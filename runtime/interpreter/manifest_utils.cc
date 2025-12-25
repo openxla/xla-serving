@@ -48,6 +48,7 @@
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "google/protobuf/util/message_differencer.h"
+#include "xla/debug_options_flags.h"  // from @xla
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/layout.h"  // from @xla
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
@@ -685,6 +686,13 @@ absl::StatusOr<std::optional<xla::CompileOptionsProto>> GetCompileOptions(
         }
       }
     }
+  }
+
+  // During orbax export debug options are not set, therefore default initialize
+  // them here.
+  if (compile_options.has_value()) {
+    *compile_options->mutable_executable_build_options()
+         ->mutable_debug_options() = xla::GetDebugOptionsFromFlags();
   }
 
   return compile_options;
