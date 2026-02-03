@@ -1,6 +1,6 @@
 // TODO: Move this test file to
-// third_party/py/orbax/checkpoint/experimental/cc_loader/checkpoint_loader_test.cc.
-#include "third_party/py/orbax/checkpoint/experimental/cc_loader/checkpoint_loader.h"
+// third_party/neptune/data_loader/ocp_loader/checkpoint_loader_test.cc.
+#include "third_party/neptune/data_loader/ocp_loader/checkpoint_loader.h"
 
 #include <cstdint>
 #include <memory>
@@ -18,7 +18,7 @@
 #include "third_party/absl/status/status.h"
 #include "third_party/absl/strings/str_cat.h"
 #include "third_party/absl/types/span.h"
-#include "third_party/py/orbax/checkpoint/experimental/cc_loader/common_types.h"
+#include "third_party/neptune/data_loader/ocp_loader/common_types.h"
 #include "third_party/py/orbax/experimental/model/core/protos/manifest.proto.h"
 #include "third_party/tensorflow/compiler/xla/hlo/ir/hlo_sharding.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
@@ -41,9 +41,9 @@ using ::testing::HasSubstr;
 using ::testing::status::StatusIs;
 
 struct CheckpointLoaderTestParam {
-  orbax::checkpoint::CheckpointType checkpoint_type;
+  neptune::CheckpointType checkpoint_type;
   std::string root_path;
-  std::vector<orbax::checkpoint::ArraySpec> weight_specs;
+  std::vector<neptune::ArraySpec> weight_specs;
   std::vector<std::string> weight_names;
   std::vector<int> device_ids;
   std::vector<HostBuffer> expected_out_host_buffer;
@@ -71,7 +71,7 @@ TEST_P(CheckpointLoaderTest, basic) {
   LOG(INFO) << " size of devices " << device_list->devices().size();
 
   TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          orbax::checkpoint::LoadCheckpoint(
+                          neptune::LoadCheckpoint(
                               GetParam().root_path, GetParam().weight_names,
                               GetParam().weight_specs, device_list, *client,
                               GetParam().checkpoint_type));
@@ -94,18 +94,18 @@ INSTANTIATE_TEST_SUITE_P(
     CheckpointLoaderTests, CheckpointLoaderTest,
     ::testing::ValuesIn<CheckpointLoaderTestParam>({
         {
-            .checkpoint_type = orbax::checkpoint::CheckpointType::kStandard,
+            .checkpoint_type = neptune::CheckpointType::kStandard,
             .root_path = devtools_build::GetDataDependencyFilepath(
                 "google3/third_party/neptune/"
                 "data_loader/testdata/non_spmd_checkpoint_gen"),
             .weight_specs =
                 {
-                    orbax::checkpoint::ArraySpec{
+                    neptune::ArraySpec{
                         .dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
                         .shape = xla::ifrt::Shape({4}),
                         .sharding = Replicate(),
                     },
-                    orbax::checkpoint::ArraySpec{
+                    neptune::ArraySpec{
                         .dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
                         .shape = xla::ifrt::Shape({8}),
                         .sharding = Replicate(),
@@ -121,18 +121,18 @@ INSTANTIATE_TEST_SUITE_P(
                 },
         },
         {
-            .checkpoint_type = orbax::checkpoint::CheckpointType::kStandard,
+            .checkpoint_type = neptune::CheckpointType::kStandard,
             .root_path = devtools_build::GetDataDependencyFilepath(
                 "google3/third_party/neptune/"
                 "data_loader/testdata/spmd_checkpoint_gen"),
             .weight_specs =
                 {
-                    orbax::checkpoint::ArraySpec{
+                    neptune::ArraySpec{
                         .dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
                         .shape = xla::ifrt::Shape({2, 2}),
                         .sharding = Tile({2, 2}),
                     },
-                    orbax::checkpoint::ArraySpec{
+                    neptune::ArraySpec{
                         .dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
                         .shape = xla::ifrt::Shape({2, 4}),
                         .sharding = Tile({2, 2}),
@@ -148,18 +148,18 @@ INSTANTIATE_TEST_SUITE_P(
                 },
         },
         {
-            .checkpoint_type = orbax::checkpoint::CheckpointType::kOcdbt,
+            .checkpoint_type = neptune::CheckpointType::kOcdbt,
             .root_path = devtools_build::GetDataDependencyFilepath(
                 "google3/third_party/neptune/"
                 "data_loader/testdata/non_spmd_ocdbt_gen"),
             .weight_specs =
                 {
-                    orbax::checkpoint::ArraySpec{
+                    neptune::ArraySpec{
                         .dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
                         .shape = xla::ifrt::Shape({4}),
                         .sharding = Replicate(),
                     },
-                    orbax::checkpoint::ArraySpec{
+                    neptune::ArraySpec{
                         .dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
                         .shape = xla::ifrt::Shape({8}),
                         .sharding = Replicate(),
@@ -175,18 +175,18 @@ INSTANTIATE_TEST_SUITE_P(
                 },
         },
         {
-            .checkpoint_type = orbax::checkpoint::CheckpointType::kOcdbt,
+            .checkpoint_type = neptune::CheckpointType::kOcdbt,
             .root_path = devtools_build::GetDataDependencyFilepath(
                 "google3/third_party/neptune/"
                 "data_loader/testdata/spmd_ocdbt_gen"),
             .weight_specs =
                 {
-                    orbax::checkpoint::ArraySpec{
+                    neptune::ArraySpec{
                         .dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
                         .shape = xla::ifrt::Shape({2, 2}),
                         .sharding = Tile({2, 2}),
                     },
-                    orbax::checkpoint::ArraySpec{
+                    neptune::ArraySpec{
                         .dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
                         .shape = xla::ifrt::Shape({2, 4}),
                         .sharding = Tile({2, 2}),
@@ -206,10 +206,10 @@ INSTANTIATE_TEST_SUITE_P(
 TEST(CheckpointLoaderFailTest, DuplicateWeightNames) {
   TF_ASSERT_OK_AND_ASSIGN(std::shared_ptr<xla::ifrt::Client> client,
                           xla::ifrt::test_util::GetClient());
-  auto results = orbax::checkpoint::LoadCheckpoint(
+  auto results = neptune::LoadCheckpoint(
       /*root_path=*/"", /*weight_names=*/{"params/0", "params/0", "params/1"},
       /*weight_specs=*/{}, /*device_list=*/{}, *client,
-      orbax::checkpoint::CheckpointType::kStandard);
+      neptune::CheckpointType::kStandard);
   EXPECT_THAT(
       results.status(),
       StatusIs(absl::StatusCode::kFailedPrecondition,

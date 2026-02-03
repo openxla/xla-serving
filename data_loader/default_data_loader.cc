@@ -28,8 +28,8 @@
 #include "third_party/absl/strings/str_join.h"
 #include "third_party/absl/strings/string_view.h"
 #include "third_party/absl/types/span.h"
-#include "third_party/py/orbax/checkpoint/experimental/cc_loader/checkpoint_loader.h"
-#include "third_party/py/orbax/checkpoint/experimental/cc_loader/metadata_util.h"
+#include "third_party/neptune/data_loader/ocp_loader/checkpoint_loader.h"
+#include "third_party/neptune/data_loader/ocp_loader/metadata_util.h"
 #include "third_party/py/orbax/experimental/model/core/protos/manifest.proto.h"
 #include "third_party/tensorflow/compiler/xla/hlo/ir/hlo_sharding.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
@@ -128,7 +128,7 @@ struct LoadOrbaxCheckpointTask {
 
       std::vector<std::string> used_weight_names;
       used_weight_names.reserve(num_weights);
-      std::vector<orbax::checkpoint::ArraySpec> used_weight_array_specs;
+      std::vector<neptune::ArraySpec> used_weight_array_specs;
       used_weight_array_specs.reserve(num_weights);
 
       for (int i = 0; i < num_weights; ++i) {
@@ -143,7 +143,7 @@ struct LoadOrbaxCheckpointTask {
           continue;
         }
         used_weight_names.push_back(std::string(weight_name));
-        used_weight_array_specs.push_back(orbax::checkpoint::ArraySpec{
+        used_weight_array_specs.push_back(neptune::ArraySpec{
             .dtype = weight_spec->dtype,
             .shape = ToIfrtShape(weight_spec->shape),
             .sharding = weight_spec->sharding.ToProto()});
@@ -151,7 +151,7 @@ struct LoadOrbaxCheckpointTask {
 
       TF_ASSIGN_OR_RETURN(
           auto named_weight_arrays,
-          orbax::checkpoint::LoadCheckpointFromOrbax(
+          neptune::LoadCheckpointFromOrbax(
               checkpoint_path, used_weight_names, used_weight_array_specs,
               device_list, *client_ptr));
 
@@ -294,7 +294,7 @@ absl::StatusOr<std::vector<std::string>> GetWeightNames(
         stablehlo_funcs) {
   TF_ASSIGN_OR_RETURN(
       std::vector<std::string> weight_names_from_checkpoint,
-      orbax::checkpoint::GetAllWeightNamesFromCheckpoint(checkpoint_path));
+      neptune::GetAllWeightNamesFromCheckpoint(checkpoint_path));
 
   TF_ASSIGN_OR_RETURN(std::vector<std::string> data_names,
                       GetDataNamesFromFunction(stablehlo_funcs.value()));
