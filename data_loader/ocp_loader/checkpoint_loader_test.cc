@@ -1,5 +1,3 @@
-// TODO: Move this test file to
-// third_party/neptune/data_loader/ocp_loader/checkpoint_loader_test.cc.
 #include "third_party/neptune/data_loader/ocp_loader/checkpoint_loader.h"
 
 #include <cstdint>
