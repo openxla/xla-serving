@@ -7,6 +7,7 @@
 #ifndef NEPTUNE_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_
 #define NEPTUNE_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -14,6 +15,7 @@
 #include "third_party/absl/status/statusor.h"
 #include "third_party/absl/strings/string_view.h"
 #include "third_party/australis/google/ifrt/ifrt_australis.proto.h"
+#include "third_party/tensorflow/compiler/xla/layout.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/device_list.h"
@@ -25,6 +27,7 @@ struct ArraySpec {
   xla::ifrt::DType dtype;
   xla::ifrt::Shape shape;
   xla::OpSharding sharding;
+  std::optional<xla::Layout> layout;
 };
 
 // Load a list of weights.

@@ -146,7 +146,9 @@ struct LoadOrbaxCheckpointTask {
         used_weight_array_specs.push_back(neptune::ArraySpec{
             .dtype = weight_spec->dtype,
             .shape = ToIfrtShape(weight_spec->shape),
-            .sharding = weight_spec->sharding.ToProto()});
+            .sharding = weight_spec->sharding.ToProto(),
+            .layout = weight_spec->layout,
+        });
       }
 
       TF_ASSIGN_OR_RETURN(
@@ -403,6 +405,7 @@ absl::Status RegisterAndLoadCheckpoints(
           .device_ids = device_data.device_ids,
           .input_name = weight_name,
           .hlo_sharding = weight_spec->sharding,
+          .layout = weight_spec->layout,
       };
       auto [array_promise, array_future] =
           tsl::MakePromise<xla::ifrt::ArrayRef>();

@@ -150,6 +150,11 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadCheckpoint(
 
     ts_load_spec.set_json_ts_spec_string(ts_load_spec_json.dump());
 
+    if (weight_spec.layout.has_value()) {
+      ts_load_spec.mutable_layout()->CopyFrom(
+          weight_spec.layout.value().ToProto());
+    }
+
     VLOG(3) << "ts_load_spec: " << ts_load_spec;
     ts_load_specs.push_back(ts_load_spec);
   }
