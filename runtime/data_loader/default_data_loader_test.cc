@@ -1,4 +1,4 @@
-#include "third_party/neptune/data_loader/default_data_loader.h"
+#include "third_party/neptune/runtime/data_loader/default_data_loader.h"
 
 #include <memory>
 #include <optional>
@@ -8,13 +8,13 @@
 
 #include "devtools/build/runtime/get_runfiles_dir.h"
 #include "learning/infra/mira/experimental/orbax_model/core/ifrt_loaded_variable_registry.h"
-#include "third_party/neptune/data_loader/data_loader.h"
 #include "learning/infra/mira/experimental/orbax_model/interpreter/manifest_utils.h"
 #include "testing/base/public/gmock.h"
 #include "testing/base/public/gunit.h"
 #include "third_party/absl/status/status.h"
 #include "third_party/absl/status/statusor.h"
 #include "third_party/absl/strings/string_view.h"
+#include "third_party/neptune/runtime/data_loader/data_loader.h"
 #include "third_party/py/orbax/experimental/model/core/protos/manifest.proto.h"
 #include "third_party/tensorflow/compiler/xla/hlo/ir/hlo_sharding.h"
 #include "third_party/tensorflow/compiler/xla/hlo/parser/hlo_parser.h"

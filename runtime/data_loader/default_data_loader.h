@@ -1,15 +1,15 @@
-#ifndef THIRD_PARTY_NEPTUNE_DATA_LOADER_DEFAULT_DATA_LOADER_H_
-#define THIRD_PARTY_NEPTUNE_DATA_LOADER_DEFAULT_DATA_LOADER_H_
+#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_DEFAULT_DATA_LOADER_H_
+#define THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_DEFAULT_DATA_LOADER_H_
 
 #include <memory>
 #include <optional>
 
-#include "third_party/neptune/data_loader/data_loader.h"
 #include "learning/infra/mira/experimental/orbax_model/interpreter/manifest_utils.h"
 #include "third_party/absl/base/nullability.h"
 #include "third_party/absl/status/statusor.h"
 #include "third_party/absl/strings/string_view.h"
 #include "third_party/absl/types/span.h"
+#include "third_party/neptune/runtime/data_loader/data_loader.h"
 #include "third_party/py/orbax/experimental/model/core/protos/manifest.proto.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
 #include "third_party/tensorflow/compiler/xla/tsl/concurrency/future.h"
@@ -44,4 +44,4 @@ class DefaultDataLoader : public DataLoader {
 
 }  // namespace jsv
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_LOADER_DEFAULT_DATA_LOADER_H_
+#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_DEFAULT_DATA_LOADER_H_

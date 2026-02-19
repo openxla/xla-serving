@@ -1,4 +1,4 @@
-#include "third_party/neptune/data_loader/ocp_loader/metadata_util.h"
+#include "third_party/neptune/runtime/data_loader/ocp_loader/metadata_util.h"
 
 #include <string>
 #include <vector>
@@ -22,7 +22,7 @@ using ::absl_testing::StatusIs;
 using ::testing::ElementsAre;
 
 constexpr const char* kCheckpointPath =
-    "google3/third_party/neptune/data_loader/ocp_loader/testdata/"
+    "google3/third_party/neptune/runtime/data_loader/ocp_loader/testdata/"
     "checkpoint_with_ocp_metadata";
 constexpr const char* kMetadataFileName = "_METADATA";
 constexpr const char* kMetadataSkipDeserializeFileName =

@@ -1,4 +1,4 @@
-#include "third_party/neptune/data_loader/ocp_loader/tensorstore_loader.h"
+#include "third_party/neptune/runtime/data_loader/ocp_loader/tensorstore_loader.h"
 
 #include <optional>
 #include <string_view>
@@ -10,8 +10,8 @@
 #include "third_party/absl/status/statusor.h"
 #include "third_party/australis/google/ifrt/ifrt_australis.proto.h"
 #include "third_party/australis/google/ifrt/tensorstore_loader.h"
-#include "third_party/neptune/data_loader/ocp_loader/common_types.h"
-#include "third_party/neptune/data_loader/ocp_loader/shared.h"
+#include "third_party/neptune/runtime/data_loader/ocp_loader/common_types.h"
+#include "third_party/neptune/runtime/data_loader/ocp_loader/shared.h"
 #include "third_party/protobuf/repeated_ptr_field.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/device.h"

@@ -1,4 +1,4 @@
-#include "third_party/neptune/data_loader/ocp_loader/tensorstore_utils.h"
+#include "third_party/neptune/runtime/data_loader/ocp_loader/tensorstore_utils.h"
 
 #include <filesystem>  // NOLINT(build/c++17)
 #include <optional>

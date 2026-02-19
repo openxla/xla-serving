@@ -1,10 +1,10 @@
 #include <memory>
 #include <utility>
 
-#include "third_party/neptune/data_loader/data_loader.h"
-#include "third_party/neptune/data_loader/default_data_loader.h"
 #include "third_party/absl/log/log.h"
 #include "third_party/absl/status/statusor.h"
+#include "third_party/neptune/runtime/data_loader/data_loader.h"
+#include "third_party/neptune/runtime/data_loader/default_data_loader.h"
 #include "third_party/py/orbax/experimental/model/core/protos/manifest.proto.h"
 
 namespace jsv {

@@ -1,4 +1,4 @@
-#include "third_party/neptune/data_loader/ocp_loader/checkpoint_loader.h"
+#include "third_party/neptune/runtime/data_loader/ocp_loader/checkpoint_loader.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -17,9 +17,9 @@
 #include "third_party/absl/types/span.h"
 #include "third_party/australis/google/ifrt/ifrt_australis.proto.h"
 #include "third_party/json/include/nlohmann/json_fwd.hpp"
-#include "third_party/neptune/data_loader/ocp_loader/common_types.h"
-#include "third_party/neptune/data_loader/ocp_loader/tensorstore_loader.h"
-#include "third_party/neptune/data_loader/ocp_loader/tensorstore_utils.h"
+#include "third_party/neptune/runtime/data_loader/ocp_loader/common_types.h"
+#include "third_party/neptune/runtime/data_loader/ocp_loader/tensorstore_loader.h"
+#include "third_party/neptune/runtime/data_loader/ocp_loader/tensorstore_utils.h"
 #include "third_party/protobuf/repeated_ptr_field.h"
 #include "third_party/tensorflow/compiler/xla/hlo/ir/hlo_sharding.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"

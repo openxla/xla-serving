@@ -1,11 +1,11 @@
 #include "third_party/absl/types/span.h"
-#include "third_party/neptune/data_loader/ocp_loader/common_types.h"
+#include "third_party/neptune/runtime/data_loader/ocp_loader/common_types.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/shape.h"
 
 // TODO(qidichen): move or add the unit test from MIRA.
-#ifndef NEPTUNE_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_
-#define NEPTUNE_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_
+#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_
+#define THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_
 
 #include <optional>
 #include <string>
@@ -78,4 +78,4 @@ LoadCheckpointFromOrbax(absl::string_view checkpoint_path,
 
 }  // namespace neptune
 
-#endif  // NEPTUNE_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_
+#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_

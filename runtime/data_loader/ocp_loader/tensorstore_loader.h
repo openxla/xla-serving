@@ -1,5 +1,5 @@
-#ifndef NEPTUNE_DATA_LOADER_OCP_LOADER_TENSORSTORE_LOADER_H_
-#define NEPTUNE_DATA_LOADER_OCP_LOADER_TENSORSTORE_LOADER_H_
+#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_LOADER_H_
+#define THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_LOADER_H_
 
 #include <cstdint>
 #include <optional>
@@ -15,7 +15,7 @@
 #include "third_party/australis/google/ifrt/ifrt_australis.proto.h"
 #include "third_party/australis/google/ifrt/tensorstore_loader.h"
 #include "third_party/json/include/nlohmann/json_fwd.hpp"
-#include "third_party/neptune/data_loader/ocp_loader/common_types.h"
+#include "third_party/neptune/runtime/data_loader/ocp_loader/common_types.h"
 #include "third_party/protobuf/repeated_ptr_field.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
@@ -34,4 +34,4 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadFromTensorstore(
 
 }  // namespace neptune
 
-#endif  // NEPTUNE_DATA_LOADER_OCP_LOADER_TENSORSTORE_LOADER_H_
+#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_LOADER_H_

@@ -1,5 +1,5 @@
-#ifndef NEPTUNE_DATA_LOADER_OCP_LOADER_SHARED_H_
-#define NEPTUNE_DATA_LOADER_OCP_LOADER_SHARED_H_
+#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_SHARED_H_
+#define THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_SHARED_H_
 
 #include "third_party/absl/status/statusor.h"
 #include "third_party/tensorstore/context.h"
@@ -20,4 +20,4 @@ inline absl::StatusOr<tensorstore::Context> GetOcdbtContext() {
 
 }  // namespace neptune
 
-#endif  // NEPTUNE_DATA_LOADER_OCP_LOADER_SHARED_H_
+#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_SHARED_H_

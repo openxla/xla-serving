@@ -1,4 +1,4 @@
-#include "third_party/neptune/data_loader/ocp_loader/checkpoint_loader.h"
+#include "third_party/neptune/runtime/data_loader/ocp_loader/checkpoint_loader.h"
 
 #include <cstdint>
 #include <memory>
@@ -16,7 +16,7 @@
 #include "third_party/absl/status/status.h"
 #include "third_party/absl/strings/str_cat.h"
 #include "third_party/absl/types/span.h"
-#include "third_party/neptune/data_loader/ocp_loader/common_types.h"
+#include "third_party/neptune/runtime/data_loader/ocp_loader/common_types.h"
 #include "third_party/py/orbax/experimental/model/core/protos/manifest.proto.h"
 #include "third_party/tensorflow/compiler/xla/hlo/ir/hlo_sharding.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
@@ -94,7 +94,7 @@ INSTANTIATE_TEST_SUITE_P(
         {
             .checkpoint_type = neptune::CheckpointType::kStandard,
             .root_path = devtools_build::GetDataDependencyFilepath(
-                "google3/third_party/neptune/"
+                "google3/third_party/neptune/runtime/"
                 "data_loader/testdata/non_spmd_checkpoint_gen"),
             .weight_specs =
                 {
@@ -121,7 +121,7 @@ INSTANTIATE_TEST_SUITE_P(
         {
             .checkpoint_type = neptune::CheckpointType::kStandard,
             .root_path = devtools_build::GetDataDependencyFilepath(
-                "google3/third_party/neptune/"
+                "google3/third_party/neptune/runtime/"
                 "data_loader/testdata/spmd_checkpoint_gen"),
             .weight_specs =
                 {
@@ -148,7 +148,7 @@ INSTANTIATE_TEST_SUITE_P(
         {
             .checkpoint_type = neptune::CheckpointType::kOcdbt,
             .root_path = devtools_build::GetDataDependencyFilepath(
-                "google3/third_party/neptune/"
+                "google3/third_party/neptune/runtime/"
                 "data_loader/testdata/non_spmd_ocdbt_gen"),
             .weight_specs =
                 {
@@ -175,7 +175,7 @@ INSTANTIATE_TEST_SUITE_P(
         {
             .checkpoint_type = neptune::CheckpointType::kOcdbt,
             .root_path = devtools_build::GetDataDependencyFilepath(
-                "google3/third_party/neptune/"
+                "google3/third_party/neptune/runtime/"
                 "data_loader/testdata/spmd_ocdbt_gen"),
             .weight_specs =
                 {

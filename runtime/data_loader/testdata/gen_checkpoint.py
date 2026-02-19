@@ -2,13 +2,13 @@ r"""Generates a checkpoint for testing.
 
 Usage:
 blaze run \
-  third_party/neptune/data_loader/testdata:gen_checkpoint \
+  third_party/neptune/runtime/data_loader/testdata:gen_checkpoint \
   -- \
   --enable_sharding=false
 
 export XLA_FLAGS="--xla_force_host_platform_device_count=4"
 blaze run \
-  third_party/neptune/data_loader/testdata:gen_checkpoint \
+  third_party/neptune/runtime/data_loader/testdata:gen_checkpoint \
   -- \
   --enable_sharding=true
 """
