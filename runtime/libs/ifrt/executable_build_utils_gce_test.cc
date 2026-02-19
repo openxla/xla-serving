@@ -15,8 +15,8 @@
 #include "third_party/llvm/llvm-project/llvm/include/llvm/Support/Casting.h"
 #include "third_party/llvm/llvm-project/mlir/include/mlir/IR/BuiltinOps.h"
 #include "third_party/llvm/llvm-project/mlir/include/mlir/IR/OwningOpRef.h"
-#include "third_party/neptune/libs/ifrt/executable_build_utils.h"
-#include "third_party/neptune/libs/ifrt/stablehlo_loader.h"
+#include "third_party/neptune/runtime/libs/ifrt/executable_build_utils.h"
+#include "third_party/neptune/runtime/libs/ifrt/stablehlo_loader.h"
 #include "third_party/protobuf/message.h"
 #include "third_party/tensorflow/compiler/xla/pjrt/pjrt_executable.h"
 #include "third_party/tensorflow/compiler/xla/pjrt/proto/compile_options.proto.h"
@@ -89,7 +89,7 @@ class BuildIfrtExecutableTest : public ::testing::Test {
 
 TEST_F(BuildIfrtExecutableTest, CompEnvsStrippedOnGce) {
   const std::string kMlirPath = devtools_build::GetDataDependencyFilepath(
-      "google3/third_party/neptune/libs/ifrt/testdata/"
+      "google3/third_party/neptune/runtime/libs/ifrt/testdata/"
       "simple.mlir");
 
   StableHloLoader loader;
@@ -135,7 +135,7 @@ TEST_F(BuildIfrtExecutableTest, CompEnvsStrippedOnGce) {
 
 TEST_F(BuildIfrtExecutableTest, DoesNotHaveExecutableBuildOptionsSucceeds) {
   const std::string kMlirPath = devtools_build::GetDataDependencyFilepath(
-      "google3/third_party/neptune/libs/ifrt/testdata/"
+      "google3/third_party/neptune/runtime/libs/ifrt/testdata/"
       "simple.mlir");
 
   StableHloLoader loader;
@@ -178,7 +178,7 @@ TEST_F(BuildIfrtExecutableTest, DoesNotHaveExecutableBuildOptionsSucceeds) {
 
 TEST_F(BuildIfrtExecutableTest, DoesNotHaveCompEnvsSucceeds) {
   const std::string kMlirPath = devtools_build::GetDataDependencyFilepath(
-      "google3/third_party/neptune/libs/ifrt/testdata/"
+      "google3/third_party/neptune/runtime/libs/ifrt/testdata/"
       "simple.mlir");
 
   StableHloLoader loader;

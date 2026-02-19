@@ -1,4 +1,4 @@
-#include "third_party/neptune/libs/ifrt/serving_core_selector/serving_core_selector.h"
+#include "third_party/neptune/runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"
 
 #include <cstddef>
 #include <cstdint>

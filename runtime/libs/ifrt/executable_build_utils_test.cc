@@ -1,4 +1,4 @@
-#include "third_party/neptune/libs/ifrt/executable_build_utils.h"
+#include "third_party/neptune/runtime/libs/ifrt/executable_build_utils.h"
 
 #include <cstdint>
 #include <memory>
@@ -28,8 +28,8 @@
 #include "third_party/llvm/llvm-project/llvm/include/llvm/Support/Casting.h"
 #include "third_party/llvm/llvm-project/mlir/include/mlir/IR/BuiltinOps.h"
 #include "third_party/llvm/llvm-project/mlir/include/mlir/IR/OwningOpRef.h"
-#include "third_party/neptune/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"
-#include "third_party/neptune/libs/ifrt/stablehlo_loader.h"
+#include "third_party/neptune/runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"
+#include "third_party/neptune/runtime/libs/ifrt/stablehlo_loader.h"
 #include "third_party/tensorflow/compiler/xla/backends/cpu/nanort/ifrt_client.h"
 #include "third_party/tensorflow/compiler/xla/pjrt/pjrt_executable.h"
 #include "third_party/tensorflow/compiler/xla/pjrt/proto/compile_options.proto.h"
@@ -102,7 +102,7 @@ class FakePersistentCompilationCache : public IfrtPersistentCompilationCache {
 
 TEST(BuildIfrtExecutableTest, Ok) {
   const std::string kMlirPath = devtools_build::GetDataDependencyFilepath(
-      "google3/third_party/neptune/libs/ifrt/testdata/"
+      "google3/third_party/neptune/runtime/libs/ifrt/testdata/"
       "simple.mlir");
 
   StableHloLoader loader;
@@ -120,7 +120,7 @@ TEST(BuildIfrtExecutableTest, Ok) {
 
 TEST(BuildIfrtExecutableTest, InvalidOptionsShallFail) {
   const std::string kMlirPath = devtools_build::GetDataDependencyFilepath(
-      "google3/third_party/neptune/libs/ifrt/testdata/"
+      "google3/third_party/neptune/runtime/libs/ifrt/testdata/"
       "simple.mlir");
 
   StableHloLoader loader;
@@ -140,7 +140,7 @@ TEST(BuildIfrtExecutableTest, InvalidOptionsShallFail) {
 
 TEST(BuildIfrtExecutableTest, PersistentCompilationCache) {
   const std::string kMlirPath = devtools_build::GetDataDependencyFilepath(
-      "google3/third_party/neptune/libs/ifrt/testdata/"
+      "google3/third_party/neptune/runtime/libs/ifrt/testdata/"
       "simple.mlir");
 
   StableHloLoader loader;
@@ -185,7 +185,7 @@ TEST(BuildIfrtExecutableTest, CompEnvsNotStripped) {
         return env;
       });
   const std::string kMlirPath = devtools_build::GetDataDependencyFilepath(
-      "google3/third_party/neptune/libs/ifrt/testdata/"
+      "google3/third_party/neptune/runtime/libs/ifrt/testdata/"
       "simple.mlir");
 
   StableHloLoader loader;
@@ -261,7 +261,7 @@ TEST(BuildIfrtExecutableTest, CompEnvsNotStripped) {
 
 TEST(GetProgramFingerprintWithTimestampTest, Ok) {
   const std::string kMlirPath = devtools_build::GetDataDependencyFilepath(
-      "google3/third_party/neptune/libs/ifrt/testdata/"
+      "google3/third_party/neptune/runtime/libs/ifrt/testdata/"
       "simple.mlir");
 
   StableHloLoader loader;

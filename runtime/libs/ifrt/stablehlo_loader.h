@@ -1,5 +1,5 @@
-#ifndef THIRD_PARTY_NEPTUNE_IFRT_STABLEHLO_LOADER_H_
-#define THIRD_PARTY_NEPTUNE_IFRT_STABLEHLO_LOADER_H_
+#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_STABLEHLO_LOADER_H_
+#define THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_STABLEHLO_LOADER_H_
 
 #include "third_party/absl/status/statusor.h"
 #include "third_party/absl/strings/string_view.h"
@@ -26,4 +26,4 @@ class StableHloLoader {
 
 }  // namespace jsv
 
-#endif  // THIRD_PARTY_NEPTUNE_IFRT_STABLEHLO_LOADER_H_
+#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_STABLEHLO_LOADER_H_

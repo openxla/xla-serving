@@ -1,4 +1,4 @@
-#include "third_party/neptune/libs/ifrt/stablehlo_loader.h"
+#include "third_party/neptune/runtime/libs/ifrt/stablehlo_loader.h"
 
 #include <string>
 

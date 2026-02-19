@@ -1,4 +1,4 @@
-#include "third_party/neptune/libs/ifrt/stablehlo_loader.h"
+#include "third_party/neptune/runtime/libs/ifrt/stablehlo_loader.h"
 
 #include <string>
 
@@ -20,7 +20,7 @@ absl::StatusOr<std::string> GetStableHloString(absl::string_view mlir_path) {
 
 TEST(StableHloLoaderTest, Load) {
   const std::string kMlirPath = devtools_build::GetDataDependencyFilepath(
-      "google3/third_party/neptune/libs/ifrt/testdata/simple.serializedmlir");
+      "google3/third_party/neptune/runtime/libs/ifrt/testdata/simple.serializedmlir");
 
   TF_ASSERT_OK_AND_ASSIGN(std::string stablehlo_str,
                           GetStableHloString(kMlirPath));

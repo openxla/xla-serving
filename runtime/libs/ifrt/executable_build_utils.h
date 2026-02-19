@@ -1,5 +1,5 @@
-#ifndef THIRD_PARTY_NEPTUNE_IFRT_EXECUTABLE_BUILD_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_IFRT_EXECUTABLE_BUILD_UTILS_H_
+#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_EXECUTABLE_BUILD_UTILS_H_
+#define THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_EXECUTABLE_BUILD_UTILS_H_
 
 #include <cstdint>
 #include <memory>
@@ -12,7 +12,7 @@
 #include "third_party/absl/strings/string_view.h"
 #include "third_party/absl/time/time.h"
 #include "third_party/llvm/llvm-project/mlir/include/mlir/IR/BuiltinOps.h"
-#include "third_party/neptune/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"
+#include "third_party/neptune/runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"
 #include "third_party/tensorflow/compiler/xla/pjrt/proto/compile_options.proto.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/executable.h"
@@ -52,4 +52,4 @@ std::string GetProgramFingerprintWithTimestamp(
 
 }  // namespace jsv
 
-#endif  // THIRD_PARTY_NEPTUNE_IFRT_EXECUTABLE_BUILD_UTILS_H_
+#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_EXECUTABLE_BUILD_UTILS_H_

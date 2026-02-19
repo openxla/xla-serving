@@ -1,5 +1,5 @@
-#ifndef THIRD_PARTY_NEPTUNE_MLIR_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_MLIR_UTILS_H_
+#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_MLIR_UTILS_H_
+#define THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_MLIR_UTILS_H_
 
 #include <cstdint>
 #include <optional>
@@ -28,4 +28,4 @@ absl::StatusOr<MlirShape> ToMlirShape(const mlir::Type& type);
 
 }  // namespace jsv::sharding_internal
 
-#endif  // THIRD_PARTY_NEPTUNE_MLIR_UTILS_H_
+#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_MLIR_UTILS_H_

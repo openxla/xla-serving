@@ -1,5 +1,5 @@
-#ifndef THIRD_PARTY_NEPTUNE_MLIR_DUMP_MLIR_UTIL_H_
-#define THIRD_PARTY_NEPTUNE_MLIR_DUMP_MLIR_UTIL_H_
+#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_MLIR_DUMP_MLIR_UTIL_H_
+#define THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_MLIR_DUMP_MLIR_UTIL_H_
 
 #include <memory>
 #include <string>
@@ -56,4 +56,4 @@ void PrintPassPipeline(const mlir::PassManager& pass_manager,
                        mlir::Operation* op, llvm::raw_ostream& os);
 }  // namespace jsv
 
-#endif  // THIRD_PARTY_NEPTUNE_MLIR_DUMP_MLIR_UTIL_H_
+#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_MLIR_DUMP_MLIR_UTIL_H_

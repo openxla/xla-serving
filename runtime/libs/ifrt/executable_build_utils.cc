@@ -1,4 +1,4 @@
-#include "third_party/neptune/libs/ifrt/executable_build_utils.h"
+#include "third_party/neptune/runtime/libs/ifrt/executable_build_utils.h"
 
 #include <memory>
 #include <string>
@@ -10,7 +10,7 @@
 #include "third_party/absl/strings/str_cat.h"
 #include "third_party/absl/time/time.h"
 #include "third_party/llvm/llvm-project/mlir/include/mlir/IR/BuiltinOps.h"
-#include "third_party/neptune/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"
+#include "third_party/neptune/runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"
 #include "third_party/tensorflow/compiler/xla/pjrt/pjrt_executable.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/device.h"
