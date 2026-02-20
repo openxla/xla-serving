@@ -1,0 +1,324 @@
+#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_BATCH_RESOURCE_BASE_H_
+#define THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_BATCH_RESOURCE_BASE_H_
+
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <map>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "learning/infra/mira/experimental/orbax_model/core/allocator.h"
+#include "learning/infra/mira/experimental/orbax_model/core/batching/batch_scheduler.h"
+#include "learning/infra/mira/experimental/orbax_model/core/batching/resource_base.h"
+#include "learning/infra/mira/experimental/orbax_model/core/batching/shared_batch_scheduler.h"
+#include "learning/infra/mira/experimental/orbax_model/core/batching/threadsafe_status.h"
+#include "learning/infra/mira/experimental/orbax_model/core/host_buffer.h"
+#include "learning/infra/mira/experimental/orbax_model/core/value.h"
+#include "third_party/absl/functional/any_invocable.h"
+#include "third_party/absl/status/status.h"
+#include "third_party/absl/status/statusor.h"
+#include "third_party/absl/strings/str_join.h"
+#include "third_party/absl/strings/string_view.h"
+#include "third_party/absl/synchronization/mutex.h"
+#include "third_party/absl/types/span.h"
+#include "third_party/neptune/runtime/kernel/kernel.h"
+#include "third_party/tensorflow/compiler/xla/tsl/platform/criticality.h"
+#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
+#include "third_party/tensorflow/core/common_runtime/cost_measurement.h"
+#include "third_party/tensorflow/core/common_runtime/request_cost.h"
+#include "third_party/tensorflow/tsl/platform/context.h"
+#include "third_party/tensorflow/tsl/platform/thread_annotations.h"
+
+namespace jsv {
+
+// Base class for resource that encapsulating the state and logic for batching
+// host buffers.
+// Users are expected to call `RegisterInput` to enqueue a batch task. It
+// requires all inputs to be `HostBuffer` and all are capable of being batched
+// together with other `HostBuffer`s. It doesn't support non-batched inputs.
+class BatchResourceBase : public ResourceBase {
+ public:
+  // Given a BatchTask (from one op invocation) with 'num_outputs'== M and
+  // split into N sub tasks, BufferMatrix is a N X M matrix.
+  // Namely, BufferMatrix[i][j] indicates the i-th split buffer of j-th output;
+  // concatenating buffers along the 2nd dimension gives a output buffer.
+  typedef std::vector<std::vector<HostBuffer>> BufferMatrix;
+
+  // One task to be batched, corresponds to a `slice` of input from one batch-op
+  // invocation.
+  //
+  // Given input from one batch-op invocation, a `slice` of this input is:
+  // 1) Split each buffer in `BatchTask::inputs` along the 0th dimension.
+  // 2) 'split_index' is calculated along the 0-th dimension.
+  //
+  // Note input from one batch-op invocation is valid and considered a
+  // specialized `slice`.
+  struct BatchTask : public jsv::BatchTask {
+    BatchTask() : criticality_val(tsl::criticality::GetCriticality()) {};
+
+    // A unique ID to identify this invocation of Batch.
+    int64_t guid;
+
+    tsl::Context propagated_context;
+
+    std::vector<HostBuffer> inputs;
+    std::vector<HostBuffer> captured_inputs;
+    jsv::Kernel::ExecuteContext* context;
+    int num_outputs;
+    absl::AnyInvocable<void(absl::Status)> done_callback;
+
+    // The index of this split, along the 0-th dimension of input from op
+    // invocation.
+    int split_index = 0;
+
+    // Two-dimensional buffer matrix, ownership shared by:
+    // 1) each split of task (to fill one row in this matrix)
+    // and
+    // 2) callback that runs to merge output of individual splits for an op
+    // invocation, after all splits complete.
+    std::shared_ptr<BufferMatrix> output;
+
+    // 'status' records error (could be from any split) if at least one split
+    // returns error, OK otherwise.
+    // Ownership is shared by individual splits and callback.
+    std::shared_ptr<ThreadSafeStatus> status;
+
+    bool is_partial = false;
+
+    uint64_t start_time;
+
+    size_t size() const override { return inputs[0].shape().dims()[0]; }
+
+    // Create a split task from this one. The caller needs to setup the inputs
+    // of the new task
+    std::unique_ptr<BatchTask> CreateSplitTask(
+        int split_index, absl::AnyInvocable<void(absl::Status)> done_callback);
+
+    // RequestCost is for collecting the cost and must outlive the batching
+    // processing.
+    //
+    // For example, to collect cost in rpc processing, `request_cost` is owned
+    // by rpc handler and points to the RequestCost of an rpc which provides
+    // the inputs to this BatchTask.
+    //
+    // After the batch processing, the request cost will be incremented with
+    // this task's processing costs.
+    tensorflow::RequestCost* request_cost = nullptr;
+
+    // Returns the criticality associated with the task.
+    tsl::criticality::Criticality criticality() const override {
+      return criticality_val;
+    };
+
+    // If nonzero, make a batch of this size entirely out of padding. This
+    // batch is processed, but is not propagated to the kernel outputs.
+    int forced_warmup_batch_size = 0;
+
+   protected:
+    virtual std::unique_ptr<BatchTask> CreateDerivedTask() {
+      return std::make_unique<BatchTask>();
+    }
+
+   private:
+    // Criticality associated with the task.
+    ::tsl::criticality::Criticality criticality_val;
+  };
+
+  using BatcherT = SharedBatchScheduler<BatchResourceBase::BatchTask>;
+
+  using BatcherQueueT = BatchScheduler<BatchResourceBase::BatchTask>;
+  using BatchT = Batch<BatchResourceBase::BatchTask>;
+
+  BatchResourceBase(std::shared_ptr<BatcherT> batcher,
+                    const BatcherT::QueueOptions& batcher_queue_options,
+                    std::vector<int32_t> allowed_batch_sizes,
+                    tsl::thread::ThreadPool* thread_pool)
+      : batcher_(std::move(batcher)),
+        batcher_queue_options_(batcher_queue_options),
+        allowed_batch_sizes_(std::move(allowed_batch_sizes)),
+        allowed_batch_sizes_str_(absl::StrJoin(allowed_batch_sizes_, ",")),
+        thread_pool_(thread_pool) {}
+
+  using CreateBatchTaskFn =
+      std::function<absl::StatusOr<std::unique_ptr<BatchTask>>()>;
+
+  // Ingests data from one invocation of the batch op. The data is enqueued to
+  // be combined with others into a batch, asynchronously.
+  // `CreateBatchTaskFn` should be used to instantiate fields added to a
+  // child class of `BatchTask` by the caller.
+  absl::Status RegisterInput(
+      int64_t guid, Kernel::ExecuteContext* context, int num_outputs,
+      const std::string& batcher_queue_name,
+      const CreateBatchTaskFn& create_batch_task_fn,
+      absl::AnyInvocable<void(absl::Status)> done_callback,
+      int forced_warmup_batch_size = 0);
+
+  // Like `RegisterInput()`, but extra "dummy" batches are processed for each
+  // batch size. Only the original request's outputs are propagated to the
+  // caller.
+  // NOTE: `done_callback` is only called for the original request, not
+  // for the dummy warmup batches.
+  absl::Status RegisterInputsForAllBatchSizes(
+      int64_t guid, Kernel::ExecuteContext* context, int num_outputs,
+      const std::string& batcher_queue_name,
+      const CreateBatchTaskFn& create_batch_task_fn,
+      absl::AnyInvocable<void(absl::Status)> done_callback);
+
+  static BatcherT::QueueOptions GetBatcherQueueOptions(
+      int32_t num_batch_threads, int32_t max_batch_size,
+      int32_t batch_timeout_micros, int32_t max_enqueued_batches,
+      const std::vector<int32_t>& allowed_batch_sizes,
+      bool enable_large_batch_splitting, bool disable_padding,
+      absl::string_view batch_padding_policy,
+      int32_t low_priority_max_batch_size,
+      int32_t low_priority_batch_timeout_micros,
+      int32_t low_priority_max_enqueued_batches,
+      const std::vector<int32_t>& low_priority_allowed_batch_sizes,
+      MixedPriorityBatchingPolicy mixed_priority_batching_policy,
+      tsl::thread::ThreadPool* thread_pool, Allocator* allocator);
+
+  // Splits 'input' of 'input_task_ptr' along the 0th dimension, into a list of
+  // 'output_tasks'.
+  // Task sizes are determined by
+  // 1) open_batch_remaining_slot
+  // 2) max_batch_size
+  // 3) size-of-input-task
+  // in a way that
+  // 1) Task sizes add up to `size-of-input-task`.
+  // 2) Task sizes from left to right are like
+  //    [open_batch_remaining_slot, max_batch_size, max_batch_size, ...,
+  //    `size-of-input-task` - `sum-of-previous-elements`].
+  //
+  // REQUIRES:
+  // Caller should make sure size-of-input-task is greater than
+  // open_batch_remaining_slot.
+  static absl::Status SplitInputTask(
+      std::unique_ptr<BatchTask>* input_task_ptr, int open_batch_remaining_slot,
+      int max_batch_size, tsl::thread::ThreadPool* thread_pool,
+      std::vector<std::unique_ptr<BatchTask>>* output_tasks,
+      Allocator* allocator);
+
+  // Splits the batch costs to each task.
+  //
+  // Inputs:
+  // 1) batch_cost_measurements, which provides the total cost of each type;
+  // 2) processed_size, it's the batch size plus the padding amount;
+  // 3) batch, provides the batch size and input sizes.
+  //
+  // Outputs:
+  // The request_cost in each batch task will be updated.
+  // - This function will use two approaches to split the batch cost (if it's
+  //   non-zero), thus two costs will be output.
+  //   1) smeared cost: batch cost is split proportionally to each task's size,
+  //      and paddings do not share any cost;
+  //   2) non-smeared cost: batch cost is split proportionally to each task or
+  //      padding's size. Here padding's cost is not assigned to any tasks.
+  // - This function will also record the metrics of this batch in each task,
+  //   including:
+  //   1) the batch size;
+  //   2) the input size from this task;
+  //   3) the padding amount.
+  static void SplitBatchCostsAndRecordMetrics(
+      const std::string& model_name, int64_t model_version,
+      absl::Span<const std::unique_ptr<tensorflow::CostMeasurement>>
+          batch_cost_measurements,
+      int64_t processed_size, BatchT& batch);
+
+  std::string DebugString() const override { return "BatchResourceBase"; }
+
+ protected:
+  // Implementation of calling the process batch function.
+  virtual void ProcessFuncBatchImpl(
+      const BatchResourceBase::BatchTask& propagated_task,
+      absl::Span<const HostBuffer> inputs,
+      std::vector<HostBuffer>* combined_outputs,
+      std::function<void(const absl::Status&)> done) const = 0;
+
+ private:
+  friend class TestJsvBatchResource;
+  friend class TestBatchResourceBase;
+
+  virtual absl::Span<const Value> GetInputsToBatch(
+      Kernel::ExecuteContext* context) const;
+
+  // Validates that it's legal to combine the tasks in 'batch' into a batch.
+  // Assumes the batch is non-empty.
+  static absl::Status ValidateBatch(const BatchT& batch);
+
+  // Returns a boolean indicating whether a batch is formed from low priority
+  // tasks only or not.
+  bool IsLowPriorityBatch(const BatchT& batch) const;
+
+  // Returns the smallest entry in 'allowed_batch_sizes_' that is greater than
+  // or equal to 'batch_size'. If 'allowed_batch_sizes_' is empty, simply
+  // returns 'batch_size'.
+  int RoundToLowestAllowedBatchSize(int batch_size,
+                                    bool is_low_priority_batch = false) const;
+
+  // Helper function to propagate the status to the task's context and call the
+  // done callback on the task.
+  void CleanUpFunctionHelper(BatchTask& task, const absl::Status& status) const;
+
+  // Concatenates the input buffers of the tasks from the batch and the
+  // unbatched task vector. When padding is enabled in the batcher queue, they
+  // are padded with garbage value up to the nearest allowed batch size.
+  absl::Status ConcatInputBuffers(
+      const BatchT& batch,
+      absl::Span<const std::unique_ptr<BatchTask>> unbatched_tasks,
+      Kernel::ExecuteContext* context,
+      std::vector<HostBuffer>* concatenated_buffers) const;
+
+  absl::Status SplitOutputBuffers(
+      absl::Span<const HostBuffer> combined_outputs, BatchT* batch,
+      std::vector<std::unique_ptr<BatchTask>>& unbatched_tasks) const;
+
+  absl::StatusOr<const BatchTask&> GetLatestDeadlineTask(
+      const BatchT& batch) const;
+
+  void ProcessFuncBatch(
+      std::unique_ptr<BatchT> batch,
+      std::vector<std::unique_ptr<BatchTask>> unbatched_tasks = {}) const;
+
+  // Callback function that wraps the Process*Batch functions above. The caller
+  // of the callback must guarantee that the unique pointers passed as argument
+  // are not null.
+  void ProcessBatchCallBack(
+      std::unique_ptr<Batch<BatchTask>> batch,
+      std::vector<std::unique_ptr<BatchTask>> unbatched_tasks);
+
+  // Looks up the batcher queue for 'queue_name'. If it didn't previously exist,
+  // creates it.
+  //
+  // The model_name and model_version are for the current model.
+  absl::Status LookupOrCreateBatcherQueue(const std::string& queue_name,
+                                          BatcherQueueT** queue,
+                                          const std::string& model_name,
+                                          int64_t model_version);
+
+  // SessionMetadata session_metadata_;
+
+  absl::Mutex outstanding_batch_mu_;
+  size_t outstanding_batch_total_size_ TF_GUARDED_BY(outstanding_batch_mu_) = 0;
+  // A batch scheduler, and options for creating queues.
+  std::shared_ptr<BatcherT> batcher_;
+  BatcherT::QueueOptions batcher_queue_options_;
+
+  // A collection of batcher queues, keyed on queue name.
+  mutable absl::Mutex batcher_queues_mu_;
+  std::map<std::string, std::unique_ptr<BatcherQueueT>> batcher_queues_
+      TF_GUARDED_BY(batcher_queues_mu_);
+
+  std::vector<int32_t> allowed_batch_sizes_;
+  // A concatenated string of <allowed_batch_sizes_>, separated by ",". This is
+  // used to record batching parameter.
+  std::string allowed_batch_sizes_str_;
+
+  tsl::thread::ThreadPool* thread_pool_;
+};
+
+}  // namespace jsv
+
+#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_BATCH_RESOURCE_BASE_H_

@@ -8,7 +8,6 @@
 #include "learning/infra/mira/experimental/orbax_model/core/host_buffer.h"
 #include "learning/infra/mira/experimental/orbax_model/core/value.h"
 #include "learning/infra/mira/experimental/orbax_model/interpreter/interpreter.h"
-#include "learning/infra/mira/experimental/orbax_model/kernel/kernel_io_data_type.h"
 #include "learning/infra/mira/experimental/orbax_model/tensorflow/tf_compatible_interpreter_create_options.h"
 #include "third_party/absl/base/nullability.h"
 #include "third_party/absl/container/flat_hash_map.h"
@@ -27,6 +26,7 @@
 #include "third_party/nanobind/include/nanobind/stl/unordered_map.h"  // IWYU pragma: keep
 #include "third_party/nanobind/include/nanobind/stl/vector.h"  // IWYU pragma: keep
 #include "third_party/neptune/python/numpy_utils.h"
+#include "third_party/neptune/runtime/kernel/kernel_io_data_type.h"
 #include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_cpu/cpu_client_options.h"
 #include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"
 #include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_tpu/xla_tpu_pjrt_client.h"
