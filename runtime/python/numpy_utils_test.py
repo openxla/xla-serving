@@ -5,7 +5,7 @@ import tensorflow as tf
 
 from google3.testing.pybase import googletest
 from google3.testing.pybase import parameterized
-from google3.third_party.neptune.python import numpy_utils_test_utils
+from google3.third_party.neptune.runtime.python import numpy_utils_test_utils
 
 
 class NumpyUtilsTest(parameterized.TestCase):

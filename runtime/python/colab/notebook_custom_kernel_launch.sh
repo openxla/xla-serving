@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Usage:
-# bash third_party/neptune/python/colab/notebook_custom_kernel_launch.sh
+# bash third_party/neptune/runtime/python/colab/notebook_custom_kernel_launch.sh
 
 source gbash.sh || exit
 
@@ -15,10 +15,10 @@ main() {
   TPU_PLATFORM=${FLAGS_tpu_platform}
   NAME="${USER}-custom-kernel-${TPU_PLATFORM?}"
 
-  blaze build -c opt --max_remote_input_files=100000 //third_party/neptune/python/colab:notebook_custom_kernel.par
+  blaze build -c opt --max_remote_input_files=100000 //third_party/neptune/runtime/python/colab:notebook_custom_kernel.par
 
   borg_vars="
-  notebook_binary=./blaze-bin/third_party/neptune/python/colab/notebook_custom_kernel.par,
+  notebook_binary=./blaze-bin/third_party/neptune/runtime/python/colab/notebook_custom_kernel.par,
   cell=${XM_CELL?},
   ${TPU_PLATFORM},
   ram=128G,

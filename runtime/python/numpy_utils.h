@@ -1,5 +1,5 @@
-#ifndef THIRD_PARTY_NEPTUNE_PYTHON_NUMPY_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_PYTHON_NUMPY_UTILS_H_
+#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_PYTHON_NUMPY_UTILS_H_
+#define THIRD_PARTY_NEPTUNE_RUNTIME_PYTHON_NUMPY_UTILS_H_
 
 #include "learning/infra/mira/experimental/orbax_model/core/allocator.h"
 #include "learning/infra/mira/experimental/orbax_model/core/default_allocator.h"
@@ -34,4 +34,4 @@ xla::nb_numpy_ndarray ToNbArray(const jsv::HostBuffer& host_buffer);
 
 }  // namespace neptune
 
-#endif  // THIRD_PARTY_NEPTUNE_PYTHON_NUMPY_UTILS_H_
+#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_PYTHON_NUMPY_UTILS_H_

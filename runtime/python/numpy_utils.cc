@@ -1,4 +1,4 @@
-#include "third_party/neptune/python/numpy_utils.h"
+#include "third_party/neptune/runtime/python/numpy_utils.h"
 
 #include <Python.h>
 
