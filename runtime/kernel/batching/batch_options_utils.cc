@@ -2,10 +2,10 @@
 
 #include <string>
 
-#include "learning/infra/mira/experimental/orbax_model/core/batching/batch_scheduler.h"
 #include "third_party/absl/log/log.h"
 #include "third_party/absl/status/status.h"
 #include "third_party/absl/strings/str_cat.h"
+#include "third_party/neptune/runtime/core/batching/batch_scheduler.h"
 #include "third_party/py/orbax/export/protos/oex_orchestration.proto.h"
 
 namespace jsv {

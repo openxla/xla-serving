@@ -23,11 +23,10 @@ class ServingCoreSelectorTest : public ::testing::Test {
     core_selector_ = std::make_unique<ServingCoreSelector>(
         &serving_device_selector_, num_cores_);
     core_selection_count_reader_ = std::make_unique<CellReader<int64_t>>(
-        "/learning/infra/mira/experimental/orbax_model/"
-        "core_selection_count");
+        "/third_party/neptune/runtime/core_selection_count");
     core_selection_count_by_device_id_only_reader_ =
         std::make_unique<CellReader<int64_t>>(
-            "/learning/infra/mira/experimental/orbax_model/"
+            "/third_party/neptune/runtime/"
             "core_selection_count_by_device_id_only");
   }
 

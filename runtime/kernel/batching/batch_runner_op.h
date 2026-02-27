@@ -9,14 +9,14 @@
 #include <utility>
 #include <vector>
 
-#include "learning/infra/mira/experimental/orbax_model/core/allocator.h"
-#include "learning/infra/mira/experimental/orbax_model/core/batching/batch_scheduler.h"
-#include "learning/infra/mira/experimental/orbax_model/core/batching/shared_batch_scheduler.h"
-#include "learning/infra/mira/experimental/orbax_model/core/default_allocator.h"
-#include "learning/infra/mira/experimental/orbax_model/core/host_buffer.h"
 #include "third_party/absl/status/status.h"
 #include "third_party/absl/status/statusor.h"
 #include "third_party/absl/types/span.h"
+#include "third_party/neptune/runtime/core/allocator.h"
+#include "third_party/neptune/runtime/core/batching/batch_scheduler.h"
+#include "third_party/neptune/runtime/core/batching/shared_batch_scheduler.h"
+#include "third_party/neptune/runtime/core/default_allocator.h"
+#include "third_party/neptune/runtime/core/host_buffer.h"
 #include "third_party/neptune/runtime/kernel/batching/batch_options_utils.h"
 #include "third_party/neptune/runtime/kernel/batching/batch_resource_base.h"
 #include "third_party/neptune/runtime/kernel/kernel.h"

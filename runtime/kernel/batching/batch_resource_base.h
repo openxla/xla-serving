@@ -10,13 +10,6 @@
 #include <utility>
 #include <vector>
 
-#include "learning/infra/mira/experimental/orbax_model/core/allocator.h"
-#include "learning/infra/mira/experimental/orbax_model/core/batching/batch_scheduler.h"
-#include "learning/infra/mira/experimental/orbax_model/core/batching/resource_base.h"
-#include "learning/infra/mira/experimental/orbax_model/core/batching/shared_batch_scheduler.h"
-#include "learning/infra/mira/experimental/orbax_model/core/batching/threadsafe_status.h"
-#include "learning/infra/mira/experimental/orbax_model/core/host_buffer.h"
-#include "learning/infra/mira/experimental/orbax_model/core/value.h"
 #include "third_party/absl/functional/any_invocable.h"
 #include "third_party/absl/status/status.h"
 #include "third_party/absl/status/statusor.h"
@@ -24,6 +17,13 @@
 #include "third_party/absl/strings/string_view.h"
 #include "third_party/absl/synchronization/mutex.h"
 #include "third_party/absl/types/span.h"
+#include "third_party/neptune/runtime/core/allocator.h"
+#include "third_party/neptune/runtime/core/batching/batch_scheduler.h"
+#include "third_party/neptune/runtime/core/batching/resource_base.h"
+#include "third_party/neptune/runtime/core/batching/shared_batch_scheduler.h"
+#include "third_party/neptune/runtime/core/batching/threadsafe_status.h"
+#include "third_party/neptune/runtime/core/host_buffer.h"
+#include "third_party/neptune/runtime/core/value.h"
 #include "third_party/neptune/runtime/kernel/kernel.h"
 #include "third_party/tensorflow/compiler/xla/tsl/platform/criticality.h"
 #include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"

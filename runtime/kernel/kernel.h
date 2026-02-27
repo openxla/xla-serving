@@ -6,7 +6,6 @@
 #include <string>
 #include <vector>
 
-#include "learning/infra/mira/experimental/orbax_model/core/value.h"
 #include "learning/infra/mira/experimental/orbax_model/interpreter/context.h"
 #include "third_party/absl/base/thread_annotations.h"
 #include "third_party/absl/container/flat_hash_map.h"
@@ -16,6 +15,7 @@
 #include "third_party/absl/strings/string_view.h"
 #include "third_party/absl/synchronization/mutex.h"
 #include "third_party/absl/types/span.h"
+#include "third_party/neptune/runtime/core/value.h"
 #include "third_party/neptune/runtime/kernel/kernel_builder_context.h"
 #include "third_party/neptune/runtime/kernel/kernel_io_data_type.h"
 #include "third_party/tensorflow/compiler/xla/tsl/concurrency/future.h"

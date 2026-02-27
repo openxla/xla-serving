@@ -1,0 +1,489 @@
+#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_HOST_BUFFER_H_
+#define THIRD_PARTY_NEPTUNE_RUNTIME_HOST_BUFFER_H_
+
+#include <stdbool.h>
+
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <memory>
+#include <optional>
+#include <vector>
+
+#include "third_party/absl/log/check.h"
+#include "third_party/absl/log/log.h"
+#include "third_party/absl/status/status.h"
+#include "third_party/absl/status/statusor.h"
+#include "third_party/absl/strings/str_cat.h"
+#include "third_party/absl/strings/string_view.h"
+#include "third_party/absl/types/span.h"
+#include "third_party/australis/google/ifrt/host_array.h"
+#include "third_party/eigen3/Eigen/Core"
+#include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
+#include "third_party/neptune/runtime/core/allocator.h"
+#include "third_party/neptune/runtime/core/default_allocator.h"
+#include "third_party/neptune/runtime/core/proto/host_buffer.proto.h"
+#include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"
+#include "third_party/tensorflow/compiler/xla/python/ifrt/shape.h"
+#include "third_party/tensorflow/compiler/xla/tsl/concurrency/ref_count.h"
+#include "third_party/tensorflow/compiler/xla/tsl/platform/errors.h"
+#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
+#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
+#include "third_party/tensorflow/compiler/xla/tsl/platform/types.h"
+#include "third_party/tensorflow/tsl/platform/tstring.h"
+
+// go/lsc-fix-eigen-includes
+// IWYU pragma: no_include "third_party/eigen3/Eigen/src/Core/util/ConfigureVectorization.h"
+
+namespace jsv {
+
+// Converts xla::ifrt::Shape to Eigen::DSizes.
+template <int NDIMS, typename IndexType = Eigen::DenseIndex>
+Eigen::DSizes<IndexType, NDIMS> AsEigenDSizesCopy(
+    const xla::ifrt::Shape& shape) {
+  CHECK(NDIMS == shape.dims().size());
+  Eigen::DSizes<IndexType, NDIMS> dsizes;
+  for (int d = 0; d < NDIMS; ++d) {
+    dsizes[d] = static_cast<IndexType>(shape.dims()[d]);
+  }
+  return dsizes;
+}
+
+// Helper to define eigen Tensor types given that the scalar is of type T.
+template <typename T, int NDIMS = 1, typename IndexType = Eigen::DenseIndex>
+struct TTypes {
+  // Rank-<NDIMS> tensor of scalar type T.
+  typedef Eigen::TensorMap<Eigen::Tensor<T, NDIMS, Eigen::RowMajor, IndexType>,
+                           Eigen::Aligned>
+      Tensor;
+
+  // Rank-1 tensor (vector) of scalar type T.
+  typedef Eigen::TensorMap<Eigen::Tensor<T, 1, Eigen::RowMajor, IndexType>,
+                           Eigen::Aligned>
+      Flat;
+
+  typedef Eigen::TensorMap<
+      Eigen::Tensor<const T, NDIMS, Eigen::RowMajor, IndexType>, Eigen::Aligned>
+      ConstTensor;
+  typedef Eigen::TensorMap<
+      Eigen::Tensor<const T, 1, Eigen::RowMajor, IndexType>, Eigen::Aligned>
+      ConstFlat;
+  typedef Eigen::TensorMap<Eigen::Tensor<T, 1, Eigen::RowMajor, IndexType>>
+      UnalignedFlat;
+
+  // Rank-2 tensor (matrix) of scalar type T.
+  typedef Eigen::TensorMap<Eigen::Tensor<T, 2, Eigen::RowMajor, IndexType>,
+                           Eigen::Aligned>
+      Matrix;
+  typedef Eigen::TensorMap<
+      Eigen::Tensor<const T, 2, Eigen::RowMajor, IndexType>, Eigen::Aligned>
+      ConstMatrix;
+};
+
+class BufferData {
+ public:
+  BufferData(void* base, xla::ifrt::DType dtype, xla::ifrt::Shape shape,
+             std::shared_ptr<void> owner = nullptr)
+      : base_(base), dtype_(dtype), shape_(shape), owner_(owner) {}
+
+  void* base() const { return base_; }
+  xla::ifrt::DType dtype() const { return dtype_; }
+  const xla::ifrt::Shape& shape() const { return shape_; }
+  std::shared_ptr<void> owner() const { return owner_; }
+
+  int ref_count() const { return owner_.use_count(); }
+
+ private:
+  void* base_ = nullptr;
+  xla::ifrt::DType dtype_;
+  xla::ifrt::Shape shape_;
+  std::shared_ptr<void> owner_ = nullptr;
+};
+
+// A wrapper to aux.HostBuffer that provides more convenient API for migration
+// from tf.Tensor of either numeric or string type. HostBuffer can be viewed as
+// a matrix of either numeric data or string. It doesn't support variant type.
+// It also does not support dynamic shape. For numeric data, it currently use
+// aux::HostArray. For string, it uses the jsv::BufferData and use tsl::tstring
+// as the underlying representation.
+class HostBuffer {
+ public:
+  HostBuffer() = default;
+  explicit HostBuffer(void* base, xla::ifrt::DType dtype,
+                      xla::ifrt::Shape shape,
+                      std::shared_ptr<void> owner = nullptr);
+  explicit HostBuffer(const xla::ifrt::DType& dtype,
+                      const xla::ifrt::Shape& shape,
+                      Allocator* allocator = DefaultAllocator::GetInstance());
+
+  tsl::RCReference<aux::MutableHostArray> host_array() const {
+    return host_array_;
+  }
+
+  BufferData string_data() const { return string_data_->buffer_data; }
+
+  /// Returns a `string_view` mapping the current host buffer.
+  ///
+  /// The returned `string_view` may point to memory location on devices
+  /// that the CPU cannot address directly.
+  ///
+  /// NOTE: The underlying buffer is refcounted, so the lifetime
+  /// of the contents mapped by the `string_view` matches the lifetime of
+  /// the buffer; callers should arrange to make sure the buffer does
+  /// not get destroyed while the `string_view` is still used.
+  ///
+  /// REQUIRES: `DataTypeCanUseMemcpy(dtype())`.
+  absl::string_view raw_data() const;
+
+  /// Slice this HostBuffer along the 1st dimension using the given allocator.
+
+  /// I.e., the returned HostBuffer covers the range [start, end).
+  /// The returned HostBuffer shares the underlying buffer with this
+  /// HostBuffer.
+  ///
+  /// NOTE: The returned HostBuffer may not satisfy the same alignment
+  /// requirement as this HostBuffer depending on the shape. The caller
+  /// must check the returned HostBuffer's alignment before calling certain
+  /// methods that have alignment requirement (e.g., `flat()`, `tensor()`).
+  ///
+  /// NOTE: When fed with an N-dimensional HostBuffer, this method returns a
+  /// HostBuffer also with N dimensions. If you want to select a sub tensor, see
+  /// SubSlice.
+  absl::StatusOr<HostBuffer> SliceAlongFirstDimension(
+      int64_t start, int64_t end,
+      Allocator* allocator = DefaultAllocator::GetInstance()) const;
+
+  /// Splits the host buffer into 'sizes.size()' individual buffers, along the
+  /// 0th dimension using the given allocator. The ith output buffer has
+  /// 0th-dimension size 'sizes[i]'.
+  ///
+  /// REQUIRES: host buffer must have at least one dimension.
+  /// REQUIRES: 0th-dimension size must equal the sum of the elements of
+  /// 'sizes'.
+  /// REQUIRES: host buffer must point to data stored in CPU memory.
+  /// REQUIRES: host buffer must be a memory-aligned type.
+  absl::StatusOr<std::vector<HostBuffer>> SplitAlongFirstDimension(
+      absl::Span<const int64_t> sizes,
+      Allocator* allocator = DefaultAllocator::GetInstance()) const;
+
+  const xla::ifrt::Shape& shape() const {
+    if (string_data_) {
+      return string_data_->buffer_data.shape();
+    }
+    return host_array_->shape();
+  }
+  const xla::ifrt::DType& dtype() const { return dtype_; }
+  xla::ifrt::DType storage_dtype() const {
+    if (string_data_) {
+      return xla::ifrt::DType(xla::ifrt::DType::Kind::kString);
+    }
+    return host_array_->dtype();
+  }
+
+  void* base() const {
+    if (string_data_) {
+      return const_cast<void*>(string_data_->buffer_data.base());
+    }
+    return host_array_->raw_data();
+  }
+
+  // Returns the total number of bytes in the storage buffer.
+  int64_t total_storage_bytes() const;
+
+  static absl::StatusOr<HostBuffer> FromProto(const HostBufferProto& proto);
+
+  // Serializes a HostBuffer to a HostBufferProto, copying the underlying data.
+  static HostBufferProto ToHostBufferProto(const HostBuffer& host_buffer);
+
+  template <int NDIMS>
+  Eigen::DSizes<Eigen::DenseIndex, NDIMS> ShapeAsEigenDSizesCopy() const {
+    return AsEigenDSizesCopy<NDIMS, Eigen::DenseIndex>(shape());
+  }
+  bool IsAligned(size_t alignment) const {
+    if (dtype_.kind() == xla::ifrt::DType::Kind::kString) return true;
+    if (shape().num_elements() == 0) return true;
+    return reinterpret_cast<uintptr_t>(base<uint8_t>()) % alignment == 0;
+  }
+
+  template <typename T, size_t NDIMS>
+  typename TTypes<T, NDIMS>::Tensor tensor() const {
+    // Check underlying host array meet alignment requirement for eigen tensor.
+    CHECK(IsAligned(EIGEN_MAX_ALIGN_BYTES));
+    return typename TTypes<T, NDIMS>::Tensor(
+        base<T>(), AsEigenDSizesCopy<NDIMS, Eigen::DenseIndex>(shape()));
+  }
+
+  template <typename T, size_t NDIMS>
+  absl::StatusOr<typename TTypes<T, NDIMS>::Tensor> shaped(
+      absl::Span<const int64_t> new_shape) {
+    // Check underlying host array meet alignment requirement for eigen tensor.
+    CHECK(IsAligned(EIGEN_MAX_ALIGN_BYTES));
+    Eigen::array<Eigen::DenseIndex, NDIMS> dims;
+    TF_RETURN_IF_ERROR(FillDimsAndValidateCompatibleShape(new_shape, &dims));
+    return typename TTypes<T, NDIMS>::Tensor(base<T>(), dims);
+  }
+
+  template <typename T, size_t NDIMS>
+  absl::StatusOr<typename TTypes<T, NDIMS>::ConstTensor> shaped(
+      absl::Span<const int64_t> new_shape) const {
+    // Check underlying host array meet alignment requirement for eigen tensor.
+    CHECK(IsAligned(EIGEN_MAX_ALIGN_BYTES));
+    Eigen::array<Eigen::DenseIndex, NDIMS> dims;
+    TF_RETURN_IF_ERROR(FillDimsAndValidateCompatibleShape(new_shape, &dims));
+    return typename TTypes<T, NDIMS>::ConstTensor(base<T>(), dims);
+  }
+
+  template <typename T>
+  typename TTypes<T>::Flat flat() {
+    // Check underlying host array meet alignment requirement for eigen tensor.
+    CHECK(IsAligned(EIGEN_MAX_ALIGN_BYTES));
+    Eigen::array<Eigen::DenseIndex, 1> dims;
+    dims[0] = shape().num_elements();
+    return typename TTypes<T, 1>::Tensor(base<T>(), dims);
+  }
+
+  template <typename T>
+  typename TTypes<T>::ConstFlat flat() const {
+    CHECK(IsAligned(EIGEN_MAX_ALIGN_BYTES));
+    Eigen::array<Eigen::DenseIndex, 1> dims;
+    dims[0] = shape().num_elements();
+    return typename TTypes<T, 1>::ConstTensor(base<T>(), dims);
+  }
+
+  template <typename T>
+  typename TTypes<T>::UnalignedFlat unaligned_flat() const {
+    Eigen::array<Eigen::DenseIndex, 1> dims;
+    dims[0] = shape().num_elements();
+    return typename TTypes<T, 1>::UnalignedFlat(base<T>(), dims);
+  }
+
+ private:
+  friend class HostBufferSplitEasyCasesTest;
+
+  bool IsInnerDimsSizeAligned() const;
+
+  absl::Status SplitEasyCases(Allocator* allocator,
+                              absl::Span<const int64_t> sizes,
+                              std::vector<HostBuffer>& output,
+                              bool& easy_cases_done) const;
+
+  absl::Status SplitAlongFirstDimensionInternal(std::vector<HostBuffer>* output,
+                                                absl::Span<const int64_t> sizes,
+                                                Allocator* allocator) const;
+
+  // TODO: Remove this struct once we can use BufferData for all
+  // date type.
+  struct StringData {
+    BufferData buffer_data;
+  };
+  template <size_t NDIMS>
+  absl::Status FillDimsAndValidateCompatibleShape(
+      absl::Span<const int64_t> new_shape,
+      Eigen::array<Eigen::DenseIndex, NDIMS>* dims) const {
+    if (NDIMS != new_shape.size()) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("NDIMS does not match shape.size(): ", NDIMS, " vs. ",
+                       new_shape.size()));
+    }
+    int64_t new_num_elements = 1;
+    for (size_t d = 0; d < NDIMS; d++) {
+      new_num_elements *= new_shape[d];
+      (*dims)[d] = new_shape[d];
+    }
+    if (new_num_elements != shape().num_elements()) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "New num elements does not match original num elements: ",
+          new_num_elements, " vs. ", shape().num_elements()));
+    }
+    return absl::OkStatus();
+  }
+  // Dtype of the host buffer can be different from the storage dtype of the
+  // underlying host array.
+  xla::ifrt::DType dtype_ = xla::ifrt::DType(xla::ifrt::DType::Kind::kU8);
+
+  // If dtype is string, string_data_ will be set. Otherwise, host_array_ will
+  // be set.
+  tsl::RCReference<aux::MutableHostArray> host_array_;
+  std::optional<StringData> string_data_;
+
+  // Returns the base pointer of the host buffer. Use with caution as there is
+  // no check on the requested type is the same as the underlying host array.
+  template <typename T>
+  T* base() const {
+    return reinterpret_cast<T*>(base());
+  }
+};
+
+template <typename T>
+void ConcatCPUImpl(
+    tsl::thread::ThreadPool* threadpool,
+    const std::vector<std::unique_ptr<typename TTypes<T, 2>::ConstMatrix>>&
+        inputs,
+    int64_t element_byte_size, typename TTypes<T, 2>::Matrix* output) {
+  size_t num_inputs = inputs.size();
+
+  std::vector<ptrdiff_t> sizes;
+  sizes.reserve(num_inputs);
+  int64_t row_size = 0;
+  for (const auto& input : inputs) {
+    sizes.push_back(input->dimension(1));
+    row_size += sizes.back();
+  }
+
+  // Max number of threads to use. Copied from TF impl.
+  int num_threads = 4;
+  if (threadpool) {
+    num_threads = std::min(num_threads, threadpool->NumThreads());
+  }
+  const int64_t estimated_total_cost = output->size() * element_byte_size;
+  num_threads = static_cast<int>(
+      std::min<int64_t>(num_threads, estimated_total_cost / 16384));
+
+  // This assumes the inputs are all have shape (1, num_elements). It copied
+  // data to the output[start, end) range.
+  auto work = [&sizes, &inputs, &output, &num_inputs, &element_byte_size](
+                  int64_t start, int64_t end) {
+    T* out = output->data();
+    T* out_start = output->data() + start;
+    T* out_end = output->data() + end;
+    for (size_t j = 0; j < num_inputs; ++j) {
+      ptrdiff_t size = sizes[j];
+      ptrdiff_t offset = out_start - out;
+      if (size <= offset) {
+        out += size;
+        continue;
+      }
+      const T* inp = &(*inputs[j])(0, 0);
+      if (offset > 0) {
+        out += offset;
+        inp += offset;
+        size -= offset;
+      }
+      size = std::min(size, out_end - out);
+      if (size <= 0) break;
+      if (std::is_same_v<T, tsl::tstring>) {
+        for (int i = 0; i < size; ++i) {
+          out[i] = inp[i];
+        }
+      } else {
+        memcpy(out, inp, size * element_byte_size);  // NOLINT
+      }
+      out += size;
+    }
+    // If this fails, concat is wrong, crash is ok.
+    CHECK((out == out_end));
+  };
+  if (!threadpool || num_threads <= 1) {
+    work(0, output->size());
+    return;
+  }
+
+  threadpool->ParallelFor(
+      output->size(),
+      tsl::thread::ThreadPool::SchedulingParams::Adaptive(element_byte_size),
+      work);
+}
+
+template <typename T>
+void ConcatCPU(
+    tsl::thread::ThreadPool* threadpool,
+    const std::vector<std::unique_ptr<typename TTypes<T, 2>::ConstMatrix>>&
+        inputs,
+    int64_t element_byte_size, typename TTypes<T, 2>::Matrix* output) {
+  ConcatCPUImpl<T>(threadpool, inputs, element_byte_size, output);
+}
+
+// Concatenates `inputs` into a single HostBuffer along the zeroth dimension
+// using the given allocator. Requires that all elements of 'inputs' have
+// element type T.
+template <typename T>
+absl::StatusOr<HostBuffer> Concat(
+    tsl::thread::ThreadPool* threadpool,
+    const absl::Span<const HostBuffer> inputs,
+    Allocator* allocator = DefaultAllocator::GetInstance()) {
+  if (inputs.empty()) {
+    return absl::InvalidArgumentError("inputs is empty");
+  }
+  const int input_dims = inputs[0].shape().dims().size();
+  const xla::ifrt::Shape& input_shape = inputs[0].shape();
+  const xla::ifrt::DType& input_dtype = inputs[0].dtype();
+
+  // Short circuit if there is only one input.
+  if (inputs.size() == 1) {
+    return inputs[0];
+  }
+
+  // Note that we reduce the concat of k-dimensional HostBuffer into a two
+  // dimensional concat. Assuming the dimensions of any input buffers are
+  // {y0, y1,...,ym-1}, we flatten it to {1, y}, where y = Prod_i(yi).
+  std::vector<std::unique_ptr<typename TTypes<T, 2>::ConstMatrix>> inputs_flat;
+  inputs_flat.reserve(inputs.size());
+  int64_t output_dim0 = 0;
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    const HostBuffer& input = inputs[i];
+    if (input.shape().dims().size() != input_dims) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Ranks of all input buffers should match: shape[0] = ",
+                       input_shape.DebugString(), " vs. shape[", i,
+                       "] = ", input.shape().DebugString()));
+    }
+    for (int j = 1; j < input_dims; ++j) {
+      if (input.shape().dims()[j] != input_shape.dims()[j]) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("Dimensions of inputs should match: shape[0] = ",
+                         input_shape.DebugString(), " vs. shape[", i,
+                         "] = ", input.shape().DebugString()));
+      }
+    }
+    auto reshaped = input.shaped<T, 2>({1, input.shape().num_elements()});
+    if (!reshaped.ok()) {
+      return reshaped.status();
+    }
+    if (input.shape().num_elements() > 0) {
+      inputs_flat.emplace_back(new
+                               typename TTypes<T, 2>::ConstMatrix(*reshaped));
+    }
+    output_dim0 += input.shape().dims()[0];
+  }
+
+  std::vector<int64_t> output_shape_vec = {input_shape.dims().begin(),
+                                           input_shape.dims().end()};
+
+  output_shape_vec[0] = output_dim0;
+  HostBuffer output_buffer(input_dtype, xla::ifrt::Shape(output_shape_vec),
+                           allocator);
+  if (!output_buffer.storage_dtype().byte_size().has_value() &&
+      output_buffer.dtype().kind() != xla::ifrt::DType::Kind::kString) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Unexpected storage dtype without byte size: ",
+                     output_buffer.storage_dtype().DebugString()));
+  }
+  int64_t cost_per_unit = 0;
+  if (output_buffer.dtype().kind() == xla::ifrt::DType::Kind::kString) {
+    cost_per_unit = sizeof(tsl::tstring);
+  } else {
+    cost_per_unit = *output_buffer.storage_dtype().byte_size();
+  }
+  if (output_buffer.shape().num_elements() > 0) {
+    auto output_flat =
+        output_buffer.shaped<T, 2>({1, output_buffer.shape().num_elements()});
+    if (!output_flat.ok()) {
+      return output_flat.status();
+    }
+    ConcatCPU<T>(threadpool, inputs_flat, cost_per_unit, &(*output_flat));
+  }
+
+  return output_buffer;
+}
+
+// Same as `Concat` above, but handles buffer dtype deduction automatically.
+// If `threadpool` is nullptr, the concatenation will be done in a single
+// thread.
+absl::StatusOr<HostBuffer> Concat(
+    tsl::thread::ThreadPool* threadpool, absl::Span<const HostBuffer> inputs,
+    Allocator* allocator = DefaultAllocator::GetInstance());
+
+}  // namespace jsv
+
+#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_HOST_BUFFER_H_

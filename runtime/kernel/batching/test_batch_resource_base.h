@@ -8,8 +8,6 @@
 #include <utility>
 #include <vector>
 
-#include "learning/infra/mira/experimental/orbax_model/core/batching/shared_batch_scheduler.h"
-#include "learning/infra/mira/experimental/orbax_model/core/host_buffer.h"
 #include "third_party/absl/base/thread_annotations.h"
 #include "third_party/absl/container/flat_hash_set.h"
 #include "third_party/absl/log/check.h"
@@ -18,6 +16,8 @@
 #include "third_party/absl/synchronization/mutex.h"
 #include "third_party/absl/time/time.h"
 #include "third_party/absl/types/span.h"
+#include "third_party/neptune/runtime/core/batching/shared_batch_scheduler.h"
+#include "third_party/neptune/runtime/core/host_buffer.h"
 #include "third_party/neptune/runtime/kernel/batching/batch_resource_base.h"
 #include "third_party/neptune/runtime/kernel/batching/batch_runner_op.h"
 #include "third_party/neptune/runtime/kernel/kernel.h"

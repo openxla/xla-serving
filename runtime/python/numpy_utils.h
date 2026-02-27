@@ -1,9 +1,9 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_PYTHON_NUMPY_UTILS_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_PYTHON_NUMPY_UTILS_H_
 
-#include "learning/infra/mira/experimental/orbax_model/core/allocator.h"
-#include "learning/infra/mira/experimental/orbax_model/core/default_allocator.h"
-#include "learning/infra/mira/experimental/orbax_model/core/host_buffer.h"
+#include "third_party/neptune/runtime/core/allocator.h"
+#include "third_party/neptune/runtime/core/default_allocator.h"
+#include "third_party/neptune/runtime/core/host_buffer.h"
 #include "third_party/tensorflow/compiler/xla/python/nb_numpy.h"
 #include "third_party/tensorflow/compiler/xla/tsl/python/lib/core/numpy.h"
 #include "third_party/tensorflow/compiler/xla/xla_data.proto.h"

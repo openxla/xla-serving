@@ -8,8 +8,6 @@
 #include <optional>
 #include <string>
 
-#include "learning/infra/mira/experimental/orbax_model/core/allocator.h"
-#include "learning/infra/mira/experimental/orbax_model/core/host_buffer.h"
 #include "learning/infra/mira/experimental/orbax_model/tensorflow/utils/ifrt_tensor_utils.h"
 #include "third_party/absl/log/check.h"
 #include "third_party/absl/log/log.h"
@@ -20,6 +18,8 @@
 #include "third_party/absl/strings/string_view.h"
 #include "third_party/absl/types/span.h"
 #include "third_party/nanobind/include/nanobind/nanobind.h"
+#include "third_party/neptune/runtime/core/allocator.h"
+#include "third_party/neptune/runtime/core/host_buffer.h"
 #include "third_party/py/numpy/_core/include/numpy/ndarrayobject.h"
 #include "third_party/py/numpy/_core/include/numpy/ndarraytypes.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"

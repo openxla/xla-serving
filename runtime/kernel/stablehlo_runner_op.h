@@ -5,10 +5,10 @@
 #include <string>
 #include <utility>
 
-#include "learning/infra/mira/experimental/orbax_model/core/flat_signature.h"
-#include "learning/infra/mira/experimental/orbax_model/core/stablehlo_runner.h"
 #include "third_party/absl/status/status.h"
 #include "third_party/absl/status/statusor.h"
+#include "third_party/neptune/runtime/core/flat_signature.h"
+#include "third_party/neptune/runtime/core/stablehlo_runner.h"
 #include "third_party/neptune/runtime/kernel/kernel.h"
 #include "third_party/neptune/runtime/kernel/kernel_builder_context.h"
 #include "third_party/neptune/runtime/kernel/kernel_io_data_type.h"

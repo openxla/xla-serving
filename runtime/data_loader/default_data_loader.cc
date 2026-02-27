@@ -9,11 +9,6 @@
 #include <utility>
 #include <vector>
 
-#include "learning/infra/mira/experimental/orbax_model/core/constants.h"
-#include "learning/infra/mira/experimental/orbax_model/core/ifrt_device_utils.h"
-#include "learning/infra/mira/experimental/orbax_model/core/ifrt_loaded_variable_registry.h"
-#include "learning/infra/mira/experimental/orbax_model/core/stablehlo_utils.h"
-#include "learning/infra/mira/experimental/orbax_model/core/value.h"
 #include "learning/infra/mira/experimental/orbax_model/interpreter/manifest_utils.h"
 #include "third_party/absl/algorithm/container.h"
 #include "third_party/absl/base/nullability.h"
@@ -27,6 +22,11 @@
 #include "third_party/absl/strings/str_join.h"
 #include "third_party/absl/strings/string_view.h"
 #include "third_party/absl/types/span.h"
+#include "third_party/neptune/runtime/core/constants.h"
+#include "third_party/neptune/runtime/core/ifrt_device_utils.h"
+#include "third_party/neptune/runtime/core/ifrt_loaded_variable_registry.h"
+#include "third_party/neptune/runtime/core/stablehlo_utils.h"
+#include "third_party/neptune/runtime/core/value.h"
 #include "third_party/neptune/runtime/data_loader/data_loader.h"
 #include "third_party/neptune/runtime/data_loader/ocp_loader/checkpoint_loader.h"
 #include "third_party/neptune/runtime/data_loader/ocp_loader/metadata_util.h"

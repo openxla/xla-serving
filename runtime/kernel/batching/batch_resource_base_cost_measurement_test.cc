@@ -4,14 +4,14 @@
 #include <utility>
 #include <vector>
 
-#include "learning/infra/mira/experimental/orbax_model/core/batching/batch_stats.h"
-#include "learning/infra/mira/experimental/orbax_model/core/host_buffer.h"
 #include "testing/base/public/gmock.h"
 #include "testing/base/public/gunit.h"
 #include "third_party/absl/status/status.h"
 #include "third_party/absl/strings/string_view.h"
 #include "third_party/absl/time/time.h"
 #include "third_party/absl/types/span.h"
+#include "third_party/neptune/runtime/core/batching/batch_stats.h"
+#include "third_party/neptune/runtime/core/host_buffer.h"
 #include "third_party/neptune/runtime/kernel/batching/batch_resource_base.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/shape.h"

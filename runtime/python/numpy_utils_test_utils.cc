@@ -1,8 +1,8 @@
 #include <cstdint>
 
-#include "learning/infra/mira/experimental/orbax_model/core/host_buffer.h"
 #include "third_party/nanobind/include/nanobind/nanobind.h"
 #include "third_party/nanobind/include/nanobind/nb_defs.h"
+#include "third_party/neptune/runtime/core/host_buffer.h"
 #include "third_party/neptune/runtime/python/numpy_utils.h"
 #include "third_party/tensorflow/compiler/xla/python/nb_numpy.h"
 #include "third_party/tensorflow/compiler/xla/tsl/python/lib/core/numpy.h"

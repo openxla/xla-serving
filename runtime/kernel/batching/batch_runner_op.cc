@@ -7,10 +7,6 @@
 #include <utility>
 #include <vector>
 
-#include "learning/infra/mira/experimental/orbax_model/core/batching/shared_batch_scheduler.h"
-#include "learning/infra/mira/experimental/orbax_model/core/host_buffer.h"
-#include "learning/infra/mira/experimental/orbax_model/core/value.h"
-#include "learning/infra/mira/experimental/orbax_model/core/value_utils.h"
 #include "learning/infra/mira/experimental/orbax_model/interpreter/linear_graph_execute.h"
 #include "third_party/absl/cleanup/cleanup.h"
 #include "third_party/absl/functional/any_invocable.h"
@@ -19,6 +15,10 @@
 #include "third_party/absl/strings/str_cat.h"
 #include "third_party/absl/strings/string_view.h"
 #include "third_party/absl/types/span.h"
+#include "third_party/neptune/runtime/core/batching/shared_batch_scheduler.h"
+#include "third_party/neptune/runtime/core/host_buffer.h"
+#include "third_party/neptune/runtime/core/value.h"
+#include "third_party/neptune/runtime/core/value_utils.h"
 #include "third_party/neptune/runtime/kernel/batching/batch_resource_base.h"
 #include "third_party/neptune/runtime/kernel/batching/warmup.h"
 #include "third_party/neptune/runtime/kernel/kernel.h"

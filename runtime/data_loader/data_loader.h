@@ -6,7 +6,6 @@
 #include <string>
 #include <vector>
 
-#include "learning/infra/mira/experimental/orbax_model/core/ifrt_loaded_variable_registry.h"
 #include "learning/infra/mira/experimental/orbax_model/interpreter/manifest_utils.h"
 #include "third_party/absl/base/no_destructor.h"
 #include "third_party/absl/base/nullability.h"
@@ -18,6 +17,7 @@
 #include "third_party/absl/strings/string_view.h"
 #include "third_party/absl/synchronization/mutex.h"
 #include "third_party/absl/types/span.h"
+#include "third_party/neptune/runtime/core/ifrt_loaded_variable_registry.h"
 #include "third_party/py/orbax/experimental/model/core/protos/manifest.proto.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
 #include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"

@@ -5,11 +5,6 @@
 #include <utility>
 #include <vector>
 
-#include "learning/infra/mira/experimental/orbax_model/core/host_buffer.h"
-#include "learning/infra/mira/experimental/orbax_model/core/host_buffer_matcher.h"
-#include "learning/infra/mira/experimental/orbax_model/core/host_buffer_test_utils.h"
-#include "learning/infra/mira/experimental/orbax_model/core/value.h"
-#include "learning/infra/mira/experimental/orbax_model/core/value_matcher.h"
 #include "testing/base/public/gmock.h"
 #include "testing/base/public/gunit.h"
 #include "third_party/absl/memory/memory.h"
@@ -18,6 +13,11 @@
 #include "third_party/absl/strings/str_cat.h"
 #include "third_party/absl/time/clock.h"
 #include "third_party/absl/time/time.h"
+#include "third_party/neptune/runtime/core/host_buffer.h"
+#include "third_party/neptune/runtime/core/host_buffer_matcher.h"
+#include "third_party/neptune/runtime/core/host_buffer_test_utils.h"
+#include "third_party/neptune/runtime/core/value.h"
+#include "third_party/neptune/runtime/core/value_matcher.h"
 #include "third_party/neptune/runtime/kernel/kernel_builder_constants.h"
 #include "third_party/neptune/runtime/kernel/kernel_builder_context.h"
 #include "third_party/neptune/runtime/kernel/kernel_io_data_type.h"

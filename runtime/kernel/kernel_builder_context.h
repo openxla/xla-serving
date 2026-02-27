@@ -3,12 +3,12 @@
 
 #include <string>
 
-#include "learning/infra/mira/experimental/orbax_model/core/value.h"
 #include "third_party/absl/container/flat_hash_map.h"
 #include "third_party/absl/status/status.h"
 #include "third_party/absl/status/statusor.h"
 #include "third_party/absl/strings/str_cat.h"
 #include "third_party/absl/strings/string_view.h"
+#include "third_party/neptune/runtime/core/value.h"
 
 namespace jsv {
 
