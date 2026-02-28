@@ -29,6 +29,8 @@
 #include "third_party/neptune/runtime/python/numpy_utils.h"
 #include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_cpu/cpu_client_options.h"
 #include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"
+#include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_gpu/xla_gpu_client_options.h"
+#include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_gpu/xla_gpu_pjrt_client.h"
 #include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_tpu/xla_tpu_pjrt_client.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
 #include "third_party/tensorflow/compiler/xla/python/nb_numpy.h"
@@ -192,6 +194,10 @@ absl::Status ModelRunner::Initialize(absl::string_view model_name,
   } else if (platform == "tpu") {
     TF_ASSIGN_OR_RETURN(auto pjrt_client, xla::GetXlaPjrtTpuClient());
     client_ = xla::ifrt::PjRtClient::Create(std::move(pjrt_client));
+  } else if (platform == "gpu") {
+    TF_ASSIGN_OR_RETURN(auto pjrt_client,
+                        xla::GetXlaPjrtGpuClient(xla::GpuClientOptions()));
+    client_ = xla::ifrt::PjRtClient::Create(std::move(pjrt_client));
   } else {
     return absl::InvalidArgumentError(
         absl::StrCat("Unsupported platform: ", platform));
@@ -219,6 +225,7 @@ absl::Status ModelRunner::Initialize(absl::string_view model_name,
   create_options->execute_worker_thread_pool =
       execute_worker_thread_pool_.get();
   create_options->ifrt_client = client_;
+  create_options->platform_name = std::string(client_->platform_name());
   create_options->computation_thread_pool = computation_thread_pool_.get();
   TF_ASSIGN_OR_RETURN(interpreter_,
                       jsv::Interpreter::Create(std::move(create_options)));
