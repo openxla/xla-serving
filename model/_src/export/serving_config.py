@@ -22,7 +22,7 @@ class ServingConfig:
     batch_options: Batch options for serving.
   """
 
-  serving_signature: str
+  serving_signature: str = 'serving_default'
   # TODO: Evaluate if we need to make this a sequence of PyTrees.
   input_signature: jaxtyping.PyTree = None
   method_key: str | None = None
