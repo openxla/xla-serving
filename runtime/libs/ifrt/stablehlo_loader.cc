@@ -2,8 +2,6 @@
 
 #include <string>
 
-#include "file/base/helpers.h"
-#include "file/base/options.h"
 #include "third_party/absl/log/check.h"
 #include "third_party/absl/log/log.h"
 #include "third_party/absl/status/statusor.h"
@@ -25,6 +23,7 @@
 #include "third_party/stablehlo/stablehlo/dialect/Register.h"
 #include "third_party/stablehlo/stablehlo/dialect/StablehloOps.h"
 #include "third_party/tensorflow/compiler/xla/pjrt/mlir_to_hlo.h"
+#include "third_party/tensorflow/compiler/xla/tsl/platform/env.h"
 #include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
 
 namespace jsv {
@@ -56,8 +55,9 @@ absl::StatusOr<mlir::OwningOpRef<mlir::ModuleOp>> StableHloLoader::Load(
 
 absl::StatusOr<mlir::OwningOpRef<mlir::ModuleOp>> StableHloLoader::LoadFromFile(
     absl::string_view mlir_path) {
-  TF_ASSIGN_OR_RETURN(std::string stablehlo_str,
-                      file::GetContents(mlir_path, file::Defaults()));
+  std::string stablehlo_str;
+  CHECK_OK(tsl::ReadFileToString(tsl::Env::Default(), std::string(mlir_path),
+                                   &stablehlo_str));
 
   return Load(stablehlo_str);
 }
