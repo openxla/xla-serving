@@ -491,7 +491,7 @@ absl::Status BatchResourceBase::ConcatInputBuffers(
         return absl::InvalidArgumentError(absl::StrCat(
             "Cannot use an empty buffer with zero rows as padding when "
             "batching. (Input ",
-            i, " got shape ", padding_source.shape().DebugString(), ".)"));
+            i, " got shape ", padding_source.shape(), ".)"));
       }
       if (padding_source.shape().dims()[0] == 1) {
         padding = padding_source;

@@ -275,8 +275,8 @@ absl::Status HostBuffer::SplitAlongFirstDimensionInternal(
     Allocator* allocator) const {
   if (!DataTypeCanUseMemCpy(dtype()) &&
       dtype() != xla::ifrt::DType(xla::ifrt::DType::Kind::kString)) {
-    return absl::InvalidArgumentError(absl::StrCat(
-        "Host buffer type does not support split: ", dtype().DebugString()));
+    return absl::InvalidArgumentError(
+        absl::StrCat("Host buffer type does not support split: ", dtype()));
   }
   if (dtype() == xla::ifrt::DType(xla::ifrt::DType::Kind::kString)) {
     auto from_strings = flat<tsl::tstring>();

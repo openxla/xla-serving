@@ -493,9 +493,8 @@ StableHloRunner::LookupWeights(std::optional<size_t> device_id) {
           "StableHlo expected weight #", i, " (", weights_[i],
           ")"
           " to have shape: ",
-          ToIfrtShape(weight_spec.shape).DebugString(), ", but got ",
-          loaded_weight_ifrt_array->shape().DebugString(),
-          " from the actual weight."));
+          ToIfrtShape(weight_spec.shape), ", but got ",
+          loaded_weight_ifrt_array->shape(), " from the actual weight."));
     }
     if (loaded_weight_ifrt_array->dtype() != weight_spec.dtype) {
       return absl::FailedPreconditionError(absl::StrCat(
@@ -569,7 +568,7 @@ absl::StatusOr<std::vector<HostBuffer>> StableHloRunner::Execute(
   if (resources_it == device_list_to_resources_map_.end()) {
     return absl::InternalError(
         absl::StrCat("Device list resources not initialized for device list: ",
-                     device_list->DebugString()));
+                     *device_list));
   }
   TF_ASSIGN_OR_RETURN(const auto& weights_array,
                       resources_it->second->weight_arrays);

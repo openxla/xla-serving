@@ -166,10 +166,7 @@ class StableHloRunner {
     }
 
     std::string DebugString() const {
-      return "Key: " + absl::StrJoin(input_shapes, ", ",
-                                     [](std::string* out, const auto& shape) {
-                                       return out->append(shape.DebugString());
-                                     });
+      return "Key: " + absl::StrJoin(input_shapes, ", ");
     }
 
     std::vector<xla::ifrt::Shape> input_shapes;

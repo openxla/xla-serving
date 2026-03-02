@@ -161,9 +161,9 @@ absl::StatusOr<int> VerifyIndexDomainsAndGetReplicas(
   int num_replicas = index_domain_counts.begin()->second;
   for (const auto& [index_domain, count] : index_domain_counts) {
     if (count != num_replicas) {
-      return absl::FailedPreconditionError(absl::StrCat(
-          "Expected ", num_replicas, " replicas for ",
-          index_domain.DebugString(), " but got ", count, " replicas"));
+      return absl::FailedPreconditionError(
+          absl::StrCat("Expected ", num_replicas, " replicas for ",
+                       index_domain, " but got ", count, " replicas"));
     }
     unique_index_domains.push_back(index_domain);
   }
@@ -181,9 +181,8 @@ absl::StatusOr<int> VerifyIndexDomainsAndGetReplicas(
       if (std::abs(offset.elements()[dim]) != bounded_box.dims()[dim] &&
           offset.elements()[dim] != 0) {
         return absl::FailedPreconditionError(absl::StrCat(
-            "IndexDomains should not have gap or overlap, but got ",
-            prev_iter->DebugString(), " and ", next_iter->DebugString(),
-            " that have offset of ", offset.DebugString()));
+            "IndexDomains should not have gap or overlap, but got ", *prev_iter,
+            " and ", *next_iter, " that have offset of ", offset));
       }
     }
     prev_iter = next_iter;
@@ -206,10 +205,9 @@ absl::StatusOr<int> VerifyIndexDomainsAndGetReplicas(
 
   if (xla::ifrt::Shape(bounded_shape) !=
       xla::ifrt::Shape(host_buffer_shape.dims())) {
-    return absl::FailedPreconditionError(
-        absl::StrCat("IndexDomain ", last_index_domain.DebugString(),
-                     " does not overlap with HostBuffer shape ",
-                     host_buffer_shape.DebugString()));
+    return absl::FailedPreconditionError(absl::StrCat(
+        "IndexDomain ", last_index_domain,
+        " does not overlap with HostBuffer shape ", host_buffer_shape));
   }
 
   return num_replicas;
@@ -264,10 +262,10 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeAssembledArrayFromHostBuffer(
     int target_size = first_index_domain->shape().dims()[dim];
     int dim_size = input_buffer.shape().dims()[dim];
     if (dim_size % target_size != 0) {
-      return absl::FailedPreconditionError(absl::StrCat(
-          "Only support even sharding, but input buffer shape ",
-          input_buffer.shape().DebugString(), " not even splittable to ",
-          first_index_domain->shape().DebugString()));
+      return absl::FailedPreconditionError(
+          absl::StrCat("Only support even sharding, but input buffer shape ",
+                       input_buffer.shape(), " not even splittable to ",
+                       first_index_domain->shape()));
     }
     int num_partitions = dim_size / target_size;
     total_num_partitions *= num_partitions;
@@ -366,9 +364,9 @@ absl::StatusOr<tsl::Future<HostBuffer>> MakeHostBufferFromArrayHelper(
                             xla::ifrt::ArrayCopySemantics::kDonateInput));
 
     if (fully_replicated_array->shape() != input_shape) {
-      return absl::InternalError(absl::StrCat(
-          "Not fully replicated output. Expected ", input_shape.DebugString(),
-          " but got ", fully_replicated_array->shape().DebugString()));
+      return absl::InternalError(
+          absl::StrCat("Not fully replicated output. Expected ", input_shape,
+                       " but got ", fully_replicated_array->shape()));
     }
 
     HostBuffer output_buffer(input_dtype, input_shape);
@@ -424,10 +422,9 @@ absl::StatusOr<tsl::Future<HostBuffer>> MakeHostBufferFromArrayHelper(
 
   for (int i = 0; i < index_domains.size(); ++i) {
     if (index_domains[i].shape() != disassembled_array[i]->shape()) {
-      return absl::FailedPreconditionError(
-          absl::StrCat("Index domain ", index_domains[i].shape().DebugString(),
-                       " not equal to array shape ",
-                       disassembled_array[i]->shape().DebugString()));
+      return absl::FailedPreconditionError(absl::StrCat(
+          "Index domain ", index_domains[i].shape(),
+          " not equal to array shape ", disassembled_array[i]->shape()));
     }
   }
 
@@ -452,7 +449,7 @@ absl::StatusOr<tsl::Future<HostBuffer>> MakeHostBufferFromArrayHelper(
 
   VLOG(2) << "Index domains: ";
   for (const auto& index_domain : index_domains) {
-    VLOG(2) << index_domain.DebugString();
+    VLOG(2) << index_domain;
   }
 
   // disassembled array is in device order.

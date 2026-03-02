@@ -423,17 +423,15 @@ absl::StatusOr<HostBuffer> Concat(
   for (size_t i = 0; i < inputs.size(); ++i) {
     const HostBuffer& input = inputs[i];
     if (input.shape().dims().size() != input_dims) {
-      return absl::InvalidArgumentError(
-          absl::StrCat("Ranks of all input buffers should match: shape[0] = ",
-                       input_shape.DebugString(), " vs. shape[", i,
-                       "] = ", input.shape().DebugString()));
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Ranks of all input buffers should match: shape[0] = ", input_shape,
+          " vs. shape[", i, "] = ", input.shape()));
     }
     for (int j = 1; j < input_dims; ++j) {
       if (input.shape().dims()[j] != input_shape.dims()[j]) {
-        return absl::InvalidArgumentError(
-            absl::StrCat("Dimensions of inputs should match: shape[0] = ",
-                         input_shape.DebugString(), " vs. shape[", i,
-                         "] = ", input.shape().DebugString()));
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Dimensions of inputs should match: shape[0] = ", input_shape,
+            " vs. shape[", i, "] = ", input.shape()));
       }
     }
     auto reshaped = input.shaped<T, 2>({1, input.shape().num_elements()});
@@ -457,7 +455,7 @@ absl::StatusOr<HostBuffer> Concat(
       output_buffer.dtype().kind() != xla::ifrt::DType::Kind::kString) {
     return absl::InvalidArgumentError(
         absl::StrCat("Unexpected storage dtype without byte size: ",
-                     output_buffer.storage_dtype().DebugString()));
+                     output_buffer.storage_dtype()));
   }
   int64_t cost_per_unit = 0;
   if (output_buffer.dtype().kind() == xla::ifrt::DType::Kind::kString) {
