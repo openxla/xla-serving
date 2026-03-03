@@ -96,9 +96,10 @@ absl::StatusOr<int> FlatSignature::GetIndexFromName(
   return it->second;
 }
 
+// We pass `kwargs` by value to allow moving the values from it.
 absl::Status FlatSignature::FillArgs(
-    std::vector<Value>& args,
-    absl::flat_hash_map<std::string, Value> kwargs) const {
+    std::vector<Value>& args, absl::flat_hash_map<std::string, Value> kwargs,
+    bool strict_match) const {
   if (args.size() > specs_.size()) {
     return absl::InvalidArgumentError(
         absl::StrCat("args.size(): ", args.size(),
@@ -124,27 +125,48 @@ absl::Status FlatSignature::FillArgs(
 
   // Add the keyword arguments.
   args.resize(specs_.size());
-  for (auto& [name, value] : kwargs) {
-    TF_ASSIGN_OR_RETURN(int index, GetIndexFromName(name));
-    if (args[index].HasValue()) {
-      return absl::InvalidArgumentError(
-          absl::StrCat("Trying to set the value at name \"", name,
-                       "\" with index ", index, " but it is already set."));
+  if (strict_match) {
+    for (auto& [name, value] : kwargs) {
+      TF_ASSIGN_OR_RETURN(int index, GetIndexFromName(name));
+      if (args[index].HasValue()) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("Trying to set the value at name \"", name,
+                         "\" with index ", index, " but it is already set."));
+      }
+      args[index] = std::move(value);
     }
-    args[index] = std::move(value);
-  }
-  // Add the default values and check if all the values are set.
-  for (int i = num_original_args; i < specs_.size(); ++i) {
-    if (args[i].HasValue()) {
-      continue;
+    // Add the default values and check if all the values are set.
+    for (int i = num_original_args; i < specs_.size(); ++i) {
+      if (args[i].HasValue()) {
+        continue;
+      }
+      if (!specs_[i].default_value.HasValue()) {
+        return absl::InvalidArgumentError(
+            absl::StrFormat("The value at index %d with name \"%s\" is not set "
+                            "and does not have a default value.",
+                            i, specs_[i].name.value_or("null")));
+      }
+      args[i] = specs_[i].default_value;
     }
-    if (!specs_[i].default_value.HasValue()) {
-      return absl::InvalidArgumentError(
-          absl::StrFormat("The value at index %d with name \"%s\" is not set "
-                          "and does not have a default value.",
-                          i, specs_[i].name.value_or("null")));
+  } else {
+    for (int i = num_original_args; i < specs_.size(); ++i) {
+      if (!specs_[i].name.has_value()) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("The spec at index ", i, " does not have a name."));
+      }
+      const std::string& name = *specs_[i].name;
+      auto it = kwargs.find(name);
+      if (it != kwargs.end()) {
+        args[i] = std::move(it->second);
+      } else if (specs_[i].default_value.HasValue()) {
+        args[i] = specs_[i].default_value;
+      } else {
+        return absl::InvalidArgumentError(
+            absl::StrFormat("The value at index %d with name \"%s\" is not set "
+                            "and does not have a default value.",
+                            i, specs_[i].name.value_or("null")));
+      }
     }
-    args[i] = specs_[i].default_value;
   }
   return absl::OkStatus();
 }

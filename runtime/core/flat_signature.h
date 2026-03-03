@@ -69,9 +69,12 @@ class FlatSignature {
   // Fills in the keyword arguments to possibly extend the vector of `args`. The
   // original elements in `args` will be put at the beginning of the list. The
   // kwargs will fill in the missing arguments based on their names and the
-  // corresponding names in `specs_`.
+  // corresponding names in `specs_`. If `strict_match` is true, unknown or
+  // overlapping keyword arguments will raise an error; otherwise, they will be
+  // ignored.
   absl::Status FillArgs(std::vector<Value>& args,
-                        absl::flat_hash_map<std::string, Value> kwargs) const;
+                        absl::flat_hash_map<std::string, Value> kwargs,
+                        bool strict_match = true) const;
 
   // Unflattens a list of values to a map. The input `Value`s will be moved to
   // the output.

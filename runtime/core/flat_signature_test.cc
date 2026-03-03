@@ -306,6 +306,50 @@ TEST(FlatSignatureTest, FillArgsWithDefaultValues) {
                       AsHostBuffer<int32_t>({3}, xla::ifrt::Shape({1}))))));
 }
 
+TEST(FlatSignatureTest, FillArgsStrictMatchConflictAssignments) {
+  std::vector<HostBuffer> positional_args{
+      AsHostBuffer<int32_t>({1}, xla::ifrt::Shape({1}))};
+  absl::flat_hash_map<std::string, Value> kwargs = {
+      {"a", Value(AsHostBuffer<int32_t>({3}, xla::ifrt::Shape({1})))},
+  };
+
+  std::vector<Value> flattened_args =
+      internal::PackAsValues(std::move(positional_args));
+  EXPECT_THAT(CreateSimpleFlatSignature({"a"}).FillArgs(
+                  flattened_args, internal::PackAsValues(std::move(kwargs)),
+                  /*strict_match=*/true),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("is already set")));
+}
+
+TEST(FlatSignatureTest, FillArgsStrictMatchUnknownKwargs) {
+  std::vector<Value> flattened_args;
+  absl::flat_hash_map<std::string, Value> kwargs = {
+      {"x", Value(AsHostBuffer<int32_t>({3}, xla::ifrt::Shape({1})))},
+  };
+  EXPECT_THAT(
+      CreateSimpleFlatSignature({"a"}).FillArgs(
+          flattened_args, internal::PackAsValues(std::move(kwargs)),
+          /*strict_match=*/true),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("not found")));
+}
+
+TEST(FlatSignatureTest, FillArgsNonStrictMatchUnknownKwargs) {
+  FlatSignature flat_signature = CreateSimpleFlatSignature({"a"});
+  TF_ASSERT_OK(flat_signature.AddDefaultValue(
+      0, Value(AsHostBuffer<int32_t>({1}, xla::ifrt::Shape({1})))));
+  std::vector<Value> flattened_args;
+  absl::flat_hash_map<std::string, Value> kwargs = {
+      {"x", Value(AsHostBuffer<int32_t>({2}, xla::ifrt::Shape({1})))},
+  };
+  TF_ASSERT_OK(flat_signature.FillArgs(
+      flattened_args, internal::PackAsValues(std::move(kwargs)),
+      /*strict_match=*/false));
+  EXPECT_THAT(flattened_args,
+              ElementsAre(ValueOfType<HostBuffer>(HostBufferEq(
+                  AsHostBuffer<int32_t>({1}, xla::ifrt::Shape({1}))))));
+}
+
 TEST(FlatSignatureTest, UnflattenToMap) {
   FlatSignature flat_signature = CreateSimpleFlatSignature({"c", "b", "a"});
   std::vector<HostBuffer> host_buffers;
