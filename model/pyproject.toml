@@ -1,0 +1,56 @@
+[build-system]
+requires = ["flit_core >=3.5,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "neptune-model"
+description = "Neptune Model"
+readme = 'README.md'
+license = {file = 'LICENSE'}
+requires-python = '>=3.10'
+authors = [{name = 'Neptune Authors', email='obm-jsv-team@google.com'}]
+classifiers=[
+    'Development Status :: 4 - Beta',
+    'Intended Audience :: Developers',
+    'Intended Audience :: Science/Research',
+    'License :: OSI Approved :: Apache Software License',
+    'Programming Language :: Python',
+    'Topic :: Scientific/Engineering :: Artificial Intelligence',
+]
+
+keywords = ["JAX machine learning", "serialization", "export"]
+
+dependencies = [
+    'absl-py',
+    'dataclasses-json',
+    'etils',
+    'jax >= 0.4.34',
+    'jaxlib',
+    'jaxtyping',
+    'numpy',
+    'protobuf',
+    "orbax-checkpoint >=0.9.0"
+]
+
+dynamic = ['version']
+
+[tool.flit.module]
+name = "neptune_model"
+
+[tool.flit.sdist]
+exclude = [
+    '**/BUILD',
+]
+
+[project.urls]
+homepage = 'http://github.com/AI-Hypercomputer/neptune'
+repository = 'http://github.com/AI-Hypercomputer/neptune'
+
+[project.optional-dependencies]
+testing = [
+    'pytest',
+    'pytest-xdist',
+    'tf-nightly',
+    'requests',
+    'chex',
+]
