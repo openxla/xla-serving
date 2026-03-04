@@ -27,14 +27,9 @@
 #include "third_party/neptune/runtime/core/value.h"
 #include "third_party/neptune/runtime/kernel/kernel_io_data_type.h"
 #include "third_party/neptune/runtime/python/numpy_utils.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_cpu/cpu_client_options.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_gpu/xla_gpu_client_options.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_gpu/xla_gpu_pjrt_client.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_tpu/xla_tpu_pjrt_client.h"
+#include "third_party/neptune/runtime/python/ifrt_client_factory.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
 #include "third_party/tensorflow/compiler/xla/python/nb_numpy.h"
-#include "third_party/tensorflow/compiler/xla/python/pjrt_ifrt/pjrt_client.h"
 #include "third_party/tensorflow/compiler/xla/tsl/platform/env.h"
 #include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
 #include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
@@ -187,21 +182,7 @@ class ModelRunner : public std::enable_shared_from_this<ModelRunner> {
 absl::Status ModelRunner::Initialize(absl::string_view model_name,
                                      absl::string_view model_path) {
   std::string platform = absl::GetFlag(FLAGS_orbax_model_runner_platform);
-  if (platform == "cpu") {
-    TF_ASSIGN_OR_RETURN(auto pjrt_client,
-                        xla::GetXlaPjrtCpuClient(xla::CpuClientOptions()));
-    client_ = xla::ifrt::PjRtClient::Create(std::move(pjrt_client));
-  } else if (platform == "tpu") {
-    TF_ASSIGN_OR_RETURN(auto pjrt_client, xla::GetXlaPjrtTpuClient());
-    client_ = xla::ifrt::PjRtClient::Create(std::move(pjrt_client));
-  } else if (platform == "gpu") {
-    TF_ASSIGN_OR_RETURN(auto pjrt_client,
-                        xla::GetXlaPjrtGpuClient(xla::GpuClientOptions()));
-    client_ = xla::ifrt::PjRtClient::Create(std::move(pjrt_client));
-  } else {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Unsupported platform: ", platform));
-  }
+  TF_ASSIGN_OR_RETURN(client_, neptune::CreateIfrtClient(platform));
   LOG(INFO) << "Platform: " << client_->platform_name()
             << ". Device count: " << client_->device_count();
 
