@@ -1,0 +1,13 @@
+edition = "2024";
+
+package jsv.serving;
+
+// Metadata for an inference request such as the model name and signature.
+message ModelSpec {
+  // Required model name.
+  string name = 1;
+
+  // A named signature to evaluate. If unspecified, the default signature will
+  // be used.
+  string signature_name = 3;
+}

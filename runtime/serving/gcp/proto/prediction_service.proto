@@ -1,0 +1,23 @@
+edition = "2024";
+
+package jsv.serving;
+
+import "third_party/neptune/runtime/serving/gcp/proto/get_model_metadata.proto";
+import "third_party/neptune/runtime/serving/gcp/proto/predict.proto";
+
+// PredictionService provides access to machine-learned models loaded by
+// model_servers.
+service PredictionService {
+  // Predict.
+  rpc Predict(PredictRequest) returns (PredictResponse) {
+    // Predict RPC deadline can either be user-facing or batch, so we set a
+    // default deadline of 10 minutes which should be acceptable for both.
+    option deadline = 600;
+  }
+
+  // GetModelMetadata - provides access to metadata for loaded models.
+  rpc GetModelMetadata(GetModelMetadataRequest)
+      returns (GetModelMetadataResponse) {
+    option deadline = 60;
+  }
+}

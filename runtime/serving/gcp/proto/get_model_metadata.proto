@@ -1,0 +1,42 @@
+edition = "2024";
+
+package jsv.serving;
+
+import "google/protobuf/any.proto";
+import "third_party/neptune/runtime/serving/gcp/proto/model.proto";
+import "third_party/py/orbax/experimental/model/core/protos/type.proto";
+import "third_party/py/orbax/export/protos/oex_orchestration.proto";
+
+message SignatureDef {
+  // The overall (input and output) signature of the model.
+  // For details, see oex_orchestration.proto
+  orbax_model_type.FunctionSignature signature = 1;
+
+  // An optional signature that is a (ordered) mapping from names to
+  // `TensorType`. For details, see oex_orchestration.proto
+  orbax_export_orchestration.NamedSignature named_signature = 2
+      [features.field_presence = EXPLICIT];
+}
+
+// Message returned for "signature_def" field.
+message SignatureDefMap {
+  map<string, SignatureDef> signature_def = 1;
+}
+
+message GetModelMetadataRequest {
+  // Model Specification indicating which model we are querying for metadata.
+  ModelSpec model_spec = 1;
+
+  // Metadata fields to get. Currently supported: "signature_def".
+  repeated string metadata_field = 2;
+}
+
+message GetModelMetadataResponse {
+  // Model Specification indicating which model this metadata belongs to.
+  ModelSpec model_spec = 1;
+
+  // Map of metadata field name to metadata field. The options for metadata
+  // field name are listed in GetModelMetadataRequest. Currently supported:
+  // "signature_def".
+  map<string, google.protobuf.Any> metadata = 2;
+}
