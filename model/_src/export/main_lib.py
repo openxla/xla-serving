@@ -8,8 +8,10 @@ in Neptune's format.
 
 from collections.abc import Sequence
 import dataclasses
+from typing import Any
 
 from absl import logging
+import jax.export as jax_export
 import jaxtyping
 
 from google3.third_party.neptune.model._src import jax2npt
@@ -61,9 +63,11 @@ Signature = tuple[
 
 
 def _update_save_bundle_for_jax_model(
-    input_signature: jaxtyping.PyTree,
     model: jax_model.JaxModel,
     method_key: str | None,
+    input_signature: jaxtyping.PyTree,
+    input_polymophic_shapes: Any | None,
+    polymorphic_constraints: Sequence[str],
     serving_signature: str,
     save_bundle: NeptuneModelSaveBundle,
 ) -> Signature:
@@ -75,11 +79,15 @@ def _update_save_bundle_for_jax_model(
   save_bundleShloFunction
 
   Args:
-    input_signature: A PyTree representing the structure, shapes, and dtypes of
-      the model inputs.
     model: The JaxModel instance to convert.
     method_key: Optional key to select a specific function if model.apply_fn is
       a Mapping. Required if model.apply_fn is a Mapping.
+    input_signature: A PyTree representing the structure, shapes, and dtypes of
+      the model inputs.
+    input_polymophic_shapes: The polymorphic shapes of the input signature. See
+      `jax.export.symbolic_args_specs` for more details.
+    polymorphic_constraints: Constraints on polymorphic dimensions, e.g., "b >=
+      1". See `jax.export.symbolic_args_specs` for more details.
     serving_signature: The key to use for the converted function in the
       save_bundle.
     save_bundle: The NeptuneModelSaveBundle to update with the converted
@@ -94,7 +102,14 @@ def _update_save_bundle_for_jax_model(
   """
   apply_fn = utils.get_apply_fn(model, method_key)
 
-  args_specs = utils.to_jax_spec((model.params, input_signature))
+  args_specs = jax_export.symbolic_args_specs(
+      args=utils.to_jax_spec((model.params, input_signature)),
+      shapes_specs=(
+          "...",  #  "..." is same as `None`,
+          input_polymophic_shapes,
+      ),
+      constraints=polymorphic_constraints,
+  )
 
   model_shlo_function = jax2npt.convert(
       fun_jax=apply_fn,
@@ -135,9 +150,11 @@ def _update_save_bundle(
   for node in pipeline:
     if node.role == orchestration_pb2.ROLE_MODEL:
       _, _ = _update_save_bundle_for_jax_model(
-          input_signature=cfg.input_signature,
           model=node.node,
           method_key=cfg.method_key,
+          input_signature=cfg.input_signature,
+          input_polymophic_shapes=cfg.input_polymophic_shapes,
+          polymorphic_constraints=cfg.polymorphic_constraints,
           serving_signature=cfg.serving_signature,
           save_bundle=save_bundle,
       )

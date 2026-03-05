@@ -8,6 +8,8 @@ import jax.numpy as jnp
 
 from google3.net.proto2.contrib.pyutil import compare
 from google3.third_party.neptune.model._src.core import persistence_lib
+from google3.third_party.neptune.model._src.core import saveable
+from google3.third_party.neptune.model._src.core import shlo_type
 from google3.third_party.neptune.model._src.export import jax_model
 from google3.third_party.neptune.model._src.export import main_lib
 from google3.third_party.neptune.model._src.export import serving_config
@@ -150,6 +152,47 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
           expected_pipelines_proto,
           pipelines_proto,
       )
+
+  def test_update_save_bundle_for_jax_model_with_polymorphic_shape(self):
+    """Tests that _update_save_bundle_for_jax_model works with polymorphic shapes."""
+    model = jax_model.JaxModel(
+        apply_fn=lambda params, x: x * params['w'],
+        params={'w': jnp.array([2.0], dtype=jnp.float32)},
+    )
+    input_signature = jax.ShapeDtypeStruct(shape=('b', 1), dtype=jnp.float32)
+    input_polymophic_shapes = 'b,_'
+    serving_signature = 'serving_default'
+    save_bundle = main_lib.NeptuneModelSaveBundle()
+
+    input_sig, output_sig = main_lib._update_save_bundle_for_jax_model(
+        model=model,
+        method_key=None,
+        input_signature=input_signature,
+        input_polymophic_shapes=input_polymophic_shapes,
+        polymorphic_constraints=[],
+        serving_signature=serving_signature,
+        save_bundle=save_bundle,
+    )
+
+    with self.subTest('adds_to_save_bundle'):
+      self.assertIn(serving_signature, save_bundle.manifest_objects)
+      self.assertIsInstance(
+          save_bundle.manifest_objects[serving_signature],
+          saveable.Saveable,
+      )
+
+    with self.subTest('check_input_signature'):
+      # input_sig = ((params_tree, input_tree), kwargs_tree)
+      # We are interested in shape of input_tree, which corresponds to x.
+      # params are {'w': array([2.], dtype=float32)} with shape (1,)
+      # input is ShapeDtypeStruct(shape=('b', 1), dtype=float32)
+      self.assertEqual(input_sig[0][0]['w'].shape, [1])
+      self.assertEqual(input_sig[0][1].shape, [None, 1])
+      self.assertEqual(input_sig[0][1].dtype, shlo_type.ShloDType.f32)
+
+    with self.subTest('check_output_signature'):
+      self.assertEqual(output_sig.shape, [None, 1])
+      self.assertEqual(output_sig.dtype, shlo_type.ShloDType.f32)
 
 
 if __name__ == '__main__':
