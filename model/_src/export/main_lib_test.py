@@ -182,17 +182,41 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
       )
 
     with self.subTest('check_input_signature'):
-      # input_sig = ((params_tree, input_tree), kwargs_tree)
-      # We are interested in shape of input_tree, which corresponds to x.
-      # params are {'w': array([2.], dtype=float32)} with shape (1,)
+      # input_sig = ((input_tree,), kwargs_tree)
       # input is ShapeDtypeStruct(shape=('b', 1), dtype=float32)
-      self.assertEqual(input_sig[0][0]['w'].shape, [1])
-      self.assertEqual(input_sig[0][1].shape, [None, 1])
-      self.assertEqual(input_sig[0][1].dtype, shlo_type.ShloDType.f32)
+      self.assertEqual(input_sig[0][0].shape, [None, 1])
+      self.assertEqual(input_sig[0][0].dtype, shlo_type.ShloDType.f32)
 
     with self.subTest('check_output_signature'):
       self.assertEqual(output_sig.shape, [None, 1])
       self.assertEqual(output_sig.dtype, shlo_type.ShloDType.f32)
+
+  def test_calculate_jax_model_input_sig(self):
+    params_spec = shlo_type.ShloTensorSpec(
+        shape=[1], dtype=shlo_type.ShloDType.f32
+    )
+    input_spec = shlo_type.ShloTensorSpec(
+        shape=[4], dtype=shlo_type.ShloDType.f32
+    )
+    kw_spec = shlo_type.ShloTensorSpec(shape=[2], dtype=shlo_type.ShloDType.f32)
+
+    with self.subTest(name='with_kwargs'):
+      apply_fn_input_sig = ((params_spec, input_spec), {'kw': kw_spec})
+      input_sig = main_lib._calculate_jax_model_input_sig(apply_fn_input_sig)
+      self.assertEqual(input_sig, ((input_spec,), {'kw': kw_spec}))
+
+    with self.subTest(name='without_kwargs'):
+      apply_fn_input_sig = (params_spec, input_spec)
+      input_sig = main_lib._calculate_jax_model_input_sig(apply_fn_input_sig)
+      self.assertEqual(input_sig, ((input_spec,), {}))
+
+    with self.subTest(name='not_sequence_fails'):
+      with self.assertRaisesRegex(ValueError, 'must be a sequence'):
+        main_lib._calculate_jax_model_input_sig(params_spec)
+
+    with self.subTest(name='wrong_num_pos_args_fails'):
+      with self.assertRaisesRegex(ValueError, 'must have exactly two elements'):
+        main_lib._calculate_jax_model_input_sig((params_spec,))
 
 
 if __name__ == '__main__':

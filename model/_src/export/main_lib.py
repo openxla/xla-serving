@@ -62,6 +62,46 @@ Signature = tuple[
 ]  # (input_signature, output_signature)
 
 
+def _calculate_jax_model_input_sig(
+    apply_fn_input_signature: jaxtyping.PyTree[shlo_type.ShloTensorSpec],
+) -> jaxtyping.PyTree[shlo_type.ShloTensorSpec]:
+  """Calculates the input signature for a JAX model function by excluding the model parameters.
+
+  Args:
+    apply_fn_input_signature: The input signature of the `apply_fn`, which is
+      expected to have exactly two positional arguments: the model parameters
+      and the actual inputs.
+
+  Returns:
+    The input signature excluding the model parameters, structured as
+    `((args,), kwargs)`.
+  """
+  if (
+      # Already arg-kwarg split if the input signature is a sequence of two
+      # elements, where the first element is a sequence of positional arguments 
+      # and the second element is a dictionary of keyword arguments.
+      isinstance(apply_fn_input_signature, Sequence)
+      and len(apply_fn_input_signature) == 2
+      and isinstance(apply_fn_input_signature[0], Sequence)
+      and isinstance(apply_fn_input_signature[1], dict)
+  ):
+    pos_args, kwargs = apply_fn_input_signature
+  else:
+    pos_args = apply_fn_input_signature
+    kwargs = {}
+  if not isinstance(pos_args, Sequence):
+    raise ValueError(
+        "The positional-arguments part of apply_fn_input_signature must be a"
+        f" sequence. Got: {pos_args}"
+    )
+  if len(pos_args) != 2:
+    raise ValueError(
+        "The positional part of apply_fn_input_signature must have exactly"
+        f" two elements. Got: {pos_args}"
+    )
+  return ((pos_args[1],), kwargs)
+
+
 def _update_save_bundle_for_jax_model(
     model: jax_model.JaxModel,
     method_key: str | None,
@@ -118,9 +158,8 @@ def _update_save_bundle_for_jax_model(
   )
   save_bundle.manifest_objects[serving_signature] = model_shlo_function
 
-  # TODO: Update the input signature to exclude the weights.
   return (
-      model_shlo_function.input_signature,
+      _calculate_jax_model_input_sig(model_shlo_function.input_signature),
       model_shlo_function.output_signature,
   )
 
