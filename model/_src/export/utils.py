@@ -5,8 +5,12 @@ from collections.abc import Mapping
 import jax
 import jaxtyping
 
+from google3.third_party.neptune.model._src.core import persistence_lib
+from google3.third_party.neptune.model._src.export import constants
 from google3.third_party.neptune.model._src.export import jax_model
 from google3.third_party.neptune.model._src.jax2npt import typing
+from google3.third_party.neptune.protos import manifest_pb2
+from google3.third_party.neptune.protos import orchestration_pb2
 
 
 def to_jax_spec(tree: jaxtyping.PyTree) -> jaxtyping.PyTree:
@@ -68,3 +72,17 @@ def get_apply_fn(
       ) from e
   else:
     return model.apply_fn
+
+
+def build_orchestration_supplemental(
+    pipelines: orchestration_pb2.Pipelines,
+) -> persistence_lib.GlobalSupplemental:
+  """Builds the orchestration supplemental data."""
+  return persistence_lib.GlobalSupplemental(
+      manifest_pb2.UnstructuredData(
+          inlined_bytes=pipelines.SerializeToString(),
+          mime_type=constants.ORCHESTRATION_MULTI_PIPELINE_MIME_TYPE,
+          version=constants.ORCHESTRATION_MULTI_PIPELINE_VERSION,
+      ),
+      constants.ORCHESTRATION_SUPPLEMENTAL_NAME,
+  )

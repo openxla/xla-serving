@@ -1,4 +1,10 @@
-"""Library for exporting JAX models."""
+"""Library for exporting JAX models to Neptune model format.
+
+This library provides the `save` function to convert and save JAX models
+according to the Neptune Model Specification. It uses `jax2npt` to convert
+JAX functions to SHLO functions, and `persistence_lib` to save them
+in Neptune's format.
+"""
 
 from collections.abc import Sequence
 import dataclasses
@@ -10,6 +16,7 @@ from google3.third_party.neptune.model._src import jax2npt
 from google3.third_party.neptune.model._src.core import persistence_lib
 from google3.third_party.neptune.model._src.core import saveable
 from google3.third_party.neptune.model._src.core import shlo_type
+from google3.third_party.neptune.model._src.export import constants
 from google3.third_party.neptune.model._src.export import jax_model
 from google3.third_party.neptune.model._src.export import serving_config
 from google3.third_party.neptune.model._src.export import utils
@@ -23,10 +30,14 @@ class NeptuneModelSaveBundle:
   Attributes:
     manifest_objects: A dictionary of saveable objects to be saved in the
       manifest.
+    pipelines: The pipeline definitions for model orchestration.
   """
 
   manifest_objects: dict[str, saveable.Saveable] = dataclasses.field(
       default_factory=dict
+  )
+  pipelines: orchestration_pb2.Pipelines = dataclasses.field(
+      default_factory=orchestration_pb2.Pipelines
   )
 
 
@@ -99,6 +110,10 @@ def _update_save_bundle_for_jax_model(
   )
 
 
+def _create_pipeline(model: jax_model.JaxModel) -> Sequence[PipelineNode]:
+  return [PipelineNode(node=model, role=orchestration_pb2.ROLE_MODEL)]
+
+
 def _update_save_bundle(
     pipeline: Sequence[PipelineNode],
     cfg: serving_config.ServingConfig,
@@ -116,7 +131,7 @@ def _update_save_bundle(
   Raises:
     ValueError: If a node with an unsupported role is encountered.
   """
-
+  components = []
   for node in pipeline:
     if node.role == orchestration_pb2.ROLE_MODEL:
       _, _ = _update_save_bundle_for_jax_model(
@@ -126,8 +141,18 @@ def _update_save_bundle(
           serving_signature=cfg.serving_signature,
           save_bundle=save_bundle,
       )
+      components.append(
+          orchestration_pb2.Component(
+              role=node.role,
+              function_name=cfg.serving_signature,
+          )
+      )
     else:
-      raise ValueError(f'Unsupported role: {node.role}')
+      raise ValueError(f"Unsupported role: {node.role}")
+
+  save_bundle.pipelines.name_to_pipeline[
+      cfg.serving_signature
+  ].components.extend(components)
 
 
 def save(
@@ -143,21 +168,31 @@ def save(
     serving_configs: The serving configurations.
   """
   logging.info(
-      'Saving model=%s to export_path=%s with serving_configs=%s',
+      "Saving model=%s to export_path=%s with serving_configs=%s",
       model,
       export_path,
       serving_configs,
   )
-
   save_bundle = NeptuneModelSaveBundle()
   for cfg in serving_configs:
+    pipeline = _create_pipeline(model)
     _update_save_bundle(
-        pipeline=[PipelineNode(node=model, role=orchestration_pb2.ROLE_MODEL)],
+        pipeline=pipeline,
         cfg=cfg,
         save_bundle=save_bundle,
     )
+
+  save_options = persistence_lib.SaveOptions(
+      version=2,
+      supplementals={
+          constants.ORCHESTRATION_SUPPLEMENTAL_NAME: (
+              utils.build_orchestration_supplemental(save_bundle.pipelines)
+          )
+      },
+  )
+
   persistence_lib.save(
       module=save_bundle.manifest_objects,
       target_dir=export_path,
-      options=persistence_lib.SaveOptions(version=2),
+      options=save_options,
   )
