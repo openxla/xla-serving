@@ -42,8 +42,9 @@ using ::testing::status::IsOk;
 class OrbaxGrpcServerTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    std::string platform = absl::GetFlag(FLAGS_orbax_grpc_server_platform);
-    if (platform == "gpu") {
+    std::string orbax_platform =
+        absl::GetFlag(FLAGS_orbax_grpc_server_platform);
+    if (orbax_platform == "cuda") {
       model_path_ = devtools_build::GetDataDependencyFilepath(
           "google3/learning/infra/mira/experimental/orbax_model/interpreter/"
           "testdata/linear_model_2x1_sharded_gen");

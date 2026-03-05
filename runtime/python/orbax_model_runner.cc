@@ -26,8 +26,8 @@
 #include "third_party/neptune/runtime/core/host_buffer.h"
 #include "third_party/neptune/runtime/core/value.h"
 #include "third_party/neptune/runtime/kernel/kernel_io_data_type.h"
-#include "third_party/neptune/runtime/python/numpy_utils.h"
 #include "third_party/neptune/runtime/python/ifrt_client_factory.h"
+#include "third_party/neptune/runtime/python/numpy_utils.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
 #include "third_party/tensorflow/compiler/xla/python/nb_numpy.h"
 #include "third_party/tensorflow/compiler/xla/tsl/platform/env.h"
@@ -41,7 +41,7 @@
 #include "third_party/tensorflow/core/framework/types.proto.h"
 
 ABSL_FLAG(std::string, orbax_model_runner_platform, "cpu",
-          "The platform to use. It can be cpu or tpu");
+          "The platform to use. It can be cpu, tpu, or cuda");
 
 namespace nb = ::nanobind;
 
@@ -183,7 +183,7 @@ absl::Status ModelRunner::Initialize(absl::string_view model_name,
                                      absl::string_view model_path) {
   std::string platform = absl::GetFlag(FLAGS_orbax_model_runner_platform);
   TF_ASSIGN_OR_RETURN(client_, neptune::CreateIfrtClient(platform));
-  LOG(INFO) << "Platform: " << client_->platform_name()
+  LOG(INFO) << "Platform: " << platform
             << ". Device count: " << client_->device_count();
 
   execute_worker_thread_pool_ = std::make_unique<tsl::thread::ThreadPool>(
@@ -206,7 +206,7 @@ absl::Status ModelRunner::Initialize(absl::string_view model_name,
   create_options->execute_worker_thread_pool =
       execute_worker_thread_pool_.get();
   create_options->ifrt_client = client_;
-  create_options->platform_name = std::string(client_->platform_name());
+  create_options->platform_name = platform;
   create_options->computation_thread_pool = computation_thread_pool_.get();
   TF_ASSIGN_OR_RETURN(interpreter_,
                       jsv::Interpreter::Create(std::move(create_options)));

@@ -60,7 +60,7 @@ absl::StatusOr<std::shared_ptr<xla::ifrt::Client>> CreateIfrtClient(
   } else if (platform == "tpu") {
     TF_ASSIGN_OR_RETURN(auto pjrt_client, xla::GetXlaPjrtTpuClient());
     return xla::ifrt::PjRtClient::Create(std::move(pjrt_client));
-  } else if (platform == "gpu") {
+  } else if (platform == "cuda") {
     TF_ASSIGN_OR_RETURN(auto pjrt_client,
                         xla::GetXlaPjrtGpuClient(xla::GpuClientOptions()));
     return xla::ifrt::PjRtClient::Create(std::move(pjrt_client));

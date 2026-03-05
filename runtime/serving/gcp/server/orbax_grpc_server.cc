@@ -13,7 +13,6 @@
 #include "third_party/absl/flags/flag.h"
 #include "third_party/absl/log/log.h"
 #include "third_party/absl/status/status.h"
-#include "third_party/absl/strings/ascii.h"
 #include "third_party/absl/strings/str_cat.h"
 #include "third_party/absl/strings/str_join.h"
 #include "third_party/absl/strings/string_view.h"
@@ -41,7 +40,7 @@
 #include "third_party/tensorflow/core/framework/tensor.h"
 
 ABSL_FLAG(std::string, orbax_grpc_server_platform, "cpu",
-          "The platform to use. It can be cpu, tpu, or gpu.");
+          "The platform to use. It can be cpu, tpu, or cuda.");
 
 namespace jsv {
 namespace serving {
@@ -64,36 +63,44 @@ void LogMapKeys(const absl::flat_hash_map<std::string, T>& map,
 
 absl::StatusOr<std::unique_ptr<OrbaxGrpcServer>> OrbaxGrpcServer::Create(
     absl::string_view model_name, absl::string_view model_path) {
-  std::string platform = absl::GetFlag(FLAGS_orbax_grpc_server_platform);
-  std::shared_ptr<xla::ifrt::Client> client;
-  LOG(INFO) << "Checking PJRT plugin initialization for platform: '" << platform
-            << "'";
-  TF_ASSIGN_OR_RETURN(bool is_pjrt_plugin_initialized,
-                      pjrt::IsPjrtPluginInitialized(platform));
-  if (!is_pjrt_plugin_initialized) {
-    LOG(INFO) << absl::StrCat("PJRT plugin not initialized for platform '",
-                              platform, "'. Initializing.");
-    TF_RETURN_IF_ERROR(pjrt::InitializePjrtPlugin(platform));
+  // The `orbax_platform` string refers to the Orbax `Platform` enum.
+  std::string orbax_platform = absl::GetFlag(FLAGS_orbax_grpc_server_platform);
+  std::string pjrt_platform = orbax_platform;
+  // Orbax models and the manifest use "cuda", but the underlying PJRT API
+  // explicitly requires the plugin string "gpu" for initialization
+  if (orbax_platform == "cuda") {
+    pjrt_platform = "gpu";
   }
-  LOG(INFO) << "PJRT plugin initialized for platform: '" << platform
+
+  LOG(INFO) << "Checking PJRT plugin initialization for PJRT platform: '"
+            << pjrt_platform << "'";
+  TF_ASSIGN_OR_RETURN(bool is_pjrt_plugin_initialized,
+                      pjrt::IsPjrtPluginInitialized(pjrt_platform));
+  if (!is_pjrt_plugin_initialized) {
+    LOG(INFO) << absl::StrCat("PJRT plugin not initialized for PJRT platform '",
+                              pjrt_platform, "'. Initializing.");
+    TF_RETURN_IF_ERROR(pjrt::InitializePjrtPlugin(pjrt_platform));
+  }
+  LOG(INFO) << "PJRT plugin initialized for PJRT platform: '" << pjrt_platform
             << "'. Getting client.";
-  if (platform == "cpu") {
+  std::shared_ptr<xla::ifrt::Client> client;
+  if (pjrt_platform == "cpu") {
     TF_ASSIGN_OR_RETURN(auto pjrt_client,
                         xla::GetXlaPjrtCpuClient(xla::CpuClientOptions()));
     client = xla::ifrt::PjRtClient::Create(std::move(pjrt_client));
-  } else if (platform == "tpu") {
+  } else if (pjrt_platform == "tpu") {
     TF_ASSIGN_OR_RETURN(auto pjrt_client, xla::GetXlaPjrtTpuClient());
     client = xla::ifrt::PjRtClient::Create(std::move(pjrt_client));
-  } else if (platform == "gpu") {
+  } else if (pjrt_platform == "gpu") {
     TF_ASSIGN_OR_RETURN(auto pjrt_client,
                         xla::GetXlaPjrtGpuClient(xla::GpuClientOptions()));
     client = xla::ifrt::PjRtClient::Create(std::move(pjrt_client));
   } else {
     return absl::InvalidArgumentError(
-        absl::StrCat("Unsupported platform: ", platform));
+        absl::StrCat("Unsupported PJRT platform: ", pjrt_platform));
   }
-  LOG(INFO) << "Platform: " << client->platform_name()
-            << ". Device count: " << client->device_count();
+  LOG(INFO) << "Orbax Server initialized for Orbax platform: " << orbax_platform
+            << " (Device count: " << client->device_count() << ")";
 
   auto execute_worker_thread_pool = std::make_unique<tsl::thread::ThreadPool>(
       tsl::Env::Default(), tsl::ThreadOptions(), "OrbaxExecutionThreadPool",
@@ -116,7 +123,7 @@ absl::StatusOr<std::unique_ptr<OrbaxGrpcServer>> OrbaxGrpcServer::Create(
   create_options->execute_worker_thread_pool = execute_worker_thread_pool.get();
   create_options->ifrt_client = client;
   create_options->computation_thread_pool = computation_thread_pool.get();
-  create_options->platform_name = client->platform_name();
+  create_options->platform_name = orbax_platform;
   std::unique_ptr<jsv::Interpreter> interpreter;
   TF_ASSIGN_OR_RETURN(interpreter,
                       jsv::Interpreter::Create(std::move(create_options)));

@@ -1,4 +1,4 @@
-"""Test orbax model runner python API on GPU with a sharded model."""
+"""Tests for orbax_model_runner.cc CUDA backend."""
 
 import os
 import numpy as np
@@ -11,11 +11,11 @@ _TEST_DATA_DIR = (
 )
 
 
-class OrbaxModelRunnerGpuTest(googletest.TestCase):
-  """Test suite for GPU model runner."""
+class OrbaxModelRunnerCudaTest(googletest.TestCase):
+  """Test suite for CUDA model runner."""
 
   def test_load_and_run_stablehlo_sharded_succeeds(self):
-    """Tests loading a model and running a StableHlo function on GPU."""
+    """Tests loading a model and running a StableHlo function on CUDA."""
     model_path = os.path.join(
         resources.GetRunfilesDir(),
         _TEST_DATA_DIR,
