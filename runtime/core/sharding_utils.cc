@@ -243,7 +243,7 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeAssembledArrayFromHostBuffer(
   auto sharding = xla::ifrt::HloSharding::Create(
       device_list, xla::ifrt::MemoryKind(), hlo_sharding);
 
-  VLOG(2) << "Assembling arrays by sharding " << sharding->DebugString();
+  VLOG(2) << "Assembling arrays by sharding " << sharding;
 
   TF_ASSIGN_OR_RETURN(auto index_domains,
                       sharding->IndexDomains(
