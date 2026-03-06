@@ -1,7 +1,10 @@
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("//devtools/python/blaze:strict.bzl", "py_strict_test")
 
-package(default_visibility = ["//third_party/neptune/model:__subpackages__"])
+package(default_visibility = [
+    "//third_party/neptune/model:__subpackages__",
+    "//third_party/py/orbax/experimental/model:__subpackages__",
+])
 
 py_library(
     name = "function",
