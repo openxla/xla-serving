@@ -7,7 +7,6 @@
 #include <utility>
 #include <vector>
 
-#include "learning/infra/mira/experimental/orbax_model/interpreter/linear_graph_execute.h"
 #include "third_party/absl/cleanup/cleanup.h"
 #include "third_party/absl/functional/any_invocable.h"
 #include "third_party/absl/status/status.h"
@@ -19,6 +18,7 @@
 #include "third_party/neptune/runtime/core/host_buffer.h"
 #include "third_party/neptune/runtime/core/value.h"
 #include "third_party/neptune/runtime/core/value_utils.h"
+#include "third_party/neptune/runtime/interpreter/linear_graph_execute.h"
 #include "third_party/neptune/runtime/kernel/batching/batch_resource_base.h"
 #include "third_party/neptune/runtime/kernel/batching/warmup.h"
 #include "third_party/neptune/runtime/kernel/kernel.h"

@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "devtools/build/runtime/get_runfiles_dir.h"
-#include "learning/infra/mira/experimental/orbax_model/interpreter/manifest_utils.h"
+#include "third_party/neptune/runtime/interpreter/manifest_utils.h"
 #include "testing/base/public/gmock.h"
 #include "testing/base/public/gunit.h"
 #include "third_party/absl/status/status.h"

@@ -5,11 +5,11 @@
 #include <string>
 #include <utility>
 
-#include "learning/infra/mira/experimental/orbax_model/interpreter/interpreter.h"
 #include "third_party/absl/status/statusor.h"
 #include "third_party/absl/strings/string_view.h"
 #include "third_party/grpc/include/grpcpp/server_context.h"
 #include "third_party/grpc/include/grpcpp/support/status.h"
+#include "third_party/neptune/runtime/interpreter/interpreter.h"
 #include "third_party/neptune/runtime/serving/gcp/proto/get_model_metadata.proto.h"
 #include "third_party/neptune/runtime/serving/gcp/proto/predict.proto.h"
 #include "third_party/neptune/runtime/serving/gcp/proto/prediction_service.grpc.pb.h"

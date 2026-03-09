@@ -5,8 +5,6 @@
 #include <utility>
 #include <vector>
 
-#include "learning/infra/mira/experimental/orbax_model/interpreter/interpreter.h"
-#include "learning/infra/mira/experimental/orbax_model/interpreter/run_options.h"
 #include "learning/infra/mira/experimental/orbax_model/tensorflow/tf_compatible_interpreter_create_options.h"
 #include "learning/infra/mira/experimental/orbax_model/tensorflow/utils/tf_to_host_buffer.h"
 #include "third_party/absl/container/flat_hash_map.h"
@@ -22,6 +20,8 @@
 #include "third_party/neptune/runtime/core/host_buffer.h"
 #include "third_party/neptune/runtime/core/proto/host_buffer.proto.h"
 #include "third_party/neptune/runtime/core/value.h"
+#include "third_party/neptune/runtime/interpreter/interpreter.h"
+#include "third_party/neptune/runtime/interpreter/run_options.h"
 #include "third_party/neptune/runtime/kernel/kernel_io_data_type.h"
 #include "third_party/neptune/runtime/serving/gcp/proto/model.proto.h"
 #include "third_party/neptune/runtime/serving/gcp/proto/prediction_service.proto.h"

@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "learning/infra/mira/experimental/orbax_model/interpreter/context.h"
+#include "third_party/neptune/runtime/interpreter/context.h"
 #include "third_party/absl/base/thread_annotations.h"
 #include "third_party/absl/container/flat_hash_map.h"
 #include "third_party/absl/functional/any_invocable.h"

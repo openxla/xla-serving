@@ -4,7 +4,7 @@
 #include <utility>
 #include <vector>
 
-#include "learning/infra/mira/experimental/orbax_model/interpreter/manifest_utils.h"
+#include "third_party/neptune/runtime/interpreter/manifest_utils.h"
 #include "third_party/absl/log/log.h"
 #include "third_party/absl/memory/memory.h"
 #include "third_party/absl/status/status.h"

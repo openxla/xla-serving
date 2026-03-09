@@ -4,7 +4,7 @@
 #include <memory>
 #include <optional>
 
-#include "learning/infra/mira/experimental/orbax_model/interpreter/manifest_utils.h"
+#include "third_party/neptune/runtime/interpreter/manifest_utils.h"
 #include "third_party/absl/base/nullability.h"
 #include "third_party/absl/status/statusor.h"
 #include "third_party/absl/strings/string_view.h"

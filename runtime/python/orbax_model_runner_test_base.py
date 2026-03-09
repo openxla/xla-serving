@@ -11,7 +11,7 @@ from google3.testing.pybase import parameterized
 from google3.third_party.neptune.runtime.python import orbax_model_runner
 
 _TEST_DATA_DIR: Final[str] = (
-    'google3/learning/infra/mira/experimental/orbax_model/interpreter/testdata'
+    'google3/learning/infra/mira/experimental/orbax_model/interpreter/testdata/'
 )
 
 

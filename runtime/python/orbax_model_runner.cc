@@ -5,7 +5,7 @@
 #include <utility>
 #include <vector>
 
-#include "learning/infra/mira/experimental/orbax_model/interpreter/interpreter.h"
+#include "third_party/neptune/runtime/interpreter/interpreter.h"
 #include "learning/infra/mira/experimental/orbax_model/tensorflow/tf_compatible_interpreter_create_options.h"
 #include "third_party/absl/base/nullability.h"
 #include "third_party/absl/container/flat_hash_map.h"
