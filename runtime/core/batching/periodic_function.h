@@ -41,9 +41,9 @@
 #include <memory>
 #include <string>
 
-#include "third_party/absl/functional/any_invocable.h"
-#include "third_party/absl/synchronization/notification.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/env.h"
+#include "absl/functional/any_invocable.h"  // from @com_google_absl
+#include "absl/synchronization/notification.h"  // from @com_google_absl
+#include "xla/tsl/platform/env.h"  // from @xla
 
 namespace jsv {
 

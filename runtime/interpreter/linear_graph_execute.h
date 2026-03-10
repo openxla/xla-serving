@@ -6,15 +6,15 @@
 #include <string>
 #include <vector>
 
-#include "third_party/neptune/runtime/interpreter/context.h"
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/core/value.h"
-#include "third_party/neptune/runtime/kernel/kernel.h"
-#include "third_party/tensorflow/compiler/xla/tsl/concurrency/future.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
+#include "runtime/interpreter/context.h"  // from @neptune
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/core/value.h"  // from @neptune
+#include "runtime/kernel/kernel.h"  // from @neptune
+#include "xla/tsl/concurrency/future.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
 
 namespace jsv {
 

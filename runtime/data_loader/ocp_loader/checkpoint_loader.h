@@ -1,7 +1,7 @@
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/data_loader/ocp_loader/common_types.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/shape.h"
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/data_loader/ocp_loader/common_types.h"  // from @neptune
+#include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
 
 // TODO(qidichen): move or add the unit test from MIRA.
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_
@@ -12,13 +12,13 @@
 #include <utility>
 #include <vector>
 
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/australis/google/ifrt/ifrt_australis.proto.h"
-#include "third_party/tensorflow/compiler/xla/layout.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/device_list.h"
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "third_party/australis/google/ifrt/ifrt_australis.pb.h"
+#include "xla/layout.h"  // from @xla
+#include "xla/python/ifrt/array.h"  // from @xla
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/python/ifrt/device_list.h"  // from @xla
 
 namespace neptune {
 

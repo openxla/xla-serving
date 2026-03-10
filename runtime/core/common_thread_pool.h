@@ -5,9 +5,9 @@
 #include <functional>
 #include <utility>
 
-#include "third_party/absl/status/status.h"
-#include "third_party/neptune/runtime/core/thread_pool_interface.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
+#include "absl/status/status.h"  // from @com_google_absl
+#include "runtime/core/thread_pool_interface.h"  // from @neptune
+#include "xla/tsl/platform/threadpool.h"  // from @xla
 
 namespace jsv {
 

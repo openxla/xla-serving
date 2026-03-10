@@ -1,4 +1,4 @@
-#include "third_party/neptune/runtime/kernel/batching/warmup.h"
+#include "runtime/kernel/batching/warmup.h"  // from @neptune
 
 #include <cstdint>
 #include <memory>
@@ -6,13 +6,13 @@
 #include <string>
 #include <utility>
 
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/synchronization/mutex.h"
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
 
 namespace jsv {
 

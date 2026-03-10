@@ -1,4 +1,4 @@
-#include "third_party/neptune/runtime/libs/mlir/dump_mlir_util.h"
+#include "runtime/libs/mlir/dump_mlir_util.h"  // from @neptune
 
 #include <cstdint>
 #include <cstdio>
@@ -8,26 +8,26 @@
 #include <string>
 #include <utility>
 
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/strings/match.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/synchronization/mutex.h"
-#include "third_party/llvm/llvm-project/llvm/include/llvm/ADT/STLExtras.h"
-#include "third_party/llvm/llvm-project/llvm/include/llvm/ADT/StringMap.h"
-#include "third_party/llvm/llvm-project/llvm/include/llvm/ADT/StringRef.h"
-#include "third_party/llvm/llvm-project/llvm/include/llvm/ADT/Twine.h"
-#include "third_party/llvm/llvm-project/llvm/include/llvm/Support/FormatVariadic.h"
-#include "third_party/llvm/llvm-project/llvm/include/llvm/Support/raw_ostream.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/Operation.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/OperationSupport.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/Pass/Pass.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/Pass/PassManager.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/Support/LLVM.h"
-#include "third_party/tensorflow/compiler/xla/tsl/lib/io/buffered_file.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/env.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/file_system.h"
-#include "third_party/tensorflow/tsl/platform/path.h"
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/strings/match.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "llvm/include/llvm/ADT/STLExtras.h"  // from @llvm-project
+#include "llvm/include/llvm/ADT/StringMap.h"  // from @llvm-project
+#include "llvm/include/llvm/ADT/StringRef.h"  // from @llvm-project
+#include "llvm/include/llvm/ADT/Twine.h"  // from @llvm-project
+#include "llvm/include/llvm/Support/FormatVariadic.h"  // from @llvm-project
+#include "llvm/include/llvm/Support/raw_ostream.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/Operation.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/OperationSupport.h"  // from @llvm-project
+#include "mlir/include/mlir/Pass/Pass.h"  // from @llvm-project
+#include "mlir/include/mlir/Pass/PassManager.h"  // from @llvm-project
+#include "mlir/include/mlir/Support/LLVM.h"  // from @llvm-project
+#include "xla/tsl/lib/io/buffered_file.h"  // from @xla
+#include "xla/tsl/platform/env.h"  // from @xla
+#include "xla/tsl/platform/file_system.h"  // from @xla
+#include "tsl/platform/path.h"  // from @tsl
 
 using llvm::raw_ostream;
 

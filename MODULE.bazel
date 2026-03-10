@@ -1,0 +1,102 @@
+module(name = "neptune")
+
+# go/keep-sorted start
+bazel_dep(name = "abseil-cpp", version = "20250814.1", repo_name = "com_google_absl")
+bazel_dep(name = "abseil-py", version = "2.1.0", repo_name = "absl_py")
+bazel_dep(name = "bazel_features", version = "1.36.0")
+bazel_dep(name = "bazel_skylib", version = "1.8.2")
+bazel_dep(name = "grpc", version = "1.78.0", repo_name = "com_github_grpc_grpc")
+bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "protobuf", version = "32.1", repo_name = "com_google_protobuf")
+bazel_dep(name = "pybind11_abseil", version = "202402.0")
+bazel_dep(name = "pybind11_bazel", version = "2.13.6")
+bazel_dep(name = "pybind11_protobuf", version = "0.0.0-20250210-f02a2b7")
+bazel_dep(name = "rules_cc", version = "0.2.8")
+bazel_dep(name = "rules_python", version = "1.8.4")
+# go/keep-sorted end
+
+# To calculate integrity:
+# wget -O temp_module_archive.tar.gz <archive URL>
+# HASH=$(openssl dgst -sha256 -binary temp_module_archive.tar.gz | openssl base64 -A)
+# echo "sha256-${HASH}"
+bazel_dep(name = "rules_ml_toolchain")
+archive_override(
+    module_name = "rules_ml_toolchain",
+    integrity = "sha256-+Ux1GT9lCXHfUhiP8OAxQGfHsVN4pur9hD0GMrPXqyA=",
+    strip_prefix = "rules_ml_toolchain-c03c8cf626cfd2647042dbe635f233d0f0693e00",
+    urls = ["https://github.com/google-ml-infra/rules_ml_toolchain/archive/c03c8cf626cfd2647042dbe635f233d0f0693e00.tar.gz"],
+)
+
+bazel_dep(name = "xla")
+archive_override(
+    module_name = "xla",
+    integrity = "sha256-f79qyQt4NL1RpF2z1EH5GdioquDNRORPvjMoEQTJ9PM=",
+    strip_prefix = "xla-f61a4a6dbaeec4b31d7c5768e172f9587dd86d0e",
+    urls = ["https://github.com/openxla/xla/archive/f61a4a6dbaeec4b31d7c5768e172f9587dd86d0e.tar.gz"],
+)
+
+# TODO: upstreaming in cl/822016400
+single_version_override(
+    module_name = "grpc",
+    patch_strip = 1,
+    patches = ["//third_party/grpc:grpc.patch"],
+    version = "1.78.0",
+)
+
+##############################################################
+# Dependencies defined in XLA via module extensions
+##############################################################
+
+### TSL
+tsl_extension = use_extension("@xla//third_party/extensions:tsl.bzl", "tsl_extension")
+use_repo(tsl_extension, "tsl")
+
+### LLVM
+llvm = use_extension("@xla//third_party/extensions:llvm.bzl", "llvm_extension")
+use_repo(llvm, "llvm-project")
+
+### C++ dependencies
+third_party = use_extension("@xla//third_party/extensions:third_party.bzl", "third_party_ext")
+use_repo(
+    third_party,
+    "stablehlo",
+)
+
+python_version_ext = use_extension("@xla//third_party/extensions:python_version.bzl", "python_version_ext")
+use_repo(python_version_ext, "python_version_repo")
+
+##############################################################
+# Dependencies defined in rules_ml_toolchain
+##############################################################
+
+### Toolchains
+register_toolchains("@rules_ml_toolchain//cc:linux_x86_64_linux_x86_64")
+
+register_toolchains("@rules_ml_toolchain//cc:linux_x86_64_linux_x86_64_cuda")
+
+single_version_override(
+    module_name = "rules_python",
+    patch_strip = 1,
+    patches = [
+        "//third_party/py:rules_python_pip_version.patch",
+        "//third_party/py:rules_python_freethreaded.patch",
+        "//third_party/py:rules_python_versions.patch",
+        "//third_party/py:rules_python_scope.patch",
+    ],
+    version = "1.8.4",
+)
+
+### Toolchains
+
+# TODO: Support HERMETIC_PYTHON_URL, etc to allow specifying a custom built
+# python version.
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.defaults(
+    # The environment variable takes precedence if set.
+    python_version = "3.11",
+    python_version_env = "HERMETIC_PYTHON_VERSION",
+)
+python.toolchain(python_version = "3.11")
+python.toolchain(python_version = "3.12")
+python.toolchain(python_version = "3.13")
+python.toolchain(python_version = "3.14")

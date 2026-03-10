@@ -1,14 +1,14 @@
 #include <memory>
 #include <utility>
 
-#include "third_party/absl/status/statusor.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/c_api_client/pjrt_c_api_client.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/pjrt_client.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/plugin/plugin_names.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/test_util.h"
-#include "third_party/tensorflow/compiler/xla/python/pjrt_ifrt/pjrt_client.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "xla/pjrt/c_api_client/pjrt_c_api_client.h"  // from @xla
+#include "xla/pjrt/pjrt_client.h"  // from @xla
+#include "xla/pjrt/plugin/plugin_names.h"  // from @xla
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/python/ifrt/test_util.h"  // from @xla
+#include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
 
 namespace jsv {
 namespace {

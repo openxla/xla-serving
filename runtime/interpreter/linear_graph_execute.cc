@@ -1,4 +1,4 @@
-#include "third_party/neptune/runtime/interpreter/linear_graph_execute.h"
+#include "runtime/interpreter/linear_graph_execute.h"  // from @neptune
 
 #include <cstdint>
 #include <memory>
@@ -6,23 +6,23 @@
 #include <utility>
 #include <vector>
 
-#include "third_party/neptune/runtime/interpreter/context.h"
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/core/value.h"
-#include "third_party/neptune/runtime/kernel/kernel.h"
-#include "third_party/tensorflow/compiler/xla/tsl/concurrency/future.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/errors.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
-#include "third_party/tensorflow/tsl/profiler/lib/connected_traceme.h"
-#include "third_party/tensorflow/tsl/profiler/lib/context_types.h"
-#include "third_party/tensorflow/tsl/profiler/lib/traceme.h"
+#include "runtime/interpreter/context.h"  // from @neptune
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/core/value.h"  // from @neptune
+#include "runtime/kernel/kernel.h"  // from @neptune
+#include "xla/tsl/concurrency/future.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
+#include "tsl/profiler/lib/connected_traceme.h"  // from @tsl
+#include "tsl/profiler/lib/context_types.h"  // from @tsl
+#include "tsl/profiler/lib/traceme.h"  // from @tsl
 
 namespace jsv {
 

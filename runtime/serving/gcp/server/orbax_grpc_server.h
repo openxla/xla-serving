@@ -5,16 +5,16 @@
 #include <string>
 #include <utility>
 
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/grpc/include/grpcpp/server_context.h"
-#include "third_party/grpc/include/grpcpp/support/status.h"
-#include "third_party/neptune/runtime/interpreter/interpreter.h"
-#include "third_party/neptune/runtime/serving/gcp/proto/get_model_metadata.proto.h"
-#include "third_party/neptune/runtime/serving/gcp/proto/predict.proto.h"
-#include "third_party/neptune/runtime/serving/gcp/proto/prediction_service.grpc.pb.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "include/grpcpp/server_context.h"  // from @com_github_grpc_grpc
+#include "include/grpcpp/support/status.h"  // from @com_github_grpc_grpc
+#include "runtime/interpreter/interpreter.h"  // from @neptune
+#include "runtime/serving/gcp/proto/get_model_metadata.pb.h"  // from @neptune
+#include "runtime/serving/gcp/proto/predict.pb.h"  // from @neptune
+#include "runtime/serving/gcp/proto/prediction_service.grpc.pb.h"  // from @neptune
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
 
 namespace jsv {
 namespace serving {

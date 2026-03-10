@@ -4,11 +4,11 @@
 #include <cstdint>
 #include <vector>
 
-#include "third_party/absl/base/thread_annotations.h"
-#include "third_party/absl/synchronization/mutex.h"
-#include "third_party/absl/synchronization/notification.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/env.h"
-#include "third_party/tensorflow/tsl/platform/thread_annotations.h"
+#include "absl/base/thread_annotations.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "absl/synchronization/notification.h"  // from @com_google_absl
+#include "xla/tsl/platform/env.h"  // from @xla
+#include "tsl/platform/thread_annotations.h"  // from @tsl
 
 namespace jsv {
 namespace test_util {

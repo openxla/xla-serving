@@ -5,13 +5,13 @@
 #include <optional>
 #include <vector>
 
-#include "third_party/absl/container/inlined_vector.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/Builders.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/Types.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/shape.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "absl/container/inlined_vector.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "mlir/include/mlir/IR/Builders.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/Types.h"  // from @llvm-project
+#include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
 
 namespace jsv::sharding_internal {
 

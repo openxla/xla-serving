@@ -1,21 +1,21 @@
-#include "third_party/neptune/runtime/core/stablehlo.h"
+#include "runtime/core/stablehlo.h"  // from @neptune
 
 #include <memory>
 #include <utility>
 #include <vector>
 
-#include "third_party/neptune/runtime/interpreter/manifest_utils.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/memory/memory.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/core/stablehlo_utils.h"
+#include "runtime/interpreter/manifest_utils.h"  // from @neptune
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/memory/memory.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/core/stablehlo_utils.h"  // from @neptune
 #include "third_party/protobuf/message.h"
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.proto.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
+#include "xla/tsl/platform/statusor.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
 
 namespace jsv {
 

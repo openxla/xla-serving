@@ -1,9 +1,9 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_THREADSAFE_STATUS_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_THREADSAFE_STATUS_H_
 
-#include "third_party/absl/base/thread_annotations.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/synchronization/mutex.h"
+#include "absl/base/thread_annotations.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
 
 namespace jsv {
 // Wrapper class to allow  concurrent updates on a 'status'.

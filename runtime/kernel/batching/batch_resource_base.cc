@@ -1,4 +1,4 @@
-#include "third_party/neptune/runtime/kernel/batching/batch_resource_base.h"
+#include "runtime/kernel/batching/batch_resource_base.h"  // from @neptune
 
 #include <algorithm>
 #include <cstddef>
@@ -10,42 +10,42 @@
 #include <utility>
 #include <vector>
 
-#include "third_party/absl/base/no_destructor.h"
-#include "third_party/absl/cleanup/cleanup.h"
-#include "third_party/absl/container/fixed_array.h"
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/functional/any_invocable.h"
-#include "third_party/absl/functional/bind_front.h"
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/match.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/synchronization/blocking_counter.h"
-#include "third_party/absl/synchronization/mutex.h"
-#include "third_party/absl/time/time.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/core/allocator.h"
-#include "third_party/neptune/runtime/core/batching/batch_scheduler.h"
-#include "third_party/neptune/runtime/core/batching/batch_scheduler_utils.h"
-#include "third_party/neptune/runtime/core/batching/batch_stats.h"
-#include "third_party/neptune/runtime/core/batching/input_split_metadata.h"
-#include "third_party/neptune/runtime/core/batching/threadsafe_status.h"
-#include "third_party/neptune/runtime/core/host_buffer.h"
-#include "third_party/neptune/runtime/core/incremental_barrier.h"
-#include "third_party/neptune/runtime/core/value.h"
-#include "third_party/neptune/runtime/kernel/batching/warmup.h"
-#include "third_party/neptune/runtime/kernel/kernel.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/shape.h"
-#include "third_party/tensorflow/compiler/xla/tsl/lib/monitoring/counter.h"
-#include "third_party/tensorflow/compiler/xla/tsl/lib/monitoring/sampler.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/criticality.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/env_time.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/errors.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
+#include "absl/base/no_destructor.h"  // from @com_google_absl
+#include "absl/cleanup/cleanup.h"  // from @com_google_absl
+#include "absl/container/fixed_array.h"  // from @com_google_absl
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/functional/any_invocable.h"  // from @com_google_absl
+#include "absl/functional/bind_front.h"  // from @com_google_absl
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/match.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/synchronization/blocking_counter.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "absl/time/time.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/core/allocator.h"  // from @neptune
+#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
+#include "runtime/core/batching/batch_scheduler_utils.h"  // from @neptune
+#include "runtime/core/batching/batch_stats.h"  // from @neptune
+#include "runtime/core/batching/input_split_metadata.h"  // from @neptune
+#include "runtime/core/batching/threadsafe_status.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/incremental_barrier.h"  // from @neptune
+#include "runtime/core/value.h"  // from @neptune
+#include "runtime/kernel/batching/warmup.h"  // from @neptune
+#include "runtime/kernel/kernel.h"  // from @neptune
+#include "xla/python/ifrt/shape.h"  // from @xla
+#include "xla/tsl/lib/monitoring/counter.h"  // from @xla
+#include "xla/tsl/lib/monitoring/sampler.h"  // from @xla
+#include "xla/tsl/platform/criticality.h"  // from @xla
+#include "xla/tsl/platform/env_time.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
 // TODO: add Copybara notation for dependencies on
 // "third_party/tensorflow/core/common_runtime" as they are used for cost
 // measurement and it depends on usage of registration pattern with internal
@@ -55,8 +55,8 @@
 #include "third_party/tensorflow/core/common_runtime/cost_util.h"
 #include "third_party/tensorflow/core/common_runtime/request_cost.h"
 #include "third_party/tensorflow/core/common_runtime/request_cost_accessor.h"
-#include "third_party/tensorflow/tsl/platform/context.h"
-#include "third_party/tensorflow/tsl/profiler/lib/traceme.h"
+#include "tsl/platform/context.h"  // from @tsl
+#include "tsl/profiler/lib/traceme.h"  // from @tsl
 
 namespace jsv {
 namespace {

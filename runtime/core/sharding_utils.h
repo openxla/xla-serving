@@ -5,22 +5,22 @@
 #include <optional>
 #include <vector>
 
-#include "third_party/absl/container/inlined_vector.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/core/host_buffer.h"
-#include "third_party/tensorflow/compiler/xla/hlo/ir/hlo_sharding.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/device.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/device_list.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/shape.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/sharding.h"
-#include "third_party/tensorflow/compiler/xla/shape.h"
-#include "third_party/tensorflow/compiler/xla/tsl/concurrency/future.h"
-#include "third_party/tensorflow/compiler/xla/tsl/concurrency/ref_count.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
+#include "absl/container/inlined_vector.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/core/host_buffer.h"  // from @neptune
+#include "xla/hlo/ir/hlo_sharding.h"  // from @xla
+#include "xla/python/ifrt/array.h"  // from @xla
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/python/ifrt/device.h"  // from @xla
+#include "xla/python/ifrt/device_list.h"  // from @xla
+#include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
+#include "xla/python/ifrt/sharding.h"  // from @xla
+#include "xla/shape.h"  // from @xla
+#include "xla/tsl/concurrency/future.h"  // from @xla
+#include "xla/tsl/concurrency/ref_count.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
 
 namespace jsv::sharding_internal {
 

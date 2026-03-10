@@ -1,16 +1,16 @@
-#include "third_party/neptune/runtime/serving/gcp/auth/utils.h"
+#include "runtime/serving/gcp/auth/utils.h"  // from @neptune
 
 #include <memory>
 #include <string>
 
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/grpc/include/grpc/grpc_security_constants.h"
-#include "third_party/grpc/include/grpcpp/security/credentials.h"
-#include "third_party/grpc/include/grpcpp/security/server_credentials.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/env.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/errors.h"
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "include/grpc/grpc_security_constants.h"  // from @com_github_grpc_grpc
+#include "include/grpcpp/security/credentials.h"  // from @com_github_grpc_grpc
+#include "include/grpcpp/security/server_credentials.h"  // from @com_github_grpc_grpc
+#include "xla/tsl/platform/env.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
 
 namespace jsv {
 namespace serving {

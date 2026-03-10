@@ -3,10 +3,10 @@
 
 #include <cstdint>
 
-#include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"
-#include "third_party/tensorflow/tsl/platform/bfloat16.h"
-#include "third_party/tensorflow/tsl/platform/ml_dtypes.h"
-#include "third_party/tensorflow/tsl/platform/tstring.h"
+#include "xla/python/ifrt/dtype.h"  // from @xla
+#include "tsl/platform/bfloat16.h"  // from @tsl
+#include "tsl/platform/ml_dtypes.h"  // from @tsl
+#include "tsl/platform/tstring.h"  // from @tsl
 
 namespace jsv {
 

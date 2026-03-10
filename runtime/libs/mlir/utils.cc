@@ -1,26 +1,26 @@
-#include "third_party/neptune/runtime/libs/mlir/utils.h"
+#include "runtime/libs/mlir/utils.h"  // from @neptune
 
 #include <cstdint>
 #include <optional>
 
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/llvm/llvm-project/llvm/include/llvm/Support/Casting.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/Builders.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/BuiltinAttributes.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/BuiltinTypeInterfaces.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/BuiltinTypes.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/Types.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/Support/DebugStringHelper.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/Support/LLVM.h"
-#include "third_party/stablehlo/stablehlo/dialect/StablehloOps.h"
-#include "third_party/tensorflow/compiler/xla/mlir/utils/type_util.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"
-#include "third_party/tensorflow/compiler/xla/python/pjrt_ifrt/pjrt_dtype.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "llvm/include/llvm/Support/Casting.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/Builders.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/BuiltinAttributes.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/BuiltinTypeInterfaces.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/BuiltinTypes.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/Types.h"  // from @llvm-project
+#include "mlir/include/mlir/Support/DebugStringHelper.h"  // from @llvm-project
+#include "mlir/include/mlir/Support/LLVM.h"  // from @llvm-project
+#include "stablehlo/dialect/StablehloOps.h"  // from @stablehlo
+#include "xla/mlir/utils/type_util.h"  // from @xla
+#include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/python/pjrt_ifrt/pjrt_dtype.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
 
 namespace jsv::sharding_internal {
 

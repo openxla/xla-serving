@@ -2,7 +2,7 @@
 #define THIRD_PARTY_NEPTUNE_RUNTIME_HOST_BUFFER_MATCHER_H_
 
 #include "testing/base/public/gunit.h"
-#include "third_party/neptune/runtime/core/host_buffer.h"
+#include "runtime/core/host_buffer.h"  // from @neptune
 
 namespace jsv {
 

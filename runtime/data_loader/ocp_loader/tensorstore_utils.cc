@@ -1,4 +1,4 @@
-#include "third_party/neptune/runtime/data_loader/ocp_loader/tensorstore_utils.h"
+#include "runtime/data_loader/ocp_loader/tensorstore_utils.h"  // from @neptune
 
 #include <filesystem>  // NOLINT(build/c++17)
 #include <optional>
@@ -7,8 +7,8 @@
 #include <utility>
 #include <variant>
 
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
 #include "third_party/json/include/nlohmann/json.hpp"
 #include "third_party/json/include/nlohmann/json_fwd.hpp"
 

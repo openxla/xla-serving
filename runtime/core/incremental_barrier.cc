@@ -1,10 +1,10 @@
-#include "third_party/neptune/runtime/core/incremental_barrier.h"
+#include "runtime/core/incremental_barrier.h"  // from @neptune
 
 #include <atomic>
 #include <utility>
 
-#include "third_party/absl/functional/bind_front.h"
-#include "third_party/absl/log/check.h"
+#include "absl/functional/bind_front.h"  // from @com_google_absl
+#include "absl/log/check.h"  // from @com_google_absl
 
 namespace jsv {
 

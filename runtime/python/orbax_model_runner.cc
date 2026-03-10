@@ -5,17 +5,17 @@
 #include <utility>
 #include <vector>
 
-#include "third_party/neptune/runtime/interpreter/interpreter.h"
+#include "runtime/interpreter/interpreter.h"  // from @neptune
 #include "learning/infra/mira/experimental/orbax_model/tensorflow/tf_compatible_interpreter_create_options.h"
-#include "third_party/absl/base/nullability.h"
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/flags/flag.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/str_join.h"
-#include "third_party/absl/strings/string_view.h"
+#include "absl/base/nullability.h"  // from @com_google_absl
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/flags/flag.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/str_join.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
 #include "third_party/nanobind/include/nanobind/nanobind.h"
 #include "third_party/nanobind/include/nanobind/nb_defs.h"
 #include "third_party/nanobind/include/nanobind/stl/shared_ptr.h"  // IWYU pragma: keep
@@ -23,22 +23,22 @@
 #include "third_party/nanobind/include/nanobind/stl/string_view.h"  // IWYU pragma: keep
 #include "third_party/nanobind/include/nanobind/stl/unordered_map.h"  // IWYU pragma: keep
 #include "third_party/nanobind/include/nanobind/stl/vector.h"  // IWYU pragma: keep
-#include "third_party/neptune/runtime/core/host_buffer.h"
-#include "third_party/neptune/runtime/core/value.h"
-#include "third_party/neptune/runtime/kernel/kernel_io_data_type.h"
-#include "third_party/neptune/runtime/python/ifrt_client_factory.h"
-#include "third_party/neptune/runtime/python/numpy_utils.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
-#include "third_party/tensorflow/compiler/xla/python/nb_numpy.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/env.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
-#include "third_party/tensorflow/compiler/xla/tsl/python/lib/core/numpy.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/value.h"  // from @neptune
+#include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
+#include "runtime/python/ifrt_client_factory.h"  // from @neptune
+#include "runtime/python/numpy_utils.h"  // from @neptune
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/python/nb_numpy.h"  // from @xla
+#include "xla/tsl/platform/env.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
+#include "xla/tsl/python/lib/core/numpy.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
 #include "third_party/tensorflow/core/framework/tensor.h"
-#include "third_party/tensorflow/core/framework/tensor.proto.h"
+#include "third_party/tensorflow/core/framework/tensor.pb.h"
 #include "third_party/tensorflow/core/framework/tensor_shape.h"
-#include "third_party/tensorflow/core/framework/types.proto.h"
+#include "third_party/tensorflow/core/framework/types.pb.h"
 
 ABSL_FLAG(std::string, orbax_model_runner_platform, "cpu",
           "The platform to use. It can be cpu, tpu, or cuda");

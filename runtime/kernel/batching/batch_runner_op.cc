@@ -1,4 +1,4 @@
-#include "third_party/neptune/runtime/kernel/batching/batch_runner_op.h"
+#include "runtime/kernel/batching/batch_runner_op.h"  // from @neptune
 
 #include <cstdint>
 #include <functional>
@@ -7,31 +7,31 @@
 #include <utility>
 #include <vector>
 
-#include "third_party/absl/cleanup/cleanup.h"
-#include "third_party/absl/functional/any_invocable.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/core/batching/shared_batch_scheduler.h"
-#include "third_party/neptune/runtime/core/host_buffer.h"
-#include "third_party/neptune/runtime/core/value.h"
-#include "third_party/neptune/runtime/core/value_utils.h"
-#include "third_party/neptune/runtime/interpreter/linear_graph_execute.h"
-#include "third_party/neptune/runtime/kernel/batching/batch_resource_base.h"
-#include "third_party/neptune/runtime/kernel/batching/warmup.h"
-#include "third_party/neptune/runtime/kernel/kernel.h"
-#include "third_party/neptune/runtime/kernel/kernel_builder_context.h"
-#include "third_party/tensorflow/compiler/xla/tsl/concurrency/future.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/errors.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
-#include "third_party/tensorflow/tsl/platform/random.h"
-#include "third_party/tensorflow/tsl/platform/refcount.h"
-#include "third_party/tensorflow/tsl/profiler/lib/connected_traceme.h"
-#include "third_party/tensorflow/tsl/profiler/lib/context_types.h"
-#include "third_party/tensorflow/tsl/profiler/lib/traceme.h"
-#include "third_party/tensorflow/tsl/profiler/lib/traceme_encode.h"
+#include "absl/cleanup/cleanup.h"  // from @com_google_absl
+#include "absl/functional/any_invocable.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/core/batching/shared_batch_scheduler.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/value.h"  // from @neptune
+#include "runtime/core/value_utils.h"  // from @neptune
+#include "runtime/interpreter/linear_graph_execute.h"  // from @neptune
+#include "runtime/kernel/batching/batch_resource_base.h"  // from @neptune
+#include "runtime/kernel/batching/warmup.h"  // from @neptune
+#include "runtime/kernel/kernel.h"  // from @neptune
+#include "runtime/kernel/kernel_builder_context.h"  // from @neptune
+#include "xla/tsl/concurrency/future.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
+#include "tsl/platform/random.h"  // from @tsl
+#include "tsl/platform/refcount.h"  // from @tsl
+#include "tsl/profiler/lib/connected_traceme.h"  // from @tsl
+#include "tsl/profiler/lib/context_types.h"  // from @tsl
+#include "tsl/profiler/lib/traceme.h"  // from @tsl
+#include "tsl/profiler/lib/traceme_encode.h"  // from @tsl
 
 namespace jsv {
 

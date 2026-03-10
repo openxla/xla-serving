@@ -1,6 +1,6 @@
-#include "third_party/absl/log/check.h"
-#include "third_party/neptune/runtime/kernel/builtin_kernel.h"
-#include "third_party/neptune/runtime/kernel/kernel.h"
+#include "absl/log/check.h"  // from @com_google_absl
+#include "runtime/kernel/builtin_kernel.h"  // from @neptune
+#include "runtime/kernel/kernel.h"  // from @neptune
 
 namespace jsv {
 namespace {

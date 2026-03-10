@@ -1,9 +1,9 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_CONTEXT_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_CONTEXT_H_
 
-#include "third_party/neptune/runtime/interpreter/clock.h"
-#include "third_party/neptune/runtime/interpreter/run_options.h"
-#include "third_party/absl/time/time.h"
+#include "runtime/interpreter/clock.h"  // from @neptune
+#include "runtime/interpreter/run_options.h"  // from @neptune
+#include "absl/time/time.h"  // from @com_google_absl
 
 namespace jsv {
 

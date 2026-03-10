@@ -4,12 +4,12 @@
 #include <algorithm>
 #include <vector>
 
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/core/value.h"
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/core/value.h"  // from @neptune
 
 namespace jsv::internal {
 

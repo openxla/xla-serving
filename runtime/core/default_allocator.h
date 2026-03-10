@@ -5,8 +5,8 @@
 #include <cstdint>
 #include <new>
 
-#include "third_party/absl/base/no_destructor.h"
-#include "third_party/neptune/runtime/core/allocator.h"
+#include "absl/base/no_destructor.h"  // from @com_google_absl
+#include "runtime/core/allocator.h"  // from @neptune
 
 namespace jsv {
 

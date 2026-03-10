@@ -3,13 +3,13 @@
 
 #include <memory>
 
-#include "third_party/absl/functional/any_invocable.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/pjrt_executable.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/device_list.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/executable.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/hlo/hlo_program.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/program.h"
+#include "absl/functional/any_invocable.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "xla/pjrt/pjrt_executable.h"  // from @xla
+#include "xla/python/ifrt/device_list.h"  // from @xla
+#include "xla/python/ifrt/executable.h"  // from @xla
+#include "xla/python/ifrt/hlo/hlo_program.h"  // from @xla
+#include "xla/python/ifrt/program.h"  // from @xla
 
 namespace jsv {
 

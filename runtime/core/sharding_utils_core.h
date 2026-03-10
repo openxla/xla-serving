@@ -5,18 +5,18 @@
 #include <functional>
 #include <vector>
 
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/types/span.h"
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
 #include "third_party/eigen3/Eigen/Core"
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
-#include "third_party/neptune/runtime/core/host_buffer.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/shape.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/errors.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/macros.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
+#include "runtime/core/host_buffer.h"  // from @neptune
+#include "xla/python/ifrt/shape.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
+#include "xla/tsl/platform/macros.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
 
 namespace jsv::sharding_internal {
 

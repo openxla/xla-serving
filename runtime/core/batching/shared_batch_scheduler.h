@@ -17,31 +17,31 @@
 #include <variant>
 #include <vector>
 
-#include "third_party/absl/base/thread_annotations.h"
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/str_format.h"
-#include "third_party/absl/synchronization/mutex.h"
-#include "third_party/absl/synchronization/notification.h"
-#include "third_party/absl/time/clock.h"
-#include "third_party/absl/time/time.h"
-#include "third_party/neptune/runtime/core/allocator.h"
-#include "third_party/neptune/runtime/core/batching/batch_scheduler.h"
-#include "third_party/neptune/runtime/core/batching/batch_scheduler_utils.h"
-#include "third_party/neptune/runtime/core/batching/batch_stats.h"
-#include "third_party/neptune/runtime/core/batching/periodic_function.h"
-#include "third_party/neptune/runtime/core/default_allocator.h"
-#include "third_party/neptune/runtime/kernel/batching/batch_options_utils.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/criticality.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/env.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/errors.h"
-#include "third_party/tensorflow/tsl/platform/cpu_info.h"
-#include "third_party/tensorflow/tsl/platform/thread_annotations.h"
-#include "third_party/tensorflow/tsl/profiler/lib/connected_traceme.h"
-#include "third_party/tensorflow/tsl/profiler/lib/context_types.h"
-#include "third_party/tensorflow/tsl/profiler/lib/traceme.h"
+#include "absl/base/thread_annotations.h"  // from @com_google_absl
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/str_format.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "absl/synchronization/notification.h"  // from @com_google_absl
+#include "absl/time/clock.h"  // from @com_google_absl
+#include "absl/time/time.h"  // from @com_google_absl
+#include "runtime/core/allocator.h"  // from @neptune
+#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
+#include "runtime/core/batching/batch_scheduler_utils.h"  // from @neptune
+#include "runtime/core/batching/batch_stats.h"  // from @neptune
+#include "runtime/core/batching/periodic_function.h"  // from @neptune
+#include "runtime/core/default_allocator.h"  // from @neptune
+#include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
+#include "xla/tsl/platform/criticality.h"  // from @xla
+#include "xla/tsl/platform/env.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
+#include "tsl/platform/cpu_info.h"  // from @tsl
+#include "tsl/platform/thread_annotations.h"  // from @tsl
+#include "tsl/profiler/lib/connected_traceme.h"  // from @tsl
+#include "tsl/profiler/lib/context_types.h"  // from @tsl
+#include "tsl/profiler/lib/traceme.h"  // from @tsl
 
 namespace jsv {
 namespace internal {

@@ -1,10 +1,10 @@
-#include "third_party/neptune/runtime/core/batching/input_split_metadata.h"
+#include "runtime/core/batching/input_split_metadata.h"  // from @neptune
 
 #include <algorithm>
 #include <string>
 
-#include "third_party/absl/container/fixed_array.h"
-#include "third_party/absl/strings/str_join.h"
+#include "absl/container/fixed_array.h"  // from @com_google_absl
+#include "absl/strings/str_join.h"  // from @com_google_absl
 
 namespace jsv {
 namespace internal {

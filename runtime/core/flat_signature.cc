@@ -1,23 +1,23 @@
-#include "third_party/neptune/runtime/core/flat_signature.h"
+#include "runtime/core/flat_signature.h"  // from @neptune
 
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/str_format.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/neptune/runtime/core/stablehlo_utils.h"
-#include "third_party/neptune/runtime/core/value.h"
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.proto.h"
-#include "third_party/py/orbax/experimental/model/core/protos/type.proto.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/errors.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/str_format.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "runtime/core/stablehlo_utils.h"  // from @neptune
+#include "runtime/core/value.h"  // from @neptune
+#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
+#include "third_party/py/orbax/experimental/model/core/protos/type.pb.h"
+#include "xla/tsl/platform/errors.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
 
 namespace jsv {
 

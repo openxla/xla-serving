@@ -1,4 +1,4 @@
-#include "third_party/neptune/runtime/data_loader/default_data_loader.h"
+#include "runtime/data_loader/default_data_loader.h"  // from @neptune
 
 #include <cstddef>
 #include <iterator>
@@ -9,37 +9,37 @@
 #include <utility>
 #include <vector>
 
-#include "third_party/neptune/runtime/interpreter/manifest_utils.h"
-#include "third_party/absl/algorithm/container.h"
-#include "third_party/absl/base/nullability.h"
-#include "third_party/absl/base/optimization.h"
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/container/flat_hash_set.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/str_join.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/core/constants.h"
-#include "third_party/neptune/runtime/core/ifrt_device_utils.h"
-#include "third_party/neptune/runtime/core/ifrt_loaded_variable_registry.h"
-#include "third_party/neptune/runtime/core/stablehlo_utils.h"
-#include "third_party/neptune/runtime/core/value.h"
-#include "third_party/neptune/runtime/data_loader/data_loader.h"
-#include "third_party/neptune/runtime/data_loader/ocp_loader/checkpoint_loader.h"
-#include "third_party/neptune/runtime/data_loader/ocp_loader/metadata_util.h"
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.proto.h"
-#include "third_party/tensorflow/compiler/xla/hlo/ir/hlo_sharding.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/device.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/device_list.h"
-#include "third_party/tensorflow/compiler/xla/tsl/concurrency/future.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/errors.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "runtime/interpreter/manifest_utils.h"  // from @neptune
+#include "absl/algorithm/container.h"  // from @com_google_absl
+#include "absl/base/nullability.h"  // from @com_google_absl
+#include "absl/base/optimization.h"  // from @com_google_absl
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/container/flat_hash_set.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/str_join.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/core/constants.h"  // from @neptune
+#include "runtime/core/ifrt_device_utils.h"  // from @neptune
+#include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune
+#include "runtime/core/stablehlo_utils.h"  // from @neptune
+#include "runtime/core/value.h"  // from @neptune
+#include "runtime/data_loader/data_loader.h"  // from @neptune
+#include "runtime/data_loader/ocp_loader/checkpoint_loader.h"  // from @neptune
+#include "runtime/data_loader/ocp_loader/metadata_util.h"  // from @neptune
+#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
+#include "xla/hlo/ir/hlo_sharding.h"  // from @xla
+#include "xla/python/ifrt/array.h"  // from @xla
+#include "xla/python/ifrt/device.h"  // from @xla
+#include "xla/python/ifrt/device_list.h"  // from @xla
+#include "xla/tsl/concurrency/future.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
 
 namespace jsv {
 namespace {

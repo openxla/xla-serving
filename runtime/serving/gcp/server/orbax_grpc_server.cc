@@ -1,4 +1,4 @@
-#include "third_party/neptune/runtime/serving/gcp/server/orbax_grpc_server.h"
+#include "runtime/serving/gcp/server/orbax_grpc_server.h"  // from @neptune
 
 #include <memory>
 #include <string>
@@ -7,36 +7,36 @@
 
 #include "learning/infra/mira/experimental/orbax_model/tensorflow/tf_compatible_interpreter_create_options.h"
 #include "learning/infra/mira/experimental/orbax_model/tensorflow/utils/tf_to_host_buffer.h"
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/flags/flag.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/str_join.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/time/time.h"
-#include "third_party/grpc/include/grpcpp/server_context.h"
-#include "third_party/grpc/include/grpcpp/support/status.h"
-#include "third_party/neptune/runtime/core/host_buffer.h"
-#include "third_party/neptune/runtime/core/proto/host_buffer.proto.h"
-#include "third_party/neptune/runtime/core/value.h"
-#include "third_party/neptune/runtime/interpreter/interpreter.h"
-#include "third_party/neptune/runtime/interpreter/run_options.h"
-#include "third_party/neptune/runtime/kernel/kernel_io_data_type.h"
-#include "third_party/neptune/runtime/serving/gcp/proto/model.proto.h"
-#include "third_party/neptune/runtime/serving/gcp/proto/prediction_service.proto.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/pjrt_api.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_cpu/cpu_client_options.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_gpu/xla_gpu_client_options.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_gpu/xla_gpu_pjrt_client.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_tpu/xla_tpu_pjrt_client.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
-#include "third_party/tensorflow/compiler/xla/python/pjrt_ifrt/pjrt_client.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/env.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/errors.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/flags/flag.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/str_join.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/time/time.h"  // from @com_google_absl
+#include "include/grpcpp/server_context.h"  // from @com_github_grpc_grpc
+#include "include/grpcpp/support/status.h"  // from @com_github_grpc_grpc
+#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/proto/host_buffer.pb.h"  // from @neptune
+#include "runtime/core/value.h"  // from @neptune
+#include "runtime/interpreter/interpreter.h"  // from @neptune
+#include "runtime/interpreter/run_options.h"  // from @neptune
+#include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
+#include "runtime/serving/gcp/proto/model.pb.h"  // from @neptune
+#include "runtime/serving/gcp/proto/prediction_service.pb.h"  // from @neptune
+#include "xla/pjrt/pjrt_api.h"  // from @xla
+#include "xla/pjrt/plugin/xla_cpu/cpu_client_options.h"  // from @xla
+#include "xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"  // from @xla
+#include "xla/pjrt/plugin/xla_gpu/xla_gpu_client_options.h"  // from @xla
+#include "xla/pjrt/plugin/xla_gpu/xla_gpu_pjrt_client.h"  // from @xla
+#include "xla/pjrt/plugin/xla_tpu/xla_tpu_pjrt_client.h"  // from @xla
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
+#include "xla/tsl/platform/env.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "third_party/tensorflow/core/framework/tensor.h"
 
 ABSL_FLAG(std::string, orbax_grpc_server_platform, "cpu",

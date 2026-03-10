@@ -1,7 +1,7 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_SHARED_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_SHARED_H_
 
-#include "third_party/absl/status/statusor.h"
+#include "absl/status/statusor.h"  // from @com_google_absl
 #include "third_party/tensorstore/context.h"
 #include "third_party/tensorstore/util/result.h"
 

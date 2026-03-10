@@ -1,8 +1,8 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BUILTIN_KERNEL_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BUILTIN_KERNEL_H_
 
-#include "third_party/absl/status/status.h"
-#include "third_party/neptune/runtime/kernel/kernel.h"
+#include "absl/status/status.h"  // from @com_google_absl
+#include "runtime/kernel/kernel.h"  // from @neptune
 
 namespace jsv {
 

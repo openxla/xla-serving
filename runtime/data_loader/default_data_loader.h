@@ -4,16 +4,16 @@
 #include <memory>
 #include <optional>
 
-#include "third_party/neptune/runtime/interpreter/manifest_utils.h"
-#include "third_party/absl/base/nullability.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/data_loader/data_loader.h"
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.proto.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
-#include "third_party/tensorflow/compiler/xla/tsl/concurrency/future.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
+#include "runtime/interpreter/manifest_utils.h"  // from @neptune
+#include "absl/base/nullability.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/data_loader/data_loader.h"  // from @neptune
+#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/tsl/concurrency/future.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
 
 namespace jsv {
 

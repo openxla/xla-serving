@@ -5,20 +5,20 @@
 #include <string>
 #include <vector>
 
-#include "third_party/absl/base/nullability.h"
-#include "third_party/absl/base/thread_annotations.h"
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/functional/any_invocable.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/str_join.h"
-#include "third_party/absl/synchronization/mutex.h"
-#include "third_party/neptune/runtime/core/value.h"
-#include "third_party/tensorflow/compiler/xla/hlo/ir/hlo_sharding.h"
-#include "third_party/tensorflow/compiler/xla/layout.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
+#include "absl/base/nullability.h"  // from @com_google_absl
+#include "absl/base/thread_annotations.h"  // from @com_google_absl
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/functional/any_invocable.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/str_join.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "runtime/core/value.h"  // from @neptune
+#include "xla/hlo/ir/hlo_sharding.h"  // from @xla
+#include "xla/layout.h"  // from @xla
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
 
 namespace jsv {
 

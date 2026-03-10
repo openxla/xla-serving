@@ -6,12 +6,12 @@
 #include <optional>
 #include <vector>
 
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/time/time.h"
-#include "third_party/neptune/runtime/core/batching/batch_scheduler.h"
-#include "third_party/neptune/runtime/core/batching/batch_stats.h"
-#include "third_party/neptune/runtime/kernel/batching/batch_options_utils.h"
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/time/time.h"  // from @com_google_absl
+#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
+#include "runtime/core/batching/batch_stats.h"  // from @neptune
+#include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
 
 namespace jsv {
 

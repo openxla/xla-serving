@@ -1,20 +1,20 @@
-#include "third_party/neptune/runtime/kernel/kernel.h"
+#include "runtime/kernel/kernel.h"  // from @neptune
 
 #include <memory>
 #include <string>
 #include <utility>
 
-#include "third_party/absl/base/no_destructor.h"
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/functional/any_invocable.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/synchronization/mutex.h"
-#include "third_party/neptune/runtime/kernel/kernel_builder_context.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/pjrt_future.h"
-#include "third_party/tensorflow/compiler/xla/tsl/concurrency/future.h"
+#include "absl/base/no_destructor.h"  // from @com_google_absl
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/functional/any_invocable.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "runtime/kernel/kernel_builder_context.h"  // from @neptune
+#include "xla/pjrt/pjrt_future.h"  // from @xla
+#include "xla/tsl/concurrency/future.h"  // from @xla
 
 namespace jsv {
 

@@ -4,12 +4,12 @@
 #include <memory>
 #include <vector>
 
-#include "third_party/neptune/runtime/interpreter/interpreter_create_options.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/neptune/runtime/kernel/kernel.h"
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.proto.h"
-#include "third_party/py/orbax/export/protos/oex_orchestration.proto.h"
+#include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "runtime/kernel/kernel.h"  // from @neptune
+#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
+#include "third_party/py/orbax/export/protos/oex_orchestration.pb.h"
 
 namespace jsv {
 

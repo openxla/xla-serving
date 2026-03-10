@@ -1,13 +1,13 @@
-#include "third_party/neptune/runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"
+#include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @neptune
 
 #include <cstddef>
 #include <string>
 
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/synchronization/mutex.h"
-#include "third_party/tensorflow/compiler/xla/tsl/framework/serving_device_selector.h"
-#include "third_party/tensorflow/compiler/xla/tsl/lib/monitoring/counter.h"
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "xla/tsl/framework/serving_device_selector.h"  // from @xla
+#include "xla/tsl/lib/monitoring/counter.h"  // from @xla
 
 namespace jsv {
 

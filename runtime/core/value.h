@@ -5,8 +5,8 @@
 #include <type_traits>
 #include <utility>
 
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/log/log.h"
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
 
 namespace jsv {
 

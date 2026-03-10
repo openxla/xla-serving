@@ -4,13 +4,13 @@
 #include <optional>
 #include <vector>
 
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/device.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/executable.h"
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "xla/python/ifrt/array.h"  // from @xla
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/python/ifrt/device.h"  // from @xla
+#include "xla/python/ifrt/executable.h"  // from @xla
 
 namespace jsv {
 

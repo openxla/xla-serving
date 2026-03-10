@@ -5,7 +5,7 @@
 #include <string>
 #include <variant>
 
-#include "third_party/absl/status/statusor.h"
+#include "absl/status/statusor.h"  // from @com_google_absl
 #include "third_party/json/include/nlohmann/json_fwd.hpp"
 
 namespace neptune {

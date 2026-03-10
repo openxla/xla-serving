@@ -5,13 +5,13 @@
 #include <string>
 #include <utility>
 
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/neptune/runtime/core/flat_signature.h"
-#include "third_party/neptune/runtime/core/stablehlo_runner.h"
-#include "third_party/neptune/runtime/kernel/kernel.h"
-#include "third_party/neptune/runtime/kernel/kernel_builder_context.h"
-#include "third_party/neptune/runtime/kernel/kernel_io_data_type.h"
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "runtime/core/flat_signature.h"  // from @neptune
+#include "runtime/core/stablehlo_runner.h"  // from @neptune
+#include "runtime/kernel/kernel.h"  // from @neptune
+#include "runtime/kernel/kernel_builder_context.h"  // from @neptune
+#include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
 
 namespace jsv {
 

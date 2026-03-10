@@ -4,11 +4,11 @@
 #include <memory>
 #include <string>
 
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/neptune/runtime/kernel/kernel.h"
-#include "third_party/neptune/runtime/kernel/kernel_builder_context.h"
-#include "third_party/neptune/runtime/kernel/kernel_io_data_type.h"
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "runtime/kernel/kernel.h"  // from @neptune
+#include "runtime/kernel/kernel_builder_context.h"  // from @neptune
+#include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
 
 namespace jsv {
 class IdentityKernel : public CancellableKernel {

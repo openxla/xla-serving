@@ -4,12 +4,12 @@
 #include <memory>
 #include <string>
 
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/llvm/llvm-project/llvm/include/llvm/ADT/StringRef.h"
-#include "third_party/llvm/llvm-project/llvm/include/llvm/Support/raw_ostream.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/Operation.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/Pass/PassManager.h"
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "llvm/include/llvm/ADT/StringRef.h"  // from @llvm-project
+#include "llvm/include/llvm/Support/raw_ostream.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/Operation.h"  // from @llvm-project
+#include "mlir/include/mlir/Pass/PassManager.h"  // from @llvm-project
 
 namespace jsv {
 

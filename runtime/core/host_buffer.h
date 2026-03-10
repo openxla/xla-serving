@@ -11,27 +11,27 @@
 #include <optional>
 #include <vector>
 
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/types/span.h"
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
 #include "third_party/australis/google/ifrt/host_array.h"
 #include "third_party/eigen3/Eigen/Core"
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
-#include "third_party/neptune/runtime/core/allocator.h"
-#include "third_party/neptune/runtime/core/default_allocator.h"
-#include "third_party/neptune/runtime/core/proto/host_buffer.proto.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/shape.h"
-#include "third_party/tensorflow/compiler/xla/tsl/concurrency/ref_count.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/errors.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/types.h"
-#include "third_party/tensorflow/tsl/platform/tstring.h"
+#include "runtime/core/allocator.h"  // from @neptune
+#include "runtime/core/default_allocator.h"  // from @neptune
+#include "runtime/core/proto/host_buffer.pb.h"  // from @neptune
+#include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
+#include "xla/tsl/concurrency/ref_count.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
+#include "xla/tsl/platform/types.h"  // from @xla
+#include "tsl/platform/tstring.h"  // from @tsl
 
 // go/lsc-fix-eigen-includes
 // IWYU pragma: no_include "third_party/eigen3/Eigen/src/Core/util/ConfigureVectorization.h"

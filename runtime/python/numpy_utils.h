@@ -1,16 +1,16 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_PYTHON_NUMPY_UTILS_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_PYTHON_NUMPY_UTILS_H_
 
-#include "third_party/neptune/runtime/core/allocator.h"
-#include "third_party/neptune/runtime/core/default_allocator.h"
-#include "third_party/neptune/runtime/core/host_buffer.h"
-#include "third_party/tensorflow/compiler/xla/python/nb_numpy.h"
-#include "third_party/tensorflow/compiler/xla/tsl/python/lib/core/numpy.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "runtime/core/allocator.h"  // from @neptune
+#include "runtime/core/default_allocator.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @neptune
+#include "xla/python/nb_numpy.h"  // from @xla
+#include "xla/tsl/python/lib/core/numpy.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
 #include "third_party/tensorflow/core/framework/tensor.h"
-#include "third_party/tensorflow/core/framework/tensor.proto.h"
+#include "third_party/tensorflow/core/framework/tensor.pb.h"
 #include "third_party/tensorflow/core/framework/tensor_shape.h"
-#include "third_party/tensorflow/core/framework/types.proto.h"
+#include "third_party/tensorflow/core/framework/types.pb.h"
 
 namespace neptune {
 

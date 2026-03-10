@@ -6,13 +6,13 @@
 #include <utility>
 #include <vector>
 
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/core/stablehlo_utils.h"
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.proto.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/core/stablehlo_utils.h"  // from @neptune
+#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
+#include "xla/xla_data.pb.h"  // from @xla
 
 namespace jsv {
 

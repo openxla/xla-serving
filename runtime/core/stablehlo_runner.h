@@ -11,41 +11,41 @@
 #include <utility>
 #include <vector>
 
-#include "third_party/neptune/runtime/interpreter/manifest_utils.h"
-#include "third_party/absl/base/call_once.h"
-#include "third_party/absl/base/nullability.h"
-#include "third_party/absl/base/thread_annotations.h"
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/hash/hash.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_join.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/synchronization/mutex.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/core/host_buffer.h"
-#include "third_party/neptune/runtime/core/ifrt_loaded_variable_registry.h"
-#include "third_party/neptune/runtime/core/loaded_stablehlo.h"
-#include "third_party/neptune/runtime/core/stablehlo.h"
-#include "third_party/neptune/runtime/core/stablehlo_optimizer.h"
-#include "third_party/neptune/runtime/core/stablehlo_utils.h"
-#include "third_party/neptune/runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"
-#include "third_party/neptune/runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"
+#include "runtime/interpreter/manifest_utils.h"  // from @neptune
+#include "absl/base/call_once.h"  // from @com_google_absl
+#include "absl/base/nullability.h"  // from @com_google_absl
+#include "absl/base/thread_annotations.h"  // from @com_google_absl
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/hash/hash.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_join.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune
+#include "runtime/core/loaded_stablehlo.h"  // from @neptune
+#include "runtime/core/stablehlo.h"  // from @neptune
+#include "runtime/core/stablehlo_optimizer.h"  // from @neptune
+#include "runtime/core/stablehlo_utils.h"  // from @neptune
+#include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
+#include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @neptune
 #include "third_party/protobuf/message.h"
-#include "third_party/tensorflow/compiler/xla/hlo/ir/hlo_sharding.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/proto/compile_options.proto.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/device.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/device_list.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/executable.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/shape.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/sharding.h"
-#include "third_party/tensorflow/compiler/xla/tsl/concurrency/future.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "xla/hlo/ir/hlo_sharding.h"  // from @xla
+#include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
+#include "xla/python/ifrt/array.h"  // from @xla
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/python/ifrt/device.h"  // from @xla
+#include "xla/python/ifrt/device_list.h"  // from @xla
+#include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/python/ifrt/executable.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
+#include "xla/python/ifrt/sharding.h"  // from @xla
+#include "xla/tsl/concurrency/future.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
 
 namespace jsv {
 

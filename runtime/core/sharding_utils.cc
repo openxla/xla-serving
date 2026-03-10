@@ -2,7 +2,7 @@
 
 #define EIGEN_USE_THREADS
 
-#include "third_party/neptune/runtime/core/sharding_utils.h"
+#include "runtime/core/sharding_utils.h"  // from @neptune
 
 #include <algorithm>
 #include <cstdint>
@@ -12,36 +12,36 @@
 #include <utility>
 #include <vector>
 
-#include "third_party/absl/container/btree_map.h"
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/types/span.h"
+#include "absl/container/btree_map.h"  // from @com_google_absl
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
-#include "third_party/neptune/runtime/core/host_buffer.h"
-#include "third_party/neptune/runtime/core/host_buffer_type_utils.h"
-#include "third_party/neptune/runtime/core/sharding_utils_core.h"
-#include "third_party/llvm/llvm-project/llvm/include/llvm/Support/Casting.h"
-#include "third_party/tensorflow/compiler/xla/hlo/ir/hlo_sharding.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/device.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/device_list.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/index.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/index_domain.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/memory.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/shape.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/sharding.h"
-#include "third_party/tensorflow/compiler/xla/python/pjrt_ifrt/xla_sharding.h"
-#include "third_party/tensorflow/compiler/xla/tsl/concurrency/future.h"
-#include "third_party/tensorflow/compiler/xla/tsl/concurrency/ref_count.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/errors.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/host_buffer_type_utils.h"  // from @neptune
+#include "runtime/core/sharding_utils_core.h"  // from @neptune
+#include "llvm/include/llvm/Support/Casting.h"  // from @llvm-project
+#include "xla/hlo/ir/hlo_sharding.h"  // from @xla
+#include "xla/python/ifrt/array.h"  // from @xla
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/python/ifrt/device.h"  // from @xla
+#include "xla/python/ifrt/device_list.h"  // from @xla
+#include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/python/ifrt/index.h"  // from @xla
+#include "xla/python/ifrt/index_domain.h"  // from @xla
+#include "xla/python/ifrt/memory.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
+#include "xla/python/ifrt/sharding.h"  // from @xla
+#include "xla/python/pjrt_ifrt/xla_sharding.h"  // from @xla
+#include "xla/tsl/concurrency/future.h"  // from @xla
+#include "xla/tsl/concurrency/ref_count.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
 
 namespace jsv::sharding_internal {
 namespace {

@@ -1,13 +1,13 @@
-#include "third_party/neptune/runtime/core/common_util.h"
+#include "runtime/core/common_util.h"  // from @neptune
 
 #include <string>
 
 #include "file/base/path.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/neptune/runtime/core/constants.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/env.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/errors.h"
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "runtime/core/constants.h"  // from @neptune
+#include "xla/tsl/platform/env.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
 
 namespace jsv {
 

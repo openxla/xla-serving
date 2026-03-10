@@ -1,15 +1,15 @@
-#include "third_party/neptune/runtime/core/sharding_utils_core.h"
+#include "runtime/core/sharding_utils_core.h"  // from @neptune
 
 #include <cstdint>
 
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/types/span.h"
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
 #include "third_party/eigen3/Eigen/Core"
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
-#include "third_party/neptune/runtime/core/host_buffer.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/logging.h"  // IWYU pragma: keep
+#include "runtime/core/host_buffer.h"  // from @neptune
+#include "xla/tsl/platform/logging.h"  // from @xla  // IWYU pragma: keep
 
 namespace jsv::sharding_internal {
 

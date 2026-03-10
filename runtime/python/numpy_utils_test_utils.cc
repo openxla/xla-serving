@@ -2,15 +2,15 @@
 
 #include "third_party/nanobind/include/nanobind/nanobind.h"
 #include "third_party/nanobind/include/nanobind/nb_defs.h"
-#include "third_party/neptune/runtime/core/host_buffer.h"
-#include "third_party/neptune/runtime/python/numpy_utils.h"
-#include "third_party/tensorflow/compiler/xla/python/nb_numpy.h"
-#include "third_party/tensorflow/compiler/xla/tsl/python/lib/core/numpy.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/python/numpy_utils.h"  // from @neptune
+#include "xla/python/nb_numpy.h"  // from @xla
+#include "xla/tsl/python/lib/core/numpy.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
 #include "third_party/tensorflow/core/framework/tensor.h"
-#include "third_party/tensorflow/core/framework/tensor.proto.h"
+#include "third_party/tensorflow/core/framework/tensor.pb.h"
 #include "third_party/tensorflow/core/framework/tensor_shape.h"
-#include "third_party/tensorflow/core/framework/types.proto.h"
+#include "third_party/tensorflow/core/framework/types.pb.h"
 #include "third_party/tensorflow/core/platform/tstring.h"
 
 namespace nb = ::nanobind;

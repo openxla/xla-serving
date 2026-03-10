@@ -4,10 +4,10 @@
 #include <memory>
 #include <string>
 
-#include "third_party/absl/functional/any_invocable.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
+#include "absl/functional/any_invocable.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "xla/python/ifrt/client.h"  // from @xla
 
 namespace neptune {
 

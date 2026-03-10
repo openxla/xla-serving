@@ -8,11 +8,11 @@
 #include <tuple>
 #include <vector>
 
-#include "third_party/absl/container/node_hash_map.h"
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/synchronization/mutex.h"
-#include "third_party/absl/time/time.h"
-#include "third_party/tensorflow/tsl/platform/thread_annotations.h"
+#include "absl/container/node_hash_map.h"  // from @com_google_absl
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "absl/time/time.h"  // from @com_google_absl
+#include "tsl/platform/thread_annotations.h"  // from @tsl
 
 namespace jsv {
 

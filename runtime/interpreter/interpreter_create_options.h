@@ -5,15 +5,15 @@
 #include <memory>
 #include <string>
 
-#include "third_party/absl/base/nullability.h"
-#include "third_party/neptune/runtime/core/allocator.h"
-#include "third_party/neptune/runtime/core/default_allocator.h"
-#include "third_party/neptune/runtime/core/stablehlo_optimizer.h"
-#include "third_party/neptune/runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.proto.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
-#include "third_party/tensorflow/tsl/platform/protobuf.h"
+#include "absl/base/nullability.h"  // from @com_google_absl
+#include "runtime/core/allocator.h"  // from @neptune
+#include "runtime/core/default_allocator.h"  // from @neptune
+#include "runtime/core/stablehlo_optimizer.h"  // from @neptune
+#include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
+#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
+#include "tsl/platform/protobuf.h"  // from @tsl
 
 namespace jsv {
 

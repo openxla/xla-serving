@@ -1,9 +1,9 @@
-#include "third_party/neptune/runtime/core/batching/threadsafe_status.h"
+#include "runtime/core/batching/threadsafe_status.h"  // from @neptune
 
 #include <utility>
 
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/synchronization/mutex.h"
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
 
 namespace jsv {
 const absl::Status& ThreadSafeStatus::status() const& {

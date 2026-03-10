@@ -4,12 +4,12 @@
 #include <cstddef>
 #include <string>
 
-#include "third_party/absl/base/nullability.h"
-#include "third_party/absl/base/thread_annotations.h"
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/synchronization/mutex.h"
-#include "third_party/tensorflow/compiler/xla/tsl/framework/serving_device_selector.h"
+#include "absl/base/nullability.h"  // from @com_google_absl
+#include "absl/base/thread_annotations.h"  // from @com_google_absl
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "xla/tsl/framework/serving_device_selector.h"  // from @xla
 
 namespace jsv {
 

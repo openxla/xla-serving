@@ -1,10 +1,10 @@
-#include "third_party/neptune/runtime/interpreter/orbax_type_utils.h"
+#include "runtime/interpreter/orbax_type_utils.h"  // from @neptune
 
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/py/orbax/experimental/model/core/protos/type.proto.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "third_party/py/orbax/experimental/model/core/protos/type.pb.h"
+#include "xla/xla_data.pb.h"  // from @xla
 
 namespace jsv {
 

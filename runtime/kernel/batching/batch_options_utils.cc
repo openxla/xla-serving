@@ -1,12 +1,12 @@
-#include "third_party/neptune/runtime/kernel/batching/batch_options_utils.h"
+#include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
 
 #include <string>
 
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/neptune/runtime/core/batching/batch_scheduler.h"
-#include "third_party/py/orbax/export/protos/oex_orchestration.proto.h"
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
+#include "third_party/py/orbax/export/protos/oex_orchestration.pb.h"
 
 namespace jsv {
 

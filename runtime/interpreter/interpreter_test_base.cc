@@ -1,14 +1,14 @@
-#include "third_party/neptune/runtime/interpreter/interpreter_test_base.h"
+#include "runtime/interpreter/interpreter_test_base.h"  // from @neptune
 
 #include <memory>
 #include <string>
 
-#include "third_party/absl/flags/flag.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/test_util.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/env.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "absl/flags/flag.h"  // from @com_google_absl
+#include "xla/python/ifrt/test_util.h"  // from @xla
+#include "xla/tsl/platform/env.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
 
 ABSL_FLAG(std::string, jsv_testonly_platform_name_override, "",
           "When non-empty, overrides the platform name used in tests."

@@ -5,21 +5,21 @@
 #include <string>
 #include <vector>
 
-#include "third_party/absl/base/nullability.h"
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/core/flat_signature.h"
-#include "third_party/neptune/runtime/core/stablehlo_utils.h"
-#include "third_party/neptune/runtime/core/type.h"
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.proto.h"
-#include "third_party/py/orbax/experimental/model/core/protos/type.proto.h"
-#include "third_party/py/orbax/export/protos/oex_orchestration.proto.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/proto/compile_options.proto.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "absl/base/nullability.h"  // from @com_google_absl
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/core/flat_signature.h"  // from @neptune
+#include "runtime/core/stablehlo_utils.h"  // from @neptune
+#include "runtime/core/type.h"  // from @neptune
+#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
+#include "third_party/py/orbax/experimental/model/core/protos/type.pb.h"
+#include "third_party/py/orbax/export/protos/oex_orchestration.pb.h"
+#include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
 
 namespace jsv {
 

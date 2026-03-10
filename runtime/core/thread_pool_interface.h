@@ -4,10 +4,10 @@
 #include <cstdint>
 #include <functional>
 
-#include "third_party/absl/base/nullability.h"
-#include "third_party/absl/status/status.h"
+#include "absl/base/nullability.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
 #include "third_party/eigen3/unsupported/Eigen/CXX11/ThreadPool"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
+#include "xla/tsl/platform/threadpool.h"  // from @xla
 
 namespace jsv {
 

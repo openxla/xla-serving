@@ -8,13 +8,13 @@
 
 #include "testing/base/public/gmock.h"
 #include "testing/base/public/gunit.h"
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/flags/declare.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/neptune/runtime/core/value.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/flags/declare.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "runtime/core/value.h"  // from @neptune
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
 
 ABSL_DECLARE_FLAG(std::string, jsv_testonly_platform_name_override);
 

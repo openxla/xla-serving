@@ -1,23 +1,23 @@
-#include "third_party/neptune/runtime/python/ifrt_client_factory.h"
+#include "runtime/python/ifrt_client_factory.h"  // from @neptune
 
 #include <memory>
 #include <string>
 #include <utility>
 
-#include "third_party/absl/base/no_destructor.h"
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_cpu/cpu_client_options.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_gpu/xla_gpu_client_options.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_gpu/xla_gpu_pjrt_client.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/plugin/xla_tpu/xla_tpu_pjrt_client.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
-#include "third_party/tensorflow/compiler/xla/python/pjrt_ifrt/pjrt_client.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
+#include "absl/base/no_destructor.h"  // from @com_google_absl
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "xla/pjrt/plugin/xla_cpu/cpu_client_options.h"  // from @xla
+#include "xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"  // from @xla
+#include "xla/pjrt/plugin/xla_gpu/xla_gpu_client_options.h"  // from @xla
+#include "xla/pjrt/plugin/xla_gpu/xla_gpu_pjrt_client.h"  // from @xla
+#include "xla/pjrt/plugin/xla_tpu/xla_tpu_pjrt_client.h"  // from @xla
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
 
 namespace neptune {
 

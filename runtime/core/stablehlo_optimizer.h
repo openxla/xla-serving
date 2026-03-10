@@ -4,9 +4,9 @@
 #include <cstdint>
 #include <vector>
 
-#include "third_party/absl/status/status.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/BuiltinOps.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/proto/compile_options.proto.h"
+#include "absl/status/status.h"  // from @com_google_absl
+#include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
+#include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
 
 namespace jsv {
 

@@ -1,4 +1,4 @@
-#include "third_party/neptune/runtime/core/loaded_stablehlo.h"
+#include "runtime/core/loaded_stablehlo.h"  // from @neptune
 
 #include <memory>
 #include <optional>
@@ -6,27 +6,27 @@
 #include <utility>
 #include <vector>
 
-#include "third_party/absl/base/nullability.h"
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/memory/memory.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/str_format.h"
-#include "third_party/absl/strings/str_join.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/synchronization/mutex.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/core/stablehlo.h"
-#include "third_party/neptune/runtime/core/stablehlo_utils.h"
-#include "third_party/neptune/runtime/libs/ifrt/stablehlo_loader.h"
-#include "third_party/neptune/runtime/libs/mlir/dump_mlir_util.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/proto/compile_options.proto.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/shape.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/errors.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "absl/base/nullability.h"  // from @com_google_absl
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/memory/memory.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/str_format.h"  // from @com_google_absl
+#include "absl/strings/str_join.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/core/stablehlo.h"  // from @neptune
+#include "runtime/core/stablehlo_utils.h"  // from @neptune
+#include "runtime/libs/ifrt/stablehlo_loader.h"  // from @neptune
+#include "runtime/libs/mlir/dump_mlir_util.h"  // from @neptune
+#include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
 
 // TODO: Add unit tests for this file.
 namespace jsv {

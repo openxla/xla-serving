@@ -10,27 +10,27 @@
 #include <utility>
 #include <vector>
 
-#include "third_party/absl/functional/any_invocable.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_join.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/synchronization/mutex.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/core/allocator.h"
-#include "third_party/neptune/runtime/core/batching/batch_scheduler.h"
-#include "third_party/neptune/runtime/core/batching/resource_base.h"
-#include "third_party/neptune/runtime/core/batching/shared_batch_scheduler.h"
-#include "third_party/neptune/runtime/core/batching/threadsafe_status.h"
-#include "third_party/neptune/runtime/core/host_buffer.h"
-#include "third_party/neptune/runtime/core/value.h"
-#include "third_party/neptune/runtime/kernel/kernel.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/criticality.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
+#include "absl/functional/any_invocable.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_join.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/core/allocator.h"  // from @neptune
+#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
+#include "runtime/core/batching/resource_base.h"  // from @neptune
+#include "runtime/core/batching/shared_batch_scheduler.h"  // from @neptune
+#include "runtime/core/batching/threadsafe_status.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/value.h"  // from @neptune
+#include "runtime/kernel/kernel.h"  // from @neptune
+#include "xla/tsl/platform/criticality.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "third_party/tensorflow/core/common_runtime/cost_measurement.h"
 #include "third_party/tensorflow/core/common_runtime/request_cost.h"
-#include "third_party/tensorflow/tsl/platform/context.h"
-#include "third_party/tensorflow/tsl/platform/thread_annotations.h"
+#include "tsl/platform/context.h"  // from @tsl
+#include "tsl/platform/thread_annotations.h"  // from @tsl
 
 namespace jsv {
 

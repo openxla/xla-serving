@@ -1,16 +1,16 @@
-#include "third_party/neptune/runtime/interpreter/optional_function_handler_factory.h"
+#include "runtime/interpreter/optional_function_handler_factory.h"  // from @neptune
 
 #include <memory>
 #include <string>
 
-#include "third_party/neptune/runtime/interpreter/optional_function_handler.h"
-#include "third_party/absl/base/no_destructor.h"
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/synchronization/mutex.h"
+#include "runtime/interpreter/optional_function_handler.h"  // from @neptune
+#include "absl/base/no_destructor.h"  // from @com_google_absl
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
 
 namespace jsv {
 

@@ -1,11 +1,11 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_STABLEHLO_LOADER_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_STABLEHLO_LOADER_H_
 
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/BuiltinOps.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/MLIRContext.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/OwningOpRef.h"
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/MLIRContext.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/OwningOpRef.h"  // from @llvm-project
 
 namespace jsv {
 

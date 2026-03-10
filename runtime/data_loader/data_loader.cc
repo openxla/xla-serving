@@ -1,15 +1,15 @@
-#include "third_party/neptune/runtime/data_loader/data_loader.h"
+#include "runtime/data_loader/data_loader.h"  // from @neptune
 
 #include <memory>
 #include <utility>
 
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/functional/any_invocable.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/synchronization/mutex.h"
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.proto.h"
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/functional/any_invocable.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
 
 namespace jsv {
 

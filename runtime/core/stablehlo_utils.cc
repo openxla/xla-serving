@@ -1,4 +1,4 @@
-#include "third_party/neptune/runtime/core/stablehlo_utils.h"
+#include "runtime/core/stablehlo_utils.h"  // from @neptune
 
 #include <algorithm>
 #include <cstddef>
@@ -8,46 +8,46 @@
 #include <utility>
 #include <vector>
 
-#include "third_party/absl/base/nullability.h"
-#include "third_party/absl/container/inlined_vector.h"
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/str_join.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/llvm/llvm-project/llvm/include/llvm/Support/LogicalResult.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/Dialect/Func/IR/FuncOps.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/Attributes.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/Block.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/Builders.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/BuiltinAttributes.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/BuiltinOps.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/Types.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/Value.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/Support/DebugStringHelper.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/Support/LLVM.h"
-#include "third_party/neptune/runtime/libs/mlir/utils.h"
+#include "absl/base/nullability.h"  // from @com_google_absl
+#include "absl/container/inlined_vector.h"  // from @com_google_absl
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/str_join.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "llvm/include/llvm/Support/LogicalResult.h"  // from @llvm-project
+#include "mlir/include/mlir/Dialect/Func/IR/FuncOps.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/Attributes.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/Block.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/Builders.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/BuiltinAttributes.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/Types.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/Value.h"  // from @llvm-project
+#include "mlir/include/mlir/Support/DebugStringHelper.h"  // from @llvm-project
+#include "mlir/include/mlir/Support/LLVM.h"  // from @llvm-project
+#include "runtime/libs/mlir/utils.h"  // from @neptune
 #include "third_party/openxla/shardy/src/shardy/dialect/sdy/ir/dialect.h"
 #include "third_party/openxla/shardy/src/shardy/dialect/sdy/ir/utils.h"
-#include "third_party/stablehlo/stablehlo/dialect/StablehloOps.h"
-#include "third_party/stablehlo/stablehlo/transforms/StablehloRefineShapes.h"
-#include "third_party/tensorflow/compiler/xla/hlo/ir/hlo_sharding.h"
-#include "third_party/tensorflow/compiler/xla/hlo/parser/hlo_parser.h"
-#include "third_party/tensorflow/compiler/xla/mlir/utils/error_util.h"
-#include "third_party/tensorflow/compiler/xla/mlir/utils/type_util.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/proto/compile_options.proto.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/shape.h"
-#include "third_party/tensorflow/compiler/xla/python/pjrt_ifrt/pjrt_dtype.h"
-#include "third_party/tensorflow/compiler/xla/python/refine_polymorphic_shapes.h"
-#include "third_party/tensorflow/compiler/xla/service/spmd/shardy/stablehlo_round_trip/export_shardings.h"
-#include "third_party/tensorflow/compiler/xla/service/spmd/shardy/utils.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/errors.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "stablehlo/dialect/StablehloOps.h"  // from @stablehlo
+#include "stablehlo/transforms/StablehloRefineShapes.h"  // from @stablehlo
+#include "xla/hlo/ir/hlo_sharding.h"  // from @xla
+#include "xla/hlo/parser/hlo_parser.h"  // from @xla
+#include "xla/mlir/utils/error_util.h"  // from @xla
+#include "xla/mlir/utils/type_util.h"  // from @xla
+#include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
+#include "xla/python/ifrt/array.h"  // from @xla
+#include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
+#include "xla/python/pjrt_ifrt/pjrt_dtype.h"  // from @xla
+#include "xla/python/refine_polymorphic_shapes.h"  // from @xla
+#include "xla/service/spmd/shardy/stablehlo_round_trip/export_shardings.h"  // from @xla
+#include "xla/service/spmd/shardy/utils.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
 
 namespace jsv {
 namespace {

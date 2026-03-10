@@ -7,20 +7,20 @@
 #include <utility>
 #include <vector>
 
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/time/time.h"
-#include "third_party/australis/google/ifrt/ifrt_australis.proto.h"
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/time/time.h"  // from @com_google_absl
+#include "third_party/australis/google/ifrt/ifrt_australis.pb.h"
 #include "third_party/australis/google/ifrt/tensorstore_loader.h"
 #include "third_party/json/include/nlohmann/json_fwd.hpp"
-#include "third_party/neptune/runtime/data_loader/ocp_loader/common_types.h"
+#include "runtime/data_loader/ocp_loader/common_types.h"  // from @neptune
 #include "third_party/protobuf/repeated_ptr_field.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/device.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/memory.h"
+#include "xla/python/ifrt/array.h"  // from @xla
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/python/ifrt/device.h"  // from @xla
+#include "xla/python/ifrt/memory.h"  // from @xla
 
 namespace neptune {
 

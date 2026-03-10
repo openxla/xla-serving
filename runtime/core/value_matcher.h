@@ -4,7 +4,7 @@
 #include <ostream>
 
 #include "testing/base/public/gunit.h"
-#include "third_party/neptune/runtime/core/value.h"
+#include "runtime/core/value.h"  // from @neptune
 
 namespace jsv {
 namespace internal {

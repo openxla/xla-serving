@@ -1,8 +1,8 @@
-#include "third_party/neptune/runtime/core/grid.h"
+#include "runtime/core/grid.h"  // from @neptune
 
 #include <string>
 
-#include "third_party/absl/strings/str_cat.h"
+#include "absl/strings/str_cat.h"  // from @com_google_absl
 
 namespace jsv {
 

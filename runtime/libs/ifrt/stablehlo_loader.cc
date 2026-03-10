@@ -1,30 +1,30 @@
-#include "third_party/neptune/runtime/libs/ifrt/stablehlo_loader.h"
+#include "runtime/libs/ifrt/stablehlo_loader.h"  // from @neptune
 
 #include <string>
 
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/Dialect/Arith/IR/Arith.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/Dialect/Func/Extensions/AllExtensions.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/Dialect/Func/IR/FuncOps.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/Dialect/MemRef/Transforms/Passes.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/Dialect/Shape/IR/Shape.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/Dialect/Tensor/IR/Tensor.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/BuiltinAttributes.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/BuiltinDialect.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/BuiltinOps.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/DialectRegistry.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/OwningOpRef.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/InitAllDialects.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/Pass/PassManager.h"
-#include "third_party/stablehlo/stablehlo/dialect/ChloOps.h"
-#include "third_party/stablehlo/stablehlo/dialect/Register.h"
-#include "third_party/stablehlo/stablehlo/dialect/StablehloOps.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/mlir_to_hlo.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/env.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "mlir/include/mlir/Dialect/Arith/IR/Arith.h"  // from @llvm-project
+#include "mlir/include/mlir/Dialect/Func/Extensions/AllExtensions.h"  // from @llvm-project
+#include "mlir/include/mlir/Dialect/Func/IR/FuncOps.h"  // from @llvm-project
+#include "mlir/include/mlir/Dialect/MemRef/Transforms/Passes.h"  // from @llvm-project
+#include "mlir/include/mlir/Dialect/Shape/IR/Shape.h"  // from @llvm-project
+#include "mlir/include/mlir/Dialect/Tensor/IR/Tensor.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/BuiltinAttributes.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/BuiltinDialect.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/DialectRegistry.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/OwningOpRef.h"  // from @llvm-project
+#include "mlir/include/mlir/InitAllDialects.h"  // from @llvm-project
+#include "mlir/include/mlir/Pass/PassManager.h"  // from @llvm-project
+#include "stablehlo/dialect/ChloOps.h"  // from @stablehlo
+#include "stablehlo/dialect/Register.h"  // from @stablehlo
+#include "stablehlo/dialect/StablehloOps.h"  // from @stablehlo
+#include "xla/pjrt/mlir_to_hlo.h"  // from @xla
+#include "xla/tsl/platform/env.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
 
 namespace jsv {
 absl::StatusOr<mlir::OwningOpRef<mlir::ModuleOp>> StableHloLoader::Load(

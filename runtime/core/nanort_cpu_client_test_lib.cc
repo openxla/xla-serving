@@ -1,9 +1,9 @@
 #include <memory>
 
-#include "third_party/absl/status/statusor.h"
-#include "third_party/tensorflow/compiler/xla/backends/cpu/nanort/ifrt_client.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/test_util.h"
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "xla/backends/cpu/nanort/ifrt_client.h"  // from @xla
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/python/ifrt/test_util.h"  // from @xla
 
 namespace jsv {
 namespace {

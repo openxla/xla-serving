@@ -4,9 +4,9 @@
 #include <memory>
 #include <string>
 
-#include "third_party/absl/status/statusor.h"
-#include "third_party/grpc/include/grpcpp/security/credentials.h"
-#include "third_party/grpc/include/grpcpp/security/server_credentials.h"
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "include/grpcpp/security/credentials.h"  // from @com_github_grpc_grpc
+#include "include/grpcpp/security/server_credentials.h"  // from @com_github_grpc_grpc
 
 namespace jsv {
 namespace serving {

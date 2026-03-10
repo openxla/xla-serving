@@ -8,20 +8,20 @@
 #include <utility>
 #include <vector>
 
-#include "third_party/absl/base/thread_annotations.h"
-#include "third_party/absl/container/flat_hash_set.h"
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/synchronization/mutex.h"
-#include "third_party/absl/time/time.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/core/batching/shared_batch_scheduler.h"
-#include "third_party/neptune/runtime/core/host_buffer.h"
-#include "third_party/neptune/runtime/kernel/batching/batch_resource_base.h"
-#include "third_party/neptune/runtime/kernel/batching/batch_runner_op.h"
-#include "third_party/neptune/runtime/kernel/kernel.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
+#include "absl/base/thread_annotations.h"  // from @com_google_absl
+#include "absl/container/flat_hash_set.h"  // from @com_google_absl
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "absl/time/time.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/core/batching/shared_batch_scheduler.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/kernel/batching/batch_resource_base.h"  // from @neptune
+#include "runtime/kernel/batching/batch_runner_op.h"  // from @neptune
+#include "runtime/kernel/kernel.h"  // from @neptune
+#include "xla/tsl/platform/threadpool.h"  // from @xla
 
 namespace jsv {
 

@@ -9,13 +9,13 @@
 #include <optional>
 #include <vector>
 
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/synchronization/mutex.h"
-#include "third_party/absl/synchronization/notification.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/criticality.h"
-#include "third_party/tensorflow/tsl/platform/thread_annotations.h"
-#include "third_party/tensorflow/tsl/profiler/lib/traceme.h"
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "absl/synchronization/notification.h"  // from @com_google_absl
+#include "xla/tsl/platform/criticality.h"  // from @xla
+#include "tsl/platform/thread_annotations.h"  // from @tsl
+#include "tsl/profiler/lib/traceme.h"  // from @tsl
 
 namespace jsv {
 

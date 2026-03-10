@@ -3,7 +3,7 @@
 
 #include <functional>
 
-#include "third_party/absl/functional/any_invocable.h"
+#include "absl/functional/any_invocable.h"  // from @com_google_absl
 
 namespace jsv {
 

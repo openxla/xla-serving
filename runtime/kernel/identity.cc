@@ -1,16 +1,16 @@
-#include "third_party/neptune/runtime/kernel/identity.h"
+#include "runtime/kernel/identity.h"  // from @neptune
 
 #include <memory>
 #include <string>
 
-#include "third_party/absl/memory/memory.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/neptune/runtime/kernel/kernel.h"
-#include "third_party/neptune/runtime/kernel/kernel_builder_constants.h"
-#include "third_party/neptune/runtime/kernel/kernel_builder_context.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
+#include "absl/memory/memory.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "runtime/kernel/kernel.h"  // from @neptune
+#include "runtime/kernel/kernel_builder_constants.h"  // from @neptune
+#include "runtime/kernel/kernel_builder_context.h"  // from @neptune
+#include "xla/tsl/platform/statusor.h"  // from @xla
 
 namespace jsv {
 

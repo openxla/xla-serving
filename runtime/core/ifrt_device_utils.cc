@@ -1,29 +1,29 @@
-#include "third_party/neptune/runtime/core/ifrt_device_utils.h"
+#include "runtime/core/ifrt_device_utils.h"  // from @neptune
 
 #include <cstdint>
 #include <optional>
 #include <vector>
 
-#include "third_party/absl/algorithm/container.h"
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/container/flat_hash_set.h"
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/str_join.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/neptune/runtime/core/grid.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/attribute_map.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/device.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/executable.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/host_callback.h"
-#include "third_party/tensorflow/compiler/xla/service/computation_placer.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "absl/algorithm/container.h"  // from @com_google_absl
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/container/flat_hash_set.h"  // from @com_google_absl
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/str_join.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "runtime/core/grid.h"  // from @neptune
+#include "xla/python/ifrt/array.h"  // from @xla
+#include "xla/python/ifrt/attribute_map.h"  // from @xla
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/python/ifrt/device.h"  // from @xla
+#include "xla/python/ifrt/executable.h"  // from @xla
+#include "xla/python/ifrt/host_callback.h"  // from @xla
+#include "xla/service/computation_placer.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
 
 namespace jsv {
 

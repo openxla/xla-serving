@@ -1,14 +1,14 @@
-#include "third_party/neptune/runtime/core/host_buffer_matcher.h"
+#include "runtime/core/host_buffer_matcher.h"  // from @neptune
 
 #include <ostream>
 
 #include "testing/base/public/gmock.h"
 #include "testing/base/public/gunit.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/core/host_buffer.h"
-#include "third_party/neptune/runtime/core/host_buffer_type_utils.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/host_buffer_type_utils.h"  // from @neptune
+#include "xla/python/ifrt/dtype.h"  // from @xla
 
 namespace jsv {
 namespace {

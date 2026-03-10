@@ -1,11 +1,11 @@
-#include "third_party/neptune/runtime/kernel/builtin_kernel.h"
+#include "runtime/kernel/builtin_kernel.h"  // from @neptune
 
-#include "third_party/absl/status/status.h"
-#include "third_party/neptune/runtime/kernel/batching/batch_runner_op.h"
-#include "third_party/neptune/runtime/kernel/identity.h"
-#include "third_party/neptune/runtime/kernel/kernel.h"
-#include "third_party/neptune/runtime/kernel/stablehlo_runner_op.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/errors.h"
+#include "absl/status/status.h"  // from @com_google_absl
+#include "runtime/kernel/batching/batch_runner_op.h"  // from @neptune
+#include "runtime/kernel/identity.h"  // from @neptune
+#include "runtime/kernel/kernel.h"  // from @neptune
+#include "runtime/kernel/stablehlo_runner_op.h"  // from @neptune
+#include "xla/tsl/platform/errors.h"  // from @xla
 
 namespace jsv {
 

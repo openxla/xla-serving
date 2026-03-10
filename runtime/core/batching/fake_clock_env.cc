@@ -1,10 +1,10 @@
-#include "third_party/neptune/runtime/core/batching/fake_clock_env.h"
+#include "runtime/core/batching/fake_clock_env.h"  // from @neptune
 
 #include <cstdint>
 
-#include "third_party/absl/synchronization/mutex.h"
-#include "third_party/absl/synchronization/notification.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/env.h"
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "absl/synchronization/notification.h"  // from @com_google_absl
+#include "xla/tsl/platform/env.h"  // from @xla
 
 namespace jsv {
 namespace test_util {

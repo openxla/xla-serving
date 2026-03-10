@@ -1,22 +1,22 @@
-#include "third_party/neptune/runtime/data_loader/ocp_loader/tensorstore_loader.h"
+#include "runtime/data_loader/ocp_loader/tensorstore_loader.h"  // from @neptune
 
 #include <optional>
 #include <string_view>
 #include <utility>
 #include <vector>
 
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/australis/google/ifrt/ifrt_australis.proto.h"
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "third_party/australis/google/ifrt/ifrt_australis.pb.h"
 #include "third_party/australis/google/ifrt/tensorstore_loader.h"
-#include "third_party/neptune/runtime/data_loader/ocp_loader/common_types.h"
-#include "third_party/neptune/runtime/data_loader/ocp_loader/shared.h"
+#include "runtime/data_loader/ocp_loader/common_types.h"  // from @neptune
+#include "runtime/data_loader/ocp_loader/shared.h"  // from @neptune
 #include "third_party/protobuf/repeated_ptr_field.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/device.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "xla/python/ifrt/array.h"  // from @xla
+#include "xla/python/ifrt/device.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
 #include "third_party/tensorstore/context.h"
 #include "third_party/tensorstore/util/result.h"
 

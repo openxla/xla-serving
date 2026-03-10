@@ -9,22 +9,22 @@
 #include <utility>
 #include <vector>
 
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/core/allocator.h"
-#include "third_party/neptune/runtime/core/batching/batch_scheduler.h"
-#include "third_party/neptune/runtime/core/batching/shared_batch_scheduler.h"
-#include "third_party/neptune/runtime/core/default_allocator.h"
-#include "third_party/neptune/runtime/core/host_buffer.h"
-#include "third_party/neptune/runtime/kernel/batching/batch_options_utils.h"
-#include "third_party/neptune/runtime/kernel/batching/batch_resource_base.h"
-#include "third_party/neptune/runtime/kernel/kernel.h"
-#include "third_party/neptune/runtime/kernel/kernel_builder_context.h"
-#include "third_party/neptune/runtime/kernel/kernel_io_data_type.h"
-#include "third_party/tensorflow/compiler/xla/tsl/concurrency/future.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
-#include "third_party/tensorflow/tsl/platform/refcount.h"
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/core/allocator.h"  // from @neptune
+#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
+#include "runtime/core/batching/shared_batch_scheduler.h"  // from @neptune
+#include "runtime/core/default_allocator.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
+#include "runtime/kernel/batching/batch_resource_base.h"  // from @neptune
+#include "runtime/kernel/kernel.h"  // from @neptune
+#include "runtime/kernel/kernel_builder_context.h"  // from @neptune
+#include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
+#include "xla/tsl/concurrency/future.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
+#include "tsl/platform/refcount.h"  // from @tsl
 namespace jsv {
 
 struct BatchRunnerOpOptions {

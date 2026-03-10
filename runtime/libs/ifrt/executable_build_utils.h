@@ -6,19 +6,19 @@
 #include <optional>
 #include <string>
 
-#include "third_party/absl/base/nullability.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/time/time.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/BuiltinOps.h"
-#include "third_party/neptune/runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/proto/compile_options.proto.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/executable.h"
-#include "third_party/tensorflow/compiler/xla/service/compilation_environments.h"
-#include "third_party/tensorflow/compiler/xla/service/computation_placer.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "absl/base/nullability.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/time/time.h"  // from @com_google_absl
+#include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
+#include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
+#include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/python/ifrt/executable.h"  // from @xla
+#include "xla/service/compilation_environments.h"  // from @xla
+#include "xla/service/computation_placer.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
 
 namespace jsv {
 

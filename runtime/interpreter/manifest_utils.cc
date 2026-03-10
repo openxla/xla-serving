@@ -1,4 +1,4 @@
-#include "third_party/neptune/runtime/interpreter/manifest_utils.h"
+#include "runtime/interpreter/manifest_utils.h"  // from @neptune
 
 #include <algorithm>
 #include <cstdint>
@@ -7,43 +7,43 @@
 #include <utility>
 #include <vector>
 
-#include "third_party/neptune/runtime/interpreter/orbax_type_utils.h"
-#include "third_party/absl/base/nullability.h"
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/ascii.h"
-#include "third_party/absl/strings/match.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/str_format.h"
-#include "third_party/absl/strings/str_join.h"
-#include "third_party/absl/strings/str_split.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/strings/strip.h"
-#include "third_party/absl/strings/substitute.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/core/constants.h"
-#include "third_party/neptune/runtime/core/flat_signature.h"
-#include "third_party/neptune/runtime/core/stablehlo_utils.h"
-#include "third_party/neptune/runtime/core/type.h"
-#include "third_party/neptune/runtime/kernel/kernel_builder_constants.h"
+#include "runtime/interpreter/orbax_type_utils.h"  // from @neptune
+#include "absl/base/nullability.h"  // from @com_google_absl
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/ascii.h"  // from @com_google_absl
+#include "absl/strings/match.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/str_format.h"  // from @com_google_absl
+#include "absl/strings/str_join.h"  // from @com_google_absl
+#include "absl/strings/str_split.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/strings/strip.h"  // from @com_google_absl
+#include "absl/strings/substitute.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/core/constants.h"  // from @neptune
+#include "runtime/core/flat_signature.h"  // from @neptune
+#include "runtime/core/stablehlo_utils.h"  // from @neptune
+#include "runtime/core/type.h"  // from @neptune
+#include "runtime/kernel/kernel_builder_constants.h"  // from @neptune
 #include "third_party/protobuf/descriptor.h"
 #include "third_party/protobuf/repeated_ptr_field.h"
 #include "third_party/protobuf/util/message_differencer.h"
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.proto.h"
-#include "third_party/py/orbax/experimental/model/core/protos/type.proto.h"
-#include "third_party/py/orbax/export/protos/oex_orchestration.proto.h"
-#include "third_party/tensorflow/compiler/xla/hlo/ir/hlo_sharding.h"
-#include "third_party/tensorflow/compiler/xla/layout.h"
-#include "third_party/tensorflow/compiler/xla/pjrt/proto/compile_options.proto.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"
-#include "third_party/tensorflow/compiler/xla/python/pjrt_ifrt/pjrt_dtype.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/env.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/errors.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
-#include "third_party/tensorflow/tsl/platform/path.h"
+#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
+#include "third_party/py/orbax/experimental/model/core/protos/type.pb.h"
+#include "third_party/py/orbax/export/protos/oex_orchestration.pb.h"
+#include "xla/hlo/ir/hlo_sharding.h"  // from @xla
+#include "xla/layout.h"  // from @xla
+#include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
+#include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/python/pjrt_ifrt/pjrt_dtype.h"  // from @xla
+#include "xla/tsl/platform/env.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
+#include "tsl/platform/path.h"  // from @tsl
 
 namespace jsv {
 

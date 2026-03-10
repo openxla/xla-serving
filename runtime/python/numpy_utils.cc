@@ -1,4 +1,4 @@
-#include "third_party/neptune/runtime/python/numpy_utils.h"
+#include "runtime/python/numpy_utils.h"  // from @neptune
 
 #include <Python.h>
 
@@ -9,32 +9,32 @@
 #include <string>
 
 #include "learning/infra/mira/experimental/orbax_model/tensorflow/utils/ifrt_tensor_utils.h"
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/str_format.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/types/span.h"
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/str_format.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
 #include "third_party/nanobind/include/nanobind/nanobind.h"
-#include "third_party/neptune/runtime/core/allocator.h"
-#include "third_party/neptune/runtime/core/host_buffer.h"
+#include "runtime/core/allocator.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @neptune
 #include "third_party/py/numpy/_core/include/numpy/ndarrayobject.h"
 #include "third_party/py/numpy/_core/include/numpy/ndarraytypes.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/shape.h"
-#include "third_party/tensorflow/compiler/xla/python/nb_numpy.h"
-#include "third_party/tensorflow/compiler/xla/python/types.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/errors.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
-#include "third_party/tensorflow/compiler/xla/tsl/python/lib/core/numpy.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
+#include "xla/python/nb_numpy.h"  // from @xla
+#include "xla/python/types.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
+#include "xla/tsl/python/lib/core/numpy.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
 #include "third_party/tensorflow/core/framework/tensor.h"
-#include "third_party/tensorflow/core/framework/tensor.proto.h"
+#include "third_party/tensorflow/core/framework/tensor.pb.h"
 #include "third_party/tensorflow/core/framework/tensor_shape.h"
-#include "third_party/tensorflow/core/framework/types.proto.h"
-#include "third_party/tensorflow/tsl/platform/tstring.h"
+#include "third_party/tensorflow/core/framework/types.pb.h"
+#include "tsl/platform/tstring.h"  // from @tsl
 
 namespace nb = ::nanobind;
 

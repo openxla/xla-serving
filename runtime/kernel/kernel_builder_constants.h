@@ -1,7 +1,7 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_BUILDER_CONSTANTS_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_BUILDER_CONSTANTS_H_
 
-#include "third_party/absl/strings/string_view.h"
+#include "absl/strings/string_view.h"  // from @com_google_absl
 
 namespace jsv {
 

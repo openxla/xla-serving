@@ -4,32 +4,32 @@
 
 #include "base/init_google.h"
 #include "learning/infra/mira/experimental/orbax_model/tensorflow/utils/tf_to_jsv_proto.h"
-#include "third_party/absl/flags/flag.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/str_join.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/grpc/include/grpcpp/channel.h"
-#include "third_party/grpc/include/grpcpp/client_context.h"
-#include "third_party/grpc/include/grpcpp/create_channel.h"
-#include "third_party/grpc/include/grpcpp/security/credentials.h"
-#include "third_party/grpc/include/grpcpp/support/status.h"
-#include "third_party/neptune/runtime/core/host_buffer.h"
-#include "third_party/neptune/runtime/core/proto/host_buffer.proto.h"
-#include "third_party/neptune/runtime/serving/gcp/auth/utils.h"
-#include "third_party/neptune/runtime/serving/gcp/proto/model.proto.h"
-#include "third_party/neptune/runtime/serving/gcp/proto/predict.proto.h"
-#include "third_party/neptune/runtime/serving/gcp/proto/prediction_service.grpc.pb.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.proto.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/shape.proto.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
+#include "absl/flags/flag.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/str_join.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "include/grpcpp/channel.h"  // from @com_github_grpc_grpc
+#include "include/grpcpp/client_context.h"  // from @com_github_grpc_grpc
+#include "include/grpcpp/create_channel.h"  // from @com_github_grpc_grpc
+#include "include/grpcpp/security/credentials.h"  // from @com_github_grpc_grpc
+#include "include/grpcpp/support/status.h"  // from @com_github_grpc_grpc
+#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/proto/host_buffer.pb.h"  // from @neptune
+#include "runtime/serving/gcp/auth/utils.h"  // from @neptune
+#include "runtime/serving/gcp/proto/model.pb.h"  // from @neptune
+#include "runtime/serving/gcp/proto/predict.pb.h"  // from @neptune
+#include "runtime/serving/gcp/proto/prediction_service.grpc.pb.h"  // from @neptune
+#include "xla/python/ifrt/dtype.pb.h"  // from @xla
+#include "xla/python/ifrt/shape.pb.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
 #include "third_party/tensorflow/core/lib/io/record_reader.h"
 #include "third_party/tensorflow/core/platform/env.h"
 #include "third_party/tensorflow/core/platform/file_system.h"
 #include "third_party/tensorflow/core/platform/tstring.h"
-#include "third_party/tensorflow_serving/apis/prediction_log.proto.h"
+#include "third_party/tensorflow_serving/apis/prediction_log.pb.h"
 
 ABSL_FLAG(std::string, server_address, "", "Server IP address and port.");
 ABSL_FLAG(std::string, model_name, "", "Name of the model to query.");

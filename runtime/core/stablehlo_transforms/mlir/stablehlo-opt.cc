@@ -1,12 +1,12 @@
-#include "third_party/llvm/llvm-project/llvm/include/llvm/Support/LogicalResult.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/Dialect/Arith/IR/Arith.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/Dialect/Func/Extensions/AllExtensions.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/Dialect/Shape/IR/Shape.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/DialectRegistry.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/MLIRContext.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/InitAllDialects.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/Tools/mlir-opt/MlirOptMain.h"
-#include "third_party/stablehlo/stablehlo/dialect/Register.h"
+#include "llvm/include/llvm/Support/LogicalResult.h"  // from @llvm-project
+#include "mlir/include/mlir/Dialect/Arith/IR/Arith.h"  // from @llvm-project
+#include "mlir/include/mlir/Dialect/Func/Extensions/AllExtensions.h"  // from @llvm-project
+#include "mlir/include/mlir/Dialect/Shape/IR/Shape.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/DialectRegistry.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/MLIRContext.h"  // from @llvm-project
+#include "mlir/include/mlir/InitAllDialects.h"  // from @llvm-project
+#include "mlir/include/mlir/Tools/mlir-opt/MlirOptMain.h"  // from @llvm-project
+#include "stablehlo/dialect/Register.h"  // from @stablehlo
 
 int main(int argc, char **argv) {
   // Register dialect extensions.

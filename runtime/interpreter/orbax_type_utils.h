@@ -1,10 +1,10 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_ORBAX_TYPE_UTILS_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_ORBAX_TYPE_UTILS_H_
 
-#include "third_party/absl/status/statusor.h"
-#include "third_party/py/orbax/experimental/model/core/protos/type.proto.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "third_party/py/orbax/experimental/model/core/protos/type.pb.h"
+#include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
 
 namespace jsv {
 

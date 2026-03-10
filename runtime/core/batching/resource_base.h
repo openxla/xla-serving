@@ -4,8 +4,8 @@
 #include <cstdint>
 #include <string>
 
-#include "third_party/absl/strings/str_format.h"
-#include "third_party/tensorflow/tsl/platform/refcount.h"
+#include "absl/strings/str_format.h"  // from @com_google_absl
+#include "tsl/platform/refcount.h"  // from @tsl
 
 namespace jsv {
 

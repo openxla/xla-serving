@@ -1,4 +1,4 @@
-#include "third_party/neptune/runtime/interpreter/interpreter.h"
+#include "runtime/interpreter/interpreter.h"  // from @neptune
 
 #include <algorithm>
 #include <cstdint>
@@ -9,55 +9,55 @@
 #include <utility>
 #include <vector>
 
-#include "third_party/neptune/runtime/interpreter/context.h"
-#include "third_party/neptune/runtime/interpreter/interpreter_create_options.h"
-#include "third_party/neptune/runtime/interpreter/linear_graph_execute.h"
-#include "third_party/neptune/runtime/interpreter/manifest_utils.h"
-#include "third_party/neptune/runtime/interpreter/optional_function_handler.h"
-#include "third_party/neptune/runtime/interpreter/optional_function_handler_factory.h"
-#include "third_party/neptune/runtime/interpreter/run_options.h"
-#include "third_party/absl/base/nullability.h"
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/flags/flag.h"
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/memory/memory.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/str_join.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/synchronization/mutex.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/core/batching/batch_scheduler.h"
-#include "third_party/neptune/runtime/core/constants.h"
-#include "third_party/neptune/runtime/core/flat_signature.h"
-#include "third_party/neptune/runtime/core/ifrt_loaded_variable_registry.h"
-#include "third_party/neptune/runtime/core/stablehlo.h"
-#include "third_party/neptune/runtime/core/stablehlo_utils.h"
-#include "third_party/neptune/runtime/core/value.h"
-#include "third_party/neptune/runtime/data_loader/data_loader.h"
-#include "third_party/neptune/runtime/kernel/batching/batch_options_utils.h"
-#include "third_party/neptune/runtime/kernel/batching/batch_runner_op.h"
-#include "third_party/neptune/runtime/kernel/kernel.h"
-#include "third_party/neptune/runtime/kernel/kernel_builder_constants.h"
-#include "third_party/neptune/runtime/kernel/kernel_builder_context.h"
-#include "third_party/neptune/runtime/kernel/kernel_io_data_type.h"
+#include "runtime/interpreter/context.h"  // from @neptune
+#include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
+#include "runtime/interpreter/linear_graph_execute.h"  // from @neptune
+#include "runtime/interpreter/manifest_utils.h"  // from @neptune
+#include "runtime/interpreter/optional_function_handler.h"  // from @neptune
+#include "runtime/interpreter/optional_function_handler_factory.h"  // from @neptune
+#include "runtime/interpreter/run_options.h"  // from @neptune
+#include "absl/base/nullability.h"  // from @com_google_absl
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/flags/flag.h"  // from @com_google_absl
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/memory/memory.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/str_join.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
+#include "runtime/core/constants.h"  // from @neptune
+#include "runtime/core/flat_signature.h"  // from @neptune
+#include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune
+#include "runtime/core/stablehlo.h"  // from @neptune
+#include "runtime/core/stablehlo_utils.h"  // from @neptune
+#include "runtime/core/value.h"  // from @neptune
+#include "runtime/data_loader/data_loader.h"  // from @neptune
+#include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
+#include "runtime/kernel/batching/batch_runner_op.h"  // from @neptune
+#include "runtime/kernel/kernel.h"  // from @neptune
+#include "runtime/kernel/kernel_builder_constants.h"  // from @neptune
+#include "runtime/kernel/kernel_builder_context.h"  // from @neptune
+#include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
 #include "third_party/protobuf/repeated_ptr_field.h"
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.proto.h"
-#include "third_party/py/orbax/experimental/model/core/protos/type.proto.h"
-#include "third_party/py/orbax/export/protos/oex_orchestration.proto.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
-#include "third_party/tensorflow/compiler/xla/python/ifrt/device.h"
-#include "third_party/tensorflow/compiler/xla/tsl/concurrency/future.h"
-#include "third_party/tensorflow/compiler/xla/tsl/lib/monitoring/counter.h"
-#include "third_party/tensorflow/compiler/xla/tsl/lib/monitoring/counter_gauge.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/env.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/errors.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
-#include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
-#include "third_party/tensorflow/tsl/platform/context.h"
+#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
+#include "third_party/py/orbax/experimental/model/core/protos/type.pb.h"
+#include "third_party/py/orbax/export/protos/oex_orchestration.pb.h"
+#include "xla/python/ifrt/array.h"  // from @xla
+#include "xla/python/ifrt/device.h"  // from @xla
+#include "xla/tsl/concurrency/future.h"  // from @xla
+#include "xla/tsl/lib/monitoring/counter.h"  // from @xla
+#include "xla/tsl/lib/monitoring/counter_gauge.h"  // from @xla
+#include "xla/tsl/platform/env.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
+#include "tsl/platform/context.h"  // from @tsl
 
 ABSL_FLAG(bool, jsv_enable_parallel_loading_pipelines, true,
           "When set to true, load the pipelines in parallel.");

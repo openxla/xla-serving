@@ -6,19 +6,19 @@
 #include <string>
 #include <vector>
 
-#include "third_party/neptune/runtime/interpreter/context.h"
-#include "third_party/absl/base/thread_annotations.h"
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/functional/any_invocable.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/string_view.h"
-#include "third_party/absl/synchronization/mutex.h"
-#include "third_party/absl/types/span.h"
-#include "third_party/neptune/runtime/core/value.h"
-#include "third_party/neptune/runtime/kernel/kernel_builder_context.h"
-#include "third_party/neptune/runtime/kernel/kernel_io_data_type.h"
-#include "third_party/tensorflow/compiler/xla/tsl/concurrency/future.h"
+#include "runtime/interpreter/context.h"  // from @neptune
+#include "absl/base/thread_annotations.h"  // from @com_google_absl
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/functional/any_invocable.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @com_google_absl
+#include "runtime/core/value.h"  // from @neptune
+#include "runtime/kernel/kernel_builder_context.h"  // from @neptune
+#include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
+#include "xla/tsl/concurrency/future.h"  // from @xla
 
 namespace jsv {
 

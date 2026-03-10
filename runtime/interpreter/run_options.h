@@ -1,7 +1,7 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_RUN_OPTIONS_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_RUN_OPTIONS_H_
 
-#include "third_party/absl/time/time.h"
+#include "absl/time/time.h"  // from @com_google_absl
 
 namespace jsv {
 

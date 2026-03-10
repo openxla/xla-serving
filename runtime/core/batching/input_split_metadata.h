@@ -3,7 +3,7 @@
 
 #include <string>
 
-#include "third_party/absl/container/fixed_array.h"
+#include "absl/container/fixed_array.h"  // from @com_google_absl
 
 namespace jsv {
 namespace internal {

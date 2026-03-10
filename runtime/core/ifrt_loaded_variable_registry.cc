@@ -1,16 +1,16 @@
-#include "third_party/neptune/runtime/core/ifrt_loaded_variable_registry.h"
+#include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune
 
 #include <string>
 #include <utility>
 
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/absl/strings/substitute.h"
-#include "third_party/absl/synchronization/mutex.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/statusor.h"
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/substitute.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "xla/tsl/platform/statusor.h"  // from @xla
 
 namespace jsv {
 

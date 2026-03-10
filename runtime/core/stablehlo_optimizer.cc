@@ -1,7 +1,7 @@
-#include "third_party/neptune/runtime/core/stablehlo_optimizer.h"
+#include "runtime/core/stablehlo_optimizer.h"  // from @neptune
 
-#include "third_party/absl/status/status.h"
-#include "third_party/llvm/llvm-project/mlir/include/mlir/IR/BuiltinOps.h"
+#include "absl/status/status.h"  // from @com_google_absl
+#include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 
 namespace jsv {
 

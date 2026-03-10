@@ -6,17 +6,17 @@
 #include <string>
 
 #include "base/init_google.h"
-#include "third_party/absl/flags/flag.h"
-#include "third_party/absl/log/check.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/str_cat.h"
-#include "third_party/grpc/include/grpcpp/security/server_credentials.h"
-#include "third_party/grpc/include/grpcpp/server.h"
-#include "third_party/grpc/include/grpcpp/server_builder.h"
-#include "third_party/neptune/runtime/serving/gcp/auth/utils.h"
-#include "third_party/neptune/runtime/serving/gcp/server/orbax_grpc_server.h"
-#include "third_party/tensorflow/compiler/xla/tsl/platform/status.h"
+#include "absl/flags/flag.h"  // from @com_google_absl
+#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "include/grpcpp/security/server_credentials.h"  // from @com_github_grpc_grpc
+#include "include/grpcpp/server.h"  // from @com_github_grpc_grpc
+#include "include/grpcpp/server_builder.h"  // from @com_github_grpc_grpc
+#include "runtime/serving/gcp/auth/utils.h"  // from @neptune
+#include "runtime/serving/gcp/server/orbax_grpc_server.h"  // from @neptune
+#include "xla/tsl/platform/status.h"  // from @xla
 
 ABSL_FLAG(int, port, 8500, "Port for the gRPC server to listen on.");
 
