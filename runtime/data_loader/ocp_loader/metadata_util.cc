@@ -3,7 +3,6 @@
 #include <string>
 #include <vector>
 
-#include "file/base/path.h"
 #include "absl/log/check.h"  // from @com_google_absl
 #include "absl/log/log.h"  // from @com_google_absl
 #include "absl/status/status.h"  // from @com_google_absl
@@ -16,6 +15,7 @@
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
+#include "tsl/platform/path.h"  // from @tsl
 #include "util/task/status_macros.h"
 
 namespace neptune {
@@ -137,7 +137,7 @@ absl::StatusOr<std::vector<std::string>> GetAllWeightNamesFromCheckpoint(
   // Parse _METADATA to get the path to each weight.
   std::string metadata;
   TF_RETURN_IF_ERROR(tsl::ReadFileToString(
-      tsl::Env::Default(), file::JoinPath(checkpoint_path, METADATA_FILE_NAME),
+      tsl::Env::Default(), tsl::io::JoinPath(checkpoint_path, METADATA_FILE_NAME),
       &metadata));
   VLOG(1) << "metadata_json: " << metadata;
   nlohmann::ordered_json metadata_json =

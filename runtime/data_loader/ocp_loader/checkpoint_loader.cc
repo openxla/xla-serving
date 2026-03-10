@@ -6,7 +6,6 @@
 #include <utility>
 #include <vector>
 
-#include "file/base/path.h"
 #include "absl/container/flat_hash_map.h"  // from @com_google_absl
 #include "absl/log/log.h"  // from @com_google_absl
 #include "absl/status/status.h"  // from @com_google_absl
@@ -36,6 +35,7 @@
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
+#include "tsl/platform/path.h"  // from @tsl
 
 // TODO(qidichen): add test for this file.
 namespace neptune {
@@ -170,7 +170,7 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadCheckpoint(
 bool IsOcdbtCheckpoint(const std::string& path) {
   // Determines whether a checkpoint uses OCDBT format.
   return tsl::Env::Default()->FileExists(
-             file::JoinPath(path, _OCDBT_MANIFEST_FILE)) == absl::OkStatus();
+             tsl::io::JoinPath(path, _OCDBT_MANIFEST_FILE)) == absl::OkStatus();
 }
 
 absl::StatusOr<std::vector<std::pair<std::string, xla::ifrt::ArrayRef>>>

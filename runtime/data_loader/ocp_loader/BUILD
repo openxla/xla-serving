@@ -22,7 +22,6 @@ cc_library(
     srcs = ["metadata_util.cc"],
     hdrs = ["metadata_util.h"],
     deps = [
-        "//file/base:path",
         "//third_party/json",
         "//util/task:status",
         "@com_google_absl//absl/log",
@@ -30,6 +29,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@tsl//tsl/platform:path",
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",
@@ -44,7 +44,6 @@ cc_library(
         ":common_types",
         ":tensorstore_loader",
         ":tensorstore_utils_cc",
-        "//file/base:path",
         "//third_party/australis:cpu_support",  # backend
         "//third_party/australis/google/ifrt:ifrt_australis_cc_proto",
         "//third_party/json",
@@ -58,6 +57,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
+        "@tsl//tsl/platform:path",
         "@xla//xla:shape_util",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/hlo/ir:hlo",
