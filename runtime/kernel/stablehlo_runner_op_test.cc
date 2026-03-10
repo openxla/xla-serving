@@ -279,8 +279,8 @@ TEST_F(SimpleMlirStableHloRunnerOpTest, VariableShardingMismatch) {
           "google3/third_party/neptune/runtime/kernel/testdata/simple.mlir"));
   stablehlo_spec_simple_->mlir_module_string = stablehlo_str;
 
-  std::vector<int> device_ids = {0};
-  xla::OpSharding sharding = xla::HloSharding::IotaTile({2, 2}).ToProto();
+  std::vector<int> device_ids = {0, 1};
+  xla::OpSharding sharding = xla::HloSharding::IotaTile({1, 2}).ToProto();
   const std::string kVariableName = "variable";
   HostBuffer variable =
       AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0}, xla::ifrt::Shape({1, 4}));

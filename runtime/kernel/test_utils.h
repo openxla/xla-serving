@@ -7,7 +7,6 @@
 #include <vector>
 
 #include "devtools/build/runtime/get_runfiles_dir.h"
-#include "third_party/neptune/runtime/interpreter/manifest_utils.h"
 #include "third_party/absl/log/log.h"
 #include "third_party/absl/status/status.h"
 #include "third_party/absl/status/statusor.h"
@@ -19,6 +18,7 @@
 #include "third_party/neptune/runtime/core/stablehlo.h"
 #include "third_party/neptune/runtime/core/stablehlo_optimizer.h"
 #include "third_party/neptune/runtime/core/value.h"
+#include "third_party/neptune/runtime/interpreter/manifest_utils.h"
 #include "third_party/neptune/runtime/kernel/kernel.h"
 #include "third_party/neptune/runtime/kernel/kernel_builder_constants.h"
 #include "third_party/neptune/runtime/kernel/kernel_builder_context.h"
@@ -27,7 +27,11 @@
 #include "third_party/tensorflow/compiler/xla/hlo/ir/hlo_sharding.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
+#include "third_party/tensorflow/compiler/xla/python/ifrt/device_list.h"
+#include "third_party/tensorflow/compiler/xla/python/ifrt/memory.h"
+#include "third_party/tensorflow/compiler/xla/python/ifrt/sharding.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/test_util.h"
+#include "third_party/tensorflow/compiler/xla/python/pjrt_ifrt/xla_sharding.h"
 #include "third_party/tensorflow/compiler/xla/tsl/concurrency/future.h"
 #include "third_party/tensorflow/compiler/xla/tsl/platform/env.h"
 #include "third_party/tensorflow/compiler/xla/tsl/platform/errors.h"
@@ -105,9 +109,14 @@ class StableHloRunnerOpTestHelper {
     auto loaded_variable_producer =
         [&]() -> absl::StatusOr<IfrtLoadedVariableRegistry::LoadedVariable> {
       TF_ASSIGN_OR_RETURN(
-          xla::ifrt::ArrayRef array,
-          jsv::sharding_internal::MakeArrayFromHostBuffer(
-              *client_, host_buffer, device_ids, hlo_sharding, *thread_pool_));
+          xla::ifrt::DeviceListRef device_list,
+          xla::ifrt::test_util::GetDevices(client_.get(), device_ids));
+      xla::ifrt::ShardingRef sharding = xla::ifrt::HloSharding::Create(
+          device_list, xla::ifrt::MemoryKind(), hlo_sharding);
+      TF_ASSIGN_OR_RETURN(xla::ifrt::ArrayRef array,
+                          jsv::sharding_internal::MakeArrayFromHostBuffer(
+                              *client_, host_buffer, device_ids,
+                              std::move(sharding), *thread_pool_));
       auto [promise, future] = tsl::MakePromise<xla::ifrt::ArrayRef>();
       promise.Set(std::move(array));
       return IfrtLoadedVariableRegistry::LoadedVariable(

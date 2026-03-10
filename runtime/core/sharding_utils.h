@@ -16,6 +16,7 @@
 #include "third_party/tensorflow/compiler/xla/python/ifrt/device_list.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/shape.h"
+#include "third_party/tensorflow/compiler/xla/python/ifrt/sharding.h"
 #include "third_party/tensorflow/compiler/xla/shape.h"
 #include "third_party/tensorflow/compiler/xla/tsl/concurrency/future.h"
 #include "third_party/tensorflow/compiler/xla/tsl/concurrency/ref_count.h"
@@ -50,7 +51,7 @@ absl::StatusOr<HostBuffer> MakeHostBufferFromDisassembledBuffers(
 // and sharding information.
 absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
     xla::ifrt::Client& ifrt_client, const HostBuffer& input_host_buffer,
-    absl::Span<const int> device_ids, const xla::HloSharding& hlo_sharding,
+    absl::Span<const int> device_ids, xla::ifrt::ShardingRef sharding,
     const tsl::thread::ThreadPool& thread_pool);
 
 // A variant of the above api. The difference is that the user passes in
@@ -58,8 +59,9 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
 absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
     xla::ifrt::Client& ifrt_client, const HostBuffer& input_host_buffer,
     const xla::ifrt::DeviceListRef& device_list,
-    const xla::HloSharding& hlo_sharding,
+    xla::ifrt::ShardingRef sharding,
     const tsl::thread::ThreadPool& thread_pool);
+
 
 // Reshards a disassembled array list back to one single tensor based on given
 // sharding spec.

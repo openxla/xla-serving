@@ -1,4 +1,5 @@
 // Enable definition of Eigen::ThreadPoolDevice instead of just declaration.
+
 #define EIGEN_USE_THREADS
 
 #include "third_party/neptune/runtime/core/sharding_utils.h"
@@ -22,6 +23,7 @@
 #include "third_party/neptune/runtime/core/host_buffer.h"
 #include "third_party/neptune/runtime/core/host_buffer_type_utils.h"
 #include "third_party/neptune/runtime/core/sharding_utils_core.h"
+#include "third_party/llvm/llvm-project/llvm/include/llvm/Support/Casting.h"
 #include "third_party/tensorflow/compiler/xla/hlo/ir/hlo_sharding.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
@@ -236,12 +238,10 @@ absl::StatusOr<xla::ifrt::ArrayRef> CreateArrayFromHostBufferForSingleDevice(
 
 absl::StatusOr<xla::ifrt::ArrayRef> MakeAssembledArrayFromHostBuffer(
     xla::ifrt::Client& ifrt_client, const HostBuffer& input_buffer,
-    const xla::HloSharding& hlo_sharding,
+    xla::ifrt::ShardingRef sharding,
     const xla::ifrt::DeviceListRef& device_list,
     const tsl::thread::ThreadPool& thread_pool) {
   // TODO: use xla::HloSharding to identifying sharding axis.
-  auto sharding = xla::ifrt::HloSharding::Create(
-      device_list, xla::ifrt::MemoryKind(), hlo_sharding);
 
   VLOG(2) << "Assembling arrays by sharding " << sharding;
 
@@ -536,32 +536,39 @@ tsl::Future<HostBuffer> MakeHostBufferFromArray(
 absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
     xla::ifrt::Client& ifrt_client, const HostBuffer& input_host_buffer,
     const xla::ifrt::DeviceListRef& device_list,
-    const xla::HloSharding& hlo_sharding,
+    xla::ifrt::ShardingRef ifrt_sharding,
     const tsl::thread::ThreadPool& thread_pool) {
-  VLOG(3) << "IsTiled: " << hlo_sharding.IsTiled();
-  VLOG(3) << "IsReplicated: " << hlo_sharding.IsReplicated();
-  VLOG(3) << "IsTileMaximal: " << hlo_sharding.IsTileMaximal();
-  if (!hlo_sharding.IsTiled() && !hlo_sharding.IsReplicated() &&
-      !hlo_sharding.IsTileMaximal()) {
-    return absl::UnimplementedError(absl::StrCat(
-        "Only support MAXIMAL, OTHER or REPLICATED, but got sharding : ",
-        hlo_sharding.ToString()));
-  }
-
-  VLOG(1) << "Hlo sharding: " << hlo_sharding.ToString();
-  VLOG(1) << "Device list size: " << device_list->size();
-
-  if (device_list->size() == 1) {
+  if (llvm::isa<const xla::ifrt::SingleDeviceSharding>(ifrt_sharding.get())) {
     return CreateArrayFromHostBufferForSingleDevice(
         ifrt_client, input_host_buffer, device_list->devices()[0]);
   }
+  const xla::ifrt::HloSharding* ifrt_hlo_sharding =
+      llvm::dyn_cast<const xla::ifrt::HloSharding>(ifrt_sharding.get());
+  if (ifrt_hlo_sharding == nullptr) {
+    return absl::InternalError(
+        "Sharding must be an instance of xla::ifrt::HloSharding");
+  }
+  const xla::HloSharding& xla_hlo_sharding =
+      ifrt_hlo_sharding->xla_hlo_sharding();
+  VLOG(3) << "HloSharding properties: IsTiled=" << xla_hlo_sharding.IsTiled()
+          << ", IsReplicated=" << xla_hlo_sharding.IsReplicated()
+          << ", IsTileMaximal=" << xla_hlo_sharding.IsTileMaximal();
+  if (!xla_hlo_sharding.IsTiled() && !xla_hlo_sharding.IsReplicated() &&
+      !xla_hlo_sharding.IsTileMaximal()) {
+    return absl::UnimplementedError(absl::StrCat(
+        "Only support MAXIMAL, OTHER or REPLICATED, but got sharding : ",
+        xla_hlo_sharding.ToString()));
+  }
+
+  VLOG(1) << "Hlo sharding: " << xla_hlo_sharding.ToString();
+  VLOG(1) << "Device list size: " << device_list->size();
 
   // IsTileMaximal() also returns true for a replicate sharding created by
   // xla::HloSharding::Replicate().
-  if (!hlo_sharding.IsReplicated() && hlo_sharding.IsTileMaximal()) {
+  if (!xla_hlo_sharding.IsReplicated() && xla_hlo_sharding.IsTileMaximal()) {
     VLOG(1) << "Single device fast path for Maximal tiled buffer";
     xla::ifrt::Device* device;
-    int unique_device_id = hlo_sharding.GetUniqueDevice();
+    int unique_device_id = xla_hlo_sharding.GetUniqueDevice();
     TF_ASSIGN_OR_RETURN(device, ifrt_client.LookupDevice(
                                     xla::ifrt::DeviceId(unique_device_id)));
     return CreateArrayFromHostBufferForSingleDevice(ifrt_client,
@@ -569,10 +576,8 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
   }
 
   // Fast path for replicated sharding.
-  if (hlo_sharding.IsReplicated()) {
+  if (xla_hlo_sharding.IsReplicated()) {
     VLOG(1) << "Fast path for replicated sharding";
-    auto ifrt_sharding = xla::ifrt::HloSharding::Create(
-        device_list, xla::ifrt::MemoryKind(), hlo_sharding);
 
     xla::ifrt::DType ifrt_dtype = input_host_buffer.dtype();
     return ifrt_client.MakeArrayFromHostBuffer(
@@ -587,18 +592,18 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
   }
 
   return MakeAssembledArrayFromHostBuffer(ifrt_client, input_host_buffer,
-                                          std::move(hlo_sharding), device_list,
+                                          std::move(ifrt_sharding), device_list,
                                           thread_pool);
 }
 
 absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
     xla::ifrt::Client& ifrt_client, const HostBuffer& input_host_buffer,
-    absl::Span<const int> device_ids, const xla::HloSharding& hlo_sharding,
+    absl::Span<const int> device_ids, xla::ifrt::ShardingRef ifrt_sharding,
     const tsl::thread::ThreadPool& thread_pool) {
   TF_ASSIGN_OR_RETURN(xla::ifrt::DeviceListRef device_list,
                       CreateDeviceList(ifrt_client, device_ids));
   return MakeArrayFromHostBuffer(ifrt_client, input_host_buffer,
-                                 std::move(device_list), hlo_sharding,
+                                 std::move(device_list), ifrt_sharding,
                                  thread_pool);
 }
 

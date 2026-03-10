@@ -33,9 +33,13 @@
 #include "third_party/tensorflow/compiler/xla/hlo/ir/tile_assignment.h"
 #include "third_party/tensorflow/compiler/xla/pjrt/proto/compile_options.proto.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
+#include "third_party/tensorflow/compiler/xla/python/ifrt/device_list.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"
+#include "third_party/tensorflow/compiler/xla/python/ifrt/memory.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/shape.h"
+#include "third_party/tensorflow/compiler/xla/python/ifrt/sharding.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/test_util.h"
+#include "third_party/tensorflow/compiler/xla/python/pjrt_ifrt/xla_sharding.h"
 #include "third_party/tensorflow/compiler/xla/tsl/concurrency/future.h"
 #include "third_party/tensorflow/compiler/xla/tsl/framework/serving_device_selector.h"
 #include "third_party/tensorflow/compiler/xla/tsl/framework/test_util/mock_serving_device_selector.h"
@@ -902,12 +906,18 @@ TEST_P(StableHloRunnerExecuteFailureTest, RunnerExecuteFailure) {
 
   std::vector<xla::ifrt::ArrayRef> inputs(params.input_data.size());
   for (int i = 0; i < params.input_data.size(); ++i) {
-    xla::HloSharding& sharding = stablehlo_spec.inputs[i].sharding;
     TF_ASSERT_OK_AND_ASSIGN(
-        inputs[i], sharding_internal::MakeArrayFromHostBuffer(
-                       *ifrt_client, params.input_data[i],
-                       *(params.assigned_devices->device_assignment), sharding,
-                       *thread_pool));
+        xla::ifrt::DeviceListRef device_list,
+        xla::ifrt::test_util::GetDevices(
+            ifrt_client.get(), *(params.assigned_devices->device_assignment)));
+    xla::ifrt::ShardingRef sharding = xla::ifrt::HloSharding::Create(
+        device_list, xla::ifrt::MemoryKind(),
+        params.stablehlo_spec.inputs[i].sharding);
+    TF_ASSERT_OK_AND_ASSIGN(
+        inputs[i],
+        sharding_internal::MakeArrayFromHostBuffer(
+            *ifrt_client, params.input_data[i], std::move(device_list),
+            std::move(sharding), *thread_pool));
   }
   std::vector<HostBuffer> host_buffers = params.input_data;
   std::vector<Value> values = internal::PackAsValues(std::move(host_buffers));

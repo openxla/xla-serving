@@ -21,6 +21,7 @@
 #include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/device.h"
+#include "third_party/tensorflow/compiler/xla/python/ifrt/device_list.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/memory.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/shape.h"
@@ -466,10 +467,17 @@ TEST_P(HostBufferToArrayTest, MakeArrayFromHostBuffer) {
                           xla::ifrt::test_util::GetClient());
 
   TF_ASSERT_OK_AND_ASSIGN(
+      xla::ifrt::DeviceListRef device_list,
+      xla::ifrt::test_util::GetDevices(client.get(),
+                                       absl::MakeSpan(GetParam().device_ids)));
+
+  xla::ifrt::ShardingRef ifrt_sharding = xla::ifrt::HloSharding::Create(
+      device_list, xla::ifrt::MemoryKind(), GetParam().sharding);
+
+  TF_ASSERT_OK_AND_ASSIGN(
       auto assembled_array,
-      MakeArrayFromHostBuffer(*client, input_buffer,
-                              absl::MakeSpan(GetParam().device_ids),
-                              GetParam().sharding, thread_pool));
+      MakeArrayFromHostBuffer(*client, input_buffer, device_list,
+                              std::move(ifrt_sharding), thread_pool));
 
   TF_ASSERT_OK_AND_ASSIGN(
       auto disassembled_arrays,
@@ -716,9 +724,11 @@ TEST(ShardingUtilsTest, MismatchRank) {
       auto device_list, xla::ifrt::test_util::GetDevices(client.get(), {0, 1}));
 
   xla::HloSharding sharding = Tile({2, 1});
+  xla::ifrt::ShardingRef ifrt_sharding = xla::ifrt::HloSharding::Create(
+      device_list, xla::ifrt::MemoryKind(), sharding);
 
   EXPECT_THAT(MakeArrayFromHostBuffer(*client, input_buffer, device_list,
-                                      std::move(sharding), thread_pool),
+                                      std::move(ifrt_sharding), thread_pool),
               absl_testing::StatusIs(
                   absl::StatusCode::kInvalidArgument,
                   "shape must have 2 dimensions, but has 3 dimensions: "

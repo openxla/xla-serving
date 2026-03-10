@@ -33,6 +33,7 @@
 #include "third_party/neptune/runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"
 #include "third_party/neptune/runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"
 #include "third_party/protobuf/message.h"
+#include "third_party/tensorflow/compiler/xla/hlo/ir/hlo_sharding.h"
 #include "third_party/tensorflow/compiler/xla/pjrt/proto/compile_options.proto.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/array.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/client.h"
@@ -41,6 +42,7 @@
 #include "third_party/tensorflow/compiler/xla/python/ifrt/dtype.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/executable.h"
 #include "third_party/tensorflow/compiler/xla/python/ifrt/shape.h"
+#include "third_party/tensorflow/compiler/xla/python/ifrt/sharding.h"
 #include "third_party/tensorflow/compiler/xla/tsl/concurrency/future.h"
 #include "third_party/tensorflow/compiler/xla/tsl/platform/threadpool.h"
 #include "third_party/tensorflow/compiler/xla/xla_data.proto.h"
@@ -99,6 +101,38 @@ class StableHloRunner {
   absl::Status MarkFullyInitialized();
 
  private:
+  struct CachedExecutableBundle {
+    // The indices of model inputs that need to be passed to the main function
+    // of the MLIR module.
+    std::vector<int> module_kept_var_idx;
+    // The offset of user input index in the main function of the MLIR module.
+    // Unused weights are excluded.
+    int input_offset;
+    // IOSpec from the StableHLO.
+    StableHloIOSpec io_spec;
+    xla::ifrt::LoadedExecutableRef ifrt_executable;
+    // The canonical program fingerprint of the `ifrt_executable` and the
+    // timestamp in microseconds. The timestamp is added for uniqueness (e.g.,
+    // in case the same executable has multiple loaded instances on the same
+    // server) and as a fallback when the canonical program fingerprint is not
+    // available.
+    std::string program_fingerprint_with_timestamp;
+    std::vector<xla::ifrt::ShardingRef> arg_ifrt_shardings;
+    // Only populated when portable execution is used, currently only single
+    // device sharding is supported.
+    absl::flat_hash_map<xla::ifrt::DeviceId,
+                        std::shared_ptr<xla::ifrt::SingleDeviceSharding>>
+        portable_single_device_shardings;
+
+    CachedExecutableBundle() = default;
+    // Move only
+    CachedExecutableBundle(CachedExecutableBundle&& other) = default;
+    CachedExecutableBundle& operator=(CachedExecutableBundle&& other) = default;
+    CachedExecutableBundle(const CachedExecutableBundle& other) = delete;
+    CachedExecutableBundle& operator=(const CachedExecutableBundle& other) =
+        delete;
+  };
+
   // A helper class to convert the inputs and outputs between
   // `jsv::HostBuffer` and `xla::ifrt::Array`.
   class DataConverter {
@@ -115,11 +149,11 @@ class StableHloRunner {
     // Converts the inputs from `jsv::HostBuffer` to `xla::ifrt::Array`.
     // Args:
     // - `inputs` are the inputs from the user excluding weights.
-    // - `model_io_spec` is the IOSpec from JAX model.
+    // - `executable_bundle` is the executable bundle for this execution.
     // - `input_offset` is the offset of the inputs in the StableHloIOSpec.
     absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ConvertInput(
         absl::Span<const HostBuffer> inputs,
-        const StableHloIOSpec& model_io_spec, int input_offset);
+        const CachedExecutableBundle& executable_bundle, int input_offset);
 
     // Converts the outputs from `xla::ifrt::Array` to `jsv::HostBuffer`.
     absl::StatusOr<std::vector<HostBuffer>> ConvertOutput(
@@ -203,32 +237,6 @@ class StableHloRunner {
   struct KeyEq {
     using is_transparent = void;
     bool operator()(const KeyView& a, const KeyView& b) const { return a == b; }
-  };
-
-  struct CachedExecutableBundle {
-    // The indices of model inputs that need to be passed to the main function
-    // of the MLIR module.
-    std::vector<int> module_kept_var_idx;
-    // The offset of user input index in the main function of the MLIR module.
-    // Unused weights are excluded.
-    int input_offset;
-    // IOSpec from the StableHLO.
-    StableHloIOSpec io_spec;
-    xla::ifrt::LoadedExecutableRef ifrt_executable;
-    // The canonical program fingerprint of the `ifrt_executable` and the
-    // timestamp in microseconds. The timestamp is added for uniqueness (e.g.,
-    // in case the same executable has multiple loaded instances on the same
-    // server) and as a fallback when the canonical program fingerprint is not
-    // available.
-    std::string program_fingerprint_with_timestamp;
-
-    CachedExecutableBundle() = default;
-    // Move only
-    CachedExecutableBundle(CachedExecutableBundle&& other) = default;
-    CachedExecutableBundle& operator=(CachedExecutableBundle&& other) = default;
-    CachedExecutableBundle(const CachedExecutableBundle& other) = delete;
-    CachedExecutableBundle& operator=(const CachedExecutableBundle& other) =
-        delete;
   };
 
   // 'weights' are expected to be in the same order as the variable arguments in
