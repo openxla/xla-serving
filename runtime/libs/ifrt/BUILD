@@ -67,7 +67,6 @@ cc_library(
     defines = ["JSV_ON_GCE"],
     visibility = [
         "//visibility:private",
-        "@neptune//:__subpackages__",
     ],
     deps = [
         "@com_google_absl//absl/base:nullability",
