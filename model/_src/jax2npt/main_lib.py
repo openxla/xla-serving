@@ -7,13 +7,11 @@ from typing import Any, Dict, Sequence
 import jax
 from jax import export as jax_export
 from jax.experimental import layout as jax_layout
-import numpy as np
-import orbax.checkpoint as ocp
-from google3.third_party.neptune.model._src.jax2npt import constants
 
 from google3.third_party.neptune.model._src.core import shlo_function
 from google3.third_party.neptune.model._src.core import unstructured_data
 from google3.third_party.neptune.model._src.core import value
+from google3.third_party.neptune.model._src.jax2npt import constants
 from google3.third_party.neptune.model._src.jax2npt import typing
 from google3.third_party.neptune.model._src.jax2npt import utils
 from google3.third_party.neptune.protos import manifest_pb2
@@ -204,20 +202,6 @@ def convert(
       model_param_names=model_param_names,
       model_inputs_layout=model_inputs_layout,
   )
-
-
-# TODO: add more check and support for checkpointing.
-def save_checkpoint(
-    state: Any,
-    path: str,
-) -> None:
-  """Saves JAX checkpoint to path."""
-  if isinstance(state, (np.ndarray, jax.Array)):
-    handler = ocp.ArrayCheckpointHandler()
-  else:
-    handler = ocp.StandardCheckpointHandler()
-  checkpointer = ocp.Checkpointer(handler)
-  checkpointer.save(path, state)
 
 
 def convert_path_to_value(

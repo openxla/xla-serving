@@ -29,7 +29,6 @@ dependencies = [
     'jaxtyping',
     'numpy',
     'protobuf',
-    "orbax-checkpoint >=0.9.0"
 ]
 
 dynamic = ['version']

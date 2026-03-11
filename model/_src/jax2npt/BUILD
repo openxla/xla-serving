@@ -33,8 +33,6 @@ pytype_strict_library(
         ":utils",
         "//third_party/py/jax",
         "//third_party/py/jax/experimental:layout",
-        "//third_party/py/numpy",
-        "//third_party/py/orbax/checkpoint",
         "@neptune//model/_src/core:shlo_function",
         "@neptune//model/_src/core:unstructured_data",
         "@neptune//model/_src/core:value",
