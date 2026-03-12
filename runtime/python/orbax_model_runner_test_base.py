@@ -5,13 +5,13 @@ from typing import Final
 
 import numpy as np
 
-from google3.pyglib import resources
-from google3.testing.pybase import googletest
-from google3.testing.pybase import parameterized
-from google3.third_party.neptune.runtime.python import orbax_model_runner
+from .pyglib import resources
+from .testing.pybase import googletest
+from .testing.pybase import parameterized
+from .third_party.neptune.runtime.python import orbax_model_runner
 
 _TEST_DATA_DIR: Final[str] = (
-    'google3/learning/infra/mira/experimental/orbax_model/interpreter/testdata/'
+    '/learning/infra/mira/experimental/orbax_model/interpreter/testdata/'
 )
 
 

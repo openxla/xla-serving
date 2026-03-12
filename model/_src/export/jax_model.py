@@ -5,7 +5,7 @@ import dataclasses
 import pathlib
 import jax
 import jaxtyping
-from google3.third_party.neptune.model._src.jax2npt import typing
+from neptune_model._src.jax2npt import typing
 
 
 @dataclasses.dataclass(frozen=True)

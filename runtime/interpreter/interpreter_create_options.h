@@ -68,7 +68,7 @@ struct InterpreterCreateOptions {
   std::unique_ptr<jsv::IfrtPersistentCompilationCache>
       persistent_compilation_cache = nullptr;
 };
-// LINT.ThenChange(//depot/google3/third_party/neptune/runtime/interpreter/interpreter.cc:InterpreterCreateOptionsValidation)
+// LINT.ThenChange(//depot//third_party/neptune/runtime/interpreter/interpreter.cc:InterpreterCreateOptionsValidation)
 }  // namespace jsv
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_INTERPRETER_CREATE_OPTIONS_H_

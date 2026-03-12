@@ -1,8 +1,8 @@
 """Build macro for proto fork."""
 
 load("//devtools/build_cleaner/skylark:build_defs.bzl", "register_extension_info")
-load("//third_party/bazel_rules/rules_python/python:proto.bzl", "py_proto_library")
-load("//third_party/protobuf/bazel:proto_library.bzl", "proto_library")
+load("@rules_python//python:proto.bzl", "py_proto_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
 load("//tools/build_defs/proto/cpp:cc_proto_library.bzl", "cc_proto_library")
 
 def ml_proto_library(name, srcs = [], deps = [], option_deps = []):

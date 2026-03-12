@@ -1,6 +1,6 @@
 load("//devtools/python/blaze:pytype.bzl", "pytype_strict_library")
 
-pytype_strict_library(
+py_library(
     name = "model_exporter",
     srcs = ["model_exporter.py"],
     visibility = [
@@ -9,8 +9,8 @@ pytype_strict_library(
     ],
     deps = [
         "//third_party/py/etils/epath",
-        "//third_party/py/jax",
-        "//third_party/py/jaxtyping",
-        "//third_party/py/orbax/checkpoint",
+        "@jax",
+        "@jaxtyping",
+        "@orbax//:checkpoint",
     ],
 )

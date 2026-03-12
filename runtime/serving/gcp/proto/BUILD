@@ -1,5 +1,5 @@
+load("@rules_proto//proto:defs.bzl", "proto_library")
 load("//net/grpc:cc_grpc_library.bzl", "cc_grpc_library")
-load("@com_google_protobuf//bazel:proto_library.bzl", "proto_library")
 load("//tools/build_defs/proto/cpp:cc_proto_library.bzl", "cc_proto_library")
 
 package(default_visibility = [
@@ -13,9 +13,9 @@ proto_library(
     srcs = ["get_model_metadata.proto"],
     deps = [
         ":model_proto",
-        "@com_google_protobuf//:protobuf", # any
         "//third_party/py/orbax/experimental/model/core/protos:type_proto",
         "//third_party/py/orbax/export/protos:oex_orchestration_proto",
+        "@com_google_protobuf//:protobuf",  # any
     ],
 )
 

@@ -8,13 +8,13 @@ import jax
 from jax import export as jax_export
 from jax.experimental import layout as jax_layout
 
-from google3.third_party.neptune.model._src.core import shlo_function
-from google3.third_party.neptune.model._src.core import unstructured_data
-from google3.third_party.neptune.model._src.core import value
-from google3.third_party.neptune.model._src.jax2npt import constants
-from google3.third_party.neptune.model._src.jax2npt import typing
-from google3.third_party.neptune.model._src.jax2npt import utils
-from google3.third_party.neptune.protos import manifest_pb2
+from neptune_model._src.core import shlo_function
+from neptune_model._src.core import unstructured_data
+from neptune_model._src.core import value
+from neptune_model._src.jax2npt import constants
+from neptune_model._src.jax2npt import typing
+from neptune_model._src.jax2npt import utils
+from neptune_model.protos import manifest_pb2
 
 
 @dataclasses.dataclass
@@ -164,7 +164,7 @@ def convert(
     platforms: Optional. Specifies the platform(s) for which to lower the code.
       Must be a tuple of `obm.manifest_pb2.Platform`. If not set, the JAX
       default backend will be used. Example can be found in
-      https://g3doc.corp.google.com/third_party/tensorflow/google/g3doc/jax_production/g3doc/guides/serving.md#basic-export-example
+
     native_serialization_disabled_checks: A sequence of safety checks to
       disable. Example can be found in
       https://jax.readthedocs.io/en/latest/_autosummary/jax.export.DisabledSafetyCheck.html#jax.export.DisabledSafetyCheck
@@ -196,9 +196,6 @@ def convert(
   exported = exported_creator(*args_spec, **kwargs_spec)
   return jax_exported_to_shlo_fn(
       exported,
-      # copybara:strip_begin(internal code)
-      xla_compile_options_per_platform,
-      # copybara:strip_end
       model_param_names=model_param_names,
       model_inputs_layout=model_inputs_layout,
   )

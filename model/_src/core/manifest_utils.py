@@ -2,16 +2,16 @@
 
 from collections.abc import Mapping, Sequence
 from absl import logging
-from google3.third_party.neptune.model._src.core import constants
-from google3.third_party.neptune.model._src.core import device_assignment
-from google3.third_party.neptune.model._src.core import function
-from google3.third_party.neptune.model._src.core import saveable
-from google3.third_party.neptune.model._src.core import serializable_function
-from google3.third_party.neptune.model._src.core import shlo_function
-from google3.third_party.neptune.model._src.core import type_proto_utils
-from google3.third_party.neptune.model._src.core import unstructured_data
-from google3.third_party.neptune.model._src.core import value
-from google3.third_party.neptune.protos import manifest_pb2
+from neptune_model._src.core import constants
+from neptune_model._src.core import device_assignment
+from neptune_model._src.core import function
+from neptune_model._src.core import saveable
+from neptune_model._src.core import serializable_function
+from neptune_model._src.core import shlo_function
+from neptune_model._src.core import type_proto_utils
+from neptune_model._src.core import unstructured_data
+from neptune_model._src.core import value
+from neptune_model.protos import manifest_pb2
 
 
 def _build_function(

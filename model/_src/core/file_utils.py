@@ -9,23 +9,6 @@ _file_opener = open
 _mkdir_p = lambda path: os.makedirs(path, exist_ok=True)
 _copy = shutil.copyfile
 
-# copybara:strip_begin(GOOGLE-INTERNAL)
-from google3.pyglib import gfile  # pylint: disable=g-import-not-at-top
-from google3.pyglib.contrib.gpathlib import gpath  # pylint: disable=g-import-not-at-top
-
-_file_opener = gfile.Open
-
-
-def _gfile_mkdir_p(path: str) -> None:
-  dir_path = gpath.GPath(path)
-  dir_path.mkdir(parents=True, exist_ok=True)
-
-
-_mkdir_p = _gfile_mkdir_p
-
-_copy = gfile.Copy
-# copybara:strip_end
-
 
 @contextlib.contextmanager
 def open_file(filename: str, mode: str):

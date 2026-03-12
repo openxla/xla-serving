@@ -10,12 +10,12 @@ from jax.experimental import mesh_utils
 import jax.numpy as jnp
 import orbax.checkpoint as ocp
 
-from google3.net.proto2.contrib.pyutil import compare
-from google3.net.proto2.python.public import text_format
-from google3.third_party.neptune.model._src.core import persistence_lib as npt_core
-from google3.third_party.neptune.model._src.jax2npt import main_lib
-from google3.third_party.neptune.model._src.test_utils import jax_mnist
-from google3.third_party.neptune.protos import manifest_pb2
+from .net.proto2.contrib.pyutil import compare
+from google.protobuf import text_format
+from neptune_model._src.core import persistence_lib as npt_core
+from neptune_model._src.jax2npt import main_lib
+from neptune_model._src.test_utils import jax_mnist
+from neptune_model.protos import manifest_pb2
 
 
 os.environ['XLA_FLAGS'] = '--xla_force_host_platform_device_count=8'

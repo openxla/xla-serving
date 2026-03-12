@@ -80,7 +80,7 @@ absl::StatusOr<StableHloIOSpec> GetStableHloIOSpec(
 // platforms, and then erases the argument. The platform index argument will be
 // set to the index of the `platform_name` in the `supported_platforms` list.
 // This function is almost a clone of the implementation in
-// google3/third_party/tensorflow/compiler/tf2xla/kernels/xla_call_module_loader.cc.
+// /third_party/tensorflow/compiler/tf2xla/kernels/xla_call_module_loader.cc.
 absl::Status SetPlatformIndex(mlir::ModuleOp module,
                               absl::Span<const std::string> supported_platforms,
                               absl::string_view platform_name);

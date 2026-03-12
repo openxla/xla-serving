@@ -537,7 +537,7 @@ absl::Status ValidateInterpreterCreateOptions(
   }
   return absl::OkStatus();
 }
-// LINT.ThenChange(//depot/google3/third_party/neptune/runtime/interpreter/interpreter_create_options.h:InterpreterCreateOptions)
+// LINT.ThenChange(//depot//third_party/neptune/runtime/interpreter/interpreter_create_options.h:InterpreterCreateOptions)
 }  // namespace
 
 absl::StatusOr<std::unique_ptr<Interpreter>> Interpreter::Create(

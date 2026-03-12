@@ -5,12 +5,12 @@ from collections.abc import Mapping
 import jax
 import jaxtyping
 
-from google3.third_party.neptune.model._src.core import persistence_lib
-from google3.third_party.neptune.model._src.export import constants
-from google3.third_party.neptune.model._src.export import jax_model
-from google3.third_party.neptune.model._src.jax2npt import typing
-from google3.third_party.neptune.protos import manifest_pb2
-from google3.third_party.neptune.protos import orchestration_pb2
+from neptune_model._src.core import persistence_lib
+from neptune_model._src.export import constants
+from neptune_model._src.export import jax_model
+from neptune_model._src.jax2npt import typing
+from neptune_model.protos import manifest_pb2
+from neptune_model.protos import orchestration_pb2
 
 
 def to_jax_spec(tree: jaxtyping.PyTree) -> jaxtyping.PyTree:

@@ -385,7 +385,7 @@ absl::Status RefineShapesIfNeeded(
   // to maintain the validity of the module when main's input types are changed
   // later. This is a workaround to allow shape refinement to be applied; the
   // custom_calls are removed before returning. More details at
-  // https://source.corp.google.com/piper///depot/google3/third_party/tensorflow/compiler/tf2xla/kernels/xla_call_module_loader.cc;l=285-325;rcl=720675664
+  // https://source.corp.google.com/piper///depot//third_party/tensorflow/compiler/tf2xla/kernels/xla_call_module_loader.cc;l=285-325;rcl=720675664
   //
   // Example:
   //

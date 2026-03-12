@@ -9,7 +9,7 @@ exports_files(
     ["mnist_jax_model_expected_manifest.textproto"],
 )
 
-pytype_strict_library(
+py_library(
     name = "jax_mnist",
     srcs = ["jax_mnist.py"],
     deps = [

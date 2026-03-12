@@ -1,6 +1,6 @@
-load("//devtools/python/blaze:pytype.bzl", "pytype_strict_contrib_test", "pytype_strict_library")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("//third_party/pybind11/google3_utils:build_defs.bzl", "pybind_extension")
+load("//devtools/python/blaze:pytype.bzl", "pytype_strict_contrib_test", "pytype_strict_library")
+load("//third_party/pybind11/_utils:build_defs.bzl", "pybind_extension")
 
 package_group(
     name = "friends",
@@ -61,7 +61,7 @@ pybind_extension(
     ],
 )
 
-pytype_strict_library(
+py_library(
     name = "orbax_model_runner_test_base",
     testonly = True,
     srcs = ["orbax_model_runner_test_base.py"],
@@ -79,13 +79,12 @@ pytype_strict_library(
     deps = [
         ":orbax_model_runner",
         "//pyglib:resources",
-        "//testing/pybase",
         "//testing/pybase:parameterized",
-        "//third_party/py/numpy",
+        "@numpy",
     ],
 )
 
-pytype_strict_contrib_test(
+py_test(
     name = "orbax_model_runner_test",
     size = "small",
     testonly = True,
@@ -100,11 +99,10 @@ pytype_strict_contrib_test(
         ":orbax_model_runner",
         ":orbax_model_runner_test_base",
         "//pyglib:resources",
-        "//testing/pybase",
     ],
 )
 
-pytype_strict_contrib_test(
+py_test(
     name = "orbax_model_runner_test_cuda",
     size = "small",
     testonly = True,
@@ -119,8 +117,7 @@ pytype_strict_contrib_test(
     deps = [
         ":orbax_model_runner",
         "//pyglib:resources",
-        "//testing/pybase",
-        "//third_party/py/numpy",
+        "@numpy",
         "@xla//xla/pjrt/plugin/xla_gpu:gpu_static_registration",
     ],
 )
@@ -178,16 +175,15 @@ pybind_extension(
     ],
 )
 
-pytype_strict_contrib_test(
+py_test(
     name = "numpy_utils_test",
     size = "small",
     srcs = ["numpy_utils_test.py"],
     deps = [
         ":numpy_utils_test_utils",
-        "//testing/pybase",
         "//testing/pybase:parameterized",
-        "//third_party/py/numpy",
         "//third_party/py/tensorflow:tensorflow_no_contrib",
+        "@numpy",
     ],
 )
 

@@ -7,7 +7,7 @@ from typing import Any, Optional, TypeAlias
 
 import numpy as np
 
-from google3.third_party.tensorflow.compiler.xla import xla_data_pb2  # pylint: disable=g-direct-tensorflow-import
+from neptune_model.xla import xla_data_pb2
 
 
 Sharding: TypeAlias = xla_data_pb2.OpSharding
@@ -17,7 +17,7 @@ ShloShape: TypeAlias = Optional[Sequence[ShloDimSize]]
 
 
 # pylint: disable=invalid-name
-# Copied from google3/third_party/py/jax/_src/export/serialization.fbs
+# Copied from /third_party/py/jax/_src/export/serialization.fbs
 class ShloDType(enum.Enum):  # pylint: disable=missing-class-docstring
   bool = 0
   i8 = 1

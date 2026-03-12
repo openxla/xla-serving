@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package neptune_model_type;
 
-import "third_party/tensorflow/compiler/xla/xla_data.proto";
+import "xla/xla_data.proto";
 
 message FunctionSignature {
   Type input = 1;
@@ -87,7 +87,7 @@ enum DType {
   // Copied from `TensorElementType` of
   // https://github.com/openxla/stablehlo/blob/main/docs/spec.md#types .
   // The right-hand-side values are copied from
-  // google3/third_party/py/jax/_src/export/serialization.fbs .
+  // /third_party/py/jax/_src/export/serialization.fbs .
   i1 = 1;  // bool
   si8 = 2;
   si16 = 3;

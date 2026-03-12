@@ -1,14 +1,14 @@
-load("//devtools/python/blaze:pytype.bzl", "pytype_strict_library", pytype_strict_test = "pytype_strict_contrib_test")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("//devtools/python/blaze:strict.bzl", "py_strict_test")
 
 package(default_visibility = ["@neptune//model:__subpackages__"])
 
-pytype_strict_library(
+py_library(
     name = "function",
     srcs = ["function.py"],
     deps = [
         ":shlo_type",
-        "//third_party/py/jaxtyping",
+        "@jaxtyping",
     ],
 )
 
@@ -17,7 +17,7 @@ pytype_strict_test(
     srcs = ["unstructured_data_test.py"],
     deps = [
         ":unstructured_data",
-        "//third_party/py/absl/testing:absltest",
+        "@com_google_absl_py//absl/testing:absltest",
         "@neptune//protos:manifest_py_pb2",
     ],
 )
@@ -29,9 +29,9 @@ pytype_strict_test(
         ":shlo_type",
         ":test_utils",
         ":type_proto_utils",
-        "//third_party/py/absl/testing:absltest",
-        "//third_party/py/absl/testing:parameterized",
         "//third_party/py/google/protobuf",
+        "@com_google_absl_py//absl/testing:absltest",
+        "@com_google_absl_py//absl/testing:parameterized",
         "@neptune//protos:type_py_pb2",
         "@xla//xla:xla_data_proto_py_pb2",
     ],
@@ -44,11 +44,11 @@ pytype_strict_test(
         ":device_assignment",
         "//learning/brain/research/jax:tpu_support",
         "//testing/pybase:parameterized",
-        "//third_party/py/absl/testing:absltest",
-        "//third_party/py/jax",
-        "//third_party/py/jax/experimental:mesh_utils",
         "//third_party/py/jax/experimental:topologies",
-        "//third_party/py/numpy",
+        "@com_google_absl_py//absl/testing:absltest",
+        "@jax",
+        "@jax//:experimental_mesh_utils",
+        "@numpy",
     ],
 )
 
@@ -59,15 +59,15 @@ pytype_strict_test(
         ":compile_options_util",
         "//platforms/xla/service/jellyfish:tpu_compilation_environment_py_pb2",
         "//platforms/xla/service/jellyfish/python:tpu_compilation_environment",
-        "//third_party/py/absl/testing:absltest",
-        "//third_party/py/absl/testing:parameterized",
         "//third_party/py/google/protobuf",
-        "//third_party/py/jax",
-        "//third_party/py/jax/experimental:mesh_utils",
+        "@com_google_absl_py//absl/testing:absltest",
+        "@com_google_absl_py//absl/testing:parameterized",
+        "@jax",
+        "@jax//:experimental_mesh_utils",
     ],
 )
 
-pytype_strict_library(
+py_library(
     name = "shlo_function",
     srcs = ["shlo_function.py"],
     deps = [
@@ -77,7 +77,7 @@ pytype_strict_library(
     ],
 )
 
-pytype_strict_library(
+py_library(
     name = "unstructured_data",
     srcs = ["unstructured_data.py"],
     deps = [
@@ -86,7 +86,7 @@ pytype_strict_library(
     ],
 )
 
-pytype_strict_library(
+py_library(
     name = "serializable_function",
     srcs = ["serializable_function.py"],
     deps = [
@@ -95,17 +95,17 @@ pytype_strict_library(
     ],
 )
 
-pytype_strict_library(
+py_library(
     name = "value",
     srcs = ["value.py"],
     deps = [
         ":shlo_type",
-        "//third_party/py/jaxtyping",
+        "@jaxtyping",
         "@neptune//protos:manifest_py_pb2",
     ],
 )
 
-pytype_strict_library(
+py_library(
     name = "file_utils",
     srcs = ["file_utils.py"],
     deps = [
@@ -114,7 +114,7 @@ pytype_strict_library(
     ],
 )
 
-pytype_strict_library(
+py_library(
     name = "saveable",
     srcs = ["saveable.py"],
     deps = [
@@ -123,48 +123,48 @@ pytype_strict_library(
     ],
 )
 
-pytype_strict_library(
+py_library(
     name = "shlo_type",
     srcs = ["shlo_type.py"],
     deps = [
-        "//third_party/py/numpy",
+        "@numpy",
         "@xla//xla:xla_data_proto_py_pb2",
     ],
 )
 
-pytype_strict_library(
+py_library(
     name = "test_utils",
     srcs = ["test_utils.py"],
-    deps = ["//third_party/py/absl/testing:parameterized"],
+    deps = ["@com_google_absl_py//absl/testing:parameterized"],
 )
 
-pytype_strict_library(
+py_library(
     name = "type_proto_utils",
     srcs = ["type_proto_utils.py"],
     deps = [
         ":shlo_type",
-        "//third_party/py/jax",
-        "//third_party/py/jaxtyping",
+        "@jax",
+        "@jaxtyping",
         "@neptune//protos:type_py_pb2",
     ],
 )
 
-pytype_strict_library(
+py_library(
     name = "device_assignment",
     srcs = ["device_assignment.py"],
-    deps = ["//third_party/py/jax"],
+    deps = ["@jax"],
 )
 
-pytype_strict_library(
+py_library(
     name = "compile_options_util",
     srcs = ["compile_options_util.py"],
     deps = [
-        "@com_google_protobuf//:protobuf", # any_py_pb2
         "//platforms/xla/service/jellyfish:tpu_compilation_environment_py_pb2",
         "//platforms/xla/service/jellyfish/python:tpu_compilation_environment",
         "//third_party/py/absl/flags",
         "//third_party/py/google/protobuf",
-        "//third_party/py/jax",
+        "@com_google_protobuf//:protobuf",  # any_py_pb2
+        "@jax",
         "@neptune//protos:manifest_py_pb2",
         "@xla//xla:xla_data_proto_py_pb2",
         "@xla//xla:xla_py_pb2",
@@ -172,12 +172,12 @@ pytype_strict_library(
     ],
 )
 
-pytype_strict_library(
+py_library(
     name = "constants",
     srcs = ["constants.py"],
 )
 
-pytype_strict_library(
+py_library(
     name = "manifest_utils",
     srcs = ["manifest_utils.py"],
     deps = [
@@ -190,18 +190,18 @@ pytype_strict_library(
         ":type_proto_utils",
         ":unstructured_data",
         ":value",
-        "//third_party/py/absl/logging",
+        "@com_google_absl_py//absl/logging",
         "@neptune//protos:manifest_py_pb2",
     ],
 )
 
-pytype_strict_library(
+py_library(
     name = "metadata",
     srcs = ["metadata.py"],
     deps = [":file_utils"],
 )
 
-pytype_strict_library(
+py_library(
     name = "persistence_lib",
     srcs = ["persistence_lib.py"],
     deps = [
@@ -212,7 +212,7 @@ pytype_strict_library(
         ":metadata",
         ":saveable",
         ":unstructured_data",
-        "//third_party/py/absl/logging",
+        "@com_google_absl_py//absl/logging",
         "@neptune//protos:manifest_py_pb2",
     ],
 )
@@ -225,7 +225,7 @@ py_strict_test(
         ":manifest_utils",
         ":serializable_function",
         ":unstructured_data",
-        "//third_party/py/absl/testing:absltest",
+        "@com_google_absl_py//absl/testing:absltest",
         "@neptune//protos:manifest_py_pb2",
     ],
 )
@@ -244,8 +244,7 @@ py_strict_test(
         ":shlo_type",
         ":unstructured_data",
         ":value",
-        "//net/proto2/contrib/pyutil:compare",
-        "//third_party/py/absl/testing:absltest",
+        "@com_google_absl_py//absl/testing:absltest",
         "@neptune//protos:manifest_py_pb2",
         "@neptune//protos:type_py_pb2",
     ],

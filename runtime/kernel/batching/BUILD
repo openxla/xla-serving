@@ -1,6 +1,6 @@
-load("//devtools/deps/check:deps_check.bzl", "check_dependencies")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("//devtools/deps/check:deps_check.bzl", "check_dependencies")
 
 cc_library(
     name = "batch_resource_base",

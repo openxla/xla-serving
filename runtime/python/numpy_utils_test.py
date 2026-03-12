@@ -3,9 +3,9 @@
 import numpy as np
 import tensorflow as tf
 
-from google3.testing.pybase import googletest
-from google3.testing.pybase import parameterized
-from google3.third_party.neptune.runtime.python import numpy_utils_test_utils
+from .testing.pybase import googletest
+from .testing.pybase import parameterized
+from .third_party.neptune.runtime.python import numpy_utils_test_utils
 
 
 class NumpyUtilsTest(parameterized.TestCase):

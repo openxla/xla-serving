@@ -6,9 +6,9 @@ from absl.testing import parameterized
 from google.protobuf import text_format
 import jax
 from jax.experimental import mesh_utils
-from google3.platforms.xla.service.jellyfish import tpu_compilation_environment_pb2 as tpu_comp_env_pb2
-from google3.platforms.xla.service.jellyfish.python import tpu_compilation_environment as tpu_comp_env
-from google3.third_party.neptune.model._src.core import compile_options_util
+from .platforms.xla.service.jellyfish import tpu_compilation_environment_pb2 as tpu_comp_env_pb2
+from .platforms.xla.service.jellyfish.python import tpu_compilation_environment as tpu_comp_env
+from neptune_model._src.core import compile_options_util
 
 
 def _get_expected_proto_from_tpu_comp_env(field_str: str, proto_str: str):

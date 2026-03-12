@@ -1,7 +1,7 @@
-load("//corp/cloud/image_from_binary:build_defs.bzl", "image_from_binary")
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("//corp/cloud/image_from_binary:build_defs.bzl", "image_from_binary")
 load("//third_party/bazel_rules/rules_docker/container:container.bzl", "container_push")
 
 vardef("JSV_SERVING_REGISTRY", "gcr.io")

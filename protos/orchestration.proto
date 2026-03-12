@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package neptune_model_orchestration;
 
-import "third_party/neptune/protos/type.proto";
+import "protos/type.proto";
 
 // Role of a node in the pipeline, i.e., preprocessor, model, or postprocessor.
 enum Role {

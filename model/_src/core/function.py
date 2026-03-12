@@ -5,7 +5,7 @@ import dataclasses
 
 import jaxtyping
 
-from google3.third_party.neptune.model._src.core.shlo_type import ShloTensorSpec
+from neptune_model._src.core.shlo_type import ShloTensorSpec
 
 
 @dataclasses.dataclass(kw_only=True)

@@ -11,10 +11,10 @@ import jax.numpy as jnp
 import jaxtyping
 import numpy as np
 
-from google3.third_party.neptune.model._src.core import shlo_type
-from google3.third_party.neptune.model._src.jax2npt import typing
-from google3.third_party.neptune.protos import manifest_pb2
-from google3.third_party.tensorflow.compiler.xla import xla_data_pb2  # pylint: disable=g-direct-tensorflow-import
+from neptune_model._src.core import shlo_type
+from neptune_model._src.jax2npt import typing
+from neptune_model.protos import manifest_pb2
+from neptune_model.xla import xla_data_pb2
 
 
 def get_physical_dtype(dtype) -> shlo_type.ShloDType | None:

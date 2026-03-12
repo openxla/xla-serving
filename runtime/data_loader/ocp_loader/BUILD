@@ -49,7 +49,7 @@ cc_library(
         "//third_party/json",
         "//third_party/protobuf",
         "//third_party/tensorstore/driver/zarr",  # tensorstore driver
-        "//third_party/tensorstore/google3_only:all_kvstore_drivers",  # tensorstore
+        "//third_party/tensorstore/_only:all_kvstore_drivers",  # tensorstore
         "//third_party/tensorstore/kvstore/ocdbt",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
@@ -79,7 +79,6 @@ cc_library(
         "//third_party/australis/google/ifrt:ifrt_australis_cc_proto",
         "//third_party/australis/google/ifrt:tensorstore_loader",
         "//third_party/json",
-        "@com_google_protobuf//:protobuf_lite",
         "//third_party/tensorstore:context",
         "//third_party/tensorstore/util:result",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -88,6 +87,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
+        "@com_google_protobuf//:protobuf_lite",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/python/ifrt",
         "@xla//xla/tsl/platform:statusor",

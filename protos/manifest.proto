@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package neptune_model_manifest;
 
-import "third_party/neptune/protos/type.proto";
-import "third_party/tensorflow/compiler/xla/pjrt/proto/compile_options.proto";
+import "protos/type.proto";
+import "xla/pjrt/proto/compile_options.proto";
 
 message Manifest {
   map<string, TopLevelObject> objects = 1;
@@ -16,7 +16,7 @@ message Manifest {
   repeated string frequent_paths = 4;
 }
 
-// Copied from google3/third_party/australis/google/ifrt/ifrt_australis.proto.
+// Copied from /third_party/australis/google/ifrt/ifrt_australis.proto.
 // Represents a mapping between device ids and coords. This allows consistently
 // mapping between incompatible id spaces by aligning the coords.
 message DeviceAssignmentByCoords {

@@ -2,10 +2,10 @@
 
 
 import os
-from google3.pyglib import resources
-from google3.testing.pybase import googletest
-from google3.third_party.neptune.runtime.python import orbax_model_runner
-from google3.third_party.neptune.runtime.python import orbax_model_runner_test_base
+from .pyglib import resources
+from .testing.pybase import googletest
+from .third_party.neptune.runtime.python import orbax_model_runner
+from .third_party.neptune.runtime.python import orbax_model_runner_test_base
 
 
 class OrbaxModelRunnerTest(
@@ -15,7 +15,7 @@ class OrbaxModelRunnerTest(
   def test_ifrt_platform_name_and_device_count(self):
     model_path = os.path.join(
         resources.GetRunfilesDir(),
-        'google3/learning/infra/mira/experimental/orbax_model/interpreter/testdata/linear_model_gen',
+        '/learning/infra/mira/experimental/orbax_model/interpreter/testdata/linear_model_gen',
     )
     runner = orbax_model_runner.ModelRunner(
         model_name='test_model', model_path=model_path

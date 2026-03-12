@@ -5,8 +5,8 @@ import dataclasses
 
 import jaxtyping
 
-from google3.third_party.neptune.model._src.core import shlo_type
-from google3.third_party.neptune.protos import manifest_pb2
+from neptune_model._src.core import shlo_type
+from neptune_model.protos import manifest_pb2
 
 
 class Value(abc.ABC):

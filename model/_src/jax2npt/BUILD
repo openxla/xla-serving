@@ -1,38 +1,38 @@
-load("//devtools/python/blaze:pytype.bzl", "pytype_strict_library", pytype_strict_test = "pytype_strict_contrib_test")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
 package(default_visibility = ["@neptune//model:__subpackages__"])
 
-pytype_strict_library(
+py_library(
     name = "typing",
     srcs = ["typing.py"],
-    deps = ["//third_party/py/jaxtyping"],
+    deps = ["@jaxtyping"],
 )
 
-pytype_strict_library(
+py_library(
     name = "utils",
     srcs = ["utils.py"],
     deps = [
         ":typing",
-        "//third_party/py/jax",
-        "//third_party/py/jax/experimental:layout",
-        "//third_party/py/jax/extend:sharding",
-        "//third_party/py/jaxtyping",
-        "//third_party/py/numpy",
+        "@jax",
+        "@jax//:experimental_layout",
+        "@jax//:extend_sharding",
+        "@jaxtyping",
         "@neptune//model/_src/core:shlo_type",
         "@neptune//protos:manifest_py_pb2",
+        "@numpy",
         "@xla//xla:xla_data_proto_py_pb2",
     ],
 )
 
-pytype_strict_library(
+py_library(
     name = "main_lib",
     srcs = ["main_lib.py"],
     deps = [
         ":constants",
         ":typing",
         ":utils",
-        "//third_party/py/jax",
-        "//third_party/py/jax/experimental:layout",
+        "@jax",
+        "@jax//:experimental_layout",
         "@neptune//model/_src/core:shlo_function",
         "@neptune//model/_src/core:unstructured_data",
         "@neptune//model/_src/core:value",
@@ -40,12 +40,12 @@ pytype_strict_library(
     ],
 )
 
-pytype_strict_library(
+py_library(
     name = "constants",
     srcs = ["constants.py"],
 )
 
-pytype_strict_library(
+py_library(
     name = "__init__",
     srcs = ["__init__.py"],
     deps = [
@@ -63,13 +63,13 @@ pytype_strict_test(
     },
     deps = [
         ":utils",
-        "//third_party/py/absl/testing:absltest",
-        "//third_party/py/absl/testing:parameterized",
-        "//third_party/py/jax",
-        "//third_party/py/jax/experimental:layout",
-        "//third_party/py/numpy",
-        "//third_party/py/orbax/experimental/model/core",
+        "@com_google_absl_py//absl/testing:absltest",
+        "@com_google_absl_py//absl/testing:parameterized",
+        "@jax",
+        "@jax//:experimental_layout",
         "@neptune//model/_src/core:shlo_type",
+        "@numpy",
+        "@orbax//:experimental_model_core",
         "@xla//xla:xla_data_proto_py_pb2",
     ],
 )
@@ -81,15 +81,13 @@ pytype_strict_test(
     shard_count = 4,
     deps = [
         ":main_lib",
-        "//net/proto2/contrib/pyutil:compare",
-        "//net/proto2/python/public",
-        "//third_party/py/absl/testing:absltest",
-        "//third_party/py/absl/testing:parameterized",
-        "//third_party/py/jax",
-        "//third_party/py/jax/experimental:mesh_utils",
-        "//third_party/py/orbax/checkpoint",
+        "@com_google_absl_py//absl/testing:absltest",
+        "@com_google_absl_py//absl/testing:parameterized",
+        "@jax",
+        "@jax//:experimental_mesh_utils",
         "@neptune//model/_src/core:persistence_lib",
         "@neptune//model/_src/test_utils:jax_mnist",
         "@neptune//protos:manifest_py_pb2",
+        "@orbax//:checkpoint",
     ],
 )
