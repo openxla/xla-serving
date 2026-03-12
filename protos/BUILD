@@ -1,9 +1,10 @@
-load("@neptune//protos:build_defs.bzl", "ml_proto_library")
-load("//tools/build_defs/testing:bzl_library.bzl", "bzl_library")
+load("@com_google_protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@rules_python//python:proto.bzl", "py_proto_library")
 
 package(default_visibility = ["//visibility:public"])
 
-ml_proto_library(
+proto_library(
     name = "type_proto",
     srcs = ["type.proto"],
     deps = [
@@ -11,7 +12,17 @@ ml_proto_library(
     ],
 )
 
-ml_proto_library(
+cc_proto_library(
+    name = "type_cc_proto",
+    deps = [":type_proto"],
+)
+
+py_proto_library(
+    name = "type_py_pb2",
+    deps = [":type_proto"],
+)
+
+proto_library(
     name = "manifest_proto",
     srcs = ["manifest.proto"],
     deps = [
@@ -20,7 +31,17 @@ ml_proto_library(
     ],
 )
 
-ml_proto_library(
+cc_proto_library(
+    name = "manifest_cc_proto",
+    deps = [":manifest_proto"],
+)
+
+py_proto_library(
+    name = "manifest_py_pb2",
+    deps = [":manifest_proto"],
+)
+
+proto_library(
     name = "orchestration_proto",
     srcs = ["orchestration.proto"],
     deps = [
@@ -28,13 +49,12 @@ ml_proto_library(
     ],
 )
 
-bzl_library(
-    name = "build_defs_bzl",
-    srcs = ["build_defs.bzl"],
-    deps = [
-        "//devtools/build_cleaner/skylark:build_defs_lib",
-        "@rules_python//python:proto_bzl",
-        "//tools/build_defs/proto/cpp:cc_proto_library_bzl",
-        "@com_google_protobuf//bazel:proto_library_bzl",
-    ],
+cc_proto_library(
+    name = "orchestration_cc_proto",
+    deps = [":orchestration_proto"],
+)
+
+py_proto_library(
+    name = "orchestration_py_pb2",
+    deps = [":orchestration_proto"],
 )
