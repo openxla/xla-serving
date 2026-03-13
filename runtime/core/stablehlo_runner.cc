@@ -546,7 +546,7 @@ StableHloRunner::LookupWeights(std::optional<size_t> device_id) {
         .device_ids = device_ids,
         .input_name = weight_name,
         .hlo_sharding = device_id.has_value()
-                            ? xla::HloSharding::AssignDevice(*device_id)
+                            ? xla::HloSharding::SingleDevice(*device_id)
                             : weight_spec.sharding,
         .layout = layout,
     };

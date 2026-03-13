@@ -504,7 +504,7 @@ absl::StatusOr<DataLoader::LoadResult> DefaultDataLoader::Load(
                                       .device_ids = {static_cast<int>(i)}};
       for (auto& weight_spec : weight_specs) {
         if (weight_spec.has_value()) {
-          weight_spec->sharding = xla::HloSharding::AssignDevice(i);
+          weight_spec->sharding = xla::HloSharding::SingleDevice(i);
         }
       }
       TF_RETURN_IF_ERROR(RegisterAndLoadCheckpoints(
