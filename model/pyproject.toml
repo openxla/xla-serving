@@ -1,9 +1,10 @@
 [build-system]
-requires = ["flit_core >=3.5,<4"]
-build-backend = "flit_core.buildapi"
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "neptune-model"
+version = "0.0.1"
 description = "Neptune Model"
 readme = 'README.md'
 license = {file = 'LICENSE'}
@@ -31,15 +32,14 @@ dependencies = [
     'protobuf',
 ]
 
-dynamic = ['version']
 
-[tool.flit.module]
-name = "neptune_model"
+[tool.setuptools]
+# Force setuptools to look for these specific folders
+package-dir = {"" = "."}
 
-[tool.flit.sdist]
-exclude = [
-    '**/BUILD',
-]
+[tool.setuptools.package-data]
+# Ensure the generated python files are treated as data if they aren't standard .py
+"*" = ["*.py", "*.pyi"]
 
 [project.urls]
 homepage = 'http://github.com/AI-Hypercomputer/neptune'
