@@ -876,7 +876,7 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraph(
   // When there are components in the pipeline and the pipeline is keyword
   // arguments based, we load the graph from the component proto for now as the
   // LoadGraphFromComponentProto method is not fully implemented yet.
-  if (!pipeline.components().empty() > 0) {
+  if (!pipeline.components().empty()) {
     return LoadGraphFromComponentProto(pipeline);
   }
   // If there are no components in the pipeline, create them from legacy fields
