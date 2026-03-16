@@ -32,7 +32,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Bazelisk
-        run: npm install -g @bazel/bazelisk
+        uses: bazelbuild/setup-bazelisk@v3
 
       - name: Cache Bazel Build
         uses: actions/cache@v4
