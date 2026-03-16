@@ -1,0 +1,49 @@
+name: build-protos
+
+on:
+  push:
+    branches:
+      - main
+      - 'test_*'
+    # Only run this if protos or bazel config changes!
+    paths:
+      - 'protos/**'
+      - 'MODULE.bazel'
+      - 'WORKSPACE'
+      - '.bazelrc'
+  pull_request:
+    branches:
+      - main
+      - 'test_*'
+    paths:
+      - 'protos/**'
+      - 'MODULE.bazel'
+      - 'WORKSPACE'
+      - '.bazelrc'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Bazel Build Protos
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Bazelisk
+        run: npm install -g @bazel/bazelisk
+
+      - name: Cache Bazel Build
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel
+          key: ${{ runner.os }}-bazel-protos-${{ hashFiles('MODULE.bazel', 'WORKSPACE') }}
+          restore-keys: |
+            ${{ runner.os }}-bazel-protos-
+
+      - name: Compile Protobufs
+        # This purely validates that the syntax is correct and Bazel can resolve the graph
+        run: |
+          echo "Validating pure Bazel proto compilation..."
+          bazel build //protos:all
