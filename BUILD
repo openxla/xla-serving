@@ -4,7 +4,7 @@
 #   Neptune is a serving engine for serving generic ML workloads on GPUs and TPUs.
 #   See the README.md file for more details.
 
-load("//tools/build_defs/license:license.bzl", "license")
+load("@rules_license//rules:license.bzl", "license")
 
 package(default_visibility = [":internal"])
 
