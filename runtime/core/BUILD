@@ -50,8 +50,6 @@ cc_library(
     ],
     deps = [
         ":constants",
-        "//file/colossus/public:cns",
-        "//file/localfile",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
         "@tsl//tsl/platform:path",
