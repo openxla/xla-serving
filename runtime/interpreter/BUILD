@@ -85,6 +85,7 @@ cc_library(
     srcs = ["interpreter_test_base.cc"],
     hdrs = ["interpreter_test_base.h"],
     deps = [
+        "//learning/infra/mira/experimental/orbax_model/interpreter/testdata/model_with_xla_custom_call:printer_kernels",
         "//testing/base/public:gunit_for_library_testonly",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/flags:flag",
@@ -307,6 +308,7 @@ cc_library(
         "//devtools/build/runtime:get_runfiles_dir",
         "//testing/base/public:gunit_for_library_testonly",
         "//testing/base/public:gunit_main",
+        "@com_google_absl//absl/base:log_severity",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
