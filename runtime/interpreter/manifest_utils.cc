@@ -8,21 +8,21 @@
 #include <vector>
 
 #include "runtime/interpreter/orbax_type_utils.h"  // from @neptune
-#include "absl/base/nullability.h"  // from @com_google_absl
-#include "absl/container/flat_hash_map.h"  // from @com_google_absl
-#include "absl/log/log.h"  // from @com_google_absl
-#include "absl/status/status.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
-#include "absl/strings/ascii.h"  // from @com_google_absl
-#include "absl/strings/match.h"  // from @com_google_absl
-#include "absl/strings/str_cat.h"  // from @com_google_absl
-#include "absl/strings/str_format.h"  // from @com_google_absl
-#include "absl/strings/str_join.h"  // from @com_google_absl
-#include "absl/strings/str_split.h"  // from @com_google_absl
-#include "absl/strings/string_view.h"  // from @com_google_absl
-#include "absl/strings/strip.h"  // from @com_google_absl
-#include "absl/strings/substitute.h"  // from @com_google_absl
-#include "absl/types/span.h"  // from @com_google_absl
+#include "absl/base/nullability.h"  // from @abseil-cpp
+#include "absl/container/flat_hash_map.h"  // from @abseil-cpp
+#include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/ascii.h"  // from @abseil-cpp
+#include "absl/strings/match.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/strings/str_format.h"  // from @abseil-cpp
+#include "absl/strings/str_join.h"  // from @abseil-cpp
+#include "absl/strings/str_split.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/strings/strip.h"  // from @abseil-cpp
+#include "absl/strings/substitute.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/constants.h"  // from @neptune
 #include "runtime/core/flat_signature.h"  // from @neptune
 #include "runtime/core/stablehlo_utils.h"  // from @neptune

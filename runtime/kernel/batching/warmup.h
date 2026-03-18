@@ -7,12 +7,12 @@
 #include <string>
 #include <utility>
 
-#include "absl/base/thread_annotations.h"  // from @com_google_absl
-#include "absl/container/flat_hash_map.h"  // from @com_google_absl
-#include "absl/log/check.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
-#include "absl/strings/string_view.h"  // from @com_google_absl
-#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "absl/base/thread_annotations.h"  // from @abseil-cpp
+#include "absl/container/flat_hash_map.h"  // from @abseil-cpp
+#include "absl/log/check.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/synchronization/mutex.h"  // from @abseil-cpp
 
 namespace jsv {
 

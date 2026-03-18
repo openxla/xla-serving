@@ -5,8 +5,8 @@
 #include <string>
 #include <utility>
 
-#include "absl/status/status.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
 #include "runtime/core/flat_signature.h"  // from @neptune
 #include "runtime/core/stablehlo_runner.h"  // from @neptune
 #include "runtime/kernel/kernel.h"  // from @neptune

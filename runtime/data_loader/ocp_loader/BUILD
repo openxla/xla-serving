@@ -1,5 +1,4 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package(default_visibility = [
     "//learning/infra/mira/experimental/orbax_model:__subpackages__",
@@ -11,9 +10,9 @@ cc_library(
     srcs = ["tensorstore_utils.cc"],
     hdrs = ["tensorstore_utils.h"],
     deps = [
-        "//third_party/json",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@nlohmann_json//:json",
     ],
 )
 
@@ -22,13 +21,13 @@ cc_library(
     srcs = ["metadata_util.cc"],
     hdrs = ["metadata_util.h"],
     deps = [
-        "//third_party/json",
         "//util/task:status",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@nlohmann_json//:json",
         "@tsl//tsl/platform:path",
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:errors",
@@ -46,17 +45,17 @@ cc_library(
         ":tensorstore_utils_cc",
         "//third_party/australis:cpu_support",  # backend
         "//third_party/australis/google/ifrt:ifrt_australis_cc_proto",
-        "//third_party/json",
-        "//third_party/protobuf",
-        "//third_party/tensorstore/driver/zarr",  # tensorstore driver
-        "//third_party/tensorstore/_only:all_kvstore_drivers",  # tensorstore
-        "//third_party/tensorstore/kvstore/ocdbt",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/types:span",
+        "@com_google_protobuf//:protobuf",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/types:span",
+        "@nlohmann_json//:json",
+        "@tensorstore//tensorstore/_only:all_kvstore_drivers",  # tensorstore
+        "@tensorstore//tensorstore/driver/zarr",  # tensorstore driver
+        "@tensorstore//tensorstore/kvstore/ocdbt",
         "@tsl//tsl/platform:path",
         "@xla//xla:shape_util",
         "@xla//xla:xla_data_proto_cc",
@@ -78,16 +77,16 @@ cc_library(
         ":shared",
         "//third_party/australis/google/ifrt:ifrt_australis_cc_proto",
         "//third_party/australis/google/ifrt:tensorstore_loader",
-        "//third_party/json",
-        "//third_party/tensorstore:context",
-        "//third_party/tensorstore/util:result",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/time",
         "@com_google_protobuf//:protobuf_lite",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/time",
+        "@nlohmann_json//:json",
+        "@tensorstore//tensorstore:context",
+        "@tensorstore//tensorstore/util:result",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/python/ifrt",
         "@xla//xla/tsl/platform:statusor",
@@ -98,9 +97,9 @@ cc_library(
     name = "shared",
     hdrs = ["shared.h"],
     deps = [
-        "//third_party/tensorstore:context",
-        "//third_party/tensorstore/util:result",
-        "@com_google_absl//absl/status:statusor",
+        "@abseil-cpp//absl/status:statusor",
+        "@tensorstore//tensorstore:context",
+        "@tensorstore//tensorstore/util:result",
     ],
 )
 

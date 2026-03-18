@@ -13,21 +13,21 @@
 #include <vector>
 
 #include "runtime/interpreter/manifest_utils.h"  // from @neptune
-#include "absl/base/call_once.h"  // from @com_google_absl
-#include "absl/base/nullability.h"  // from @com_google_absl
-#include "absl/base/optimization.h"  // from @com_google_absl
-#include "absl/container/flat_hash_map.h"  // from @com_google_absl
-#include "absl/container/flat_hash_set.h"  // from @com_google_absl
-#include "absl/log/check.h"  // from @com_google_absl
-#include "absl/log/log.h"  // from @com_google_absl
-#include "absl/memory/memory.h"  // from @com_google_absl
-#include "absl/status/status.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
-#include "absl/strings/str_cat.h"  // from @com_google_absl
-#include "absl/strings/string_view.h"  // from @com_google_absl
-#include "absl/synchronization/mutex.h"  // from @com_google_absl
-#include "absl/time/clock.h"  // from @com_google_absl
-#include "absl/types/span.h"  // from @com_google_absl
+#include "absl/base/call_once.h"  // from @abseil-cpp
+#include "absl/base/nullability.h"  // from @abseil-cpp
+#include "absl/base/optimization.h"  // from @abseil-cpp
+#include "absl/container/flat_hash_map.h"  // from @abseil-cpp
+#include "absl/container/flat_hash_set.h"  // from @abseil-cpp
+#include "absl/log/check.h"  // from @abseil-cpp
+#include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/memory/memory.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/synchronization/mutex.h"  // from @abseil-cpp
+#include "absl/time/clock.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "mlir/include/mlir/IR/OwningOpRef.h"  // from @llvm-project
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "runtime/core/ifrt_device_utils.h"  // from @neptune

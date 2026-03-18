@@ -8,11 +8,11 @@
 #include <string>
 #include <utility>
 
-#include "absl/log/log.h"  // from @com_google_absl
-#include "absl/status/status.h"  // from @com_google_absl
-#include "absl/strings/match.h"  // from @com_google_absl
-#include "absl/strings/string_view.h"  // from @com_google_absl
-#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/strings/match.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "llvm/include/llvm/ADT/STLExtras.h"  // from @llvm-project
 #include "llvm/include/llvm/ADT/StringMap.h"  // from @llvm-project
 #include "llvm/include/llvm/ADT/StringRef.h"  // from @llvm-project

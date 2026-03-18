@@ -3,10 +3,10 @@
 #include <memory>
 #include <string>
 
-#include "absl/memory/memory.h"  // from @com_google_absl
-#include "absl/status/status.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
-#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/memory/memory.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "runtime/kernel/kernel.h"  // from @neptune
 #include "runtime/kernel/kernel_builder_constants.h"  // from @neptune
 #include "runtime/kernel/kernel_builder_context.h"  // from @neptune

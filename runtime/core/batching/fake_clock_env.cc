@@ -2,8 +2,8 @@
 
 #include <cstdint>
 
-#include "absl/synchronization/mutex.h"  // from @com_google_absl
-#include "absl/synchronization/notification.h"  // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @abseil-cpp
+#include "absl/synchronization/notification.h"  // from @abseil-cpp
 #include "xla/tsl/platform/env.h"  // from @xla
 
 namespace jsv {

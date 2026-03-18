@@ -7,14 +7,14 @@
 
 #include "learning/infra/mira/experimental/orbax_model/tensorflow/tf_compatible_interpreter_create_options.h"
 #include "learning/infra/mira/experimental/orbax_model/tensorflow/utils/tf_to_host_buffer.h"
-#include "absl/container/flat_hash_map.h"  // from @com_google_absl
-#include "absl/flags/flag.h"  // from @com_google_absl
-#include "absl/log/log.h"  // from @com_google_absl
-#include "absl/status/status.h"  // from @com_google_absl
-#include "absl/strings/str_cat.h"  // from @com_google_absl
-#include "absl/strings/str_join.h"  // from @com_google_absl
-#include "absl/strings/string_view.h"  // from @com_google_absl
-#include "absl/time/time.h"  // from @com_google_absl
+#include "absl/container/flat_hash_map.h"  // from @abseil-cpp
+#include "absl/flags/flag.h"  // from @abseil-cpp
+#include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/strings/str_join.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/time/time.h"  // from @abseil-cpp
 #include "include/grpcpp/server_context.h"  // from @com_github_grpc_grpc
 #include "include/grpcpp/support/status.h"  // from @com_github_grpc_grpc
 #include "runtime/core/host_buffer.h"  // from @neptune

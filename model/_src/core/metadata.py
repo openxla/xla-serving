@@ -1,7 +1,7 @@
 """Model version metadata and its serialization."""
 
 import dataclasses
-from neptune_model._src.core import file_utils
+from .third_party.neptune.model._src.core import file_utils
 
 
 @dataclasses.dataclass

@@ -4,11 +4,11 @@
 #include <string>
 #include <utility>
 
-#include "absl/base/nullability.h"  // from @com_google_absl
-#include "absl/log/log.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
-#include "absl/strings/str_cat.h"  // from @com_google_absl
-#include "absl/time/time.h"  // from @com_google_absl
+#include "absl/base/nullability.h"  // from @abseil-cpp
+#include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/time/time.h"  // from @abseil-cpp
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 #include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
 #include "xla/pjrt/pjrt_executable.h"  // from @xla

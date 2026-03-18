@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <new>
 
-#include "absl/base/no_destructor.h"  // from @com_google_absl
+#include "absl/base/no_destructor.h"  // from @abseil-cpp
 #include "runtime/core/allocator.h"  // from @neptune
 
 namespace jsv {

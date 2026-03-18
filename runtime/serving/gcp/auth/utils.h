@@ -4,7 +4,7 @@
 #include <memory>
 #include <string>
 
-#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @abseil-cpp
 #include "include/grpcpp/security/credentials.h"  // from @com_github_grpc_grpc
 #include "include/grpcpp/security/server_credentials.h"  // from @com_github_grpc_grpc
 

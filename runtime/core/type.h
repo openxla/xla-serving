@@ -5,7 +5,7 @@
 #include <utility>
 #include <vector>
 
-#include "absl/container/btree_map.h"  // from @com_google_absl
+#include "absl/container/btree_map.h"  // from @abseil-cpp
 #include "runtime/core/value.h"  // from @neptune
 
 namespace jsv::type {

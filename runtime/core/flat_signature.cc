@@ -5,13 +5,13 @@
 #include <utility>
 #include <vector>
 
-#include "absl/container/flat_hash_map.h"  // from @com_google_absl
-#include "absl/log/check.h"  // from @com_google_absl
-#include "absl/status/status.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
-#include "absl/strings/str_cat.h"  // from @com_google_absl
-#include "absl/strings/str_format.h"  // from @com_google_absl
-#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/container/flat_hash_map.h"  // from @abseil-cpp
+#include "absl/log/check.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/strings/str_format.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
 #include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"

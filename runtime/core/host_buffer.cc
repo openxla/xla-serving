@@ -11,14 +11,14 @@
 #include <utility>
 #include <vector>
 
-#include "absl/log/check.h"  // from @com_google_absl
-#include "absl/status/status.h"  // from @com_google_absl
-#include "absl/strings/str_cat.h"  // from @com_google_absl
-#include "absl/strings/string_view.h"  // from @com_google_absl
-#include "absl/types/span.h"  // from @com_google_absl
+#include "absl/log/check.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "third_party/australis/google/ifrt/host_array.h"
 #include "third_party/australis/google/ifrt/host_array_ops.h"
-#include "third_party/eigen3/Eigen/Core"  // IWYU pragma: keep, go/lsc-fix-eigen-includes
+#include "Eigen/Core"  // IWYU pragma: keep, go/lsc-fix-eigen-includes
 #include "runtime/core/allocator.h"  // from @neptune
 #include "runtime/core/default_allocator.h"  // from @neptune
 #include "runtime/core/host_buffer_type_utils.h"  // from @neptune
@@ -31,7 +31,7 @@
 #include "tsl/platform/tstring.h"  // from @tsl
 
 // go/lsc-fix-eigen-includes
-// IWYU pragma: no_include "third_party/eigen3/Eigen/src/Core/util/ConfigureVectorization.h"
+// IWYU pragma: no_include "Eigen/src/Core/util/ConfigureVectorization.h"
 
 namespace jsv {
 namespace {

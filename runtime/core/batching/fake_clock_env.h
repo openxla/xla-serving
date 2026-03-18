@@ -4,9 +4,9 @@
 #include <cstdint>
 #include <vector>
 
-#include "absl/base/thread_annotations.h"  // from @com_google_absl
-#include "absl/synchronization/mutex.h"  // from @com_google_absl
-#include "absl/synchronization/notification.h"  // from @com_google_absl
+#include "absl/base/thread_annotations.h"  // from @abseil-cpp
+#include "absl/synchronization/mutex.h"  // from @abseil-cpp
+#include "absl/synchronization/notification.h"  // from @abseil-cpp
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "tsl/platform/thread_annotations.h"  // from @tsl
 

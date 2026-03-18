@@ -4,8 +4,8 @@
 #include <string>
 #include <vector>
 
-#include "absl/status/statusor.h"  // from @com_google_absl
-#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "third_party/json/include/nlohmann/json.hpp"
 #include "third_party/json/include/nlohmann/json_fwd.hpp"
 

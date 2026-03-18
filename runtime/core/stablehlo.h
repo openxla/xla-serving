@@ -6,10 +6,10 @@
 #include <utility>
 #include <vector>
 
-#include "absl/log/log.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
-#include "absl/strings/string_view.h"  // from @com_google_absl
-#include "absl/types/span.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
 #include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
 #include "xla/xla_data.pb.h"  // from @xla

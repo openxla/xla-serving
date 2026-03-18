@@ -5,9 +5,9 @@
 #include <optional>
 #include <vector>
 
-#include "absl/container/inlined_vector.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
-#include "absl/types/span.h"  // from @com_google_absl
+#include "absl/container/inlined_vector.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla

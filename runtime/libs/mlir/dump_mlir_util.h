@@ -4,8 +4,8 @@
 #include <memory>
 #include <string>
 
-#include "absl/status/status.h"  // from @com_google_absl
-#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "llvm/include/llvm/ADT/StringRef.h"  // from @llvm-project
 #include "llvm/include/llvm/Support/raw_ostream.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/Operation.h"  // from @llvm-project

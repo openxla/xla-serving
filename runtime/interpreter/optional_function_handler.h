@@ -5,8 +5,8 @@
 #include <vector>
 
 #include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
-#include "absl/status/statusor.h"  // from @com_google_absl
-#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "runtime/kernel/kernel.h"  // from @neptune
 #include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
 #include "third_party/py/orbax/export/protos/oex_orchestration.pb.h"

@@ -3,9 +3,9 @@
 #include <cstddef>
 #include <string>
 
-#include "absl/strings/str_cat.h"  // from @com_google_absl
-#include "absl/strings/string_view.h"  // from @com_google_absl
-#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "xla/tsl/framework/serving_device_selector.h"  // from @xla
 #include "xla/tsl/lib/monitoring/counter.h"  // from @xla
 

@@ -1,7 +1,6 @@
+load("//corp/cloud/image_from_binary:build_defs.bzl", "image_from_binary")
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("@rules_cc//cc:cc_test.bzl", "cc_test")
-load("//corp/cloud/image_from_binary:build_defs.bzl", "image_from_binary")
 load("//third_party/bazel_rules/rules_docker/container:container.bzl", "container_push")
 
 vardef("JSV_SERVING_REGISTRY", "gcr.io")
@@ -31,13 +30,13 @@ cc_binary(
     deps = [
         ":jsv_grpc_server",
         "//base",
+        "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
         "@com_github_grpc_grpc//:grpc++",
         "@com_github_grpc_grpc//:grpc++_reflection",
-        "@com_google_absl//absl/flags:flag",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
         "@neptune//runtime/serving/gcp/auth:utils",
         "@xla//xla/tsl/platform:status",
     ],
@@ -51,14 +50,14 @@ cc_library(
         "//learning/infra/mira/experimental/orbax_model/tensorflow:tf_compatible_interpreter_create_options",
         "//learning/infra/mira/experimental/orbax_model/tensorflow/utils:tf_to_host_buffer",
         "//third_party/tensorflow/core/framework:tensor",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/flags:flag",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/time",
         "@neptune//runtime/core:host_buffer",
         "@neptune//runtime/core:value",
         "@neptune//runtime/core/proto:host_buffer_cc_proto",

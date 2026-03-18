@@ -1,4 +1,4 @@
-#include "absl/types/span.h"  // from @com_google_absl
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/data_loader/ocp_loader/common_types.h"  // from @neptune
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
@@ -12,8 +12,8 @@
 #include <utility>
 #include <vector>
 
-#include "absl/status/statusor.h"  // from @com_google_absl
-#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "third_party/australis/google/ifrt/ifrt_australis.pb.h"
 #include "xla/layout.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla

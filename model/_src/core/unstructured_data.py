@@ -3,8 +3,8 @@
 import dataclasses
 import pathlib
 
-from neptune_model._src.core import file_utils
-from neptune_model.protos import manifest_pb2
+from .third_party.neptune.model._src.core import file_utils
+from .third_party.neptune.protos import manifest_pb2
 
 
 @dataclasses.dataclass

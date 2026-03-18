@@ -1,9 +1,9 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_CLOCK_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_CLOCK_H_
 
-#include "absl/base/no_destructor.h"  // from @com_google_absl
-#include "absl/time/clock.h"  // from @com_google_absl
-#include "absl/time/time.h"  // from @com_google_absl
+#include "absl/base/no_destructor.h"  // from @abseil-cpp
+#include "absl/time/clock.h"  // from @abseil-cpp
+#include "absl/time/time.h"  // from @abseil-cpp
 
 namespace jsv {
 

@@ -4,9 +4,9 @@
 #include <cstdint>
 #include <functional>
 
-#include "absl/base/nullability.h"  // from @com_google_absl
-#include "absl/status/status.h"  // from @com_google_absl
-#include "third_party/eigen3/unsupported/Eigen/CXX11/ThreadPool"
+#include "absl/base/nullability.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "unsupported/Eigen/CXX11/ThreadPool"
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
 namespace jsv {

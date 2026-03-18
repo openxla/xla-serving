@@ -5,10 +5,10 @@
 #include <optional>
 
 #include "runtime/interpreter/manifest_utils.h"  // from @neptune
-#include "absl/base/nullability.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
-#include "absl/strings/string_view.h"  // from @com_google_absl
-#include "absl/types/span.h"  // from @com_google_absl
+#include "absl/base/nullability.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/data_loader/data_loader.h"  // from @neptune
 #include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
 #include "xla/python/ifrt/client.h"  // from @xla

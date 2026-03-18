@@ -17,16 +17,16 @@
 #include <variant>
 #include <vector>
 
-#include "absl/base/thread_annotations.h"  // from @com_google_absl
-#include "absl/log/check.h"  // from @com_google_absl
-#include "absl/log/log.h"  // from @com_google_absl
-#include "absl/status/status.h"  // from @com_google_absl
-#include "absl/strings/str_cat.h"  // from @com_google_absl
-#include "absl/strings/str_format.h"  // from @com_google_absl
-#include "absl/synchronization/mutex.h"  // from @com_google_absl
-#include "absl/synchronization/notification.h"  // from @com_google_absl
-#include "absl/time/clock.h"  // from @com_google_absl
-#include "absl/time/time.h"  // from @com_google_absl
+#include "absl/base/thread_annotations.h"  // from @abseil-cpp
+#include "absl/log/check.h"  // from @abseil-cpp
+#include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/strings/str_format.h"  // from @abseil-cpp
+#include "absl/synchronization/mutex.h"  // from @abseil-cpp
+#include "absl/synchronization/notification.h"  // from @abseil-cpp
+#include "absl/time/clock.h"  // from @abseil-cpp
+#include "absl/time/time.h"  // from @abseil-cpp
 #include "runtime/core/allocator.h"  // from @neptune
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
 #include "runtime/core/batching/batch_scheduler_utils.h"  // from @neptune

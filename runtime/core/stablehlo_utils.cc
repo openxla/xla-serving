@@ -8,15 +8,15 @@
 #include <utility>
 #include <vector>
 
-#include "absl/base/nullability.h"  // from @com_google_absl
-#include "absl/container/inlined_vector.h"  // from @com_google_absl
-#include "absl/log/check.h"  // from @com_google_absl
-#include "absl/log/log.h"  // from @com_google_absl
-#include "absl/status/status.h"  // from @com_google_absl
-#include "absl/strings/str_cat.h"  // from @com_google_absl
-#include "absl/strings/str_join.h"  // from @com_google_absl
-#include "absl/strings/string_view.h"  // from @com_google_absl
-#include "absl/types/span.h"  // from @com_google_absl
+#include "absl/base/nullability.h"  // from @abseil-cpp
+#include "absl/container/inlined_vector.h"  // from @abseil-cpp
+#include "absl/log/check.h"  // from @abseil-cpp
+#include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/strings/str_join.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "llvm/include/llvm/Support/LogicalResult.h"  // from @llvm-project
 #include "mlir/include/mlir/Dialect/Func/IR/FuncOps.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/Attributes.h"  // from @llvm-project
@@ -29,8 +29,8 @@
 #include "mlir/include/mlir/Support/DebugStringHelper.h"  // from @llvm-project
 #include "mlir/include/mlir/Support/LLVM.h"  // from @llvm-project
 #include "runtime/libs/mlir/utils.h"  // from @neptune
-#include "third_party/openxla/shardy/src/shardy/dialect/sdy/ir/dialect.h"
-#include "third_party/openxla/shardy/src/shardy/dialect/sdy/ir/utils.h"
+#include "shardy/dialect/sdy/ir/dialect.h"  // from @shardy
+#include "shardy/dialect/sdy/ir/utils.h"  // from @shardy
 #include "stablehlo/dialect/StablehloOps.h"  // from @stablehlo
 #include "stablehlo/transforms/StablehloRefineShapes.h"  // from @stablehlo
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla

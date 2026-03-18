@@ -5,18 +5,18 @@ import os
 from absl.testing import absltest
 
 from .net.proto2.contrib.pyutil import compare
-from neptune_model._src.core import constants
-from neptune_model._src.core import device_assignment
-from neptune_model._src.core import file_utils
-from neptune_model._src.core import function
-from neptune_model._src.core import persistence_lib
-from neptune_model._src.core import serializable_function
-from neptune_model._src.core import shlo_function
-from neptune_model._src.core import shlo_type
-from neptune_model._src.core import unstructured_data
-from neptune_model._src.core import value
-from neptune_model.protos import manifest_pb2
-from neptune_model.protos import type_pb2
+from .third_party.neptune.model._src.core import constants
+from .third_party.neptune.model._src.core import device_assignment
+from .third_party.neptune.model._src.core import file_utils
+from .third_party.neptune.model._src.core import function
+from .third_party.neptune.model._src.core import persistence_lib
+from .third_party.neptune.model._src.core import serializable_function
+from .third_party.neptune.model._src.core import shlo_function
+from .third_party.neptune.model._src.core import shlo_type
+from .third_party.neptune.model._src.core import unstructured_data
+from .third_party.neptune.model._src.core import value
+from .third_party.neptune.protos import manifest_pb2
+from .third_party.neptune.protos import type_pb2
 
 
 class PersistenceLibTest(absltest.TestCase):

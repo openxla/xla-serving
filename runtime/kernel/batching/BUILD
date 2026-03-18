@@ -1,6 +1,4 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("@rules_cc//cc:cc_test.bzl", "cc_test")
-load("//devtools/deps/check:deps_check.bzl", "check_dependencies")
 
 cc_library(
     name = "batch_resource_base",
@@ -16,21 +14,21 @@ cc_library(
         "//third_party/tensorflow/core/common_runtime:cost_util",
         "//third_party/tensorflow/core/common_runtime:request_cost",
         "//third_party/tensorflow/core/common_runtime:request_cost_accessor",
-        "@com_google_absl//absl/base:no_destructor",
-        "@com_google_absl//absl/cleanup",
-        "@com_google_absl//absl/container:fixed_array",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/functional:any_invocable",
-        "@com_google_absl//absl/functional:bind_front",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:string_view",
-        "@com_google_absl//absl/synchronization",
-        "@com_google_absl//absl/time",
-        "@com_google_absl//absl/types:span",
+        "@abseil-cpp//absl/base:no_destructor",
+        "@abseil-cpp//absl/cleanup",
+        "@abseil-cpp//absl/container:fixed_array",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/functional:any_invocable",
+        "@abseil-cpp//absl/functional:bind_front",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/time",
+        "@abseil-cpp//absl/types:span",
         "@neptune//runtime/core:allocator",
         "@neptune//runtime/core:host_buffer",
         "@neptune//runtime/core:incremental_barrier",
@@ -69,12 +67,12 @@ cc_library(
         ":batch_options_utils",
         ":batch_resource_base",
         ":warmup",
-        "@com_google_absl//absl/cleanup",
-        "@com_google_absl//absl/functional:any_invocable",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/types:span",
+        "@abseil-cpp//absl/cleanup",
+        "@abseil-cpp//absl/functional:any_invocable",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/types:span",
         "@neptune//runtime/core:allocator",
         "@neptune//runtime/core:default_allocator",
         "@neptune//runtime/core:host_buffer",
@@ -98,40 +96,21 @@ cc_library(
     ],
 )
 
-check_dependencies(
-    name = "batch_runner_op_deps_test",
-    of = [":batch_runner_op"],
-    allowed_match_regexp = "|".join([
-        # go/keep-sorted start
-        "//third_party/tensorflow/compiler/xla(/|:)",  # OpenXLA
-        "//third_party/tensorflow/core/common_runtime:.*cost.*",  # cost measurement libs.
-        "//third_party/tensorflow/core/platform(/|:)",  # contains data types. Brought in by cost measurement libs.
-        "//third_party/tensorflow/core:platform_base",  # brought in by "request_cost_accessor_registry".
-        "//third_party/tensorflow/core:tflite_portable_logging",  # brought in by "request_cost_accessor_registry".
-        "//third_party/tensorflow/third_party(/|:)",
-        "//third_party/tensorflow/tsl(/|:)",  # go/moving-tsl-into-xla-lsc
-        "//third_party/tensorflow:",  # contains platform-related libs. Brought in by several libs.
-        # go/keep-sorted end
-    ]),
-    dont_match_regexp = "//third_party/tensorflow",
-    error_context = "'BatchRunnerOp' should not have any dependency on TensorFlow.",
-)
-
 cc_library(
     name = "warmup",
     srcs = ["warmup.cc"],
     hdrs = ["warmup.h"],
     visibility = ["//learning/serving/servables/tfrt:__pkg__"],
     deps = [
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:string_view",
-        "@com_google_absl//absl/synchronization",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/synchronization",
     ],
 )
 
@@ -146,36 +125,11 @@ cc_library(
     ],
     deps = [
         "//third_party/py/orbax/export/protos:oex_orchestration_cc_proto",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:string_view",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:string_view",
         "@neptune//runtime/core/batching:batch_scheduler",
-    ],
-)
-
-cc_library(
-    name = "test_batch_resource_base",
-    testonly = True,
-    hdrs = ["test_batch_resource_base.h"],
-    visibility = [
-        "@neptune//runtime/kernel:__subpackages__",
-    ],
-    deps = [
-        ":batch_resource_base",
-        ":batch_runner_op",
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/synchronization",
-        "@com_google_absl//absl/time",
-        "@com_google_absl//absl/types:span",
-        "@neptune//runtime/core:host_buffer",
-        "@neptune//runtime/core/batching:shared_batch_scheduler",
-        "@neptune//runtime/kernel",
-        "@xla//xla/tsl/platform:env",
     ],
 )

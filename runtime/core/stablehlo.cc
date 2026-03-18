@@ -5,12 +5,12 @@
 #include <vector>
 
 #include "runtime/interpreter/manifest_utils.h"  // from @neptune
-#include "absl/log/log.h"  // from @com_google_absl
-#include "absl/memory/memory.h"  // from @com_google_absl
-#include "absl/status/status.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
-#include "absl/strings/str_cat.h"  // from @com_google_absl
-#include "absl/types/span.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/memory/memory.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
 #include "third_party/protobuf/message.h"
 #include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"

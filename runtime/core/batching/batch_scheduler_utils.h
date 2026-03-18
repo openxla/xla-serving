@@ -6,9 +6,9 @@
 #include <optional>
 #include <vector>
 
-#include "absl/log/log.h"  // from @com_google_absl
-#include "absl/strings/string_view.h"  // from @com_google_absl
-#include "absl/time/time.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/time/time.h"  // from @abseil-cpp
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
 #include "runtime/core/batching/batch_stats.h"  // from @neptune
 #include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune

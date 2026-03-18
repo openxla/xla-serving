@@ -1,4 +1,4 @@
-#include "absl/log/check.h"  // from @com_google_absl
+#include "absl/log/check.h"  // from @abseil-cpp
 #include "runtime/kernel/builtin_kernel.h"  // from @neptune
 #include "runtime/kernel/kernel.h"  // from @neptune
 

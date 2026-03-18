@@ -2,8 +2,8 @@
 
 from dataclasses import dataclass  # pylint: disable=g-importing-member
 
-from neptune_model._src.core import function
-from neptune_model._src.core import unstructured_data
+from .third_party.neptune.model._src.core import function
+from .third_party.neptune.model._src.core import unstructured_data
 
 
 @dataclass

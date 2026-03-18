@@ -1,5 +1,5 @@
-load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("//corp/cloud/image_from_binary:build_defs.bzl", "image_from_binary")
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("//third_party/bazel_rules/rules_docker/container:container.bzl", "container_push")
 
 vardef("JSV_CLIENT_REGISTRY", "gcr.io")
@@ -29,12 +29,12 @@ cc_binary(
         "//third_party/tensorflow/core:lib",
         "//third_party/tensorflow/core:portable_gif_internal",
         "//third_party/tensorflow_serving/apis:prediction_log_cc_proto",
+        "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_google_absl//absl/flags:flag",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
         "@neptune//runtime/core:host_buffer",
         "@neptune//runtime/core/proto:host_buffer_cc_proto",
         "@neptune//runtime/serving/gcp/auth:utils",

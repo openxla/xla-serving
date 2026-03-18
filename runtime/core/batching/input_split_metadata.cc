@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <string>
 
-#include "absl/container/fixed_array.h"  // from @com_google_absl
-#include "absl/strings/str_join.h"  // from @com_google_absl
+#include "absl/container/fixed_array.h"  // from @abseil-cpp
+#include "absl/strings/str_join.h"  // from @abseil-cpp
 
 namespace jsv {
 namespace internal {

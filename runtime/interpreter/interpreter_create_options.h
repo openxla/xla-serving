@@ -5,7 +5,7 @@
 #include <memory>
 #include <string>
 
-#include "absl/base/nullability.h"  // from @com_google_absl
+#include "absl/base/nullability.h"  // from @abseil-cpp
 #include "runtime/core/allocator.h"  // from @neptune
 #include "runtime/core/default_allocator.h"  // from @neptune
 #include "runtime/core/stablehlo_optimizer.h"  // from @neptune

@@ -5,9 +5,9 @@
 #include <utility>
 #include <vector>
 
-#include "absl/log/check.h"  // from @com_google_absl
-#include "absl/log/log.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/log/check.h"  // from @abseil-cpp
+#include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
 #include "third_party/australis/google/ifrt/ifrt_australis.pb.h"
 #include "third_party/australis/google/ifrt/tensorstore_loader.h"
 #include "runtime/data_loader/ocp_loader/common_types.h"  // from @neptune
@@ -17,8 +17,8 @@
 #include "xla/python/ifrt/device.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
-#include "third_party/tensorstore/context.h"
-#include "third_party/tensorstore/util/result.h"
+#include "context.h"  // from @tensorstore
+#include "util/result.h"  // from @tensorstore
 
 namespace neptune {
 

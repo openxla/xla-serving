@@ -6,11 +6,11 @@
 #include <string>
 
 #include "base/init_google.h"
-#include "absl/flags/flag.h"  // from @com_google_absl
-#include "absl/log/check.h"  // from @com_google_absl
-#include "absl/log/log.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
-#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/flags/flag.h"  // from @abseil-cpp
+#include "absl/log/check.h"  // from @abseil-cpp
+#include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "include/grpcpp/security/server_credentials.h"  // from @com_github_grpc_grpc
 #include "include/grpcpp/server.h"  // from @com_github_grpc_grpc
 #include "include/grpcpp/server_builder.h"  // from @com_github_grpc_grpc

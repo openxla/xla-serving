@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <string>
 
-#include "absl/strings/str_format.h"  // from @com_google_absl
+#include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "tsl/platform/refcount.h"  // from @tsl
 
 namespace jsv {

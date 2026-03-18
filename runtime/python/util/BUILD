@@ -1,4 +1,4 @@
-load("//devtools/python/blaze:pytype.bzl", "pytype_strict_library")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
 py_library(
     name = "model_exporter",

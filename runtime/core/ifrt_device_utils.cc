@@ -4,16 +4,16 @@
 #include <optional>
 #include <vector>
 
-#include "absl/algorithm/container.h"  // from @com_google_absl
-#include "absl/container/flat_hash_map.h"  // from @com_google_absl
-#include "absl/container/flat_hash_set.h"  // from @com_google_absl
-#include "absl/log/check.h"  // from @com_google_absl
-#include "absl/log/log.h"  // from @com_google_absl
-#include "absl/status/status.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
-#include "absl/strings/str_cat.h"  // from @com_google_absl
-#include "absl/strings/str_join.h"  // from @com_google_absl
-#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/algorithm/container.h"  // from @abseil-cpp
+#include "absl/container/flat_hash_map.h"  // from @abseil-cpp
+#include "absl/container/flat_hash_set.h"  // from @abseil-cpp
+#include "absl/log/check.h"  // from @abseil-cpp
+#include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/strings/str_join.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "runtime/core/grid.h"  // from @neptune
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/attribute_map.h"  // from @xla

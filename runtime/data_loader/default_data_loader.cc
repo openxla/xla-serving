@@ -10,18 +10,18 @@
 #include <vector>
 
 #include "runtime/interpreter/manifest_utils.h"  // from @neptune
-#include "absl/algorithm/container.h"  // from @com_google_absl
-#include "absl/base/nullability.h"  // from @com_google_absl
-#include "absl/base/optimization.h"  // from @com_google_absl
-#include "absl/container/flat_hash_map.h"  // from @com_google_absl
-#include "absl/container/flat_hash_set.h"  // from @com_google_absl
-#include "absl/log/log.h"  // from @com_google_absl
-#include "absl/status/status.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
-#include "absl/strings/str_cat.h"  // from @com_google_absl
-#include "absl/strings/str_join.h"  // from @com_google_absl
-#include "absl/strings/string_view.h"  // from @com_google_absl
-#include "absl/types/span.h"  // from @com_google_absl
+#include "absl/algorithm/container.h"  // from @abseil-cpp
+#include "absl/base/nullability.h"  // from @abseil-cpp
+#include "absl/base/optimization.h"  // from @abseil-cpp
+#include "absl/container/flat_hash_map.h"  // from @abseil-cpp
+#include "absl/container/flat_hash_set.h"  // from @abseil-cpp
+#include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/strings/str_join.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/constants.h"  // from @neptune
 #include "runtime/core/ifrt_device_utils.h"  // from @neptune
 #include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune

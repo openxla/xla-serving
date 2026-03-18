@@ -3,8 +3,8 @@
 import jax
 import jaxtyping
 
-from neptune_model._src.core import shlo_type
-from neptune_model.protos import type_pb2
+from .third_party.neptune.model._src.core import shlo_type
+from .third_party.neptune.protos import type_pb2
 
 
 _SHLO_DTYPE_TO_MANIFEST_DTYPE: dict[shlo_type.ShloDType, type_pb2.DType] = {

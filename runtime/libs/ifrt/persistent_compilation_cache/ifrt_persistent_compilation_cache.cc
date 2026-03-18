@@ -3,8 +3,8 @@
 #include <memory>
 #include <utility>
 
-#include "absl/functional/any_invocable.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/functional/any_invocable.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
 #include "xla/pjrt/pjrt_executable.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla

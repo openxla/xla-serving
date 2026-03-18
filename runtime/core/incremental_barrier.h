@@ -3,7 +3,7 @@
 
 #include <functional>
 
-#include "absl/functional/any_invocable.h"  // from @com_google_absl
+#include "absl/functional/any_invocable.h"  // from @abseil-cpp
 
 namespace jsv {
 

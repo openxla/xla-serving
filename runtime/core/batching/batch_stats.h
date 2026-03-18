@@ -8,10 +8,10 @@
 #include <tuple>
 #include <vector>
 
-#include "absl/container/node_hash_map.h"  // from @com_google_absl
-#include "absl/log/check.h"  // from @com_google_absl
-#include "absl/synchronization/mutex.h"  // from @com_google_absl
-#include "absl/time/time.h"  // from @com_google_absl
+#include "absl/container/node_hash_map.h"  // from @abseil-cpp
+#include "absl/log/check.h"  // from @abseil-cpp
+#include "absl/synchronization/mutex.h"  // from @abseil-cpp
+#include "absl/time/time.h"  // from @abseil-cpp
 #include "tsl/platform/thread_annotations.h"  // from @tsl
 
 namespace jsv {

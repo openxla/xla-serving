@@ -7,7 +7,7 @@ from typing import Any, Optional, TypeAlias
 
 import numpy as np
 
-from neptune_model.xla import xla_data_pb2
+from .third_party.tensorflow.compiler.xla import xla_data_pb2  # pylint: disable=g-direct-tensorflow-import
 
 
 Sharding: TypeAlias = xla_data_pb2.OpSharding

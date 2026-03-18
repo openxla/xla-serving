@@ -2,9 +2,9 @@
 
 #include <string>
 
-#include "absl/log/log.h"  // from @com_google_absl
-#include "absl/status/status.h"  // from @com_google_absl
-#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
 #include "third_party/py/orbax/export/protos/oex_orchestration.pb.h"
 

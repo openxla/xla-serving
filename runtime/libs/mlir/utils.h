@@ -5,8 +5,8 @@
 #include <optional>
 #include <vector>
 
-#include "absl/container/inlined_vector.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/container/inlined_vector.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
 #include "mlir/include/mlir/IR/Builders.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/Types.h"  // from @llvm-project
 #include "xla/python/ifrt/dtype.h"  // from @xla

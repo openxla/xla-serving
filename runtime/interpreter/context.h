@@ -3,7 +3,7 @@
 
 #include "runtime/interpreter/clock.h"  // from @neptune
 #include "runtime/interpreter/run_options.h"  // from @neptune
-#include "absl/time/time.h"  // from @com_google_absl
+#include "absl/time/time.h"  // from @abseil-cpp
 
 namespace jsv {
 

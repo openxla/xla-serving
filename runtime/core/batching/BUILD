@@ -1,5 +1,4 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package(default_visibility = [
     "@neptune//runtime/interpreter:__pkg__",
@@ -11,12 +10,12 @@ cc_library(
     srcs = ["batch_scheduler.cc"],
     hdrs = ["batch_scheduler.h"],
     deps = [
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/strings:string_view",
-        "@com_google_absl//absl/synchronization",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings:str_format",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/synchronization",
         "@tsl//tsl/platform:thread_annotations",
         "@tsl//tsl/profiler/lib:traceme",
         "@xla//xla/tsl/platform:criticality",
@@ -31,14 +30,14 @@ cc_library(
         ":batch_scheduler_utils",
         ":batch_stats",
         ":periodic_function",
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/synchronization",
-        "@com_google_absl//absl/time",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:str_format",
+        "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/time",
         "@neptune//runtime/core:allocator",
         "@neptune//runtime/core:default_allocator",
         "@neptune//runtime/kernel/batching:batch_options_utils",
@@ -60,11 +59,11 @@ cc_library(
     deps = [
         ":batch_scheduler",
         ":batch_stats",
-        "@com_google_absl//absl/algorithm:container",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/strings:string_view",
-        "@com_google_absl//absl/time",
+        "@abseil-cpp//absl/algorithm:container",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/time",
         "@neptune//runtime/kernel/batching:batch_options_utils",
     ],
 )
@@ -73,10 +72,10 @@ cc_library(
     name = "batch_stats",
     hdrs = ["batch_stats.h"],
     deps = [
-        "@com_google_absl//absl/container:node_hash_map",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/synchronization",
-        "@com_google_absl//absl/time",
+        "@abseil-cpp//absl/container:node_hash_map",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/time",
         "@tsl//tsl/platform:thread_annotations",
     ],
 )
@@ -86,8 +85,8 @@ cc_library(
     srcs = ["fake_clock_env.cc"],
     hdrs = ["fake_clock_env.h"],
     deps = [
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/synchronization",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/synchronization",
         "@tsl//tsl/platform:thread_annotations",
         "@xla//xla/tsl/platform:env",
     ],
@@ -98,11 +97,11 @@ cc_library(
     srcs = ["periodic_function.cc"],
     hdrs = ["periodic_function.h"],
     deps = [
-        "@com_google_absl//absl/functional:any_invocable",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/synchronization",
+        "@abseil-cpp//absl/functional:any_invocable",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/synchronization",
         "@xla//xla/tsl/platform:env",
     ],
 )
@@ -112,8 +111,8 @@ cc_library(
     srcs = ["input_split_metadata.cc"],
     hdrs = ["input_split_metadata.h"],
     deps = [
-        "@com_google_absl//absl/container:fixed_array",
-        "@com_google_absl//absl/strings",
+        "@abseil-cpp//absl/container:fixed_array",
+        "@abseil-cpp//absl/strings",
     ],
 )
 
@@ -121,7 +120,7 @@ cc_library(
     name = "resource_base",
     hdrs = ["resource_base.h"],
     deps = [
-        "@com_google_absl//absl/strings:str_format",
+        "@abseil-cpp//absl/strings:str_format",
         "@tsl//tsl/platform:refcount",
     ],
 )
@@ -131,8 +130,8 @@ cc_library(
     srcs = ["threadsafe_status.cc"],
     hdrs = ["threadsafe_status.h"],
     deps = [
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/synchronization",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/synchronization",
     ],
 )

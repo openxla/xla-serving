@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @abseil-cpp
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
 

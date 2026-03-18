@@ -9,10 +9,10 @@
 #include <optional>
 #include <vector>
 
-#include "absl/log/check.h"  // from @com_google_absl
-#include "absl/strings/string_view.h"  // from @com_google_absl
-#include "absl/synchronization/mutex.h"  // from @com_google_absl
-#include "absl/synchronization/notification.h"  // from @com_google_absl
+#include "absl/log/check.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/synchronization/mutex.h"  // from @abseil-cpp
+#include "absl/synchronization/notification.h"  // from @abseil-cpp
 #include "xla/tsl/platform/criticality.h"  // from @xla
 #include "tsl/platform/thread_annotations.h"  // from @tsl
 #include "tsl/profiler/lib/traceme.h"  // from @tsl

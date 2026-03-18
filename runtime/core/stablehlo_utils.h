@@ -5,13 +5,13 @@
 #include <string>
 #include <vector>
 
-#include "absl/base/nullability.h"  // from @com_google_absl
-#include "absl/log/check.h"  // from @com_google_absl
-#include "absl/log/log.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
-#include "absl/strings/str_cat.h"  // from @com_google_absl
-#include "absl/strings/string_view.h"  // from @com_google_absl
-#include "absl/types/span.h"  // from @com_google_absl
+#include "absl/base/nullability.h"  // from @abseil-cpp
+#include "absl/log/check.h"  // from @abseil-cpp
+#include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 #include "runtime/libs/mlir/utils.h"  // from @neptune
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
@@ -40,6 +40,12 @@ struct ArgSpec {
     return dtype == other.dtype && shape == other.shape &&
            sharding == other.sharding;
   }
+
+  // Before c++ 20, the compiler is not smart enough to deduce the
+  // operator!= from operator==, so we need to implement it since OSS uses
+  // c++ 17.
+  // TODO: Remove this once we move to c++ 20.
+  bool operator!=(const ArgSpec& other) const { return !(*this == other); }
 
   // Checks if the `dtype` and `shape` of two ArgSpec are equal.
   bool IsDTypeAndShapeEqual(const ArgSpec& other) const {

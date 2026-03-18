@@ -1,5 +1,4 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package(default_visibility = [
     "@neptune//:__subpackages__",
@@ -8,7 +7,7 @@ package(default_visibility = [
 package_group(
     name = "checkpoint_users",
     packages = [
-        "@neptune//runtime/interpreter/...",
+        "//runtime/interpreter/...",
     ],
 )
 
@@ -19,17 +18,17 @@ cc_library(
     visibility = [":checkpoint_users"],
     deps = [
         "//third_party/py/orbax/experimental/model/core/protos:manifest_cc_proto",
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/base:no_destructor",
-        "@com_google_absl//absl/base:nullability",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/functional:any_invocable",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:string_view",
-        "@com_google_absl//absl/synchronization",
-        "@com_google_absl//absl/types:span",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/base:no_destructor",
+        "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/functional:any_invocable",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/types:span",
         "@neptune//runtime/core:ifrt_loaded_variable_registry",
         "@neptune//runtime/interpreter:manifest_utils",
         "@xla//xla/python/ifrt",
@@ -44,17 +43,17 @@ cc_library(
     deps = [
         ":data_loader",
         "//third_party/py/orbax/experimental/model/core/protos:manifest_cc_proto",
-        "@com_google_absl//absl/algorithm:container",
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/base:nullability",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:string_view",
-        "@com_google_absl//absl/types:span",
+        "@abseil-cpp//absl/algorithm:container",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/container:flat_hash_set",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/types:span",
         "@neptune//runtime/core:constants",
         "@neptune//runtime/core:ifrt_device_utils",
         "@neptune//runtime/core:ifrt_loaded_variable_registry",
@@ -81,8 +80,8 @@ cc_library(
         ":data_loader",
         ":default_data_loader",
         "//third_party/py/orbax/experimental/model/core/protos:manifest_cc_proto",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status:statusor",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status:statusor",
     ],
     alwayslink = 1,
 )

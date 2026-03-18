@@ -2,8 +2,8 @@ edition = "2024";
 
 package jsv;
 
-import "third_party/tensorflow/compiler/xla/python/ifrt/dtype.proto";
-import "third_party/tensorflow/compiler/xla/python/ifrt/shape.proto";
+import "xla/python/ifrt/dtype.proto";
+import "xla/python/ifrt/shape.proto";
 
 // Proto representation of the jsv::HostBuffer.
 message HostBufferProto {

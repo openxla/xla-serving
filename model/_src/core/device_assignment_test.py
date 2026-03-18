@@ -5,7 +5,7 @@ from jax.experimental import mesh_utils
 from jax.experimental import topologies as jax_topologies
 import numpy as np
 from .testing.pybase import parameterized
-from neptune_model._src.core import device_assignment
+from .third_party.neptune.model._src.core import device_assignment
 
 
 class DeviceAssignmentTest(parameterized.TestCase):

@@ -2,8 +2,8 @@
 
 #include <utility>
 
-#include "absl/status/status.h"  // from @com_google_absl
-#include "absl/synchronization/mutex.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/synchronization/mutex.h"  // from @abseil-cpp
 
 namespace jsv {
 const absl::Status& ThreadSafeStatus::status() const& {

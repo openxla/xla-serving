@@ -12,14 +12,14 @@
 #include <utility>
 #include <vector>
 
-#include "absl/container/btree_map.h"  // from @com_google_absl
-#include "absl/log/check.h"  // from @com_google_absl
-#include "absl/log/log.h"  // from @com_google_absl
-#include "absl/status/status.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
-#include "absl/strings/str_cat.h"  // from @com_google_absl
-#include "absl/types/span.h"  // from @com_google_absl
-#include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
+#include "absl/container/btree_map.h"  // from @abseil-cpp
+#include "absl/log/check.h"  // from @abseil-cpp
+#include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
+#include "unsupported/Eigen/CXX11/Tensor"
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "runtime/core/host_buffer_type_utils.h"  // from @neptune
 #include "runtime/core/sharding_utils_core.h"  // from @neptune

@@ -1,5 +1,5 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("//devtools/python/blaze:pytype.bzl", "pytype_strict_contrib_test", "pytype_strict_library")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("//third_party/pybind11/_utils:build_defs.bzl", "pybind_extension")
 
 package_group(
@@ -16,7 +16,7 @@ package_group(
 package_group(
     name = "internal",
     packages = [
-        "@neptune//runtime/python/...",
+        "//runtime/python/...",
     ],
 )
 
@@ -40,14 +40,14 @@ pybind_extension(
         "//third_party/nanobind",
         "//third_party/tensorflow/core:framework",
         "//third_party/tensorflow/core:protos_all_cc",
-        "@com_google_absl//absl/base:nullability",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/flags:flag",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:string_view",
+        "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:string_view",
         "@neptune//runtime/core:host_buffer",
         "@neptune//runtime/core:value",
         "@neptune//runtime/interpreter",
@@ -135,13 +135,13 @@ cc_library(
         "//third_party/python_runtime:headers",
         "//third_party/tensorflow/core:framework",
         "//third_party/tensorflow/core:protos_all_cc",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/types:span",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:str_format",
+        "@abseil-cpp//absl/types:span",
         "@neptune//runtime/core:allocator",
         "@neptune//runtime/core:default_allocator",
         "@neptune//runtime/core:host_buffer",
@@ -193,12 +193,12 @@ cc_library(
     hdrs = ["ifrt_client_factory.h"],
     visibility = [":internal"],
     deps = [
-        "@com_google_absl//absl/base:no_destructor",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/functional:any_invocable",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
+        "@abseil-cpp//absl/base:no_destructor",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/functional:any_invocable",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
         "@xla//xla/pjrt/plugin/xla_cpu:cpu_client_options",
         "@xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
         "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_client_options",

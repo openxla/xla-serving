@@ -1,8 +1,8 @@
 #include "runtime/interpreter/orbax_type_utils.h"  // from @neptune
 
-#include "absl/status/status.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
-#include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "third_party/py/orbax/experimental/model/core/protos/type.pb.h"
 #include "xla/xla_data.pb.h"  // from @xla
 

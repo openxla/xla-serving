@@ -1,6 +1,6 @@
 #include "runtime/core/stablehlo_optimizer.h"  // from @neptune
 
-#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @abseil-cpp
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 
 namespace jsv {

@@ -3,9 +3,9 @@
 #include <memory>
 #include <string>
 
-#include "absl/log/check.h"  // from @com_google_absl
-#include "absl/log/log.h"  // from @com_google_absl
-#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/log/check.h"  // from @abseil-cpp
+#include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
 #include "include/grpc/grpc_security_constants.h"  // from @com_github_grpc_grpc
 #include "include/grpcpp/security/credentials.h"  // from @com_github_grpc_grpc
 #include "include/grpcpp/security/server_credentials.h"  // from @com_github_grpc_grpc
