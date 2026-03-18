@@ -16,3 +16,9 @@ common --define=grpc_no_ares=true
 common --define=tsl_link_protobuf=true
 
 common --repository_cache=~/.bazel_repository_cache
+
+# Required by Abseil and Tensorstore to prevent compilation errors 
+# (e.g. InstantiateRawHashMap not found) and ensure correct ABI compatibility.
+# TODO: update to c++20
+build --cxxopt=-std=c++17
+build --cxxopt=-fsized-deallocation
