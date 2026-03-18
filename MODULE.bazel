@@ -35,7 +35,7 @@ archive_override(
     urls = ["https://github.com/openxla/xla/archive/f61a4a6dbaeec4b31d7c5768e172f9587dd86d0e.tar.gz"],
 )
 
-# TODO: upstreaming in cl/822016400
+# TODO: upstreaming in cl/822016400 copybara:strip
 single_version_override(
     module_name = "grpc",
     patch_strip = 1,
