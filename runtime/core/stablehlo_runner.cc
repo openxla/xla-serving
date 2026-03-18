@@ -96,8 +96,7 @@ absl::StatusOr<xla::DeviceAssignment> GetRuntimeXlaDeviceAssignment(
 absl::StatusOr<xla::ifrt::ShardingRef> ToIfrtSharding(
     xla::ifrt::Client& ifrt_client, const xla::HloSharding& hlo_sharding,
     const xla::ifrt::DeviceListRef& device_list) {
-  if (!hlo_sharding.IsTiled() && !hlo_sharding.IsReplicated() &&
-      !hlo_sharding.IsTileMaximal()) {
+  if (!hlo_sharding.IsTiled() && !hlo_sharding.IsReplicatedOrSingleDevice()) {
     return absl::UnimplementedError(absl::StrCat(
         "Only support MAXIMAL, OTHER or REPLICATED, but got sharding : ",
         hlo_sharding.ToString()));
@@ -108,7 +107,7 @@ absl::StatusOr<xla::ifrt::ShardingRef> ToIfrtSharding(
         device_list->devices().front(), xla::ifrt::MemoryKind());
   }
 
-  if (!hlo_sharding.IsReplicated() && hlo_sharding.IsTileMaximal()) {
+  if (hlo_sharding.IsSingleDevice()) {
     VLOG(1) << "Single device fast path for Maximal tiled tensor";
     xla::ifrt::Device* device;
     int unique_device_id = hlo_sharding.GetUniqueDevice();

@@ -374,9 +374,8 @@ absl::StatusOr<tsl::Future<HostBuffer>> MakeHostBufferFromArrayHelper(
         ->CopyToHostBuffer(output_buffer.base(), std::nullopt,
                            xla::ifrt::ArrayCopySemantics::kAlwaysCopy)
         .MapTo(std::move(output_buffer));
-  } else if (hlo_sharding.IsTileMaximal()) {
-    // Maximal implies single device
-    VLOG(1) << "Fast path for maximal";
+  } else if (hlo_sharding.IsSingleDevice()) {
+    VLOG(1) << "Fast path for single device";
     TF_ASSIGN_OR_RETURN(
         std::vector<xla::ifrt::ArrayRef> disassembled_array,
         input_array.DisassembleIntoSingleDeviceArrays(
@@ -552,9 +551,10 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
       ifrt_hlo_sharding->xla_hlo_sharding();
   VLOG(3) << "HloSharding properties: IsTiled=" << xla_hlo_sharding.IsTiled()
           << ", IsReplicated=" << xla_hlo_sharding.IsReplicated()
-          << ", IsTileMaximal=" << xla_hlo_sharding.IsTileMaximal();
-  if (!xla_hlo_sharding.IsTiled() && !xla_hlo_sharding.IsReplicated() &&
-      !xla_hlo_sharding.IsTileMaximal()) {
+          << ", IsReplicatedOrSingleDevice="
+          << xla_hlo_sharding.IsReplicatedOrSingleDevice();
+  if (!xla_hlo_sharding.IsTiled() &&
+      !xla_hlo_sharding.IsReplicatedOrSingleDevice()) {
     return absl::UnimplementedError(absl::StrCat(
         "Only support MAXIMAL, OTHER or REPLICATED, but got sharding : ",
         xla_hlo_sharding.ToString()));
@@ -563,9 +563,7 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
   VLOG(1) << "Hlo sharding: " << xla_hlo_sharding.ToString();
   VLOG(1) << "Device list size: " << device_list->size();
 
-  // IsTileMaximal() also returns true for a replicate sharding created by
-  // xla::HloSharding::Replicate().
-  if (!xla_hlo_sharding.IsReplicated() && xla_hlo_sharding.IsTileMaximal()) {
+  if (xla_hlo_sharding.IsSingleDevice()) {
     VLOG(1) << "Single device fast path for Maximal tiled buffer";
     xla::ifrt::Device* device;
     int unique_device_id = xla_hlo_sharding.GetUniqueDevice();
