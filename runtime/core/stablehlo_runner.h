@@ -32,7 +32,7 @@
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
 #include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
 #include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @neptune
-#include "third_party/protobuf/message.h"
+#include "google/protobuf/message.h"
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla

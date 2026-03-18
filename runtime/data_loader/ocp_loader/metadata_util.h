@@ -6,8 +6,8 @@
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "third_party/json/include/nlohmann/json.hpp"
-#include "third_party/json/include/nlohmann/json_fwd.hpp"
+#include "nlohmann/json.hpp"  // from @nlohmann_json
+#include "nlohmann/json_fwd.hpp"  // from @nlohmann_json
 
 namespace neptune {
 

@@ -14,9 +14,9 @@
 #include "absl/time/time.h"  // from @abseil-cpp
 #include "third_party/australis/google/ifrt/ifrt_australis.pb.h"
 #include "third_party/australis/google/ifrt/tensorstore_loader.h"
-#include "third_party/json/include/nlohmann/json_fwd.hpp"
+#include "nlohmann/json_fwd.hpp"  // from @nlohmann_json
 #include "runtime/data_loader/ocp_loader/common_types.h"  // from @neptune
-#include "third_party/protobuf/repeated_ptr_field.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla

@@ -12,7 +12,7 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
-#include "third_party/protobuf/message.h"
+#include "google/protobuf/message.h"
 #include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla

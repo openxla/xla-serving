@@ -10,14 +10,12 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "third_party/json/include/nlohmann/json.hpp"
-#include "third_party/json/include/nlohmann/json_fwd.hpp"
+#include "nlohmann/json.hpp"  // from @nlohmann_json
+#include "nlohmann/json_fwd.hpp"  // from @nlohmann_json
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "tsl/platform/path.h"  // from @tsl
-#include "util/task/status_macros.h"
-
 namespace neptune {
 
 constexpr const char* METADATA_FILE_NAME = "_METADATA";
@@ -85,7 +83,7 @@ std::vector<std::string> GetParamNamesFromLists(
 
 absl::StatusOr<std::vector<std::string>> GetParamNames(
     const nlohmann::ordered_json& metadata_json) {
-  ASSIGN_OR_RETURN(std::vector<std::vector<std::string>> param_name_lists,
+  TF_ASSIGN_OR_RETURN(std::vector<std::vector<std::string>> param_name_lists,
                    GetParamNameLists(metadata_json));
   std::vector<std::string> param_names =
       GetParamNamesFromLists(param_name_lists);
@@ -108,7 +106,7 @@ bool is_prefix_path(const std::vector<std::string>& sub_tree_path,
 absl::StatusOr<std::vector<std::string>> GetParamNamesForSubTree(
     const nlohmann::ordered_json& metadata_json,
     std::vector<std::string>& sub_tree) {
-  ASSIGN_OR_RETURN(std::vector<std::vector<std::string>> param_name_lists,
+  TF_ASSIGN_OR_RETURN(std::vector<std::vector<std::string>> param_name_lists,
                    GetParamNameLists(metadata_json));
   if (sub_tree.empty()) {  // Fall back to get all param names
     return GetParamNamesFromLists(param_name_lists);

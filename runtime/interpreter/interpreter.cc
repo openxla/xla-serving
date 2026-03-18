@@ -43,7 +43,7 @@
 #include "runtime/kernel/kernel_builder_constants.h"  // from @neptune
 #include "runtime/kernel/kernel_builder_context.h"  // from @neptune
 #include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
-#include "third_party/protobuf/repeated_ptr_field.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
 #include "third_party/py/orbax/experimental/model/core/protos/type.pb.h"
 #include "third_party/py/orbax/export/protos/oex_orchestration.pb.h"

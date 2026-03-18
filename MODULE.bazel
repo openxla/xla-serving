@@ -61,6 +61,7 @@ third_party = use_extension("@xla//third_party/extensions:third_party.bzl", "thi
 use_repo(
     third_party,
     "eigen_archive",
+    "riegeli",
     "shardy",
     "stablehlo",
 )

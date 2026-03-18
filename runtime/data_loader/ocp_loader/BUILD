@@ -12,6 +12,7 @@ cc_library(
     deps = [
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
         "@nlohmann_json//:json",
     ],
 )
@@ -21,7 +22,6 @@ cc_library(
     srcs = ["metadata_util.cc"],
     hdrs = ["metadata_util.h"],
     deps = [
-        "//util/task:status",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/log:check",
         "@abseil-cpp//absl/status",

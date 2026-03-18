@@ -12,7 +12,7 @@
 #include "third_party/australis/google/ifrt/tensorstore_loader.h"
 #include "runtime/data_loader/ocp_loader/common_types.h"  // from @neptune
 #include "runtime/data_loader/ocp_loader/shared.h"  // from @neptune
-#include "third_party/protobuf/repeated_ptr_field.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla

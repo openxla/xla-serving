@@ -9,8 +9,9 @@
 
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
-#include "third_party/json/include/nlohmann/json.hpp"
-#include "third_party/json/include/nlohmann/json_fwd.hpp"
+#include "absl/strings/match.h"  // from @abseil-cpp
+#include "nlohmann/json.hpp"  // from @nlohmann_json
+#include "nlohmann/json_fwd.hpp"  // from @nlohmann_json
 
 namespace neptune {
 
@@ -90,7 +91,7 @@ absl::StatusOr<nlohmann::json> BuildKvstoreTspec(
   normalized_directory =
       std::regex_replace(normalized_directory, std::regex("gs:/"), "gs://");
 
-  bool is_gcs_path = normalized_directory.starts_with("gs://");
+  bool is_gcs_path = absl::StartsWith(normalized_directory, "gs://");
 
   nlohmann::json kv_spec;
 
