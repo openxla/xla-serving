@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neptune-model"
+version = "0.0.1"
+description = "Neptune Model"
+readme = 'README.md'
+license = {file = 'LICENSE'}
+requires-python = '>=3.10'
+authors = [{name = 'Neptune Authors', email='obm-jsv-team@google.com'}]
+classifiers=[
+    'Development Status :: 4 - Beta',
+    'Intended Audience :: Developers',
+    'Intended Audience :: Science/Research',
+    'License :: OSI Approved :: Apache Software License',
+    'Programming Language :: Python',
+    'Topic :: Scientific/Engineering :: Artificial Intelligence',
+]
+
+keywords = ["JAX machine learning", "serialization", "export"]
+
+dependencies = [
+    'absl-py',
+    'dataclasses-json',
+    'etils',
+    'jax >= 0.4.34',
+    'jaxlib',
+    'jaxtyping',
+    'numpy',
+    'protobuf',
+]
+
+
+[tool.setuptools]
+# Force setuptools to look for these specific folders
+package-dir = {"" = "."}
+
+[tool.setuptools.package-data]
+# Ensure the generated python files are treated as data if they aren't standard .py
+"*" = ["*.py", "*.pyi"]
+
+[project.urls]
+homepage = 'http://github.com/AI-Hypercomputer/neptune'
+repository = 'http://github.com/AI-Hypercomputer/neptune'
+
+[project.optional-dependencies]
+testing = [
+    'pytest',
+    'pytest-xdist',
+    'tf-nightly',
+    'requests',
+    'chex',
+]
