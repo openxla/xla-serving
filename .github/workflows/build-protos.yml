@@ -5,21 +5,10 @@ on:
     branches:
       - main
       - 'test_*'
-    # Only run this if protos or bazel config changes!
-    paths:
-      - 'protos/**'
-      - 'MODULE.bazel'
-      - 'WORKSPACE'
-      - '.bazelrc'
   pull_request:
     branches:
       - main
       - 'test_*'
-    paths:
-      - 'protos/**'
-      - 'MODULE.bazel'
-      - 'WORKSPACE'
-      - '.bazelrc'
   workflow_dispatch:
 
 jobs:
