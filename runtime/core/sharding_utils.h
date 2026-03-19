@@ -22,7 +22,7 @@
 #include "xla/tsl/concurrency/ref_count.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace jsv::sharding_internal {
+namespace neptune::sharding_internal {
 
 // Splits the given `input_buffer` into equal shapes of slices.
 //
@@ -84,6 +84,6 @@ tsl::Future<HostBuffer> MakeHostBufferFromArray(
 absl::StatusOr<xla::ifrt::DeviceListRef> CreateDeviceList(
     xla::ifrt::Client& ifrt_client, absl::Span<const int> device_ids);
 
-}  // namespace jsv::sharding_internal
+}  // namespace neptune::sharding_internal
 
 #endif  //  THIRD_PARTY_NEPTUNE_RUNTIME_SHARDING_UTILS_H_

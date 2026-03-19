@@ -5,7 +5,7 @@
 #include "runtime/interpreter/run_options.h"  // from @neptune
 #include "absl/time/time.h"  // from @abseil-cpp
 
-namespace jsv {
+namespace neptune {
 
 struct CancellationContext {
   const Clock* clock = RealClock::Get();
@@ -24,6 +24,6 @@ struct RunContext {
   };
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_CONTEXT_H_

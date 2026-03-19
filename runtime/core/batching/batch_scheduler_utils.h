@@ -13,7 +13,7 @@
 #include "runtime/core/batching/batch_stats.h"  // from @neptune
 #include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
 
-namespace jsv {
+namespace neptune {
 
 // Returns the next allowed batch size, which is the smallest allowed batch size
 // greater than or equal to the given batch size. If allowed_batch_sizes,
@@ -120,6 +120,6 @@ void MaybeBatchDown(Batch<TaskType>& batch,
   batch.TryTrimToNewSize(batch_down_size, out_trimmed_tasks);
 }
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_BATCH_SCHEDULER_UTILS_H_

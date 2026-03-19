@@ -12,7 +12,7 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 
-namespace jsv {
+namespace neptune {
 
 OptionalFunctionHandlerFactoryRegistry&
 OptionalFunctionHandlerFactoryRegistry::Instance() {
@@ -47,4 +47,4 @@ OptionalFunctionHandlerRouter::GetHandler(absl::string_view key) {
       "handler is not registered."));
 }
 
-}  // namespace jsv
+}  // namespace neptune

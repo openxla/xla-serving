@@ -23,7 +23,7 @@
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 // A class that holds loaded StableHLO(s) (i.e. MLIR module(s)) representing
 // a single JAX model. The loaded StableHLO(s) could be:
@@ -111,7 +111,7 @@ class LoadedStableHlo {
   // make sure the MLIR context in the loader is alive when the module is
   // destroyed.
   struct ModuleBundleWithLoader {
-    std::unique_ptr<jsv::StableHloLoader> loader;
+    std::unique_ptr<StableHloLoader> loader;
     ModuleBundle bundle;
   };
 
@@ -158,6 +158,6 @@ class LoadedStableHlo {
   const int num_outputs_;
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_LOADED_STABLEHLO_H_

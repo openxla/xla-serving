@@ -41,7 +41,7 @@
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 namespace {
 
 // Result of the `Load` method.
@@ -533,4 +533,4 @@ DefaultDataLoader::DefaultDataLoader(CreateOptions create_options)
       checkpoint_loader_thread_pool_(
           create_options.checkpoint_loader_thread_pool) {}
 
-}  // namespace jsv
+}  // namespace neptune

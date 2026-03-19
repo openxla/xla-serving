@@ -3,7 +3,7 @@
 
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 
-namespace jsv {
+namespace neptune {
 
 inline constexpr absl::string_view kStableHlo = "stablehlo";
 // Some kernels's implementation can take different numbers of inputs. This
@@ -26,6 +26,6 @@ inline constexpr absl::string_view kFunctionFlatInputSignature =
 inline constexpr absl::string_view kFunctionFlatOutputSignature =
     "function_flat_output_signature";
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_BUILDER_CONSTANTS_H_

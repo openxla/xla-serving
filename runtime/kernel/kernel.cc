@@ -16,7 +16,7 @@
 #include "xla/pjrt/pjrt_future.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 absl::Status CancellableKernel::Run(ExecuteContext& context) {
   if (context.run_context.cancellation_context.IsCancelled()) {
@@ -67,4 +67,4 @@ absl::StatusOr<std::unique_ptr<Kernel>> KernelRegistry::Create(
   return it->second(context);
 }
 
-}  // namespace jsv
+}  // namespace neptune

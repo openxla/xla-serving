@@ -12,7 +12,7 @@
 #include "runtime/kernel/kernel_builder_context.h"  // from @neptune
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 absl::StatusOr<std::unique_ptr<Kernel>> IdentityKernel::Create(
     const KernelBuilderContext& context) {
@@ -38,4 +38,4 @@ absl::Status IdentityKernel::RunInternal(ExecuteContext& context) {
   return absl::OkStatus();
 }
 
-}  // namespace jsv
+}  // namespace neptune

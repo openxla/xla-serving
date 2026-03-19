@@ -47,7 +47,7 @@
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 class StableHloRunner {
  public:
@@ -341,6 +341,6 @@ class StableHloRunner {
   friend class StableHloRunnerTestPeer;
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_STABLEHLO_RUNNER_H_

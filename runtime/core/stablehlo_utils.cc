@@ -49,7 +49,7 @@
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 namespace {
 
 constexpr absl::string_view kPolymorphicShapeAttrName =
@@ -100,8 +100,8 @@ absl::StatusOr<ArgSpec> BuildArgSpecFromArg(
     xla::CompileOptionsProto* compile_options) {
   TF_ASSIGN_OR_RETURN(
       xla::ifrt::DType dtype,
-      jsv::sharding_internal::ToIfrtDType(func.getArgumentTypes()[idx]));
-  TF_ASSIGN_OR_RETURN(auto shape, jsv::sharding_internal::ToMlirShape(
+      sharding_internal::ToIfrtDType(func.getArgumentTypes()[idx]));
+  TF_ASSIGN_OR_RETURN(auto shape, sharding_internal::ToMlirShape(
                                       func.getArgumentTypes()[idx]));
 
   xla::OpSharding sharding;
@@ -135,8 +135,8 @@ absl::StatusOr<ArgSpec> BuildArgSpecFromResult(
     xla::CompileOptionsProto* compile_options) {
   TF_ASSIGN_OR_RETURN(
       xla::ifrt::DType dtype,
-      jsv::sharding_internal::ToIfrtDType(func.getResultTypes()[idx]));
-  TF_ASSIGN_OR_RETURN(auto shape, jsv::sharding_internal::ToMlirShape(
+      sharding_internal::ToIfrtDType(func.getResultTypes()[idx]));
+  TF_ASSIGN_OR_RETURN(auto shape, sharding_internal::ToMlirShape(
                                       func.getResultTypes()[idx]));
 
   xla::OpSharding sharding;
@@ -514,4 +514,4 @@ xla::ifrt::Shape ToIfrtShape(const ArgShape& shape) {
   return xla::ifrt::Shape(dimensions);
 }
 
-}  // namespace jsv
+}  // namespace neptune

@@ -68,7 +68,7 @@
 #include "xla/xla_data.pb.h"  // from @xla
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
-namespace jsv {
+namespace neptune {
 namespace {
 
 // Returns the device assignment from the given IFRT devices list.
@@ -734,4 +734,4 @@ absl::Status StableHloRunner::MarkFullyInitialized() {
   return absl::OkStatus();
 }
 
-}  // namespace jsv
+}  // namespace neptune

@@ -11,7 +11,7 @@
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
 
-namespace jsv {
+namespace neptune {
 
 absl::Status DataLoaderFactoryRegistry::RegisterDataLoaderFactory(
     orbax_model_manifest::LoaderType loader_type,
@@ -41,4 +41,4 @@ DataLoaderFactoryRegistry::CreateDataLoader(
   return it->second(std::move(create_options));
 }
 
-}  // namespace jsv
+}  // namespace neptune

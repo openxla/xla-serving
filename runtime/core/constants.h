@@ -1,7 +1,7 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_CONSTANTS_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_CONSTANTS_H_
 
-namespace jsv {
+namespace neptune {
 
 // Orbax manifest version file name and known keys. The file is a text file
 // named 'orbax_model_version.txt' with the following format:
@@ -43,6 +43,6 @@ inline constexpr char kTfConcreteFunctionHandleMimeType[] =
     "application/protobuf; "
     "type=orbax_model_tf_concrete_function_handle.TfConcreteFunctionHandle";
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CONSTANTS_H_

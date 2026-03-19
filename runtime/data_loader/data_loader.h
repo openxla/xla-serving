@@ -22,7 +22,7 @@
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 // Abstract class for loading data (e.g. params from checkpoint).
 class DataLoader {
@@ -99,6 +99,6 @@ class DataLoaderFactoryRegistry {
       type_to_factory_ ABSL_GUARDED_BY(mu_);
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_DATA_LOADER_H_

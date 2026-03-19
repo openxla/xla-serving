@@ -33,7 +33,7 @@
 // go/lsc-fix-eigen-includes
 // IWYU pragma: no_include "Eigen/src/Core/util/ConfigureVectorization.h"
 
-namespace jsv {
+namespace neptune {
 namespace {
 bool DataTypeCanUseMemCpy(xla::ifrt::DType dtype) {
   switch (dtype.kind()) {
@@ -435,4 +435,4 @@ HostBufferProto HostBuffer::ToHostBufferProto(const HostBuffer& host_buffer) {
   return proto;
 }
 
-}  // namespace jsv
+}  // namespace neptune

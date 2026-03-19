@@ -15,7 +15,7 @@
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 // TODO: Revamp the checkpoint-related tests.
 // Default data loader (i.e. model params loader) for loading params (e.g.
@@ -42,6 +42,6 @@ class DefaultDataLoader : public DataLoader {
   tsl::thread::ThreadPool* absl_nullable checkpoint_loader_thread_pool_;
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_DEFAULT_DATA_LOADER_H_

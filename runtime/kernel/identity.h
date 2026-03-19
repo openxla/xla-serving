@@ -10,7 +10,7 @@
 #include "runtime/kernel/kernel_builder_context.h"  // from @neptune
 #include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
 
-namespace jsv {
+namespace neptune {
 class IdentityKernel : public CancellableKernel {
  public:
   ~IdentityKernel() override = default;
@@ -40,6 +40,6 @@ class IdentityKernel : public CancellableKernel {
 
   int num_host_buffers_;
 };
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_IDENTITY_H_

@@ -8,7 +8,7 @@
 #include "absl/container/btree_map.h"  // from @abseil-cpp
 #include "runtime/core/value.h"  // from @neptune
 
-namespace jsv::type {
+namespace neptune::type {
 
 /* A structured-data (a.k.a. "tree") system (to e.g. represent function
 signatures).
@@ -55,6 +55,6 @@ using Type = Tree;
 // A list of (key, value) pairs for `Tree`.
 using StringTypePairs = std::vector<std::pair<std::string, Type>>;
 
-}  // namespace jsv::type
+}  // namespace neptune::type
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_TYPE_H_

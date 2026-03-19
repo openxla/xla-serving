@@ -21,7 +21,7 @@
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 // Device assignment information from the manifest.
 struct AssignedDevices {
@@ -167,6 +167,6 @@ GetStableHloFunctionsByObjectName(
         manifest_objects,
     absl::string_view function_object_name);
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_MANIFEST_UTILS_H_

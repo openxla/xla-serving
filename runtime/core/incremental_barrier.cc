@@ -6,7 +6,7 @@
 #include "absl/functional/bind_front.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
 
-namespace jsv {
+namespace neptune {
 
 class InternalIncrementalBarrier {
  public:
@@ -46,4 +46,4 @@ IncrementalBarrier::BarrierCallback IncrementalBarrier::Inc() {
   return internal_barrier_->Inc();
 }
 
-}  // namespace jsv
+}  // namespace neptune

@@ -11,7 +11,7 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/value.h"  // from @neptune
 
-namespace jsv::internal {
+namespace neptune::internal {
 
 // Creates a vector of `Value` from a vector of objects. The objects will be
 // moved.
@@ -69,6 +69,6 @@ absl::StatusOr<std::vector<T>> UnpackFromValues(
   return result;
 }
 
-}  // namespace jsv::internal
+}  // namespace neptune::internal
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_VALUE_UTILS_H_

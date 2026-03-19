@@ -14,7 +14,7 @@
 #include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 // TODO b/401364010 - Add unit test for this class.
 
@@ -70,6 +70,6 @@ class StableHlo {
   const std::vector<Spec> specs_;
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_STABLEHLO_H_

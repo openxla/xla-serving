@@ -11,7 +11,7 @@
 #include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
 #include "third_party/py/orbax/export/protos/oex_orchestration.pb.h"
 
-namespace jsv {
+namespace neptune {
 
 // An interface to handle optional (non-StableHLO) functions.
 class OptionalFunctionHandler {
@@ -34,6 +34,6 @@ class OptionalFunctionHandler {
       const orbax_export_orchestration::NamedTensorTypeList* named_outputs) = 0;
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_OPTIONAL_FUNCTION_HANDLER_H_

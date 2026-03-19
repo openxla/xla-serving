@@ -7,7 +7,7 @@
 #include "runtime/data_loader/default_data_loader.h"  // from @neptune
 #include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
 
-namespace jsv {
+namespace neptune {
 namespace {
 
 bool kUnused = []() {
@@ -23,4 +23,4 @@ bool kUnused = []() {
 }();
 
 }  // namespace
-}  // namespace jsv
+}  // namespace neptune

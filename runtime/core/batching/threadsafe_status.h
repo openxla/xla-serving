@@ -5,7 +5,7 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 
-namespace jsv {
+namespace neptune {
 // Wrapper class to allow  concurrent updates on a 'status'.
 //
 // Example Usage:
@@ -36,6 +36,6 @@ class ThreadSafeStatus {
   mutable absl::Mutex mutex_;
   absl::Status status_ ABSL_GUARDED_BY(mutex_);
 };
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_THREADSAFE_STATUS_H_

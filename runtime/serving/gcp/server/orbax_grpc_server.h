@@ -16,7 +16,7 @@
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 namespace serving {
 
 static constexpr char kDefaultServingSignatureDefKey[] = "serving_default";
@@ -70,6 +70,6 @@ class OrbaxGrpcServer final : public jsv::serving::PredictionService::Service {
 };
 
 }  // namespace serving
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_ORBAX_GRPC_SERVER_H_

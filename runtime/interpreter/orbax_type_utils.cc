@@ -6,7 +6,7 @@
 #include "third_party/py/orbax/experimental/model/core/protos/type.pb.h"
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 absl::StatusOr<xla::PrimitiveType> ToPrimitiveType(
     orbax_model_type::DType type) {
@@ -55,4 +55,4 @@ absl::StatusOr<xla::PrimitiveType> ToPrimitiveType(
   }
 }
 
-}  // namespace jsv
+}  // namespace neptune

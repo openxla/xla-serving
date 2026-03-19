@@ -58,7 +58,7 @@
 #include "tsl/platform/context.h"  // from @tsl
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
-namespace jsv {
+namespace neptune {
 namespace {
 
 // Move this to a util.
@@ -972,4 +972,4 @@ void BatchResourceBase::SplitBatchCostsAndRecordMetrics(
   }
 }
 
-}  // namespace jsv
+}  // namespace neptune

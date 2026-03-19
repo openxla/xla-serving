@@ -8,7 +8,7 @@
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 
-namespace jsv {
+namespace neptune {
 
 class Value;
 
@@ -402,6 +402,6 @@ bool Value::IsType() const {
                   nullptr) == value_internal::GetTypeInfo<T>();
 }
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_VALUE_H_

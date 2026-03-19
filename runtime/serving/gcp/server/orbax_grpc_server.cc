@@ -42,7 +42,7 @@
 ABSL_FLAG(std::string, orbax_grpc_server_platform, "cpu",
           "The platform to use. It can be cpu, tpu, or cuda.");
 
-namespace jsv {
+namespace neptune {
 namespace serving {
 
 namespace {
@@ -207,4 +207,4 @@ grpc::Status OrbaxGrpcServer::GetModelMetadata(
 }
 
 }  // namespace serving
-}  // namespace jsv
+}  // namespace neptune

@@ -12,7 +12,7 @@
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 namespace serving {
 
 // Creates gRPC server credentials based on the provided flags.
@@ -88,4 +88,4 @@ CreateChannelCredentials(std::string server_cert_chain_path,
 }
 
 }  // namespace serving
-}  // namespace jsv
+}  // namespace neptune

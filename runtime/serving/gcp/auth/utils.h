@@ -8,7 +8,7 @@
 #include "include/grpcpp/security/credentials.h"  // from @com_github_grpc_grpc
 #include "include/grpcpp/security/server_credentials.h"  // from @com_github_grpc_grpc
 
-namespace jsv {
+namespace neptune {
 namespace serving {
 
 // Creates gRPC server credentials based on the provided flags.
@@ -24,6 +24,6 @@ CreateChannelCredentials(std::string server_cert_chain_path,
                          bool use_insecure_grpc_credentials);
 
 }  // namespace serving
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_AUTH_UTILS_H_

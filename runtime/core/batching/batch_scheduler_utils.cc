@@ -8,7 +8,7 @@
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 
-namespace jsv {
+namespace neptune {
 
 int GetNextAllowedBatchSize(int batch_size,
                             const std::vector<int32_t>& allowed_batch_sizes,
@@ -52,4 +52,4 @@ int32_t GetPrevAllowedBatchSize(int batch_size,
   return *result;
 }
 
-}  // namespace jsv
+}  // namespace neptune

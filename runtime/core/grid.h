@@ -7,7 +7,7 @@
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 
-namespace jsv {
+namespace neptune {
 
 // Coordinates that identify a particular point in a 4-d grid (usually a TPU
 // topology).
@@ -55,6 +55,6 @@ struct GridCoords {
   }
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_GRID_H_

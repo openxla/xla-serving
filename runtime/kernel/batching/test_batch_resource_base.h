@@ -23,7 +23,7 @@
 #include "runtime/kernel/kernel.h"  // from @neptune
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 class TestBatchResourceBase : public BatchResourceBase {
  public:
@@ -141,6 +141,6 @@ class TestJsvBatchResource : public JsvBatchResource {
   absl::flat_hash_set<int32_t> allowed_batch_sizes_;
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_TEST_BATCH_RESOURCE_BASE_H_

@@ -35,7 +35,7 @@
 #include "xla/xla_data.pb.h"  // from @xla
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
-namespace jsv {
+namespace neptune {
 
 absl::StatusOr<std::unique_ptr<Kernel>> StableHloRunnerOp::Create(
     const KernelBuilderContext& context) {
@@ -135,4 +135,4 @@ absl::Status StableHloRunnerOp::RunInternal(ExecuteContext& context) {
   return absl::OkStatus();
 }
 
-}  // namespace jsv
+}  // namespace neptune

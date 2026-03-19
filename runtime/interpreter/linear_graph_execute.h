@@ -16,7 +16,7 @@
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 // In this file, we use the term "linear graph" to refer to a graph of kernels
 // that are executed sequentially, aka, each node corresponds to one jsv kernel.
@@ -44,6 +44,6 @@ tsl::Future<std::vector<Value>> AsyncExecuteLinearGraph(
     absl::Span<const std::unique_ptr<Kernel>> graph,
     tsl::thread::ThreadPool* thread_pool, absl::string_view model_name,
     int64_t model_version);
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_LINEAR_GRAPH_EXECUTE_H_

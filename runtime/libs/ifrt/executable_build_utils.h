@@ -20,7 +20,7 @@
 #include "xla/service/computation_placer.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 constexpr absl::string_view kMissingProgramFingerprint =
     "MISSING_PROGRAM_FINGERPRINT";
@@ -50,6 +50,6 @@ std::string GetProgramFingerprintWithTimestamp(
     absl_nonnull xla::ifrt::LoadedExecutableRef ifrt_executable,
     absl::Time now);
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_EXECUTABLE_BUILD_UTILS_H_

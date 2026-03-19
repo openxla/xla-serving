@@ -13,7 +13,7 @@
 #include "runtime/kernel/kernel_builder_context.h"  // from @neptune
 #include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
 
-namespace jsv {
+namespace neptune {
 
 // A kernel that runs a StableHlo computation.
 // It takes a list of `jsv::HostBuffer` as inputs and outputs.
@@ -64,6 +64,6 @@ class StableHloRunnerOp : public CancellableKernel {
   std::unique_ptr<FlatSignature> output_signature_;
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_STABLEHLO_RUNNER_OP_H_

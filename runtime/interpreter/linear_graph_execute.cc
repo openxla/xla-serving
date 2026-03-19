@@ -24,7 +24,7 @@
 #include "tsl/profiler/lib/context_types.h"  // from @tsl
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
-namespace jsv {
+namespace neptune {
 
 namespace {
 
@@ -234,4 +234,4 @@ tsl::Future<std::vector<Value>> AsyncExecuteLinearGraph(
   return async_results;
 }
 
-}  // namespace jsv
+}  // namespace neptune

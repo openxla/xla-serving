@@ -3,7 +3,7 @@
 
 #include "absl/time/time.h"  // from @abseil-cpp
 
-namespace jsv {
+namespace neptune {
 
 // Per-request options for running a model. This struct is part of the public
 // API, and, thus, adding new fields should be done with caution since they may
@@ -13,6 +13,6 @@ struct RunOptions {
   absl::Time deadline = absl::InfiniteFuture();
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_RUN_OPTIONS_H_

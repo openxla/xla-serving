@@ -36,7 +36,7 @@
 // go/lsc-fix-eigen-includes
 // IWYU pragma: no_include "Eigen/src/Core/util/ConfigureVectorization.h"
 
-namespace jsv {
+namespace neptune {
 
 // Converts xla::ifrt::Shape to Eigen::DSizes.
 template <int NDIMS, typename IndexType = Eigen::DenseIndex>
@@ -482,6 +482,6 @@ absl::StatusOr<HostBuffer> Concat(
     tsl::thread::ThreadPool* threadpool, absl::Span<const HostBuffer> inputs,
     Allocator* allocator = DefaultAllocator::GetInstance());
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_HOST_BUFFER_H_

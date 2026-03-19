@@ -6,7 +6,7 @@
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 // Converts an `orbax_model_type::DType` to `xla::PrimitiveType`.
 absl::StatusOr<xla::PrimitiveType> ToPrimitiveType(
@@ -15,6 +15,6 @@ absl::StatusOr<xla::PrimitiveType> ToPrimitiveType(
 // Converts an `orbax_model_type::DType` to `xla::ifrt::DType`.
 absl::StatusOr<xla::ifrt::DType> ToIfrtDType(orbax_model_type::DType type);
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_ORBAX_TYPE_UTILS_H_

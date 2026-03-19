@@ -22,13 +22,13 @@
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 // Represents the shape of an input or output. Any dimension that is not set is
 // assumed to be dynamic. We just use the same type that we get out of the MLIR
 // library for this, it can be assumed to behave like a
 // std::vector<std::optional<int64_t>>, where std::nullopt means dynamic.
-using ArgShape = jsv::sharding_internal::MlirShape;
+using ArgShape = sharding_internal::MlirShape;
 
 struct ArgSpec {
   xla::ifrt::DType dtype;
@@ -145,6 +145,6 @@ absl::Status InputShapeEqual(ArgShape stablehlo_input_shape,
 // function for anything else.
 xla::ifrt::Shape ToIfrtShape(const ArgShape& shape);
 
-};  // namespace jsv
+};  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_STABLEHLO_UTILS_H_

@@ -45,7 +45,7 @@
 #include "absl/synchronization/notification.h"  // from @abseil-cpp
 #include "xla/tsl/platform/env.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 namespace internal {
 class PeriodicFunctionTestAccess;
@@ -106,6 +106,6 @@ class PeriodicFunction {
   void operator=(const PeriodicFunction&) = delete;
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_PERIODIC_FUNCTION_H_

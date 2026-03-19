@@ -62,7 +62,7 @@
 ABSL_FLAG(bool, jsv_enable_parallel_loading_pipelines, true,
           "When set to true, load the pipelines in parallel.");
 
-namespace jsv {
+namespace neptune {
 
 using orbax_export_orchestration::BatchOptions;
 
@@ -1165,4 +1165,4 @@ absl::Status Interpreter::MarkFullyInitialized() {
   return absl::OkStatus();
 }
 
-}  // namespace jsv
+}  // namespace neptune

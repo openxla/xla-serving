@@ -8,7 +8,7 @@
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 // An interface for optimizing StableHLO models. All implementation must be
 // thread-safe and stateless.
@@ -25,6 +25,6 @@ class StablehloOptimizer {
   virtual absl::Status Optimize(const Args& args, mlir::ModuleOp module);
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_STABLEHLO_OPTIMIZER_H_

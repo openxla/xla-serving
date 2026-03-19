@@ -3,7 +3,7 @@
 
 #include <cstddef>
 
-namespace jsv {
+namespace neptune {
 
 // An interface for allocating memory.
 class Allocator {
@@ -19,6 +19,6 @@ class Allocator {
   virtual ~Allocator() = default;
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_ALLOCATOR_H_

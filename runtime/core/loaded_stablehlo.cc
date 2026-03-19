@@ -29,7 +29,7 @@
 #include "xla/xla_data.pb.h"  // from @xla
 
 // TODO: Add unit tests for this file.
-namespace jsv {
+namespace neptune {
 
 namespace {
 
@@ -170,13 +170,13 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
     // StableHLOs.
     //
     // Deserialize the string to the MLIR module.
-    auto loader = std::make_unique<jsv::StableHloLoader>();
+    auto loader = std::make_unique<StableHloLoader>();
     TF_ASSIGN_OR_RETURN(auto module, loader->Load(spec.mlir_module_string));
     if (!module) {
       return absl::FailedPreconditionError("Failed to load StableHlo module");
     }
     if (VLOG_IS_ON(1)) {
-      jsv::DumpMlirOpToFile("stablehlo_module_origin", module.get());
+      DumpMlirOpToFile("stablehlo_module_origin", module.get());
     }
 
     // If the StableHLO module is exported for multiple platforms, set the
@@ -347,4 +347,4 @@ void LoadedStableHlo::ReleaseAllModules() {
   }
 }
 
-}  // namespace jsv
+}  // namespace neptune

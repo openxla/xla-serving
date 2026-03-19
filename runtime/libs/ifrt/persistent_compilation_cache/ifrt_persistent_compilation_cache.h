@@ -11,7 +11,7 @@
 #include "xla/python/ifrt/hlo/hlo_program.h"  // from @xla
 #include "xla/python/ifrt/program.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 class IfrtPersistentCompilationCache {
  public:
@@ -34,6 +34,6 @@ class IfrtPersistentCompilationCache {
           value_fn);
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_PERSISTENT_COMPILATION_CACHE_IFRT_PERSISTENT_COMPILATION_CACHE_H_

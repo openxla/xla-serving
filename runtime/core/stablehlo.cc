@@ -17,7 +17,7 @@
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 namespace {
 
@@ -73,4 +73,4 @@ absl::StatusOr<std::unique_ptr<StableHlo>> StableHlo::Create(
   return absl::WrapUnique(new StableHlo(std::move(specs)));
 }
 
-}  // namespace jsv
+}  // namespace neptune

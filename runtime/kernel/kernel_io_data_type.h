@@ -1,7 +1,7 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_IO_DATA_TYPE_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_IO_DATA_TYPE_H_
 
-namespace jsv {
+namespace neptune {
 
 // The data type of the kernel input and output. This is the data type wrapped
 // by `jsv::Value`.
@@ -11,6 +11,6 @@ enum class KernelIODataType {
   kHostBuffer,  // `jsv::HostBuffer`
   kTensor,      // `tensorflow::Tensor`
 };
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_IO_DATA_TYPE_H_

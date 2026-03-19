@@ -19,7 +19,7 @@
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 std::string MetaArgSpec::DebugString() const {
   return absl::StrFormat("MetaArgSpec: %s, name: %s, has_default_value: %v, ",
@@ -207,4 +207,4 @@ absl::StatusOr<std::vector<std::string>> FlatSignature::GetAllNames() const {
   return all_names;
 }
 
-}  // namespace jsv
+}  // namespace neptune

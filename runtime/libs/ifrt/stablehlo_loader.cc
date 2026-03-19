@@ -26,7 +26,7 @@
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 absl::StatusOr<mlir::OwningOpRef<mlir::ModuleOp>> StableHloLoader::Load(
     absl::string_view stablehlo_str) {
   // Load a superset of dialects; we should check at serialization time that
@@ -62,4 +62,4 @@ absl::StatusOr<mlir::OwningOpRef<mlir::ModuleOp>> StableHloLoader::LoadFromFile(
   return Load(stablehlo_str);
 }
 
-}  // namespace jsv
+}  // namespace neptune

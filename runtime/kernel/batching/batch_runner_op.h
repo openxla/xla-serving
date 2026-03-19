@@ -25,7 +25,7 @@
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "tsl/platform/refcount.h"  // from @tsl
-namespace jsv {
+namespace neptune {
 
 struct BatchRunnerOpOptions {
   int num_batch_threads = 0;
@@ -118,6 +118,6 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateBatchRunnerOp(
     std::vector<std::unique_ptr<Kernel>> kernels,
     const BatchRunnerOpOptions& options, tsl::thread::ThreadPool* thread_pool);
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_BATCH_RUNNER_OP_H_

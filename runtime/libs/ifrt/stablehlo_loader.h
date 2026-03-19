@@ -7,7 +7,7 @@
 #include "mlir/include/mlir/IR/MLIRContext.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/OwningOpRef.h"  // from @llvm-project
 
-namespace jsv {
+namespace neptune {
 
 class StableHloLoader {
  public:
@@ -24,6 +24,6 @@ class StableHloLoader {
   mlir::MLIRContext context_{mlir::MLIRContext::Threading::ENABLED};
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_STABLEHLO_LOADER_H_

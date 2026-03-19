@@ -43,7 +43,7 @@
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace jsv::sharding_internal {
+namespace neptune::sharding_internal {
 namespace {
 
 // Shard the given `input_buffer` into equal shapes of slices.
@@ -744,4 +744,4 @@ absl::StatusOr<HostBuffer> MakeHostBufferFromDisassembledBuffers(
   return output_buffer;
 }
 
-}  // namespace jsv::sharding_internal
+}  // namespace neptune::sharding_internal

@@ -15,7 +15,7 @@
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "tsl/platform/protobuf.h"  // from @tsl
 
-namespace jsv {
+namespace neptune {
 
 // LINT.IfChange(InterpreterCreateOptions)
 // The options to create the interpreter. This is a virtual class to allow
@@ -44,8 +44,8 @@ struct InterpreterCreateOptions {
   int min_num_batch_threads = 1;
   int min_max_enqueued_batches = 1;
   std::unique_ptr<StablehloOptimizer> optimizer = nullptr;
-  // The default allocator is jsv::DefaultAllocator. It can be overridden to a
-  // custom allocator which extends jsv::Allocator.
+  // The default allocator is DefaultAllocator. It can be overridden to a
+  // custom allocator which extends Allocator.
   Allocator* absl_nonnull allocator = DefaultAllocator::GetInstance();
   // The platform name to use for `xla::ExecutableBuildOptions`. If not set,
   // the default platform name will be "TPU".
@@ -65,10 +65,10 @@ struct InterpreterCreateOptions {
       nullptr;
   // Persistent compilation cache for single-host serving. If nullptr, the
   // compilation cache is disabled.
-  std::unique_ptr<jsv::IfrtPersistentCompilationCache>
+  std::unique_ptr<IfrtPersistentCompilationCache>
       persistent_compilation_cache = nullptr;
 };
 // LINT.ThenChange(//depot//third_party/neptune/runtime/interpreter/interpreter.cc:InterpreterCreateOptionsValidation)
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_INTERPRETER_CREATE_OPTIONS_H_

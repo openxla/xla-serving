@@ -31,7 +31,7 @@
 
 using llvm::raw_ostream;
 
-namespace jsv {
+namespace neptune {
 namespace {
 
 struct NameCounts {
@@ -205,4 +205,4 @@ std::string GetDumpDirFromEnvVar() {
   }
   return result;
 }
-}  // namespace jsv
+}  // namespace neptune

@@ -14,7 +14,7 @@
 #include "runtime/core/value.h"  // from @neptune
 #include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
 
-namespace jsv {
+namespace neptune {
 
 // An enhanced version of `ArgSpec` that contains more information about the
 // argument.
@@ -114,6 +114,6 @@ struct FunctionFlatSignature {
   FlatSignature output_signature;
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_FLAT_SIGNATURE_H_

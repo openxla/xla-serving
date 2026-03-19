@@ -45,13 +45,13 @@
 #include "xla/xla_data.pb.h"  // from @xla
 #include "tsl/platform/path.h"  // from @tsl
 
-namespace jsv {
+namespace neptune {
 
-using ::jsv::type::Dict;
-using ::jsv::type::None;
-using ::jsv::type::StringTypePairs;
-using ::jsv::type::Tuple;
-using ::jsv::type::Type;
+using type::Dict;
+using type::None;
+using type::StringTypePairs;
+using type::Tuple;
+using type::Type;
 
 namespace {
 
@@ -799,4 +799,4 @@ GetStableHloFunctionsByObjectName(
   return functions;
 }
 
-}  // namespace jsv
+}  // namespace neptune

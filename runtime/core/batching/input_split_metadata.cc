@@ -6,7 +6,7 @@
 #include "absl/container/fixed_array.h"  // from @abseil-cpp
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 
-namespace jsv {
+namespace neptune {
 namespace internal {
 namespace {
 int compute_task_size_from_open_batch(int input_task_size,
@@ -80,4 +80,4 @@ absl::FixedArray<int> InputSplitMetadata::generate_task_sizes(
   return task_sizes;
 }
 }  // namespace internal
-}  // namespace jsv
+}  // namespace neptune

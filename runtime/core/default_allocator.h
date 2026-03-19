@@ -8,7 +8,7 @@
 #include "absl/base/no_destructor.h"  // from @abseil-cpp
 #include "runtime/core/allocator.h"  // from @neptune
 
-namespace jsv {
+namespace neptune {
 
 // An allocator that allocates host memory.
 class DefaultAllocator : public Allocator {
@@ -31,6 +31,6 @@ class DefaultAllocator : public Allocator {
   DefaultAllocator() = default;
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DEFAULT_ALLOCATOR_H_

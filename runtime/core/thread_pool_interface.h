@@ -9,7 +9,7 @@
 #include "unsupported/Eigen/CXX11/ThreadPool"
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 using SchedulingParams = tsl::thread::ThreadPool::SchedulingParams;
 
@@ -37,6 +37,6 @@ class ThreadPoolInterface {
   virtual ~ThreadPoolInterface() = default;
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_THREAD_POOL_INTERFACE_H_

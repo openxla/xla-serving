@@ -18,7 +18,7 @@
 #include "xla/tsl/platform/macros.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
-namespace jsv::sharding_internal {
+namespace neptune::sharding_internal {
 
 // Validates the input shape for slicing.
 absl::Status ValidateShapesForSlice(absl::string_view input_name,
@@ -436,6 +436,6 @@ class XlaNDConcatenator {
   }
 };
 
-}  // namespace jsv::sharding_internal
+}  // namespace neptune::sharding_internal
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_SHARDING_UTILS_CORE_H_

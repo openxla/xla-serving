@@ -11,7 +11,7 @@
 #include "mlir/include/mlir/IR/Operation.h"  // from @llvm-project
 #include "mlir/include/mlir/Pass/PassManager.h"  // from @llvm-project
 
-namespace jsv {
+namespace neptune {
 
 inline constexpr absl::string_view kCrashReproducerStdErr = "-";
 inline constexpr absl::string_view kCrashReproducerCrashAnalysis =
@@ -54,6 +54,6 @@ std::string GetDumpDirFromEnvVar();
 // Prints the pass pipeline of `pass_manager` to `os`.
 void PrintPassPipeline(const mlir::PassManager& pass_manager,
                        mlir::Operation* op, llvm::raw_ostream& os);
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_MLIR_DUMP_MLIR_UTIL_H_

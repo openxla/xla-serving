@@ -8,7 +8,7 @@
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
 #include "third_party/py/orbax/export/protos/oex_orchestration.pb.h"
 
-namespace jsv {
+namespace neptune {
 
 using orbax_export_orchestration::BatchOptions;
 
@@ -27,6 +27,6 @@ absl::StatusOr<std::string> GetBatchPaddingPolicyString(
 absl::StatusOr<MixedPriorityBatchingPolicy> GetMixedPriorityBatchingPolicy(
     BatchOptions::MixedPriorityBatchingPolicy mixed_priority_batching_policy);
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_BATCH_OPTIONS_UTILS_H_

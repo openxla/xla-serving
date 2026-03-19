@@ -11,7 +11,7 @@
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "xla/tsl/platform/logging.h"  // from @xla  // IWYU pragma: keep
 
-namespace jsv::sharding_internal {
+namespace neptune::sharding_internal {
 
 absl::Status ValidateShapesForSlice(absl::string_view input_name,
                                     const HostBuffer* input,
@@ -209,4 +209,4 @@ Eigen::DSizes<Eigen::DenseIndex, 8> GetSliceIndices(
   return subscript;
 }
 
-}  // namespace jsv::sharding_internal
+}  // namespace neptune::sharding_internal

@@ -10,7 +10,7 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "runtime/core/value.h"  // from @neptune
 
-namespace jsv {
+namespace neptune {
 
 class KernelBuilderContext {
  public:
@@ -44,6 +44,6 @@ class KernelBuilderContext {
   absl::flat_hash_map<std::string, Value> configs_;
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_BUILDER_CONTEXT_H_

@@ -31,7 +31,7 @@
 #include "third_party/py/orbax/export/protos/oex_orchestration.pb.h"
 #include "xla/tsl/concurrency/future.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 using KernelGraph = std::vector<std::unique_ptr<Kernel>>;
 
@@ -241,6 +241,6 @@ class Interpreter {
   absl::flat_hash_map<std::string, std::unique_ptr<GraphBundle>> graph_bundles_;
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_INTERPRETER_H_

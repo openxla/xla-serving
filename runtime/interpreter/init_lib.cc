@@ -2,7 +2,7 @@
 #include "runtime/kernel/builtin_kernel.h"  // from @neptune
 #include "runtime/kernel/kernel.h"  // from @neptune
 
-namespace jsv {
+namespace neptune {
 namespace {
 
 // TODO: Find a better way to register the kernels
@@ -18,4 +18,4 @@ static const bool kUnused = []() {
 
 }  // namespace
 
-}  // namespace jsv
+}  // namespace neptune

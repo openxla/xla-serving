@@ -5,7 +5,7 @@
 #include "absl/time/clock.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
 
-namespace jsv {
+namespace neptune {
 
 class Clock {
  public:
@@ -26,6 +26,6 @@ class RealClock : public Clock {
   }
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_CLOCK_H_

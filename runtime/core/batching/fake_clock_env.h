@@ -10,7 +10,7 @@
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "tsl/platform/thread_annotations.h"  // from @tsl
 
-namespace jsv {
+namespace neptune {
 namespace test_util {
 
 // An Env implementation with a fake clock for NowMicros() and
@@ -52,6 +52,6 @@ class FakeClockEnv : public tsl::EnvWrapper {
 };
 
 }  // namespace test_util
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_FAKE_CLOCK_ENV_H_

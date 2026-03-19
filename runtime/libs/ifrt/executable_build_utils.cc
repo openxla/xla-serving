@@ -23,7 +23,7 @@
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 namespace {
 
@@ -130,4 +130,4 @@ std::string GetProgramFingerprintWithTimestamp(
                       kProgramFingerprintAndTimestampDelimiter, now_timestamp);
 }
 
-}  // namespace jsv
+}  // namespace neptune

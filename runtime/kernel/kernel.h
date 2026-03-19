@@ -20,7 +20,7 @@
 #include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
 #include "xla/tsl/concurrency/future.h"  // from @xla
 
-namespace jsv {
+namespace neptune {
 
 // Kernel interface definition. All kernels should implement this interface.
 class Kernel {
@@ -135,6 +135,6 @@ class KernelRegistry {
 
 KernelRegistry& GetGlobalKernelRegistry();
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_H_

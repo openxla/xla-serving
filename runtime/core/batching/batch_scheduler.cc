@@ -5,7 +5,7 @@
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 
-namespace jsv {
+namespace neptune {
 
 absl::StatusOr<MixedPriorityBatchingPolicy> GetMixedPriorityBatchingPolicy(
     absl::string_view attr_value) {
@@ -24,4 +24,4 @@ absl::StatusOr<MixedPriorityBatchingPolicy> GetMixedPriorityBatchingPolicy(
       "Unknown mixed priority batching policy: %s", attr_value));
 }
 
-}  // namespace jsv
+}  // namespace neptune

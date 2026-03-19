@@ -32,7 +32,7 @@
 #include "tsl/platform/context.h"  // from @tsl
 #include "tsl/platform/thread_annotations.h"  // from @tsl
 
-namespace jsv {
+namespace neptune {
 
 // Base class for resource that encapsulating the state and logic for batching
 // host buffers.
@@ -319,6 +319,6 @@ class BatchResourceBase : public ResourceBase {
   tsl::thread::ThreadPool* thread_pool_;
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_BATCH_RESOURCE_BASE_H_

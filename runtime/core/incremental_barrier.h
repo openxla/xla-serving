@@ -5,7 +5,7 @@
 
 #include "absl/functional/any_invocable.h"  // from @abseil-cpp
 
-namespace jsv {
+namespace neptune {
 
 class InternalIncrementalBarrier;
 
@@ -62,6 +62,6 @@ class IncrementalBarrier {
   InternalIncrementalBarrier* internal_barrier_;
 };
 
-}  // namespace jsv
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INCREMENTAL_BARRIER_H_

@@ -9,7 +9,7 @@
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "tsl/platform/path.h"  // from @tsl
 
-namespace jsv {
+namespace neptune {
 
 absl::Status IsOrbaxModelDirectory(absl::string_view path) {
   const std::string orbax_model_manifest_version_path =
@@ -19,4 +19,4 @@ absl::Status IsOrbaxModelDirectory(absl::string_view path) {
   return absl::OkStatus();
 }
 
-}  // namespace jsv
+}  // namespace neptune
