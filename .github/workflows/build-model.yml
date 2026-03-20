@@ -9,7 +9,7 @@ on:
 
 jobs:
   build-and-test:
-    name: "build-model (Python ${{ matrix.python-version }})"
+    name: "build-model (Python ${{ matrix.python-version }}, jax ${{ matrix.jax-version }})"
     runs-on: ubuntu-latest
     strategy:
       matrix:
