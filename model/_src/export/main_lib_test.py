@@ -21,12 +21,12 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
   def test_save_model_with_one_config(self):
     """Tests that save() runs."""
     model = jax_model.JaxModel(
-        apply_fn=lambda params, x: x * params['w'],
+        apply_fn=lambda params, inputs: {'out': inputs['x'] * params['w']},
         params={'w': jnp.array([2.0], dtype=jnp.float32)},
     )
     cfg = serving_config.ServingConfig(
         serving_signature='serving_default',
-        input_signature=jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.float32),
+        input_signature={'x': jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.float32)},
     )
     export_path = self.create_tempdir().full_path
     main_lib.save(
@@ -77,16 +77,23 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
                           }
                         }
                         elements {
-                          leaf {
-                            tensor_type {
-                              shape {
-                                shape_with_known_rank {
-                                  dimension_sizes {
-                                    size: 4
+                          dict {
+                            string_to_type {
+                              key: "x"
+                              value {
+                                leaf {
+                                  tensor_type {
+                                    shape {
+                                      shape_with_known_rank {
+                                        dimension_sizes {
+                                          size: 4
+                                        }
+                                      }
+                                    }
+                                    dtype: f32
                                   }
                                 }
                               }
-                              dtype: f32
                             }
                           }
                         }
@@ -99,16 +106,23 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
                   }
                 }
                 output {
-                  leaf {
-                    tensor_type {
-                      shape {
-                        shape_with_known_rank {
-                          dimension_sizes {
-                            size: 4
+                  dict {
+                    string_to_type {
+                      key: "out"
+                      value {
+                        leaf {
+                          tensor_type {
+                            shape {
+                              shape_with_known_rank {
+                                dimension_sizes {
+                                  size: 4
+                                }
+                              }
+                            }
+                            dtype: f32
                           }
                         }
                       }
-                      dtype: f32
                     }
                   }
                 }
@@ -121,7 +135,7 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
           key: "orchestration"
           value {
             file_system_location {
-              string_path: "orchestration"
+              string_path: "orchestration.pb"
             }
             mime_type: "application/protobuf; type=neptune_orchestration.Pipelines"
             version: "0.0.1"
@@ -140,6 +154,94 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
         name_to_pipeline {
           key: "serving_default"
           value {
+            signature {
+              input {
+                tuple {
+                  elements {
+                    tuple {
+                      elements {
+                        dict {
+                          string_to_type {
+                            key: "x"
+                            value {
+                              leaf {
+                                tensor_type {
+                                  shape {
+                                    shape_with_known_rank {
+                                      dimension_sizes {
+                                        size: 4
+                                      }
+                                    }
+                                  }
+                                  dtype: f32
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                  elements {
+                    dict {
+                    }
+                  }
+                }
+              }
+              output {
+                dict {
+                  string_to_type {
+                    key: "out"
+                    value {
+                      leaf {
+                        tensor_type {
+                          shape {
+                            shape_with_known_rank {
+                              dimension_sizes {
+                                size: 4
+                              }
+                            }
+                          }
+                          dtype: f32
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            named_signature {
+              inputs {
+                named_tensor_types {
+                  name: "x"
+                  tensor_type {
+                    shape {
+                      shape_with_known_rank {
+                        dimension_sizes {
+                          size: 4
+                        }
+                      }
+                    }
+                    dtype: f32
+                  }
+                }
+              }
+              outputs {
+                named_tensor_types {
+                  name: "out"
+                  tensor_type {
+                    shape {
+                      shape_with_known_rank {
+                        dimension_sizes {
+                          size: 4
+                        }
+                      }
+                    }
+                    dtype: f32
+                  }
+                }
+              }
+            }
             components {
               role: ROLE_MODEL
               function_name: "serving_default"

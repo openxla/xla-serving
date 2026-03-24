@@ -1,5 +1,4 @@
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
-load("//devtools/python/blaze:strict.bzl", "py_strict_test")
 
 package(default_visibility = ["//third_party/neptune/model:__subpackages__"])
 
@@ -217,7 +216,7 @@ py_library(
     ],
 )
 
-py_strict_test(
+pytype_strict_test(
     name = "manifest_utils_test",
     srcs = ["manifest_utils_test.py"],
     deps = [
@@ -230,7 +229,7 @@ py_strict_test(
     ],
 )
 
-py_strict_test(
+pytype_strict_test(
     name = "persistence_lib_test",
     srcs = ["persistence_lib_test.py"],
     deps = [
@@ -247,5 +246,30 @@ py_strict_test(
         "//third_party/neptune/protos:manifest_py_pb2",
         "//third_party/neptune/protos:type_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
+    ],
+)
+
+py_library(
+    name = "orchestration_proto_utils",
+    srcs = ["orchestration_proto_utils.py"],
+    deps = [
+        ":constants",
+        ":shlo_type",
+        ":type_proto_utils",
+        "//third_party/neptune/protos:manifest_py_pb2",
+        "//third_party/neptune/protos:orchestration_py_pb2",
+        "@jax",
+        "@jaxtyping",
+    ],
+)
+
+pytype_strict_test(
+    name = "orchestration_proto_utils_test",
+    srcs = ["orchestration_proto_utils_test.py"],
+    deps = [
+        ":orchestration_proto_utils",
+        ":shlo_type",
+        "@com_google_absl_py//absl/testing:absltest",
+        "@com_google_absl_py//absl/testing:parameterized",
     ],
 )
