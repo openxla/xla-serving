@@ -11,13 +11,16 @@ import dataclasses
 from typing import Any
 
 from absl import logging
+import jax
 import jax.export as jax_export
 import jaxtyping
 
 from .third_party.neptune.model._src import jax2npt
+from .third_party.neptune.model._src.core import orchestration_proto_utils
 from .third_party.neptune.model._src.core import persistence_lib
 from .third_party.neptune.model._src.core import saveable
 from .third_party.neptune.model._src.core import shlo_type
+from .third_party.neptune.model._src.core import type_proto_utils
 from .third_party.neptune.model._src.export import constants
 from .third_party.neptune.model._src.export import jax_model
 from .third_party.neptune.model._src.export import serving_config
@@ -38,6 +41,7 @@ class NeptuneModelSaveBundle:
   manifest_objects: dict[str, saveable.Saveable] = dataclasses.field(
       default_factory=dict
   )
+  model_params: jaxtyping.PyTree[shlo_type.ShloTensorSpec] | None = None
   pipelines: orchestration_pb2.Pipelines = dataclasses.field(
       default_factory=orchestration_pb2.Pipelines
   )
@@ -186,9 +190,16 @@ def _update_save_bundle(
     ValueError: If a node with an unsupported role is encountered.
   """
   components = []
-  for node in pipeline:
+  pipeline_input_signature: (
+      jaxtyping.PyTree[shlo_type.ShloTensorSpec] | None
+  ) = None
+  pipeline_output_signature: (
+      jaxtyping.PyTree[shlo_type.ShloTensorSpec] | None
+  ) = None
+  for i, node in enumerate(pipeline):
+    node_signature: Signature
     if node.role == orchestration_pb2.ROLE_MODEL:
-      _, _ = _update_save_bundle_for_jax_model(
+      node_signature = _update_save_bundle_for_jax_model(
           model=node.node,
           method_key=cfg.method_key,
           input_signature=cfg.input_signature,
@@ -205,10 +216,29 @@ def _update_save_bundle(
       )
     else:
       raise ValueError(f"Unsupported role: {node.role}")
+    if i == 0:
+      pipeline_input_signature = node_signature[0]
+    if i == len(pipeline) - 1:
+      pipeline_output_signature = node_signature[1]
 
-  save_bundle.pipelines.name_to_pipeline[
-      cfg.serving_signature
-  ].components.extend(components)
+  assert pipeline_input_signature is not None
+  assert pipeline_output_signature is not None
+  pipeline_proto = orchestration_pb2.Pipeline()
+  pipeline_proto.signature.CopyFrom(
+      type_proto_utils.to_function_signature_proto(
+          pipeline_input_signature, pipeline_output_signature
+      )
+  )
+  pipeline_proto.named_signature.CopyFrom(
+      orchestration_proto_utils.to_named_signature_proto(
+          pipeline_input_signature, pipeline_output_signature
+      )
+  )
+  pipeline_proto.components.extend(components)
+
+  save_bundle.pipelines.name_to_pipeline[cfg.serving_signature].CopyFrom(
+      pipeline_proto
+  )
 
 
 def save(
@@ -242,7 +272,12 @@ def save(
       version=2,
       supplementals={
           constants.ORCHESTRATION_SUPPLEMENTAL_NAME: (
-              utils.build_orchestration_supplemental(save_bundle.pipelines)
+              persistence_lib.GlobalSupplemental(
+                  orchestration_proto_utils.serialize_pipelines_proto(
+                      save_bundle.pipelines
+                  ),
+                  constants.DEFAULT_ORCHESTRATION_SUPPLEMENTAL_FILENAME,
+              )
           )
       },
   )

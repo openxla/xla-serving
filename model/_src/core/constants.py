@@ -25,3 +25,15 @@ MANIFEST_VERSION = '0.0.1'
 MANIFEST_MIME_TYPE = (
     'application/protobuf; type=neptune_model_manifest.Manifest'
 )
+
+################################################################################
+# Orchestration constants
+################################################################################
+
+ORCHESTRATION_MULTI_PIPELINE_MIME_TYPE = (
+    'application/protobuf; type=neptune_orchestration.Pipelines'
+)
+ORCHESTRATION_MULTI_PIPELINE_VERSION = '0.0.1'
+# The filename of the orchestration proto file relative to the save
+# directory.
+DEFAULT_SUPPLEMENTAL_FILENAME = 'orchestration.pb'

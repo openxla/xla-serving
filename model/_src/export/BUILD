@@ -13,9 +13,11 @@ py_library(
         "@com_google_absl_py//absl/logging",
         "@jax",
         "@jaxtyping",
+        "@neptune//model/_src/core:orchestration_proto_utils",
         "@neptune//model/_src/core:persistence_lib",
         "@neptune//model/_src/core:saveable",
         "@neptune//model/_src/core:shlo_type",
+        "@neptune//model/_src/core:type_proto_utils",
         "@neptune//model/_src/jax2npt:__init__",
         "@neptune//protos:orchestration_py_pb2",
     ],
@@ -50,14 +52,10 @@ py_library(
     name = "utils",
     srcs = ["utils.py"],
     deps = [
-        ":constants",
         ":jax_model",
         "@jax",
         "@jaxtyping",
-        "@neptune//model/_src/core:persistence_lib",
         "@neptune//model/_src/jax2npt:typing",
-        "@neptune//protos:manifest_py_pb2",
-        "@neptune//protos:orchestration_py_pb2",
     ],
 )
 
