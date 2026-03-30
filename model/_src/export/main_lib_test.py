@@ -131,6 +131,21 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
             }
           }
         }
+        objects {
+          key: "weights"
+          value {
+            value {
+              external {
+                data {
+                  file_system_location {
+                    string_path: "checkpoint"
+                  }
+                  mime_type: "application/x.orbax-checkpoint"
+                }
+              }
+            }
+          }
+        }
         supplemental_info {
           key: "orchestration"
           value {
@@ -254,6 +269,9 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
           expected_pipelines_proto,
           pipelines_proto,
       )
+
+    with self.subTest(name='checkpoint_exists'):
+      self.assertTrue((pathlib.Path(export_path) / 'checkpoint').is_dir())
 
   def test_update_save_bundle_for_jax_model_with_polymorphic_shape(self):
     """Tests that _update_save_bundle_for_jax_model works with polymorphic shapes."""

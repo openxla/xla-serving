@@ -20,6 +20,7 @@ py_library(
         "@com_google_absl_py//absl/logging",
         "@jax",
         "@jaxtyping",
+        "@orbax//:checkpoint",
     ],
 )
 
