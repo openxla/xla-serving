@@ -8,12 +8,14 @@ in Neptune's format.
 
 from collections.abc import Sequence
 import dataclasses
+import pathlib
 from typing import Any
 
 from absl import logging
 import jax
 import jax.export as jax_export
 import jaxtyping
+import orbax.checkpoint as ocp
 
 from .third_party.neptune.model._src import jax2npt
 from .third_party.neptune.model._src.core import orchestration_proto_utils
@@ -268,6 +270,23 @@ def save(
         save_bundle=save_bundle,
     )
 
+  checkpoint_dir = (
+      pathlib.Path(export_path) / constants.DEFAULT_CHECKPOINT_SUBDIR
+  )
+  checkpointer = ocp.Checkpointer(ocp.StandardCheckpointHandler())
+  checkpointer.save(
+      checkpoint_dir,
+      model.params,
+      force=True,
+  )
+  save_module = {
+      constants.WEIGHTS_NAME: jax2npt.convert_path_to_value(
+          constants.DEFAULT_CHECKPOINT_SUBDIR,
+          constants.ORBAX_CHECKPOINT_MIME_TYPE,
+      ),
+      **save_bundle.manifest_objects,
+  }
+
   save_options = persistence_lib.SaveOptions(
       version=2,
       supplementals={
@@ -283,7 +302,7 @@ def save(
   )
 
   persistence_lib.save(
-      module=save_bundle.manifest_objects,
+      module=save_module,
       target_dir=export_path,
       options=save_options,
   )

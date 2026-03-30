@@ -20,6 +20,7 @@ py_library(
         "@neptune//model/_src/core:type_proto_utils",
         "@neptune//model/_src/jax2npt:__init__",
         "@neptune//protos:orchestration_py_pb2",
+        "@orbax//:checkpoint",
     ],
 )
 
