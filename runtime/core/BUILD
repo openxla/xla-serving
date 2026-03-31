@@ -136,6 +136,19 @@ cc_library(
 )
 
 cc_library(
+    name = "h2d_transfer_executor",
+    hdrs = ["h2d_transfer_executor.h"],
+    visibility = [":core_users"],
+    deps = [
+        ":host_buffer",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/types:span",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/tsl/platform:env",
+    ],
+)
+
+cc_library(
     name = "stablehlo_utils",
     srcs = ["stablehlo_utils.cc"],
     hdrs = ["stablehlo_utils.h"],
@@ -181,6 +194,7 @@ cc_library(
     hdrs = ["stablehlo_runner.h"],
     visibility = [":core_users"],
     deps = [
+        ":h2d_transfer_executor",
         ":host_buffer",
         ":ifrt_device_utils",
         ":ifrt_loaded_variable_registry",
@@ -190,6 +204,7 @@ cc_library(
         ":stablehlo_optimizer",
         ":stablehlo_utils",
         ":value",
+        "//monitoring/streamz/public",
         "@com_google_protobuf//:protobuf",
         "@abseil-cpp//absl/base",
         "@abseil-cpp//absl/base:core_headers",
@@ -224,6 +239,7 @@ cc_library(
         "@xla//xla/tsl/concurrency:future",
         "@xla//xla/tsl/concurrency:ref_count",
         "@xla//xla/tsl/framework:serving_device_selector",
+        "@xla//xla/tsl/lib/monitoring:counter",
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",

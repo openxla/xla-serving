@@ -12,7 +12,6 @@
 #include <utility>
 #include <vector>
 
-#include "runtime/interpreter/manifest_utils.h"  // from @neptune
 #include "absl/base/call_once.h"  // from @abseil-cpp
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/base/optimization.h"  // from @abseil-cpp
@@ -29,6 +28,7 @@
 #include "absl/time/clock.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "mlir/include/mlir/IR/OwningOpRef.h"  // from @llvm-project
+#include "runtime/core/h2d_transfer_executor.h"  // from @neptune
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "runtime/core/ifrt_device_utils.h"  // from @neptune
 #include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune
@@ -38,6 +38,7 @@
 #include "runtime/core/stablehlo_optimizer.h"  // from @neptune
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
+#include "runtime/interpreter/manifest_utils.h"  // from @neptune
 #include "runtime/libs/ifrt/executable_build_utils.h"  // from @neptune
 #include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
 #include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @neptune
@@ -62,6 +63,7 @@
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/concurrency/ref_count.h"  // from @xla
 #include "xla/tsl/framework/serving_device_selector.h"  // from @xla
+#include "xla/tsl/lib/monitoring/counter.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
@@ -121,55 +123,100 @@ absl::StatusOr<xla::ifrt::ShardingRef> ToIfrtSharding(
                                         hlo_sharding);
 }
 
+auto* input_transfer_counter =
+    ::tsl::monitoring::Counter<1>::New("/jsv/input_transfer/dispatched",
+                                       "Tracks how many transfers were routed "
+                                       "to the Arena vs. Default IFRT path.",
+                                       "transfer_path");
+
 }  // namespace
+
+absl::StatusOr<absl::Span<const xla::ifrt::ShardingRef>>
+StableHloRunner::DataConverter::ValidateAndResolveShardings(
+    absl::Span<const HostBuffer> inputs,
+    const CachedExecutableBundle& executable_bundle, int input_offset) const {
+  if (input_offset + inputs.size() > executable_bundle.io_spec.inputs.size()) {
+    return absl::InvalidArgumentError("Too many inputs provided.");
+  }
+
+  // Validate data types and shapes before passing to executor to prevent
+  // buffer over-reads during memcpy.
+  for (int i = 0; i < inputs.size(); ++i) {
+    const ArgSpec& input_spec =
+        executable_bundle.io_spec.inputs[input_offset + i];
+    if (inputs[i].dtype() != input_spec.dtype) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Input dtype mismatch. Expected: ", input_spec.dtype,
+                       ", but got: ", inputs[i].dtype()));
+    }
+    TF_RETURN_IF_ERROR(InputShapeEqual(input_spec.shape, inputs[i].shape()));
+  }
+
+  if (!executable_bundle.portable_single_device_shardings.empty()) {
+    DCHECK(!device_list_->devices().empty());
+    auto it = executable_bundle.portable_single_device_shardings.find(
+        device_list_->devices()[0]->Id());
+    if (it == executable_bundle.portable_single_device_shardings.end()) {
+      return absl::FailedPreconditionError(
+          absl::StrCat("No portable single device sharding found for device ",
+                       device_list_->devices()[0]->Id()));
+    }
+    return absl::MakeConstSpan(it->second).subspan(input_offset, inputs.size());
+  }
+
+  if (input_offset + inputs.size() >
+      executable_bundle.arg_ifrt_shardings.size()) {
+    return absl::InternalError("IFRT Executable arg shardings size mismatch.");
+  }
+  return absl::MakeConstSpan(executable_bundle.arg_ifrt_shardings)
+      .subspan(input_offset, inputs.size());
+}
+
+absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
+StableHloRunner::DataConverter::ExecuteDefaultTransfer(
+    absl::Span<const HostBuffer> inputs,
+    absl::Span<const xla::ifrt::ShardingRef> shardings_span) const {
+  std::vector<xla::ifrt::ArrayRef> converted_inputs;
+  converted_inputs.reserve(inputs.size());
+
+  for (int i = 0; i < inputs.size(); ++i) {
+    const HostBuffer& input_data = inputs[i];
+    VLOG(2) << "Converting input of shape " << input_data.shape();
+
+    xla::ifrt::ArrayRef array;
+    TF_ASSIGN_OR_RETURN(array, sharding_internal::MakeArrayFromHostBuffer(
+                                   *ifrt_client_, input_data, device_list_,
+                                   shardings_span[i], *thread_pool_));
+
+    converted_inputs.push_back(std::move(array));
+  }
+  return converted_inputs;
+}
 
 absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
 StableHloRunner::DataConverter::ConvertInput(
     absl::Span<const HostBuffer> inputs,
-    const StableHloRunner::CachedExecutableBundle& executable_bundle,
-    int input_offset) {
+    const CachedExecutableBundle& executable_bundle, int input_offset) {
   tsl::profiler::TraceMe trace_me([&]() {
-    return tsl::profiler::TraceMeEncode("TransferFromHostToDevice", {});
+    return tsl::profiler::TraceMeEncode(h2d_transfer_executor_ != nullptr
+                                            ? "ArenaTransferFromHostToDevice"
+                                            : "TransferFromHostToDevice",
+                                        {});
   });
-  std::vector<xla::ifrt::ArrayRef> converted_inputs;
-  converted_inputs.reserve(inputs.size());
-  for (int i = 0; i < inputs.size(); ++i) {
-    const HostBuffer& input_data = inputs[i];
-    const ArgSpec& input_spec =
-        executable_bundle.io_spec.inputs[i + input_offset];
-    if (input_data.dtype() != input_spec.dtype) {
-      return absl::InvalidArgumentError(
-          absl::StrCat("Input dtype mismatch. Expected: ", input_spec.dtype,
-                       ", but got: ", input_data.dtype()));
-    }
-    const xla::ifrt::Shape& input_shape = input_data.shape();
-    TF_RETURN_IF_ERROR(InputShapeEqual(input_spec.shape, input_shape));
-    VLOG(2) << "Converting input of shape " << input_shape;
-    xla::ifrt::ArrayRef array;
-    if (!executable_bundle.portable_single_device_shardings.empty()) {
-      auto it = executable_bundle.portable_single_device_shardings.find(
-          device_list_->devices()[0]->Id());
-      if (it == executable_bundle.portable_single_device_shardings.end()) {
-        return absl::FailedPreconditionError(
-            absl::StrCat("No portable single device sharding found for device ",
-                         device_list_->devices()[0]->Id()));
-      }
-      TF_ASSIGN_OR_RETURN(array,
-                          sharding_internal::MakeArrayFromHostBuffer(
-                              *ifrt_client_, input_data, device_list_,
-                              it->second, *thread_pool_));
-    } else {
-      DCHECK(executable_bundle.arg_ifrt_shardings.size() > i + input_offset);
-      xla::ifrt::ShardingRef sharding =
-          executable_bundle.arg_ifrt_shardings[i + input_offset];
-      TF_ASSIGN_OR_RETURN(array, sharding_internal::MakeArrayFromHostBuffer(
-                                     *ifrt_client_, input_data, device_list_,
-                                     sharding, *thread_pool_));
-    }
 
-    converted_inputs.push_back(std::move(array));
-}
-  return converted_inputs;
+  TF_ASSIGN_OR_RETURN(
+      absl::Span<const xla::ifrt::ShardingRef> shardings_span,
+      ValidateAndResolveShardings(inputs, executable_bundle, input_offset));
+
+  if (h2d_transfer_executor_ != nullptr) {
+    static auto* const arena_cell = input_transfer_counter->GetCell("arena");
+    arena_cell->IncrementBy(1);
+    return h2d_transfer_executor_->ExecuteTransfer(inputs, shardings_span);
+  }
+
+  static auto* const default_cell = input_transfer_counter->GetCell("default");
+  default_cell->IncrementBy(1);
+  return ExecuteDefaultTransfer(inputs, shardings_span);
 }
 
 absl::StatusOr<std::vector<HostBuffer>>
@@ -213,7 +260,8 @@ StableHloRunner::StableHloRunner(
         persistent_compilation_cache,
     StablehloOptimizer* absl_nullable optimizer,
     absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
-    jsv::ServingCoreSelector* absl_nullable serving_core_selector)
+    jsv::ServingCoreSelector* absl_nullable serving_core_selector,
+    std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory)
     : loaded_stablehlo_(std::move(loaded_stablehlo)),
       compile_options_(std::move(compile_options)),
       assigned_device_list_(std::move(assigned_device_list)),
@@ -224,7 +272,9 @@ StableHloRunner::StableHloRunner(
       compilation_environment_proto_(compilation_environment_proto),
       optimizer_(optimizer),
       assigned_devices_(std::move(assigned_devices)),
-      serving_core_selector_(serving_core_selector) {}
+      serving_core_selector_(serving_core_selector),
+      h2d_transfer_executor_factory_(std::move(h2d_transfer_executor_factory)) {
+}
 
 absl::StatusOr<std::unique_ptr<StableHloRunner>> StableHloRunner::Create(
     absl_nonnull std::shared_ptr<StableHlo> stablehlo,
@@ -238,7 +288,8 @@ absl::StatusOr<std::unique_ptr<StableHloRunner>> StableHloRunner::Create(
     tsl::thread::ThreadPool* absl_nonnull thread_pool,
     StablehloOptimizer* absl_nullable optimizer,
     absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
-    jsv::ServingCoreSelector* absl_nullable serving_core_selector) {
+    jsv::ServingCoreSelector* absl_nullable serving_core_selector,
+    std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory) {
   if (!stablehlo) {
     return absl::InvalidArgumentError(
         "`StableHlo` should be non-null when creating `StableHloRunner`");
@@ -281,7 +332,7 @@ absl::StatusOr<std::unique_ptr<StableHloRunner>> StableHloRunner::Create(
       std::move(client), ifrt_loaded_variable_registry, std::move(weights),
       assigned_device_list, compilation_environment_proto,
       persistent_compilation_cache, optimizer, assigned_devices,
-      serving_core_selector));
+      serving_core_selector, std::move(h2d_transfer_executor_factory)));
   TF_RETURN_IF_ERROR(runner->Init(thread_pool));
   return runner;
 }
@@ -295,14 +346,12 @@ absl::Status StableHloRunner::Init(
                           ifrt_client_->LookupDevice(xla::ifrt::DeviceId(i)));
       TF_ASSIGN_OR_RETURN(xla::ifrt::DeviceListRef device_list,
                           ifrt_client_->MakeDeviceList({device}));
-      device_list_to_resources_map_[device_list] =
-          std::make_unique<ResourcesPerDeviceList>(ifrt_client_, device_list,
-                                                   thread_pool);
+      TF_RETURN_IF_ERROR(
+          CreateResourcesPerDeviceList(device_list, thread_pool));
     }
   } else {
-    device_list_to_resources_map_[assigned_device_list_] =
-        std::make_unique<ResourcesPerDeviceList>(
-            ifrt_client_, assigned_device_list_, thread_pool);
+    TF_RETURN_IF_ERROR(
+        CreateResourcesPerDeviceList(assigned_device_list_, thread_pool));
   }
   return absl::OkStatus();
 }
@@ -392,6 +441,7 @@ StableHloRunner::CreateExecutableSynchronously(
                        module_bundle->module_kept_var_idx.end());
   executable_bundle->input_offset = module_bundle->input_offset;
   executable_bundle->io_spec = io_spec;
+
   executable_bundle->ifrt_executable = std::move(ifrt_executable);
   executable_bundle->program_fingerprint_with_timestamp =
       jsv::GetProgramFingerprintWithTimestamp(
@@ -466,12 +516,12 @@ StableHloRunner::LookUpOrCreateExecutable(
   } else {
     if (IsPortableExecutable()) {
       for (xla::ifrt::Device* device : ifrt_client_->addressable_devices()) {
-        TF_ASSIGN_OR_RETURN(xla::ifrt::DeviceListRef device_list,
-                            ifrt_client_->MakeDeviceList({device}));
-        (*executable_bundle)
-            ->portable_single_device_shardings.emplace(
-                device->Id(), xla::ifrt::SingleDeviceSharding::Create(
-                                  device, xla::ifrt::MemoryKind()));
+        xla::ifrt::ShardingRef sharding =
+            xla::ifrt::SingleDeviceSharding::Create(device,
+                                                    xla::ifrt::MemoryKind());
+        (*executable_bundle)->portable_single_device_shardings[device->Id()] =
+            std::vector<xla::ifrt::ShardingRef>(
+                (*executable_bundle)->io_spec.inputs.size(), sharding);
       }
     } else {
       (*executable_bundle)
@@ -684,7 +734,7 @@ absl::StatusOr<std::vector<HostBuffer>> StableHloRunner::Execute(
   // TODO: Consider validating that the inputs and outputs match
   // the model IO spec before converting.
   TF_ASSIGN_OR_RETURN(
-      auto converted_inputs,
+      std::vector<xla::ifrt::ArrayRef> converted_inputs,
       data_converter->ConvertInput(reshaped_inputs, *executable_bundle,
                                    executable_bundle->input_offset));
 
@@ -731,6 +781,22 @@ absl::Status StableHloRunner::MarkFullyInitialized() {
   // because no compilation will be allowed. A module can be large, e.g.
   // containing a large const.
   loaded_stablehlo_->ReleaseAllModules();
+  return absl::OkStatus();
+}
+
+absl::Status StableHloRunner::CreateResourcesPerDeviceList(
+    xla::ifrt::DeviceListRef device_list,
+    tsl::thread::ThreadPool* thread_pool) {
+  std::unique_ptr<H2DTransferExecutor> h2d_transfer_executor;
+  if (h2d_transfer_executor_factory_ != nullptr) {
+    TF_ASSIGN_OR_RETURN(h2d_transfer_executor,
+                        h2d_transfer_executor_factory_->Create(
+                            ifrt_client_, device_list, thread_pool));
+  }
+  device_list_to_resources_map_[device_list] =
+      std::make_unique<ResourcesPerDeviceList>(
+          ifrt_client_, device_list, thread_pool,
+          std::move(h2d_transfer_executor));
   return absl::OkStatus();
 }
 

@@ -11,7 +11,6 @@
 #include <utility>
 #include <vector>
 
-#include "runtime/interpreter/manifest_utils.h"  // from @neptune
 #include "absl/base/call_once.h"  // from @abseil-cpp
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/base/thread_annotations.h"  // from @abseil-cpp
@@ -24,16 +23,17 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "runtime/core/h2d_transfer_executor.h"  // from @neptune
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune
 #include "runtime/core/loaded_stablehlo.h"  // from @neptune
 #include "runtime/core/stablehlo.h"  // from @neptune
 #include "runtime/core/stablehlo_optimizer.h"  // from @neptune
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
+#include "runtime/interpreter/manifest_utils.h"  // from @neptune
 #include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
 #include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @neptune
 #include "google/protobuf/message.h"
-#include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
@@ -63,7 +63,9 @@ class StableHloRunner {
       tsl::thread::ThreadPool* absl_nonnull thread_pool,
       StablehloOptimizer* absl_nullable optimizer,
       absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
-      jsv::ServingCoreSelector* absl_nullable serving_core_selector);
+      jsv::ServingCoreSelector* absl_nullable serving_core_selector,
+      std::unique_ptr<H2DTransferExecutorFactory>
+          h2d_transfer_executor_factory = nullptr);
 
   // Movable but not copyable.
   StableHloRunner(StableHloRunner&& other) = default;
@@ -97,10 +99,21 @@ class StableHloRunner {
   }
 
   // Marks the runner to fully initialized. After this is called, the
-  // runner will not allow new TPU compilation.
+  // runner will not allow new accelerator compilation.
   absl::Status MarkFullyInitialized();
 
  private:
+  // Creates and initializes the `ResourcesPerDeviceList` for the given
+  // `device_list`. This structure encapsulates the `DataConverter` (which
+  // internally holds the `H2DTransferExecutor`) and the loaded weight arrays
+  // specific to this device list, inserting the result into
+  // `device_list_to_resources_map_`.
+  absl::Status CreateResourcesPerDeviceList(
+      xla::ifrt::DeviceListRef device_list,
+      tsl::thread::ThreadPool* thread_pool);
+
+  // Container for lazily-evaluated compilation artifacts and execution
+  // metadata.
   struct CachedExecutableBundle {
     // The indices of model inputs that need to be passed to the main function
     // of the MLIR module.
@@ -111,6 +124,7 @@ class StableHloRunner {
     // IOSpec from the StableHLO.
     StableHloIOSpec io_spec;
     xla::ifrt::LoadedExecutableRef ifrt_executable;
+
     // The canonical program fingerprint of the `ifrt_executable` and the
     // timestamp in microseconds. The timestamp is added for uniqueness (e.g.,
     // in case the same executable has multiple loaded instances on the same
@@ -120,8 +134,16 @@ class StableHloRunner {
     std::vector<xla::ifrt::ShardingRef> arg_ifrt_shardings;
     // Only populated when portable execution is used, currently only single
     // device sharding is supported.
+    //
+    // We store a pre-allocated std::vector of ShardingRefs (where all elements
+    // point to the same single device sharding) instead of a single reference.
+    // This avoids repeated `malloc` calls on the inference hot path: the
+    // batched H2DTransferExecutor requires an `absl::Span`, so storing the
+    // fully expanded vector here allows us to pass a zero-allocation pointer
+    // slice (O(1) subspan) instead of dynamically allocating a new
+    // std::vector on every request.
     absl::flat_hash_map<xla::ifrt::DeviceId,
-                        std::shared_ptr<xla::ifrt::SingleDeviceSharding>>
+                        std::vector<xla::ifrt::ShardingRef>>
         portable_single_device_shardings;
 
     CachedExecutableBundle() = default;
@@ -132,17 +154,18 @@ class StableHloRunner {
     CachedExecutableBundle& operator=(const CachedExecutableBundle& other) =
         delete;
   };
-
   // A helper class to convert the inputs and outputs between
   // `jsv::HostBuffer` and `xla::ifrt::Array`.
   class DataConverter {
    public:
     DataConverter(absl_nonnull std::shared_ptr<xla::ifrt::Client> ifrt_client,
                   xla::ifrt::DeviceListRef device_list,
-                  tsl::thread::ThreadPool* absl_nonnull thread_pool)
+                  tsl::thread::ThreadPool* absl_nonnull thread_pool,
+                  std::unique_ptr<H2DTransferExecutor> h2d_transfer_executor)
         : ifrt_client_(std::move(ifrt_client)),
           device_list_(std::move(device_list)),
-          thread_pool_(thread_pool) {}
+          thread_pool_(thread_pool),
+          h2d_transfer_executor_(std::move(h2d_transfer_executor)) {}
 
     const xla::ifrt::DeviceListRef& device_list() const { return device_list_; }
 
@@ -161,19 +184,36 @@ class StableHloRunner {
         const StableHloIOSpec& model_io_spec);
 
    private:
+    // Validates input data types and shapes against the model specification
+    // and resolves the corresponding physical sharding references.
+    absl::StatusOr<absl::Span<const xla::ifrt::ShardingRef>>
+    ValidateAndResolveShardings(absl::Span<const HostBuffer> inputs,
+                                const CachedExecutableBundle& executable_bundle,
+                                int input_offset) const;
+
+    // Performs standard host-to-device transfers for inputs using the default
+    // IFRT MakeArrayFromHostBuffer path.
+    absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ExecuteDefaultTransfer(
+        absl::Span<const HostBuffer> inputs,
+        absl::Span<const xla::ifrt::ShardingRef> shardings_span) const;
+
     absl_nonnull std::shared_ptr<xla::ifrt::Client> ifrt_client_;
     xla::ifrt::DeviceListRef device_list_;
     tsl::thread::ThreadPool* absl_nonnull thread_pool_;  // NOT OWNED.
+    std::unique_ptr<H2DTransferExecutor> h2d_transfer_executor_;
   };
 
   // Resources such as `DataConverter` and weight arrays that are organized
   // per device list.
   struct ResourcesPerDeviceList {
-    ResourcesPerDeviceList(std::shared_ptr<xla::ifrt::Client> ifrt_client,
-                           xla::ifrt::DeviceListRef device_list,
-                           tsl::thread::ThreadPool* thread_pool)
+    ResourcesPerDeviceList(
+        std::shared_ptr<xla::ifrt::Client> ifrt_client,
+        xla::ifrt::DeviceListRef device_list,
+        tsl::thread::ThreadPool* thread_pool,
+        std::unique_ptr<H2DTransferExecutor> h2d_transfer_executor)
         : data_converter(std::make_unique<DataConverter>(
-              ifrt_client, device_list, thread_pool)) {}
+              ifrt_client, device_list, thread_pool,
+              std::move(h2d_transfer_executor))) {}
 
     std::unique_ptr<DataConverter> data_converter;
     // IFRT array for weights. They are looked up from the registry.
@@ -254,7 +294,9 @@ class StableHloRunner {
           persistent_compilation_cache,
       StablehloOptimizer* absl_nullable optimizer,
       absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
-      jsv::ServingCoreSelector* absl_nullable serving_core_selector);
+      jsv::ServingCoreSelector* absl_nullable serving_core_selector,
+      std::unique_ptr<H2DTransferExecutorFactory>
+          h2d_transfer_executor_factory);
 
   using SharedCachedExecutableBundle = std::shared_ptr<CachedExecutableBundle>;
 
@@ -333,6 +375,8 @@ class StableHloRunner {
   absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices_;
 
   jsv::ServingCoreSelector* absl_nullable serving_core_selector_;
+
+  std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory_;
 
   absl::flat_hash_map<xla::ifrt::DeviceListRef,
                       std::unique_ptr<ResourcesPerDeviceList>>
