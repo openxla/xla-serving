@@ -1,6 +1,19 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
+    name = "riegeli",
+    sha256 = "419cc9613217c1fe02fc3921a573d4ef9c1e4ee0b7daa5d147d709a2af13a6ae",
+    strip_prefix = "riegeli-9ca2ab068edf8396d5364d79705792bfe4ca79d9",
+    urls = ["https://github.com/google/riegeli/archive/9ca2ab068edf8396d5364d79705792bfe4ca79d9.tar.gz"],
+    repo_mapping = {
+        "@net_zstd": "@zstd",
+        "@com_google_googleapis": "@googleapis",
+        "@com_google_googletest": "@googletest",
+        "@com_google_absl": "@abseil-cpp",
+    },
+)
+
+http_archive(
     name = "tensorstore",
     integrity = "sha256-bn5EENBIZYRdFFzXWEtW7eDFyGAk4FxPuGzAm5Z34F8=",
     strip_prefix = "tensorstore-2268931b0ff74d322b95632d11d8db7d6dda280f",
