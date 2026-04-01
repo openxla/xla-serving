@@ -44,6 +44,7 @@
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
+#include "xla/tsl/lib/monitoring/counter.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
@@ -161,11 +162,7 @@ class StableHloRunner {
     DataConverter(absl_nonnull std::shared_ptr<xla::ifrt::Client> ifrt_client,
                   xla::ifrt::DeviceListRef device_list,
                   tsl::thread::ThreadPool* absl_nonnull thread_pool,
-                  std::unique_ptr<H2DTransferExecutor> h2d_transfer_executor)
-        : ifrt_client_(std::move(ifrt_client)),
-          device_list_(std::move(device_list)),
-          thread_pool_(thread_pool),
-          h2d_transfer_executor_(std::move(h2d_transfer_executor)) {}
+                  std::unique_ptr<H2DTransferExecutor> h2d_transfer_executor);
 
     const xla::ifrt::DeviceListRef& device_list() const { return device_list_; }
 
@@ -176,7 +173,8 @@ class StableHloRunner {
     // - `input_offset` is the offset of the inputs in the StableHloIOSpec.
     absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ConvertInput(
         absl::Span<const HostBuffer> inputs,
-        const CachedExecutableBundle& executable_bundle, int input_offset);
+        const CachedExecutableBundle& executable_bundle,
+        int input_offset) const;
 
     // Converts the outputs from `xla::ifrt::Array` to `jsv::HostBuffer`.
     absl::StatusOr<std::vector<HostBuffer>> ConvertOutput(
@@ -201,6 +199,9 @@ class StableHloRunner {
     xla::ifrt::DeviceListRef device_list_;
     tsl::thread::ThreadPool* absl_nonnull thread_pool_;  // NOT OWNED.
     std::unique_ptr<H2DTransferExecutor> h2d_transfer_executor_;
+
+    tsl::monitoring::CounterCell* const arena_cell_;
+    tsl::monitoring::CounterCell* const default_cell_;
   };
 
   // Resources such as `DataConverter` and weight arrays that are organized

@@ -35,7 +35,7 @@ class H2DTransferExecutor {
   // `input_shardings`: The exact IFRT Shardings required for these arrays.
   virtual absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ExecuteTransfer(
       absl::Span<const HostBuffer> inputs,
-      absl::Span<const xla::ifrt::ShardingRef> input_shardings) = 0;
+      absl::Span<const xla::ifrt::ShardingRef> input_shardings) const = 0;
 };
 
 // Factory interface for creating an `H2DTransferExecutor`.

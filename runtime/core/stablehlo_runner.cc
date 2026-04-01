@@ -128,8 +128,19 @@ auto* input_transfer_counter =
                                        "Tracks how many transfers were routed "
                                        "to the Arena vs. Default IFRT path.",
                                        "transfer_path");
-
 }  // namespace
+
+StableHloRunner::DataConverter::DataConverter(
+    absl_nonnull std::shared_ptr<xla::ifrt::Client> ifrt_client,
+    xla::ifrt::DeviceListRef device_list,
+    tsl::thread::ThreadPool* absl_nonnull thread_pool,
+    std::unique_ptr<H2DTransferExecutor> h2d_transfer_executor)
+    : ifrt_client_(std::move(ifrt_client)),
+      device_list_(std::move(device_list)),
+      thread_pool_(thread_pool),
+      h2d_transfer_executor_(std::move(h2d_transfer_executor)),
+      arena_cell_(input_transfer_counter->GetCell("arena")),
+      default_cell_(input_transfer_counter->GetCell("default")) {}
 
 absl::StatusOr<absl::Span<const xla::ifrt::ShardingRef>>
 StableHloRunner::DataConverter::ValidateAndResolveShardings(
@@ -196,7 +207,7 @@ StableHloRunner::DataConverter::ExecuteDefaultTransfer(
 absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
 StableHloRunner::DataConverter::ConvertInput(
     absl::Span<const HostBuffer> inputs,
-    const CachedExecutableBundle& executable_bundle, int input_offset) {
+    const CachedExecutableBundle& executable_bundle, int input_offset) const {
   tsl::profiler::TraceMe trace_me([&]() {
     return tsl::profiler::TraceMeEncode(h2d_transfer_executor_ != nullptr
                                             ? "ArenaTransferFromHostToDevice"
@@ -209,13 +220,11 @@ StableHloRunner::DataConverter::ConvertInput(
       ValidateAndResolveShardings(inputs, executable_bundle, input_offset));
 
   if (h2d_transfer_executor_ != nullptr) {
-    static auto* const arena_cell = input_transfer_counter->GetCell("arena");
-    arena_cell->IncrementBy(1);
+    arena_cell_->IncrementBy(1);
     return h2d_transfer_executor_->ExecuteTransfer(inputs, shardings_span);
   }
 
-  static auto* const default_cell = input_transfer_counter->GetCell("default");
-  default_cell->IncrementBy(1);
+  default_cell_->IncrementBy(1);
   return ExecuteDefaultTransfer(inputs, shardings_span);
 }
 
