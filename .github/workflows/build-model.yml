@@ -55,3 +55,10 @@ jobs:
         run: |
           # Run the build command we perfected
           python -m build --wheel --no-isolation
+
+      - name: Upload Wheel Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: neptune-model-wheel-py${{ matrix.python-version }}
+          path: model/dist/*.whl
+          retention-days: 14
