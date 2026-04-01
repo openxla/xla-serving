@@ -116,7 +116,7 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadCheckpoint(
     auto ifrt_sharding = xla::ifrt::HloSharding::Create(
         device_list, xla::ifrt::MemoryKind(), hlo_sharding);
 
-    VLOG(4) << "ifrt_sharding: " << ifrt_sharding;
+    VLOG(4) << "ifrt_sharding: " << *ifrt_sharding;
 
     TF_ASSIGN_OR_RETURN(auto index_domains,
                         ifrt_sharding->IndexDomains(
