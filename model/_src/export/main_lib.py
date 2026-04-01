@@ -17,17 +17,17 @@ import jax.export as jax_export
 import jaxtyping
 import orbax.checkpoint as ocp
 
-from .third_party.neptune.model._src import jax2npt
-from .third_party.neptune.model._src.core import orchestration_proto_utils
-from .third_party.neptune.model._src.core import persistence_lib
-from .third_party.neptune.model._src.core import saveable
-from .third_party.neptune.model._src.core import shlo_type
-from .third_party.neptune.model._src.core import type_proto_utils
-from .third_party.neptune.model._src.export import constants
-from .third_party.neptune.model._src.export import jax_model
-from .third_party.neptune.model._src.export import serving_config
-from .third_party.neptune.model._src.export import utils
-from .third_party.neptune.protos import orchestration_pb2
+from neptune_model._src import jax2npt
+from neptune_model._src.core import orchestration_proto_utils
+from neptune_model._src.core import persistence_lib
+from neptune_model._src.core import saveable
+from neptune_model._src.core import shlo_type
+from neptune_model._src.core import type_proto_utils
+from neptune_model._src.export import constants
+from neptune_model._src.export import jax_model
+from neptune_model._src.export import serving_config
+from neptune_model._src.export import utils
+from neptune_model.protos import orchestration_pb2
 
 
 @dataclasses.dataclass

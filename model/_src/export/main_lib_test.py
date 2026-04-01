@@ -7,13 +7,13 @@ import jax
 import jax.numpy as jnp
 
 from .net.proto2.contrib.pyutil import compare
-from .third_party.neptune.model._src.core import persistence_lib
-from .third_party.neptune.model._src.core import saveable
-from .third_party.neptune.model._src.core import shlo_type
-from .third_party.neptune.model._src.export import jax_model
-from .third_party.neptune.model._src.export import main_lib
-from .third_party.neptune.model._src.export import serving_config
-from .third_party.neptune.protos import orchestration_pb2
+from neptune_model._src.core import persistence_lib
+from neptune_model._src.core import saveable
+from neptune_model._src.core import shlo_type
+from neptune_model._src.export import jax_model
+from neptune_model._src.export import main_lib
+from neptune_model._src.export import serving_config
+from neptune_model.protos import orchestration_pb2
 
 
 class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):

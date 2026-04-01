@@ -5,8 +5,8 @@ from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
 
-from .third_party.neptune.model._src.export import jax_model
-from .third_party.neptune.model._src.export import utils
+from neptune_model._src.export import jax_model
+from neptune_model._src.export import utils
 
 
 class UtilsTest(parameterized.TestCase):

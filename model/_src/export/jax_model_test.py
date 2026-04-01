@@ -2,7 +2,7 @@
 
 import pathlib
 from absl.testing import absltest
-from .third_party.neptune.model._src.export import jax_model
+from neptune_model._src.export import jax_model
 
 
 class JaxModelTest(absltest.TestCase):

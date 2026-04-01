@@ -5,11 +5,11 @@ from collections.abc import Sequence
 import jax
 import jaxtyping
 
-from .third_party.neptune.model._src.core import constants
-from .third_party.neptune.model._src.core import shlo_type
-from .third_party.neptune.model._src.core import type_proto_utils
-from .third_party.neptune.protos import manifest_pb2
-from .third_party.neptune.protos import orchestration_pb2
+from neptune_model._src.core import constants
+from neptune_model._src.core import shlo_type
+from neptune_model._src.core import type_proto_utils
+from neptune_model.protos import manifest_pb2
+from neptune_model.protos import orchestration_pb2
 
 
 def _calculate_named_signature(
