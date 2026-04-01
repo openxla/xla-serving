@@ -2,8 +2,8 @@ import pathlib
 
 from absl.testing import absltest
 
-from .third_party.neptune.model._src.core import unstructured_data
-from .third_party.neptune.protos import manifest_pb2
+from neptune_model._src.core import unstructured_data
+from neptune_model.protos import manifest_pb2
 
 
 class UnstructuredDataTest(absltest.TestCase):

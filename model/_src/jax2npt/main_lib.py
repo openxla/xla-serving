@@ -8,13 +8,13 @@ import jax
 from jax import export as jax_export
 from jax.experimental import layout as jax_layout
 
-from .third_party.neptune.model._src.core import shlo_function
-from .third_party.neptune.model._src.core import unstructured_data
-from .third_party.neptune.model._src.core import value
-from .third_party.neptune.model._src.jax2npt import constants
-from .third_party.neptune.model._src.jax2npt import typing
-from .third_party.neptune.model._src.jax2npt import utils
-from .third_party.neptune.protos import manifest_pb2
+from neptune_model._src.core import shlo_function
+from neptune_model._src.core import unstructured_data
+from neptune_model._src.core import value
+from neptune_model._src.jax2npt import constants
+from neptune_model._src.jax2npt import typing
+from neptune_model._src.jax2npt import utils
+from neptune_model.protos import manifest_pb2
 
 
 @dataclasses.dataclass

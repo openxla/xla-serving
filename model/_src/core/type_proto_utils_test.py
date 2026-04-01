@@ -4,11 +4,11 @@ from absl.testing import absltest
 from absl.testing import parameterized
 from google.protobuf import text_format
 
-from .third_party.neptune.model._src.core import shlo_type
-from .third_party.neptune.model._src.core import test_utils
-from .third_party.neptune.model._src.core import type_proto_utils
-from .third_party.neptune.protos import type_pb2
-from .third_party.tensorflow.compiler.xla import xla_data_pb2  # pylint: disable=g-direct-tensorflow-import
+from neptune_model._src.core import shlo_type
+from neptune_model._src.core import test_utils
+from neptune_model._src.core import type_proto_utils
+from neptune_model.protos import type_pb2
+from neptune_model.xla import xla_data_pb2
 
 
 class ShloTensorSpecToTensorTypeProtoTest(

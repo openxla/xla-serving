@@ -4,9 +4,9 @@ import abc
 from collections.abc import Mapping
 from dataclasses import dataclass  # pylint: disable=g-importing-member
 
-from .third_party.neptune.model._src.core import function
-from .third_party.neptune.model._src.core import shlo_type
-from .third_party.neptune.model._src.core import unstructured_data
+from neptune_model._src.core import function
+from neptune_model._src.core import shlo_type
+from neptune_model._src.core import unstructured_data
 
 
 class ShloFunctionSupplementalInfo(abc.ABC):

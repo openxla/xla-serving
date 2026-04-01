@@ -1,10 +1,10 @@
 import os
 from absl.testing import absltest
-from .third_party.neptune.model._src.core import device_assignment
-from .third_party.neptune.model._src.core import manifest_utils
-from .third_party.neptune.model._src.core import serializable_function
-from .third_party.neptune.model._src.core import unstructured_data
-from .third_party.neptune.protos import manifest_pb2
+from neptune_model._src.core import device_assignment
+from neptune_model._src.core import manifest_utils
+from neptune_model._src.core import serializable_function
+from neptune_model._src.core import unstructured_data
+from neptune_model.protos import manifest_pb2
 
 
 class ManifestUtilTest(absltest.TestCase):

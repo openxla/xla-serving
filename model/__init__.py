@@ -5,6 +5,6 @@
 __version__ = '0.0.1'
 
 
-from .third_party.neptune.model._src.export.jax_model import JaxModel
-from .third_party.neptune.model._src.export.main_lib import save
-from .third_party.neptune.model._src.export.serving_config import ServingConfig
+from neptune_model._src.export.jax_model import JaxModel
+from neptune_model._src.export.main_lib import save
+from neptune_model._src.export.serving_config import ServingConfig

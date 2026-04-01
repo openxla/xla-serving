@@ -53,8 +53,8 @@ cc_library(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/types:span",
         "@nlohmann_json//:json",
-        "@tensorstore//tensorstore/_only:all_kvstore_drivers",  # tensorstore
         "@tensorstore//tensorstore/driver/zarr",  # tensorstore driver
+        "@tensorstore//tensorstore/_only:all_kvstore_drivers",  # tensorstore
         "@tensorstore//tensorstore/kvstore/ocdbt",
         "@tsl//tsl/platform:path",
         "@xla//xla:shape_util",

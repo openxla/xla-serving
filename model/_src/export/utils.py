@@ -5,8 +5,8 @@ from collections.abc import Mapping
 import jax
 import jaxtyping
 
-from .third_party.neptune.model._src.export import jax_model
-from .third_party.neptune.model._src.jax2npt import typing
+from neptune_model._src.export import jax_model
+from neptune_model._src.jax2npt import typing
 
 
 def to_jax_spec(tree: jaxtyping.PyTree) -> jaxtyping.PyTree:

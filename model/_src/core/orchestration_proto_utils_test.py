@@ -2,8 +2,8 @@ from absl.testing import absltest
 from absl.testing import parameterized
 
 from .net.proto2.contrib.pyutil import compare
-from .third_party.neptune.model._src.core import orchestration_proto_utils
-from .third_party.neptune.model._src.core import shlo_type
+from neptune_model._src.core import orchestration_proto_utils
+from neptune_model._src.core import shlo_type
 
 
 class OrchestrationProtoUtilsTest(compare.Proto2Assertions, parameterized.TestCase):

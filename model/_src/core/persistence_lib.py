@@ -10,14 +10,14 @@ import pathlib
 
 from absl import logging
 
-from .third_party.neptune.model._src.core import constants
-from .third_party.neptune.model._src.core import device_assignment
-from .third_party.neptune.model._src.core import file_utils
-from .third_party.neptune.model._src.core import manifest_utils
-from .third_party.neptune.model._src.core import metadata
-from .third_party.neptune.model._src.core import saveable
-from .third_party.neptune.model._src.core import unstructured_data
-from .third_party.neptune.protos import manifest_pb2
+from neptune_model._src.core import constants
+from neptune_model._src.core import device_assignment
+from neptune_model._src.core import file_utils
+from neptune_model._src.core import manifest_utils
+from neptune_model._src.core import metadata
+from neptune_model._src.core import saveable
+from neptune_model._src.core import unstructured_data
+from neptune_model.protos import manifest_pb2
 
 
 @dataclasses.dataclass
