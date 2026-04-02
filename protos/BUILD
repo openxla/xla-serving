@@ -58,3 +58,18 @@ py_proto_library(
     name = "orchestration_py_pb2",
     deps = [":orchestration_proto"],
 )
+
+proto_library(
+    name = "tf_concrete_function_handle_proto",
+    srcs = ["tf_concrete_function_handle.proto"],
+)
+
+cc_proto_library(
+    name = "tf_concrete_function_handle_cc_proto",
+    deps = [":tf_concrete_function_handle_proto"],
+)
+
+py_proto_library(
+    name = "tf_concrete_function_handle_py_pb2",
+    deps = [":tf_concrete_function_handle_proto"],
+)
