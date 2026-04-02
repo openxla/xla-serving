@@ -1,17 +1,31 @@
 #include "runtime/data_loader/ocp_loader/tensorstore_utils.h"  // from @neptune
 
+#include <cstdint>
 #include <filesystem>  // NOLINT(build/c++17)
 #include <optional>
 #include <regex>  // NOLINT(build/c++11)
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 
+#include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/match.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/strings/str_format.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "nlohmann/json.hpp"  // from @nlohmann_json
 #include "nlohmann/json_fwd.hpp"  // from @nlohmann_json
+#include "xla/python/ifrt/array.h"  // from @xla
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/python/ifrt/device.h"  // from @xla
+#include "xla/python/ifrt/device_list.h"  // from @xla
+#include "xla/python/ifrt/memory.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
+#include "xla/python/ifrt/sharding.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
 
 namespace neptune {
 
@@ -125,9 +139,8 @@ absl::StatusOr<nlohmann::json> BuildKvstoreTspec(
     if (is_gcs_path) {
       base_driver_spec = normalized_directory;
     } else {
-      base_driver_spec = nlohmann::json {
-        {"driver", default_driver}, { "path", normalized_directory }
-      };
+      base_driver_spec = nlohmann::json{{"driver", default_driver},
+                                        {"path", normalized_directory}};
     }
 
     kv_spec["driver"] = "ocdbt";
@@ -160,6 +173,44 @@ absl::StatusOr<nlohmann::json> BuildKvstoreTspec(
   }
 
   return kv_spec;
+}
+
+absl::StatusOr<xla::ifrt::ArrayRef> AssembleOpaqueIfrtArray(
+    xla::ifrt::Client* ifrt_client,
+    const absl::Span<xla::ifrt::ArrayRef>& ifrt_arrays,
+    const std::vector<int64_t>& global_shape) {
+  if (ifrt_arrays.empty()) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Cannot assemble 0 arrays into an array"));
+  }
+  absl::InlinedVector<xla::ifrt::Device*, 1> devices;
+  devices.reserve(ifrt_arrays.size());
+  std::vector<xla::ifrt::Shape> shapes;
+  shapes.reserve(ifrt_arrays.size());
+  std::optional<xla::ifrt::MemoryKind> memory_kind;
+  for (auto& ifrt_array : ifrt_arrays) {
+    devices.push_back(ifrt_array->sharding().devices()->devices().front());
+    shapes.push_back(ifrt_array->shape());
+    xla::ifrt::MemoryKind this_kind = ifrt_array->sharding().memory_kind();
+    if (memory_kind == std::nullopt) {
+      memory_kind = this_kind;
+    } else if (*memory_kind != this_kind) {
+      return absl::InvalidArgumentError(absl::StrFormat(
+          "assemble arrays of different memory kind, [%v] vs [%v]",
+          *memory_kind, this_kind));
+    }
+  }
+
+  TF_ASSIGN_OR_RETURN(xla::ifrt::DeviceListRef device_list,
+                      ifrt_client->MakeDeviceList(devices));
+  return ifrt_client->AssembleArrayFromSingleDeviceArrays(
+      ifrt_arrays.at(0)->dtype(), xla::ifrt::Shape(global_shape),
+      xla::ifrt::ConcreteSharding::Create(
+          std::move(device_list), memory_kind.value_or(xla::ifrt::MemoryKind()),
+          /*shape=*/xla::ifrt::Shape(global_shape),
+          /*shard_shapes=*/std::move(shapes)),
+      ifrt_arrays, xla::ifrt::ArrayCopySemantics::kReuseInput,
+      xla::ifrt::SingleDeviceShardSemantics::kAddressableShards);
 }
 
 }  // namespace neptune

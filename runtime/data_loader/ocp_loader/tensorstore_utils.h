@@ -1,12 +1,18 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_UTILS_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_UTILS_H_
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <variant>
+#include <vector>
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "nlohmann/json_fwd.hpp"  // from @nlohmann_json
+#include "xla/python/ifrt/array.h"  // from @xla
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
 
 namespace neptune {
 
@@ -69,6 +75,14 @@ absl::StatusOr<nlohmann::json>  BuildKvstoreTspec(
     bool use_ocdbt = true,
     const std::optional<std::variant<int, std::string>>& process_id =
         std::nullopt);
+
+// Constructs a single ifrt array from multiple ifrt_arrays with
+// the partially opaque sharding (ConcreteSharding). The global_shape is the
+// shape of the assembled array across all devices.
+absl::StatusOr<xla::ifrt::ArrayRef> AssembleOpaqueIfrtArray(
+    xla::ifrt::Client* ifrt_client,
+    const absl::Span<xla::ifrt::ArrayRef>& ifrt_arrays,
+    const std::vector<int64_t>& global_shape);
 
 }  // namespace neptune
 

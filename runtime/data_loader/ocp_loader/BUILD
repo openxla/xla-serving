@@ -10,10 +10,16 @@ cc_library(
     srcs = ["tensorstore_utils.cc"],
     hdrs = ["tensorstore_utils.h"],
     deps = [
+        "@abseil-cpp//absl/container:inlined_vector",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:str_format",
+        "@abseil-cpp//absl/types:span",
         "@nlohmann_json//:json",
+        "@xla//xla:xla_data_proto_cc",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/tsl/platform:statusor",
     ],
 )
 
