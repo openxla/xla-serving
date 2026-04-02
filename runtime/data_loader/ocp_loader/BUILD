@@ -17,6 +17,7 @@ cc_library(
         "@abseil-cpp//absl/strings:str_format",
         "@abseil-cpp//absl/types:span",
         "@nlohmann_json//:json",
+        "@tensorstore//tensorstore:data_type",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/python/ifrt",
         "@xla//xla/tsl/platform:statusor",

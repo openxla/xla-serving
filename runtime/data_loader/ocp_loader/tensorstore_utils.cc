@@ -22,10 +22,12 @@
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
+#include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/memory.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
+#include "data_type.h"  // from @tensorstore
 
 namespace neptune {
 
@@ -211,6 +213,87 @@ absl::StatusOr<xla::ifrt::ArrayRef> AssembleOpaqueIfrtArray(
           /*shard_shapes=*/std::move(shapes)),
       ifrt_arrays, xla::ifrt::ArrayCopySemantics::kReuseInput,
       xla::ifrt::SingleDeviceShardSemantics::kAddressableShards);
+}
+
+absl::StatusOr<tensorstore::DataType> ToTensorStoreDType(
+    xla::ifrt::DType dtype) {
+  static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__,
+                "Big endian support not implemented");
+
+  switch (dtype.kind()) {
+    case xla::ifrt::DType::kPred:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::bool_t>);
+    case xla::ifrt::DType::kS2:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::int2_t>);
+    case xla::ifrt::DType::kS4:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::int4_t>);
+    case xla::ifrt::DType::kS8:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::int8_t>);
+    case xla::ifrt::DType::kS16:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::int16_t>);
+    case xla::ifrt::DType::kS32:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::int32_t>);
+    case xla::ifrt::DType::kS64:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::int64_t>);
+    case xla::ifrt::DType::kU8:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::uint8_t>);
+    case xla::ifrt::DType::kU16:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::uint16_t>);
+    case xla::ifrt::DType::kU32:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::uint32_t>);
+    case xla::ifrt::DType::kU64:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::uint64_t>);
+    case xla::ifrt::DType::kBF16:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::bfloat16_t>);
+    case xla::ifrt::DType::kF16:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::float16_t>);
+    case xla::ifrt::DType::kF32:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::float32_t>);
+    case xla::ifrt::DType::kF64:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::float64_t>);
+    case xla::ifrt::DType::kC64:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::complex64_t>);
+    case xla::ifrt::DType::kC128:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::complex128_t>);
+    case xla::ifrt::DType::kF8E4M3FN:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::float8_e4m3fn_t>);
+    case xla::ifrt::DType::kF8E4M3B11FNUZ:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::float8_e4m3b11fnuz_t>);
+    case xla::ifrt::DType::kF8E4M3FNUZ:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::float8_e4m3fnuz_t>);
+    case xla::ifrt::DType::kF8E5M2:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::float8_e5m2_t>);
+    case xla::ifrt::DType::kF8E5M2FNUZ:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::float8_e5m2fnuz_t>);
+    case xla::ifrt::DType::kF4E2M1FN:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::float4_e2m1fn_t>);
+    default:
+      return absl::UnimplementedError(absl::StrCat(
+          "Unable to convert IFRT dtype ", dtype, " to TensorStore dtype"));
+  }
 }
 
 }  // namespace neptune

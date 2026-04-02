@@ -12,7 +12,9 @@
 #include "nlohmann/json_fwd.hpp"  // from @nlohmann_json
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
+#include "data_type.h"  // from @tensorstore
 
 namespace neptune {
 
@@ -83,6 +85,10 @@ absl::StatusOr<xla::ifrt::ArrayRef> AssembleOpaqueIfrtArray(
     xla::ifrt::Client* ifrt_client,
     const absl::Span<xla::ifrt::ArrayRef>& ifrt_arrays,
     const std::vector<int64_t>& global_shape);
+
+// Converts an IFRT data type to a TensorStore data type.
+absl::StatusOr<tensorstore::DataType> ToTensorStoreDType(
+    xla::ifrt::DType dtype);
 
 }  // namespace neptune
 
