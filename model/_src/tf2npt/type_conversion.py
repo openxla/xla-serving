@@ -1,0 +1,50 @@
+"""Type conversion helpers for tf2npt."""
+
+from typing import Any
+
+import numpy as np
+import tensorflow as tf
+
+from neptune_model._src.core import shlo_type
+
+
+def to_tf_dtype(shlo_dtype: shlo_type.ShloDType) -> Any:
+  if shlo_dtype == shlo_type.ShloDType.bf16:
+    return tf.bfloat16
+  if shlo_dtype == shlo_type.ShloDType.str:
+    return tf.string
+  return shlo_type.shlo_dtype_to_np_dtype(shlo_dtype)
+
+
+def to_tf_spec(
+    input_spec: shlo_type.ShloTensorSpec | tf.TensorSpec,
+) -> tf.TensorSpec:
+  if isinstance(input_spec, tf.TensorSpec):
+    return input_spec
+  return tf.TensorSpec(
+      shape=input_spec.shape,
+      dtype=to_tf_dtype(input_spec.dtype),
+      name=input_spec.name,
+  )
+
+
+def to_npt_dtype(tf_dtype: tf.DType) -> shlo_type.ShloDType:
+  if tf_dtype == tf.bfloat16:
+    return shlo_type.ShloDType.bf16
+  if tf_dtype == tf.string:
+    return shlo_type.ShloDType.str
+  if tf_dtype in (tf.resource, tf.variant):
+    raise ValueError(f"Can't convert TF dtype {tf_dtype} to a Neptune dtype")
+  return shlo_type.np_dtype_to_shlo_dtype(np.dtype(tf_dtype.as_numpy_dtype()))
+
+
+def to_npt_spec(
+    input_spec: tf.TensorSpec | shlo_type.ShloTensorSpec,
+) -> shlo_type.ShloTensorSpec:
+  if isinstance(input_spec, shlo_type.ShloTensorSpec):
+    return input_spec
+  return shlo_type.ShloTensorSpec(
+      shape=tuple(input_spec.shape.as_list()),
+      dtype=to_npt_dtype(input_spec.dtype),
+      name=input_spec.name,
+  )

@@ -12,7 +12,7 @@ from neptune_model.xla import xla_data_pb2
 
 
 class ShloTensorSpecToTensorTypeProtoTest(
-    test_utils.ObmTestCase, parameterized.TestCase
+    test_utils.NptTestCase, parameterized.TestCase
 ):
 
   def test_converts_spec(self):
@@ -79,7 +79,7 @@ class ShloTensorSpecToTensorTypeProtoTest(
 
 
 class ShloTensorSpecPyTreeToTypeProtoTest(
-    test_utils.ObmTestCase, parameterized.TestCase
+    test_utils.NptTestCase, parameterized.TestCase
 ):
 
   class MyCustomClass:

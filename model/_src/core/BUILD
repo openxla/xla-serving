@@ -134,7 +134,11 @@ py_library(
 py_library(
     name = "test_utils",
     srcs = ["test_utils.py"],
-    deps = ["@com_google_absl_py//absl/testing:parameterized"],
+    deps = [
+        "@com_google_absl_py//absl/testing:parameterized",
+        "@jax",
+        "@jaxtyping",
+    ],
 )
 
 py_library(
