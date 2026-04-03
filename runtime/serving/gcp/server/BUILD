@@ -69,6 +69,8 @@ cc_library(
         "@neptune//runtime/serving/gcp/proto:predict_cc_proto",
         "@neptune//runtime/serving/gcp/proto:prediction_service_cc_grpc_proto",
         "@neptune//runtime/serving/gcp/proto:prediction_service_cc_proto",
+        "@tsl//tsl/profiler/lib:traceme",
+        "@tsl//tsl/profiler/lib:traceme_encode",
         "@xla//xla/pjrt:pjrt_api",
         "@xla//xla/pjrt/plugin/xla_cpu:cpu_client_options",
         "@xla//xla/pjrt/plugin/xla_cpu:cpu_static_registration",

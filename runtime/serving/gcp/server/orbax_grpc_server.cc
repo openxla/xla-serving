@@ -38,6 +38,8 @@
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "third_party/tensorflow/core/framework/tensor.h"
+#include "tsl/profiler/lib/traceme.h"  // from @tsl
+#include "tsl/profiler/lib/traceme_encode.h"  // from @tsl
 
 ABSL_FLAG(std::string, orbax_grpc_server_platform, "cpu",
           "The platform to use. It can be cpu, tpu, or cuda.");
@@ -142,11 +144,16 @@ grpc::Status OrbaxGrpcServer::Predict(
                         "Interpreter not initialized.");
   }
 
-  std::string_view pipeline_name =
+  absl::string_view pipeline_name =
       request->model_spec().signature_name().empty()
-          ? kDefaultServingSignatureDefKey
-          : request->model_spec().signature_name();
+          ? absl::string_view(kDefaultServingSignatureDefKey)
+          : absl::string_view(request->model_spec().signature_name());
   VLOG(1) << "Using pipeline name: '" << pipeline_name << "'";
+
+  tsl::profiler::TraceMe trace_predict([&]() {
+    return tsl::profiler::TraceMeEncode("Predict",
+                                        {{"pipeline_name", pipeline_name}});
+  });
 
   TF_ASSIGN_OR_RETURN(jsv::KernelIODataType input_data_type,
                       interpreter_->GetModelInputDataType(pipeline_name));
@@ -155,14 +162,17 @@ grpc::Status OrbaxGrpcServer::Predict(
   VLOG(3) << "Input expects tensor: " << input_expects_tensor;
 
   absl::flat_hash_map<std::string, jsv::Value> input_with_names;
-  for (const auto& [name, host_buffer_proto] : request->inputs()) {
-    TF_ASSIGN_OR_RETURN(jsv::HostBuffer host_buffer,
-                        jsv::HostBuffer::FromProto(host_buffer_proto));
-    if (input_expects_tensor) {
-      TF_ASSIGN_OR_RETURN(tensorflow::Tensor tensor, ToTFTensor(host_buffer));
-      input_with_names[name] = jsv::Value(std::move(tensor));
-    } else {
-      input_with_names[name] = jsv::Value(std::move(host_buffer));
+  {
+    tsl::profiler::TraceMe trace_inputs("ConvertInputs");
+    for (const auto& [name, host_buffer_proto] : request->inputs()) {
+      TF_ASSIGN_OR_RETURN(jsv::HostBuffer host_buffer,
+                          jsv::HostBuffer::FromProto(host_buffer_proto));
+      if (input_expects_tensor) {
+        TF_ASSIGN_OR_RETURN(tensorflow::Tensor tensor, ToTFTensor(host_buffer));
+        input_with_names[name] = jsv::Value(std::move(tensor));
+      } else {
+        input_with_names[name] = jsv::Value(std::move(host_buffer));
+      }
     }
   }
   LogMapKeys(input_with_names, "Input with names", /*vlog_level=*/2);
@@ -180,17 +190,20 @@ grpc::Status OrbaxGrpcServer::Predict(
   bool output_is_tensor = (output_data_type == jsv::KernelIODataType::kTensor);
   VLOG(3) << "Output is tensor: " << output_is_tensor;
 
-  for (const auto& [name, value] : output_with_names) {
-    jsv::HostBuffer host_buffer;
-    if (output_is_tensor) {
-      TF_ASSIGN_OR_RETURN(host_buffer,
-                          ToHostBuffer(value.Get<tensorflow::Tensor>()));
-    } else {
-      host_buffer = value.Get<jsv::HostBuffer>();
+  {
+    tsl::profiler::TraceMe traceme_serialization("ConvertOutputs");
+    for (const auto& [name, value] : output_with_names) {
+      jsv::HostBuffer host_buffer;
+      if (output_is_tensor) {
+        TF_ASSIGN_OR_RETURN(host_buffer,
+                            ToHostBuffer(value.Get<tensorflow::Tensor>()));
+      } else {
+        host_buffer = value.Get<jsv::HostBuffer>();
+      }
+      HostBufferProto host_buffer_proto =
+          HostBuffer::ToHostBufferProto(std::move(host_buffer));
+      (*response->mutable_outputs())[name] = std::move(host_buffer_proto);
     }
-    HostBufferProto host_buffer_proto =
-        HostBuffer::ToHostBufferProto(std::move(host_buffer));
-    (*response->mutable_outputs())[name] = std::move(host_buffer_proto);
   }
 
   response->mutable_model_spec()->set_name(model_name_);

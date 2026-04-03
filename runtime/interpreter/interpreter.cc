@@ -9,13 +9,6 @@
 #include <utility>
 #include <vector>
 
-#include "runtime/interpreter/context.h"  // from @neptune
-#include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
-#include "runtime/interpreter/linear_graph_execute.h"  // from @neptune
-#include "runtime/interpreter/manifest_utils.h"  // from @neptune
-#include "runtime/interpreter/optional_function_handler.h"  // from @neptune
-#include "runtime/interpreter/optional_function_handler_factory.h"  // from @neptune
-#include "runtime/interpreter/run_options.h"  // from @neptune
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/flags/flag.h"  // from @abseil-cpp
@@ -37,6 +30,13 @@
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
 #include "runtime/data_loader/data_loader.h"  // from @neptune
+#include "runtime/interpreter/context.h"  // from @neptune
+#include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
+#include "runtime/interpreter/linear_graph_execute.h"  // from @neptune
+#include "runtime/interpreter/manifest_utils.h"  // from @neptune
+#include "runtime/interpreter/optional_function_handler.h"  // from @neptune
+#include "runtime/interpreter/optional_function_handler_factory.h"  // from @neptune
+#include "runtime/interpreter/run_options.h"  // from @neptune
 #include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
 #include "runtime/kernel/batching/batch_runner_op.h"  // from @neptune
 #include "runtime/kernel/kernel.h"  // from @neptune
@@ -58,6 +58,7 @@
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 #include "tsl/platform/context.h"  // from @tsl
+#include "tsl/profiler/lib/traceme.h"  // from @tsl
 
 ABSL_FLAG(bool, jsv_enable_parallel_loading_pipelines, true,
           "When set to true, load the pipelines in parallel.");
@@ -969,6 +970,8 @@ absl::StatusOr<std::vector<Value>> Interpreter::Run(
     absl::string_view pipeline_name, absl::Span<const Value> positional_inputs,
     const absl::flat_hash_map<std::string, Value>& keyword_inputs,
     const RunOptions run_options) {
+  VLOG(2) << "Interpreter::Run: pipeline_name=" << pipeline_name
+          << ", model_name=" << create_options_->model_name;
   auto result = [this, pipeline_name, &positional_inputs, &keyword_inputs,
                  &run_options]() -> absl::StatusOr<std::vector<Value>> {
     TF_ASSIGN_OR_RETURN(GraphBundle * graph_bundle,
@@ -1021,6 +1024,8 @@ tsl::Future<std::vector<Value>> Interpreter::RunAsync(
     absl::string_view pipeline_name, absl::Span<const Value> positional_inputs,
     const absl::flat_hash_map<std::string, Value>& keyword_inputs,
     const RunOptions run_options) {
+  VLOG(2) << "Interpreter::RunAsync: pipeline_name=" << pipeline_name
+          << ", model_name=" << create_options_->model_name;
   auto future = [this, pipeline_name, &positional_inputs, &keyword_inputs,
                  &run_options]() {
     // TODO: type check inputs and outputs.

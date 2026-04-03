@@ -20,10 +20,10 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "unsupported/Eigen/CXX11/Tensor"
+#include "llvm/include/llvm/Support/Casting.h"  // from @llvm-project
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "runtime/core/host_buffer_type_utils.h"  // from @neptune
 #include "runtime/core/sharding_utils_core.h"  // from @neptune
-#include "llvm/include/llvm/Support/Casting.h"  // from @llvm-project
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
@@ -42,6 +42,7 @@
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
+#include "tsl/profiler/lib/traceme.h"  // from @tsl
 
 namespace neptune::sharding_internal {
 namespace {
@@ -523,6 +524,7 @@ tsl::Future<HostBuffer> MakeHostBufferFromArray(
     const xla::HloSharding& hlo_sharding,
     const xla::ifrt::DeviceListRef& device_list,
     tsl::thread::ThreadPool& thread_pool) {
+  tsl::profiler::TraceMe trace_me("MakeHostBufferFromArray", /*level=*/3);
   absl::StatusOr<tsl::Future<HostBuffer>> output_future =
       MakeHostBufferFromArrayHelper(ifrt_client, input_array, hlo_sharding,
                                     device_list, thread_pool);
@@ -537,6 +539,8 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
     const xla::ifrt::DeviceListRef& device_list,
     xla::ifrt::ShardingRef ifrt_sharding,
     const tsl::thread::ThreadPool& thread_pool) {
+  tsl::profiler::TraceMe trace_me("MakeArrayFromHostBuffer_DeviceList",
+                                  /*level=*/3);
   if (llvm::isa<const xla::ifrt::SingleDeviceSharding>(ifrt_sharding.get())) {
     return CreateArrayFromHostBufferForSingleDevice(
         ifrt_client, input_host_buffer, device_list->devices()[0]);
@@ -598,6 +602,8 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
     xla::ifrt::Client& ifrt_client, const HostBuffer& input_host_buffer,
     absl::Span<const int> device_ids, xla::ifrt::ShardingRef ifrt_sharding,
     const tsl::thread::ThreadPool& thread_pool) {
+  tsl::profiler::TraceMe trace_me("MakeArrayFromHostBuffer_DeviceIds",
+                                  /*level=*/3);
   TF_ASSIGN_OR_RETURN(xla::ifrt::DeviceListRef device_list,
                       CreateDeviceList(ifrt_client, device_ids));
   return MakeArrayFromHostBuffer(ifrt_client, input_host_buffer,
