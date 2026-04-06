@@ -124,12 +124,12 @@ cc_library(
         "@neptune//runtime/kernel/batching:__subpackages__",
     ],
     deps = [
-        "//third_party/py/orbax/export/protos:oex_orchestration_cc_proto",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/strings:string_view",
+        "@neptune//protos:orchestration_cc_proto",
         "@neptune//runtime/core/batching:batch_scheduler",
     ],
 )

@@ -7,10 +7,6 @@
 #include <utility>
 #include <vector>
 
-#include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
-#include "runtime/interpreter/manifest_utils.h"  // from @neptune
-#include "runtime/interpreter/optional_function_handler_factory.h"  // from @neptune
-#include "runtime/interpreter/run_options.h"  // from @neptune
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/base/thread_annotations.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
@@ -20,15 +16,19 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "protos/manifest.pb.h"  // from @neptune
+#include "protos/orchestration.pb.h"  // from @neptune
 #include "runtime/core/flat_signature.h"  // from @neptune
 #include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
 #include "runtime/data_loader/data_loader.h"  // from @neptune
+#include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
+#include "runtime/interpreter/manifest_utils.h"  // from @neptune
+#include "runtime/interpreter/optional_function_handler_factory.h"  // from @neptune
+#include "runtime/interpreter/run_options.h"  // from @neptune
 #include "runtime/kernel/kernel.h"  // from @neptune
 #include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
 #include "google/protobuf/repeated_ptr_field.h"
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
-#include "third_party/py/orbax/export/protos/oex_orchestration.pb.h"
 #include "xla/tsl/concurrency/future.h"  // from @xla
 
 namespace neptune {
@@ -140,7 +140,7 @@ class Interpreter {
   struct GraphBundle {
     // For logging and debugging.
     std::string pipeline_name;
-    orbax_export_orchestration::Pipeline pipeline;
+    neptune_model_orchestration::Pipeline pipeline;
     FunctionFlatSignature signature;
     mutable absl::Mutex graph_mutex;
     // nullopt if the graph is not loaded yet.
@@ -172,24 +172,24 @@ class Interpreter {
 
   // Loads the graph from the given pipeline.
   absl::StatusOr<KernelGraph> LoadGraph(
-      const orbax_export_orchestration::Pipeline& pipeline);
+      const neptune_model_orchestration::Pipeline& pipeline);
 
   // Loads the graph from the given pipeline using the `components` from the
   // pipeline proto. If no components are provided in the pipeline proto, we
   // will create an auxiliary components from the legacy fields and load the
   // graph based on the auxiliary components.
   absl::StatusOr<KernelGraph> LoadGraphFromComponentProto(
-      const orbax_export_orchestration::Pipeline& pipeline,
+      const neptune_model_orchestration::Pipeline& pipeline,
       const proto2::RepeatedPtrField<
-          orbax_export_orchestration::Component>* absl_nullable
+          neptune_model_orchestration::Component>* absl_nullable
           auxiliary_components = nullptr);
 
   // Loads StableHloRunnerOp based on model function name and weights name.
   absl::StatusOr<std::unique_ptr<Kernel>> LoadStableHloRunnerOp(
       absl::string_view model_function_name, absl::string_view weights_name,
-      const orbax_export_orchestration::NamedTensorTypeList* named_inputs =
+      const neptune_model_orchestration::NamedTensorTypeList* named_inputs =
           nullptr,
-      const orbax_export_orchestration::NamedTensorTypeList* named_outputs =
+      const neptune_model_orchestration::NamedTensorTypeList* named_outputs =
           nullptr);
 
   // Loads the weights from the model.
@@ -199,7 +199,7 @@ class Interpreter {
   // - assigned_devices: the assigned devices for the weights.
   absl::StatusOr<DataLoader::LoadResult> LoadWeights(
       absl::string_view weight_set_name,
-      absl::Span<const orbax_model_manifest::Function* const> stablehlo_funcs,
+      absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs,
       const AssignedDevices& assigned_devices);
 
   // Converts the inputs to a vector of `Value`s by merging the positional and
@@ -209,8 +209,9 @@ class Interpreter {
       absl::Span<const Value> positional_inputs,
       const absl::flat_hash_map<std::string, Value>& keyword_inputs);
 
-  orbax_model_manifest::Manifest manifest_;
-  absl::flat_hash_map<std::string, const orbax_model_manifest::TopLevelObject*>
+  neptune_model_manifest::Manifest manifest_;
+  absl::flat_hash_map<std::string,
+                      const neptune_model_manifest::TopLevelObject*>
       manifest_objects_;
   // Routes optional functions to the correct handler based on function
   // type. OptionalFunctionHandlers for each key are unique per

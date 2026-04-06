@@ -14,8 +14,8 @@ proto_library(
     deps = [
         ":model_proto",
         "@com_google_protobuf//:protobuf", # any
-        "//third_party/py/orbax/experimental/model/core/protos:type_proto",
-        "//third_party/py/orbax/export/protos:oex_orchestration_proto",
+        "@neptune//protos:orchestration_proto",
+        "@neptune//protos:type_proto",
     ],
 )
 

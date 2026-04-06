@@ -4,12 +4,12 @@
 #include <memory>
 #include <vector>
 
-#include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "protos/manifest.pb.h"  // from @neptune
+#include "protos/orchestration.pb.h"  // from @neptune
+#include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
 #include "runtime/kernel/kernel.h"  // from @neptune
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
-#include "third_party/py/orbax/export/protos/oex_orchestration.pb.h"
 
 namespace neptune {
 
@@ -27,11 +27,12 @@ class OptionalFunctionHandler {
   // and output.
   virtual absl::StatusOr<std::vector<std::unique_ptr<Kernel>>> HandleFunction(
       absl::string_view model_path,
-      const orbax_model_manifest::Function& function,
+      const neptune_model_manifest::Function& function,
       const InterpreterCreateOptions& create_options,
       bool insert_pre_data_conversion, bool insert_post_data_conversion,
-      const orbax_export_orchestration::NamedTensorTypeList* named_inputs,
-      const orbax_export_orchestration::NamedTensorTypeList* named_outputs) = 0;
+      const neptune_model_orchestration::NamedTensorTypeList* named_inputs,
+      const neptune_model_orchestration::NamedTensorTypeList*
+          named_outputs) = 0;
 };
 
 }  // namespace neptune

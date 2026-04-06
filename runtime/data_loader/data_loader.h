@@ -6,7 +6,6 @@
 #include <string>
 #include <vector>
 
-#include "runtime/interpreter/manifest_utils.h"  // from @neptune
 #include "absl/base/no_destructor.h"  // from @abseil-cpp
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/base/thread_annotations.h"  // from @abseil-cpp
@@ -17,8 +16,9 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "protos/manifest.pb.h"  // from @neptune
 #include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
+#include "runtime/interpreter/manifest_utils.h"  // from @neptune
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
@@ -58,11 +58,11 @@ class DataLoader {
   // TODO: Unify the type style of all the optional args (`const
   // T* absl_nullable` preferred).
   virtual absl::StatusOr<LoadResult> Load(
-      const orbax_model_manifest::ExternalValue& value_to_load,
+      const neptune_model_manifest::ExternalValue& value_to_load,
       std::optional<absl::string_view> model_path,
       const AssignedDevices* absl_nullable assigned_devices,
-      std::optional<const orbax_model_manifest::Manifest*> manifest,
-      std::optional<absl::Span<const orbax_model_manifest::Function* const>>
+      std::optional<const neptune_model_manifest::Manifest*> manifest,
+      std::optional<absl::Span<const neptune_model_manifest::Function* const>>
           stable_hlo_func) = 0;
 
  protected:
@@ -79,13 +79,13 @@ class DataLoaderFactoryRegistry {
   // Registers a data loader factory for the given `loader_type`.
   // Returns error if the `loader_type` is already registered.
   absl::Status RegisterDataLoaderFactory(
-      orbax_model_manifest::LoaderType loader_type,
+      neptune_model_manifest::LoaderType loader_type,
       DataLoaderFactory data_loader_factory);
 
   // Creates a `DataLoader` instance for the given `loader_type` with
   // `create_options`. Returns error if the `loader_type` is not registered.
   absl::StatusOr<std::unique_ptr<DataLoader>> CreateDataLoader(
-      orbax_model_manifest::LoaderType loader_type,
+      neptune_model_manifest::LoaderType loader_type,
       DataLoader::CreateOptions create_options) const;
 
   static DataLoaderFactoryRegistry& GetGlobalRegistry() {
@@ -95,7 +95,7 @@ class DataLoaderFactoryRegistry {
 
  private:
   mutable absl::Mutex mu_;
-  absl::flat_hash_map<orbax_model_manifest::LoaderType, DataLoaderFactory>
+  absl::flat_hash_map<neptune_model_manifest::LoaderType, DataLoaderFactory>
       type_to_factory_ ABSL_GUARDED_BY(mu_);
 };
 

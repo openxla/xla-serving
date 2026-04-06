@@ -10,8 +10,8 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "protos/manifest.pb.h"  // from @neptune
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
 #include "xla/xla_data.pb.h"  // from @xla
 
 namespace neptune {
@@ -54,7 +54,7 @@ class StableHlo {
 
   // Creates an StableHlo object from one or multiple `Function`s.
   static absl::StatusOr<std::unique_ptr<StableHlo>> Create(
-      absl::Span<const orbax_model_manifest::Function* const> funcs);
+      absl::Span<const neptune_model_manifest::Function* const> funcs);
 
   // Creates an StableHlo object directly from a list of `Spec`s.
   static absl::StatusOr<std::unique_ptr<StableHlo>> Create(

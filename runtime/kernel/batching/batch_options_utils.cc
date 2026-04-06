@@ -5,8 +5,8 @@
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "protos/orchestration.pb.h"  // from @neptune
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
-#include "third_party/py/orbax/export/protos/oex_orchestration.pb.h"
 
 namespace neptune {
 

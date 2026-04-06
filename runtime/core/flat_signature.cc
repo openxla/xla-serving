@@ -12,10 +12,10 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "protos/manifest.pb.h"  // from @neptune
+#include "protos/type.pb.h"  // from @neptune
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
-#include "third_party/py/orbax/experimental/model/core/protos/type.pb.h"
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 

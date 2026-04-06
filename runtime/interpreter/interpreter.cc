@@ -22,6 +22,9 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "protos/manifest.pb.h"  // from @neptune
+#include "protos/orchestration.pb.h"  // from @neptune
+#include "protos/type.pb.h"  // from @neptune
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
 #include "runtime/core/constants.h"  // from @neptune
 #include "runtime/core/flat_signature.h"  // from @neptune
@@ -44,9 +47,6 @@
 #include "runtime/kernel/kernel_builder_context.h"  // from @neptune
 #include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
 #include "google/protobuf/repeated_ptr_field.h"
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
-#include "third_party/py/orbax/experimental/model/core/protos/type.pb.h"
-#include "third_party/py/orbax/export/protos/oex_orchestration.pb.h"
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
@@ -65,7 +65,7 @@ ABSL_FLAG(bool, jsv_enable_parallel_loading_pipelines, true,
 
 namespace neptune {
 
-using orbax_export_orchestration::BatchOptions;
+using neptune_model_orchestration::BatchOptions;
 
 namespace {
 
@@ -90,7 +90,7 @@ auto* request_count = tsl::monitoring::Counter<4>::New(
 using KernelSubGraph = std::vector<std::unique_ptr<Kernel>>;
 
 absl::Status ValidateStableHlo(
-    absl::Span<const orbax_model_manifest::Function* absl_nonnull const>
+    absl::Span<const neptune_model_manifest::Function* absl_nonnull const>
         funcs) {
   for (auto* func : funcs) {
     // TODO: mapping from function name to kernel
@@ -110,7 +110,7 @@ absl::Status ValidateStableHlo(
 }
 
 absl::StatusOr<std::string> GetKeyFromProcessorMimeType(
-    const orbax_model_manifest::Function& func) {
+    const neptune_model_manifest::Function& func) {
   if (func.body().other().has_mime_type()) {
     return std::string(func.body().other().mime_type());
   }
@@ -119,19 +119,19 @@ absl::StatusOr<std::string> GetKeyFromProcessorMimeType(
       "routing.");
 }
 
-proto2::RepeatedPtrField<orbax_export_orchestration::Component>
+proto2::RepeatedPtrField<neptune_model_orchestration::Component>
 CreateAuxiliaryComponents(
-    const orbax_export_orchestration::Pipeline& pipeline) {
-  proto2::RepeatedPtrField<orbax_export_orchestration::Component> components;
+    const neptune_model_orchestration::Pipeline& pipeline) {
+  proto2::RepeatedPtrField<neptune_model_orchestration::Component> components;
   for (const auto& pre_processor_name : pipeline.pre_processor_names()) {
     auto* component = components.Add();
     component->set_function_name(pre_processor_name);
-    component->set_role(orbax_export_orchestration::ROLE_PREPROCESSOR);
+    component->set_role(neptune_model_orchestration::ROLE_PREPROCESSOR);
   }
   for (const auto& model_function : pipeline.model_functions()) {
     auto* component = components.Add();
     component->set_function_name(model_function.model_function_name());
-    component->set_role(orbax_export_orchestration::ROLE_MODEL);
+    component->set_role(neptune_model_orchestration::ROLE_MODEL);
     if (model_function.has_weights_name()) {
       component->set_weights_name(model_function.weights_name());
     }
@@ -139,7 +139,7 @@ CreateAuxiliaryComponents(
   for (const auto& post_processor_name : pipeline.post_processor_names()) {
     auto* component = components.Add();
     component->set_function_name(post_processor_name);
-    component->set_role(orbax_export_orchestration::ROLE_POSTPROCESSOR);
+    component->set_role(neptune_model_orchestration::ROLE_POSTPROCESSOR);
   }
   return components;
 }
@@ -220,9 +220,9 @@ absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
                              batch_runner_op_options, thread_pool);
 }
 
-absl::StatusOr<const orbax_model_manifest::Function*> GetFunctionByObjectName(
+absl::StatusOr<const neptune_model_manifest::Function*> GetFunctionByObjectName(
     const absl::flat_hash_map<std::string,
-                              const orbax_model_manifest::TopLevelObject*>&
+                              const neptune_model_manifest::TopLevelObject*>&
         manifest_objects,
     absl::string_view function_object_name) {
   if (!manifest_objects.contains(function_object_name)) {
@@ -230,7 +230,7 @@ absl::StatusOr<const orbax_model_manifest::Function*> GetFunctionByObjectName(
         absl::StrCat("Failed to find function object with name: \"",
                      function_object_name, "\""));
   }
-  const orbax_model_manifest::TopLevelObject* function_obj =
+  const neptune_model_manifest::TopLevelObject* function_obj =
       manifest_objects.at(function_object_name);
 
   if (!function_obj->has_function() ||
@@ -263,7 +263,7 @@ struct BatchingConfig {
 
 BatchingConfig GetBatchingConfig(
     const InterpreterCreateOptions& create_options,
-    const orbax_export_orchestration::Pipeline& pipeline) {
+    const neptune_model_orchestration::Pipeline& pipeline) {
   BatchOptions::BatchComponent batch_component =
       BatchOptions::BATCH_COMPONENT_UNSPECIFIED;
   if (create_options.enable_batching && pipeline.has_batch_options()) {
@@ -350,7 +350,7 @@ absl::Status ValidateMapReturnIsAllowed(
 
 // Loads the input signature from the given pipeline.
 absl::StatusOr<FlatSignature> LoadPipelineInputSignature(
-    const orbax_export_orchestration::Pipeline& pipeline) {
+    const neptune_model_orchestration::Pipeline& pipeline) {
   if (pipeline.has_named_signature() &&
       pipeline.named_signature().has_inputs()) {
     // Get the flat signature from the `NamedSignature` in orchestration.
@@ -364,7 +364,7 @@ absl::StatusOr<FlatSignature> LoadPipelineInputSignature(
 
 // Loads the output signature from the given pipeline.
 absl::StatusOr<FlatSignature> LoadPipelineOutputSignature(
-    const orbax_export_orchestration::Pipeline& pipeline) {
+    const neptune_model_orchestration::Pipeline& pipeline) {
   if (pipeline.has_named_signature() &&
       pipeline.named_signature().has_outputs()) {
     // Get the flat signature from the `NamedSignature` in orchestration.
@@ -379,7 +379,8 @@ absl::StatusOr<FlatSignature> LoadPipelineOutputSignature(
 // Builds an in-memory representation `StableHlo` of StableHLOs from
 // proto representations in `Function`s.
 absl::StatusOr<std::unique_ptr<StableHlo>> BuildStableHloFromFunctions(
-    absl::Span<const orbax_model_manifest::Function* const> stable_hlo_funcs) {
+    absl::Span<const neptune_model_manifest::Function* const>
+        stable_hlo_funcs) {
   std::vector<StableHlo::Spec> stablehlo_specs;
   stablehlo_specs.reserve(stable_hlo_funcs.size());
   for (const auto& func : stable_hlo_funcs) {
@@ -387,8 +388,8 @@ absl::StatusOr<std::unique_ptr<StableHlo>> BuildStableHloFromFunctions(
     TF_ASSIGN_OR_RETURN(std::vector<ArgSpec> output_specs,
                         GetOutputSpec(*func));
     TF_RETURN_IF_ERROR(CheckMimeAndDataType(
-        func->body().stable_hlo_body().stable_hlo(), kStableHloMimeType,
-        orbax_model_manifest::UnstructuredData::kInlinedBytes,
+        func->body().stable_hlo_body().stable_hlo(), {kStableHloMimeType},
+        neptune_model_manifest::UnstructuredData::kInlinedBytes,
         "StableHlo MLIR module"));
     stablehlo_specs.push_back(StableHlo::Spec{
         .inputs = std::move(input_specs),
@@ -408,7 +409,7 @@ absl::StatusOr<std::unique_ptr<StableHlo>> BuildStableHloFromFunctions(
 
 // Loads the signature from the given pipeline.
 absl::StatusOr<FunctionFlatSignature> LoadPipelineSignature(
-    const orbax_export_orchestration::Pipeline& pipeline) {
+    const neptune_model_orchestration::Pipeline& pipeline) {
   TF_ASSIGN_OR_RETURN(FlatSignature input_flat_signature,
                       LoadPipelineInputSignature(pipeline));
   if (input_flat_signature.IsAllSpecWithName()) {
@@ -443,11 +444,11 @@ absl::StatusOr<FunctionFlatSignature> LoadPipelineSignature(
 // function(s). When there are multiple StableHLO functions, they are
 // concretized StableHLOs for a single polymorphic function.
 absl::StatusOr<std::unique_ptr<Kernel>> CreateStableHloRunnerOp(
-    absl::Span<const orbax_model_manifest::Function* const> stable_hlo_funcs,
-    const orbax_model_manifest::Manifest& manifest,
+    absl::Span<const neptune_model_manifest::Function* const> stable_hlo_funcs,
+    const neptune_model_manifest::Manifest& manifest,
     const std::vector<std::string>& weight_names,
-    const orbax_export_orchestration::NamedTensorTypeList* named_inputs,
-    const orbax_export_orchestration::NamedTensorTypeList* named_outputs,
+    const neptune_model_orchestration::NamedTensorTypeList* named_inputs,
+    const neptune_model_orchestration::NamedTensorTypeList* named_outputs,
     xla::CompileOptionsProto* absl_nullable compile_options,
     std::shared_ptr<xla::ifrt::Client> ifrt_client,
     const InterpreterCreateOptions& create_options,
@@ -505,12 +506,12 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateStableHloRunnerOp(
 }
 
 struct NamedSignature {
-  const orbax_export_orchestration::NamedTensorTypeList* inputs = nullptr;
-  const orbax_export_orchestration::NamedTensorTypeList* outputs = nullptr;
+  const neptune_model_orchestration::NamedTensorTypeList* inputs = nullptr;
+  const neptune_model_orchestration::NamedTensorTypeList* outputs = nullptr;
 };
 
 NamedSignature GetNamedSignatureOfComponent(
-    const orbax_export_orchestration::Component& component) {
+    const neptune_model_orchestration::Component& component) {
   if (component.has_named_signature()) {
     return {.inputs = &component.named_signature().inputs(),
             .outputs = &component.named_signature().outputs()};
@@ -591,7 +592,7 @@ absl::Status Interpreter::Load() {
   }
 
   TF_ASSIGN_OR_RETURN(
-      orbax_export_orchestration::Pipelines pipelines,
+      neptune_model_orchestration::Pipelines pipelines,
       GetOexOrchestration(create_options_->model_path, manifest_));
 
   if (pipelines.name_to_pipeline().empty()) {
@@ -663,10 +664,10 @@ absl::Status Interpreter::Load() {
 
 absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadStableHloRunnerOp(
     absl::string_view model_function_name, absl::string_view weights_name,
-    const orbax_export_orchestration::NamedTensorTypeList* named_inputs,
-    const orbax_export_orchestration::NamedTensorTypeList* named_outputs) {
+    const neptune_model_orchestration::NamedTensorTypeList* named_inputs,
+    const neptune_model_orchestration::NamedTensorTypeList* named_outputs) {
   TF_ASSIGN_OR_RETURN(
-      std::vector<const orbax_model_manifest::Function*> stablehlo_funcs,
+      std::vector<const neptune_model_manifest::Function*> stablehlo_funcs,
       GetStableHloFunctionsByObjectName(manifest_objects_,
                                         model_function_name));
 
@@ -738,15 +739,15 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadStableHloRunnerOp(
 }
 
 absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
-    const orbax_export_orchestration::Pipeline& pipeline,
+    const neptune_model_orchestration::Pipeline& pipeline,
     const proto2::RepeatedPtrField<
-        orbax_export_orchestration::Component>* absl_nullable
+        neptune_model_orchestration::Component>* absl_nullable
         auxiliary_components) {
   if (auxiliary_components == nullptr && pipeline.components().empty()) {
     return absl::InvalidArgumentError(
         "Pipeline does not contain any component.");
   }
-  const proto2::RepeatedPtrField<orbax_export_orchestration::Component>&
+  const proto2::RepeatedPtrField<neptune_model_orchestration::Component>&
       components = auxiliary_components != nullptr ? *auxiliary_components
                                                    : pipeline.components();
 
@@ -769,7 +770,7 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
     NamedSignature named_signature =
         keyword_arguments_based ? GetNamedSignatureOfComponent(component)
                                 : NamedSignature{};
-    if (component.role() == orbax_export_orchestration::ROLE_MODEL) {
+    if (component.role() == neptune_model_orchestration::ROLE_MODEL) {
       if (stablehlo_runner_op != nullptr) {
         return absl::InvalidArgumentError(
             "A pipeline can only support one JAX function.");
@@ -783,13 +784,13 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
   }
   // Load data processors.
   for (const auto& component : components) {
-    if (component.role() == orbax_export_orchestration::ROLE_MODEL) {
+    if (component.role() == neptune_model_orchestration::ROLE_MODEL) {
       // The stablehlo runner op has been loaded explicitly at the beginning.
       // Skip it here.
       continue;
     }
     TF_ASSIGN_OR_RETURN(
-        const orbax_model_manifest::Function* func,
+        const neptune_model_manifest::Function* func,
         GetFunctionByObjectName(manifest_objects_, component.function_name()));
     LOG(INFO) << "Adding function: " << component.function_name();
     NamedSignature named_signature =
@@ -801,10 +802,10 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
 
     bool insert_pre_data_conversion = true;
     bool insert_post_data_conversion = true;
-    if (component.role() == orbax_export_orchestration::ROLE_PREPROCESSOR) {
+    if (component.role() == neptune_model_orchestration::ROLE_PREPROCESSOR) {
       insert_pre_data_conversion = batching_config.batch_preprocessing;
     } else if (component.role() ==
-               orbax_export_orchestration::ROLE_POSTPROCESSOR) {
+               neptune_model_orchestration::ROLE_POSTPROCESSOR) {
       insert_post_data_conversion = batching_config.batch_postprocessing;
     }
     TF_ASSIGN_OR_RETURN(
@@ -813,10 +814,10 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
             create_options_->model_path, *func, *create_options_,
             insert_pre_data_conversion, insert_post_data_conversion,
             named_signature.inputs, named_signature.outputs));
-    if (component.role() == orbax_export_orchestration::ROLE_PREPROCESSOR) {
+    if (component.role() == neptune_model_orchestration::ROLE_PREPROCESSOR) {
       preprocessors.push_back(std::move(sub_graph));
     } else if (component.role() ==
-               orbax_export_orchestration::ROLE_POSTPROCESSOR) {
+               neptune_model_orchestration::ROLE_POSTPROCESSOR) {
       postprocessors.push_back(std::move(sub_graph));
     }
   }
@@ -873,7 +874,7 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
 // fields and remove this function once all models are migrated to the new
 // components.
 absl::StatusOr<KernelGraph> Interpreter::LoadGraph(
-    const orbax_export_orchestration::Pipeline& pipeline) {
+    const neptune_model_orchestration::Pipeline& pipeline) {
   // When there are components in the pipeline and the pipeline is keyword
   // arguments based, we load the graph from the component proto for now as the
   // LoadGraphFromComponentProto method is not fully implemented yet.
@@ -882,7 +883,7 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraph(
   }
   // If there are no components in the pipeline, create them from legacy fields
   // and then call LoadGraphFromComponentProto.
-  proto2::RepeatedPtrField<orbax_export_orchestration::Component> components =
+  proto2::RepeatedPtrField<neptune_model_orchestration::Component> components =
       CreateAuxiliaryComponents(pipeline);
   return LoadGraphFromComponentProto(pipeline, &components);
 }
@@ -925,7 +926,7 @@ Interpreter::GetGraphBundle(absl::string_view pipeline_name) const {
 
 absl::StatusOr<DataLoader::LoadResult> Interpreter::LoadWeights(
     absl::string_view weight_set_name,
-    absl::Span<const orbax_model_manifest::Function* const> stablehlo_funcs,
+    absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs,
     const AssignedDevices& assigned_devices) {
   const auto it = manifest_objects_.find(weight_set_name);
   if (it == manifest_objects_.end()) {

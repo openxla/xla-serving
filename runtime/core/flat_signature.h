@@ -10,9 +10,9 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "protos/manifest.pb.h"  // from @neptune
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
 
 namespace neptune {
 

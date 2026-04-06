@@ -17,7 +17,6 @@ cc_library(
     hdrs = ["data_loader.h"],
     visibility = [":checkpoint_users"],
     deps = [
-        "//third_party/py/orbax/experimental/model/core/protos:manifest_cc_proto",
         "@abseil-cpp//absl/base:core_headers",
         "@abseil-cpp//absl/base:no_destructor",
         "@abseil-cpp//absl/base:nullability",
@@ -29,6 +28,7 @@ cc_library(
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/types:span",
+        "@neptune//protos:manifest_cc_proto",
         "@neptune//runtime/core:ifrt_loaded_variable_registry",
         "@neptune//runtime/interpreter:manifest_utils",
         "@xla//xla/python/ifrt",
@@ -42,7 +42,6 @@ cc_library(
     hdrs = ["default_data_loader.h"],
     deps = [
         ":data_loader",
-        "//third_party/py/orbax/experimental/model/core/protos:manifest_cc_proto",
         "@abseil-cpp//absl/algorithm:container",
         "@abseil-cpp//absl/base:core_headers",
         "@abseil-cpp//absl/base:nullability",
@@ -54,6 +53,7 @@ cc_library(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
+        "@neptune//protos:manifest_cc_proto",
         "@neptune//runtime/core:constants",
         "@neptune//runtime/core:ifrt_device_utils",
         "@neptune//runtime/core:ifrt_loaded_variable_registry",
@@ -79,9 +79,9 @@ cc_library(
     deps = [
         ":data_loader",
         ":default_data_loader",
-        "//third_party/py/orbax/experimental/model/core/protos:manifest_cc_proto",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/status:statusor",
+        "@neptune//protos:manifest_cc_proto",
     ],
     alwayslink = 1,
 )

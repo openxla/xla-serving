@@ -5,12 +5,12 @@
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "protos/orchestration.pb.h"  // from @neptune
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
-#include "third_party/py/orbax/export/protos/oex_orchestration.pb.h"
 
 namespace neptune {
 
-using orbax_export_orchestration::BatchOptions;
+using neptune_model_orchestration::BatchOptions;
 
 // batch_padding_policy string constants matching with the
 // BatchOptions.BatchPaddingPolicy enum.

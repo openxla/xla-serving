@@ -3,18 +3,18 @@ edition = "2024";
 package jsv.serving;
 
 import "google/protobuf/any.proto";
+import "protos/orchestration.proto";
+import "protos/type.proto";
 import "third_party/neptune/runtime/serving/gcp/proto/model.proto";
-import "third_party/py/orbax/experimental/model/core/protos/type.proto";
-import "third_party/py/orbax/export/protos/oex_orchestration.proto";
 
 message SignatureDef {
   // The overall (input and output) signature of the model.
-  // For details, see oex_orchestration.proto
-  orbax_model_type.FunctionSignature signature = 1;
+  // For details, see orchestration.proto
+  neptune_model_type.FunctionSignature signature = 1;
 
   // An optional signature that is a (ordered) mapping from names to
-  // `TensorType`. For details, see oex_orchestration.proto
-  orbax_export_orchestration.NamedSignature named_signature = 2
+  // `TensorType`. For details, see orchestration.proto
+  neptune_model_orchestration.NamedSignature named_signature = 2
       [features.field_presence = EXPLICIT];
 }
 

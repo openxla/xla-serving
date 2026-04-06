@@ -4,16 +4,16 @@
 #include <utility>
 #include <vector>
 
-#include "runtime/interpreter/manifest_utils.h"  // from @neptune
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/memory/memory.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "protos/manifest.pb.h"  // from @neptune
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
+#include "runtime/interpreter/manifest_utils.h"  // from @neptune
 #include "google/protobuf/message.h"
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
@@ -22,7 +22,7 @@ namespace neptune {
 namespace {
 
 absl::StatusOr<StableHlo::Spec> BuildSpec(
-    const orbax_model_manifest::Function& func) {
+    const neptune_model_manifest::Function& func) {
   TF_ASSIGN_OR_RETURN(std::vector<ArgSpec> input_spec, GetInputSpec(func));
   TF_ASSIGN_OR_RETURN(std::vector<ArgSpec> output_spec, GetOutputSpec(func));
 
@@ -32,7 +32,7 @@ absl::StatusOr<StableHlo::Spec> BuildSpec(
                      func.DebugString()));
   }
 
-  const orbax_model_manifest::StableHloFunctionBody& stable_hlo_body =
+  const neptune_model_manifest::StableHloFunctionBody& stable_hlo_body =
       func.body().stable_hlo_body();
 
   return StableHlo::Spec{
@@ -50,7 +50,7 @@ absl::StatusOr<StableHlo::Spec> BuildSpec(
 }  // namespace
 
 absl::StatusOr<std::unique_ptr<StableHlo>> StableHlo::Create(
-    absl::Span<const orbax_model_manifest::Function* const> funcs) {
+    absl::Span<const neptune_model_manifest::Function* const> funcs) {
   if (funcs.empty()) {
     return absl::InvalidArgumentError(
         "`funcs` should have at least one element");

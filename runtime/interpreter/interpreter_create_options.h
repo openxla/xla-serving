@@ -6,11 +6,11 @@
 #include <string>
 
 #include "absl/base/nullability.h"  // from @abseil-cpp
+#include "protos/manifest.pb.h"  // from @neptune
 #include "runtime/core/allocator.h"  // from @neptune
 #include "runtime/core/default_allocator.h"  // from @neptune
 #include "runtime/core/stablehlo_optimizer.h"  // from @neptune
 #include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "tsl/platform/protobuf.h"  // from @tsl
@@ -49,9 +49,9 @@ struct InterpreterCreateOptions {
   Allocator* absl_nonnull allocator = DefaultAllocator::GetInstance();
   // The platform name to use for `xla::ExecutableBuildOptions`. If not set,
   // the default platform name will be "TPU".
-  // platform_name should be the name of orbax_model_manifest::Platform name.
-  std::string platform_name =
-      orbax_model_manifest::Platform_Name(orbax_model_manifest::Platform::TPU);
+  // platform_name should be the name of neptune_model_manifest::Platform name.
+  std::string platform_name = neptune_model_manifest::Platform_Name(
+      neptune_model_manifest::Platform::TPU);
   // If true, the interpreter will only load the pipeline when it is requested.
   bool lazy_loading_pipelines = false;
   // If true, the device assignment in the manifest will be ignored.

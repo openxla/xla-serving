@@ -4,13 +4,13 @@
 #include <memory>
 #include <optional>
 
-#include "runtime/interpreter/manifest_utils.h"  // from @neptune
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "protos/manifest.pb.h"  // from @neptune
 #include "runtime/data_loader/data_loader.h"  // from @neptune
-#include "third_party/py/orbax/experimental/model/core/protos/manifest.pb.h"
+#include "runtime/interpreter/manifest_utils.h"  // from @neptune
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
@@ -26,11 +26,11 @@ class DefaultDataLoader : public DataLoader {
       CreateOptions create_options);
 
   absl::StatusOr<LoadResult> Load(
-      const orbax_model_manifest::ExternalValue& value_to_load,
+      const neptune_model_manifest::ExternalValue& value_to_load,
       std::optional<absl::string_view> model_path,
       const AssignedDevices* absl_nullable assigned_devices,
-      std::optional<const orbax_model_manifest::Manifest*> manifest,
-      std::optional<absl::Span<const orbax_model_manifest::Function* const>>
+      std::optional<const neptune_model_manifest::Manifest*> manifest,
+      std::optional<absl::Span<const neptune_model_manifest::Function* const>>
           stablehlo_funcs) override;
 
  private:
