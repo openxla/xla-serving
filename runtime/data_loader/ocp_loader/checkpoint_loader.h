@@ -14,7 +14,6 @@
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "third_party/australis/google/ifrt/ifrt_australis.pb.h"
 #include "xla/layout.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla

@@ -1,14 +1,13 @@
 #include "runtime/data_loader/ocp_loader/tensorstore_loader.h"  // from @neptune
 
 #include <optional>
-#include <string_view>
 #include <utility>
 #include <vector>
 
-#include "absl/log/check.h"  // from @abseil-cpp
-#include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
-#include "third_party/australis/google/ifrt/ifrt_australis.pb.h"
+#include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "third_party/australis/google/ifrt/tensorstore_loader.h"
 #include "runtime/data_loader/ocp_loader/common_types.h"  // from @neptune
 #include "runtime/data_loader/ocp_loader/shared.h"  // from @neptune
@@ -21,11 +20,13 @@
 #include "util/result.h"  // from @tensorstore
 
 namespace neptune {
+namespace {
+
+}  // namespace
 
 absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadFromTensorstore(
-    xla::ifrt::Client* ifrt_client,
-    const ::proto2::RepeatedPtrField<aux::TensorStoreLoadSpec>& specs,
-    std::string_view base_dir, aux::LoadFromTensorstoreExtraOptions opts,
+    xla::ifrt::Client* ifrt_client, absl::Span<const TensorStoreLoadSpec> specs,
+    absl::string_view base_dir, aux::LoadFromTensorstoreExtraOptions opts,
     CheckpointType checkpoint_type) {
   std::optional<tensorstore::Context> context;
   if (checkpoint_type == CheckpointType::kOcdbt) {
@@ -37,10 +38,8 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadFromTensorstore(
     opts.tensorstore_context_spec = *std::move(context_spec_json);
   }
 
-  // Do not set `base_dir` because the path in `specs` already contains the
-  // base_dir.
-  return aux::LoadFromTensorstore(ifrt_client, specs, /*base_dir=*/"",
-                                  std::move(opts));
+  // TODO - b/479524192: Add implementation for external users.
+  return absl::UnimplementedError("To be implemented.");
 }
 
 }  // namespace neptune

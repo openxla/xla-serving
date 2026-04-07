@@ -14,12 +14,10 @@
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "third_party/australis/google/ifrt/ifrt_australis.pb.h"
-#include "nlohmann/json_fwd.hpp"  // from @nlohmann_json
+#include "nlohmann/json.hpp"  // from @nlohmann_json
 #include "runtime/data_loader/ocp_loader/common_types.h"  // from @neptune
 #include "runtime/data_loader/ocp_loader/tensorstore_loader.h"  // from @neptune
 #include "runtime/data_loader/ocp_loader/tensorstore_utils.h"  // from @neptune
-#include "google/protobuf/repeated_ptr_field.h"
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
@@ -99,17 +97,17 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadCheckpoint(
         weight_names.size(), " and ", weight_specs.size()));
   }
 
-  std::vector<aux::TensorStoreLoadSpec> ts_load_specs;
+  std::vector<TensorStoreLoadSpec> ts_load_specs;
   ts_load_specs.reserve(weight_specs.size());
 
   for (int i = 0; i < weight_specs.size(); ++i) {
     const ArraySpec& weight_spec = weight_specs[i];
-    aux::TensorStoreLoadSpec ts_load_spec;
+    TensorStoreLoadSpec ts_load_spec;
     // TODO: add support for other dtypes.
     xla::PrimitiveType primitive_type;
     TF_ASSIGN_OR_RETURN(primitive_type,
                         xla::ifrt::ToPrimitiveType(weight_spec.dtype));
-    ts_load_spec.set_dtype(static_cast<int64_t>(primitive_type));
+    ts_load_spec.dtype = static_cast<int64_t>(primitive_type);
 
     TF_ASSIGN_OR_RETURN(xla::HloSharding hlo_sharding,
                         xla::HloSharding::FromProto(weight_spec.sharding));
@@ -126,10 +124,10 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadCheckpoint(
     for (int j = 0; j < index_domains.size(); ++j) {
       auto& index_domain = index_domains[j];
       VLOG(4) << "index_domain: " << index_domain;
-      auto* shard = ts_load_spec.add_shards();
-      shard->set_device_id(device_list->devices()[j]->Id().value());
+      auto& shard = ts_load_spec.shards.emplace_back();
+      shard.device_id = device_list->devices()[j]->Id().value();
       for (int64_t index : index_domain.origin().elements()) {
-        shard->add_index_offset(index);
+        shard.index_offset.push_back(index);
       }
     }
     // TODO: assume equal split. Add error checking in case that is
@@ -137,33 +135,30 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadCheckpoint(
     auto json_shape_array = nlohmann::json::array();
 
     for (auto dim : weight_spec.shape.dims()) {
-      ts_load_spec.add_global_shape(dim);
+      ts_load_spec.global_shape.push_back(dim);
       json_shape_array.push_back(dim);
     }
     for (auto dim : index_domains[0].shape().dims()) {
-      ts_load_spec.add_per_shard_shape(dim);
+      ts_load_spec.per_shard_shape.push_back(dim);
     }
 
     TF_ASSIGN_OR_RETURN(
         nlohmann::json ts_load_spec_json,
         GetJsonTsLoadSpec(root_path, weight_names[i], checkpoint_type));
 
-    ts_load_spec.set_json_ts_spec_string(ts_load_spec_json.dump());
+    ts_load_spec.json_ts_spec_string = ts_load_spec_json.dump();
 
     if (weight_spec.layout.has_value()) {
-      ts_load_spec.mutable_layout()->CopyFrom(
-          weight_spec.layout.value().ToProto());
+      ts_load_spec.layout = weight_spec.layout.value().ToProto();
     }
 
     VLOG(3) << "ts_load_spec: " << ts_load_spec;
     ts_load_specs.push_back(ts_load_spec);
   }
 
-  auto load_specs = proto2::RepeatedPtrField<aux::TensorStoreLoadSpec>(
-      ts_load_specs.begin(), ts_load_specs.end());
-
   // Assume each weight has a full path
-  return LoadFromTensorstore(&client, load_specs, /*base_dir=*/root_path,
+  return LoadFromTensorstore(&client, absl::MakeSpan(ts_load_specs),
+                             /*base_dir=*/root_path,
                              /*opts=*/{}, checkpoint_type);
 }
 
