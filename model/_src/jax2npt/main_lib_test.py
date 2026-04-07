@@ -45,7 +45,7 @@ class MainLibTest(parameterized.TestCase):
       ),
       dict(
           testcase_name='_native_cpu_serialization',
-          native_serialization_platforms=[manifest_pb2.Platform.CPU],
+          native_serialization_platforms=['cpu'],
           polymorphic_shape=False,
       ),
   )
@@ -101,11 +101,15 @@ class MainLibTest(parameterized.TestCase):
     else:
       input_args_spec = jax.ShapeDtypeStruct((8, 4), jnp.float64)
     params_args_spec = _get_shape_dtype_struct(params)
+    jax_export_kwargs = {}
+    if native_serialization_platforms:
+      jax_export_kwargs['platforms'] = native_serialization_platforms
+
     obm_shlo_fn = main_lib.convert(
         model_fn,
         (params_args_spec, input_args_spec),
         {},
-        platforms=native_serialization_platforms,
+        jax_export_kwargs=jax_export_kwargs,
     )
     obm_module = dict()
     model_function_name = 'my_model_fn'

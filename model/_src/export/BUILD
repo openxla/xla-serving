@@ -9,7 +9,6 @@ py_library(
         ":constants",
         ":jax_model",
         ":serving_config",
-        ":utils",
         "//third_party/neptune/model/_src/core:orchestration_proto_utils",
         "//third_party/neptune/model/_src/core:persistence_lib",
         "//third_party/neptune/model/_src/core:saveable",
@@ -28,6 +27,10 @@ py_library(
     name = "jax_model",
     srcs = ["jax_model.py"],
     deps = [
+        ":utils",
+        "//third_party/neptune/model/_src/core:shlo_function",
+        "//third_party/neptune/model/_src/core:shlo_type",
+        "//third_party/neptune/model/_src/jax2npt:__init__",
         "//third_party/neptune/model/_src/jax2npt:typing",
         "@jax",
         "@jaxtyping",
@@ -40,6 +43,7 @@ pytype_strict_test(
     deps = [
         ":jax_model",
         "@com_google_absl_py//absl/testing:absltest",
+        "@jax",
     ],
 )
 
@@ -53,8 +57,6 @@ py_library(
     name = "utils",
     srcs = ["utils.py"],
     deps = [
-        ":jax_model",
-        "//third_party/neptune/model/_src/jax2npt:typing",
         "@jax",
         "@jaxtyping",
     ],

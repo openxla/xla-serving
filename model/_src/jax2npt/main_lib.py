@@ -1,6 +1,7 @@
 """A converter from JAX to ML Exported Model (EM)."""
 
 # pylint: disable=protected-access
+from collections.abc import Mapping
 import dataclasses
 from typing import Any, Dict, Sequence
 
@@ -151,10 +152,7 @@ def convert(
     fun_jax: typing.ApplyFn,
     args_spec: Sequence[Any],
     kwargs_spec: Dict[str, Any],
-    platforms: Sequence[manifest_pb2.Platform] | None = None,
-    native_serialization_disabled_checks: Sequence[
-        jax_export.DisabledSafetyCheck
-    ] = (),
+    jax_export_kwargs: Mapping[str, Any] | None = None,
     xla_compile_options_per_platform: (
         manifest_pb2.CompileOptionsProtoMap | None
     ) = None,
@@ -180,13 +178,8 @@ def convert(
       {class}`jax.ShapeDtypeStruct`, or values with `.shape` and `.dtype`
       attributes, or result of calling `jax_export.symbolic_args_specs()`. These
       will be used to trace the function in jax export.
-    platforms: Optional. Specifies the platform(s) for which to lower the code.
-      Must be a tuple of `obm.manifest_pb2.Platform`. If not set, the JAX
-      default backend will be used. Example can be found in
-
-    native_serialization_disabled_checks: A sequence of safety checks to
-      disable. Example can be found in
-      https://jax.readthedocs.io/en/latest/_autosummary/jax.export.DisabledSafetyCheck.html#jax.export.DisabledSafetyCheck
+    jax_export_kwargs: Keyword arguments for `jax.export.export`. See
+      https://docs.jax.dev/en/latest/_autosummary/jax.export.export.html#jax.export.export.
     xla_compile_options_per_platform: XLA compile options to be saved in the
       model artifact, to ensure XLA compilation consistency and reproducibility
       between export time and serving time. Each map entry corresponds to a
@@ -204,10 +197,9 @@ def convert(
   if not hasattr(fun_jax, "trace"):
     fun_jax = jax.jit(fun_jax)
 
-  exported_creator = utils.make_jax_exported_creator(
+  exported_creator = jax_export.export(
       fun_jax,
-      platforms,
-      native_serialization_disabled_checks,
+      **(jax_export_kwargs or {}),
   )
 
   utils.assert_not_in_jax_transformation()

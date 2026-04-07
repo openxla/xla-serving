@@ -1,6 +1,6 @@
 """Common utils shared between jax_to_polymorphic_function.py and main_lib.py."""
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, TypeVar
 
 import jax
@@ -37,29 +37,6 @@ def assert_not_in_jax_transformation():
   arr = jax.lax.iota("int32", 0)
   if isinstance(arr, jax.core.Tracer):
     raise ValueError("convert must be used outside all JAX transformations.")
-
-
-def make_jax_exported_creator(
-    fun_jax: typing.ApplyFn,
-    platforms: Sequence[manifest_pb2.Platform] | None = None,
-    native_serialization_disabled_checks: Sequence[
-        jax_export.DisabledSafetyCheck
-    ] = (),
-):
-  """Calls jax_export.export and returns a callable that returns Exported."""
-  if platforms:
-    native_serialization_platforms = tuple(
-        manifest_pb2.Platform.Name(p).lower() for p in platforms
-    )
-  else:
-    native_serialization_platforms = None
-
-  return jax_export.export(
-      fun_jax,
-      platforms=native_serialization_platforms,
-      disabled_checks=native_serialization_disabled_checks,
-  )
-
 
 JaxDType = np.dtype[Any]
 
