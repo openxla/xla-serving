@@ -9,7 +9,6 @@ py_library(
         ":constants",
         ":jax_model",
         ":serving_config",
-        ":utils",
         "@com_google_absl_py//absl/logging",
         "@jax",
         "@jaxtyping",
@@ -28,8 +27,12 @@ py_library(
     name = "jax_model",
     srcs = ["jax_model.py"],
     deps = [
+        ":utils",
         "@jax",
         "@jaxtyping",
+        "@neptune//model/_src/core:shlo_function",
+        "@neptune//model/_src/core:shlo_type",
+        "@neptune//model/_src/jax2npt:__init__",
         "@neptune//model/_src/jax2npt:typing",
     ],
 )
@@ -40,6 +43,7 @@ pytype_strict_test(
     deps = [
         ":jax_model",
         "@com_google_absl_py//absl/testing:absltest",
+        "@jax",
     ],
 )
 
@@ -53,10 +57,8 @@ py_library(
     name = "utils",
     srcs = ["utils.py"],
     deps = [
-        ":jax_model",
         "@jax",
         "@jaxtyping",
-        "@neptune//model/_src/jax2npt:typing",
     ],
 )
 

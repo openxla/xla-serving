@@ -21,7 +21,9 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
   def test_save_model_with_one_config(self):
     """Tests that save() runs."""
     model = jax_model.JaxModel(
-        apply_fn=lambda params, inputs: {'out': inputs['x'] * params['w']},
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=lambda params, inputs: {'out': inputs['x'] * params['w']},
+        ),
         params={'w': jnp.array([2.0], dtype=jnp.float32)},
     )
     cfg = serving_config.ServingConfig(
@@ -276,7 +278,10 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
   def test_update_save_bundle_for_jax_model_with_polymorphic_shape(self):
     """Tests that _update_save_bundle_for_jax_model works with polymorphic shapes."""
     model = jax_model.JaxModel(
-        apply_fn=lambda params, x: x * params['w'],
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=lambda params, x: x * params['w'],
+            input_polymophic_shapes='b,_',
+        ),
         params={'w': jnp.array([2.0], dtype=jnp.float32)},
     )
     input_signature = jax.ShapeDtypeStruct(shape=('b', 1), dtype=jnp.float32)
@@ -288,8 +293,6 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
         model=model,
         method_key=None,
         input_signature=input_signature,
-        input_polymophic_shapes=input_polymophic_shapes,
-        polymorphic_constraints=[],
         serving_signature=serving_signature,
         save_bundle=save_bundle,
     )
