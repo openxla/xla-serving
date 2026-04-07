@@ -10,12 +10,14 @@
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/time/time.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "third_party/australis/google/ifrt/tensorstore_loader.h"
+#include "nlohmann/json.hpp"  // from @nlohmann_json
 #include "runtime/data_loader/ocp_loader/common_types.h"  // from @neptune
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
+#include "xla/python/ifrt/memory.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
 namespace neptune {
@@ -63,11 +65,17 @@ struct TensorStoreLoadSpec {
   }
 };
 
+struct LoadFromTensorstoreExtraOptions {
+  absl::Duration timeout = absl::InfiniteDuration();
+  std::optional<xla::ifrt::MemoryKind> memory_kind = std::nullopt;
+  std::optional<nlohmann::json> tensorstore_context_spec = std::nullopt;
+};
+
 // TensorStoreLoader(ifrt_client).Load(), but with fastpaths for different
 // backends.
 absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadFromTensorstore(
     xla::ifrt::Client* ifrt_client, absl::Span<const TensorStoreLoadSpec> specs,
-    absl::string_view base_dir, aux::LoadFromTensorstoreExtraOptions opts,
+    absl::string_view base_dir, LoadFromTensorstoreExtraOptions opts,
     CheckpointType checkpoint_type);
 
 }  // namespace neptune

@@ -8,7 +8,6 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "third_party/australis/google/ifrt/tensorstore_loader.h"
 #include "runtime/data_loader/ocp_loader/common_types.h"  // from @neptune
 #include "runtime/data_loader/ocp_loader/shared.h"  // from @neptune
 #include "google/protobuf/repeated_ptr_field.h"
@@ -26,7 +25,7 @@ namespace {
 
 absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadFromTensorstore(
     xla::ifrt::Client* ifrt_client, absl::Span<const TensorStoreLoadSpec> specs,
-    absl::string_view base_dir, aux::LoadFromTensorstoreExtraOptions opts,
+    absl::string_view base_dir, LoadFromTensorstoreExtraOptions opts,
     CheckpointType checkpoint_type) {
   std::optional<tensorstore::Context> context;
   if (checkpoint_type == CheckpointType::kOcdbt) {
