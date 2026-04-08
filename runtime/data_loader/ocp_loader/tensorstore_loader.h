@@ -16,9 +16,9 @@
 #include "runtime/data_loader/ocp_loader/common_types.h"  // from @neptune
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
-#include "xla/python/ifrt/device.h"  // from @xla
 #include "xla/python/ifrt/memory.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
+#include "context.h"  // from @tensorstore
 
 namespace neptune {
 
@@ -71,8 +71,31 @@ struct LoadFromTensorstoreExtraOptions {
   std::optional<nlohmann::json> tensorstore_context_spec = std::nullopt;
 };
 
-// TensorStoreLoader(ifrt_client).Load(), but with fastpaths for different
-// backends.
+// Shared context for loading multiple ifrt::Arrays from tensorstore.
+class TensorStoreLoader {
+ public:
+  // ifrt_client must outlive
+  explicit TensorStoreLoader(
+      xla::ifrt::Client* ifrt_client,
+      std::optional<tensorstore::Context> context = std::nullopt)
+      : ifrt_client_(ifrt_client),
+        context_(context.value_or(tensorstore::Context())) {}
+
+  // Loads a single array from tensorstore.
+  absl::StatusOr<xla::ifrt::ArrayRef> LoadSingleArray(
+      const TensorStoreLoadSpec& proto_spec, absl::string_view base_dir = "",
+      int64_t* total_transfer = nullptr);
+
+  absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> Load(
+      absl::Span<const TensorStoreLoadSpec> specs,
+      absl::string_view base_dir = "", int64_t* total_transfer = nullptr);
+
+ private:
+  xla::ifrt::Client* ifrt_client_;
+  tensorstore::Context context_;
+};
+
+// Uses TensorStoreLoader to load arrays from tensorstore.
 absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadFromTensorstore(
     xla::ifrt::Client* ifrt_client, absl::Span<const TensorStoreLoadSpec> specs,
     absl::string_view base_dir, LoadFromTensorstoreExtraOptions opts,
