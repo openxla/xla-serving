@@ -800,22 +800,23 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
     TF_ASSIGN_OR_RETURN(OptionalFunctionHandler * handler,
                         optional_function_handler_router_.GetHandler(key));
 
-    bool insert_pre_data_conversion = true;
-    bool insert_post_data_conversion = true;
+    bool pre_data_conversion = true;
     if (component.role() == neptune_model_orchestration::ROLE_PREPROCESSOR) {
-      insert_pre_data_conversion = batching_config.batch_preprocessing;
-    } else if (component.role() ==
+      pre_data_conversion = batching_config.batch_preprocessing;
+    }
+    bool post_data_conversion = true;
+    if (component.role() ==
                neptune_model_orchestration::ROLE_POSTPROCESSOR) {
-      insert_post_data_conversion = batching_config.batch_postprocessing;
+      post_data_conversion = batching_config.batch_postprocessing;
     }
     TF_ASSIGN_OR_RETURN(
         std::vector<std::unique_ptr<Kernel>> sub_graph,
-        handler->HandleFunction(
-            create_options_->model_path, *func, *create_options_,
-            insert_pre_data_conversion, insert_post_data_conversion,
-            named_signature.inputs, named_signature.outputs));
-    if (component.role() == neptune_model_orchestration::ROLE_PREPROCESSOR) {
-      preprocessors.push_back(std::move(sub_graph));
+       handler->HandleFunction(create_options_->model_path, *func,
+                                *create_options_, pre_data_conversion,
+                                post_data_conversion, named_signature.inputs,
+                                named_signature.outputs));
+   if (component.role() == neptune_model_orchestration::ROLE_PREPROCESSOR) {
+       preprocessors.push_back(std::move(sub_graph));
     } else if (component.role() ==
                neptune_model_orchestration::ROLE_POSTPROCESSOR) {
       postprocessors.push_back(std::move(sub_graph));

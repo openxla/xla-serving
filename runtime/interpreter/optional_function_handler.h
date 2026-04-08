@@ -19,17 +19,14 @@ class OptionalFunctionHandler {
   virtual ~OptionalFunctionHandler() = default;
 
   // Handles the function by creating a sub-graph that can be inserted into the
-  // current graph.
-  // TODO: `insert_pre_data_conversion` and
-  // `insert_post_data_conversion` are used to determine whether to insert data
-  // conversion kernels before and after the optional function. Remove these two
-  // params once the TfSavedModelFunctionRunnerOp supports HostBuffer as input
-  // and output.
+  // current graph. `pre_data_conversion` and `post_data_conversion` is used to
+  // determine whether to convert the input and output of the function to
+  // HostBuffer.
   virtual absl::StatusOr<std::vector<std::unique_ptr<Kernel>>> HandleFunction(
       absl::string_view model_path,
       const neptune_model_manifest::Function& function,
-      const InterpreterCreateOptions& create_options,
-      bool insert_pre_data_conversion, bool insert_post_data_conversion,
+      const InterpreterCreateOptions& create_options, bool pre_data_conversion,
+      bool post_data_conversion,
       const neptune_model_orchestration::NamedTensorTypeList* named_inputs,
       const neptune_model_orchestration::NamedTensorTypeList*
           named_outputs) = 0;
