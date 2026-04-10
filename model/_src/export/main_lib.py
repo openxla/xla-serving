@@ -192,6 +192,7 @@ def _update_save_bundle(
           orchestration_pb2.Component(
               role=node.role,
               function_name=cfg.serving_signature,
+              weights_name=constants.WEIGHTS_NAME,
           )
       )
     else:

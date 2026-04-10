@@ -286,6 +286,7 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
             components {
               role: ROLE_MODEL
               function_name: "serving_default"
+              weights_name: "weights"
             }
           }
         }
