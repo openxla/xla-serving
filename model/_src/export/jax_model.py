@@ -7,6 +7,7 @@ import jax
 import jax.export as jax_export
 import jaxtyping
 from neptune_model._src import jax2npt
+from neptune_model._src.core import compile_options_util
 from neptune_model._src.core import shlo_function
 from neptune_model._src.core import shlo_type
 from neptune_model._src.export import utils
@@ -32,7 +33,7 @@ class ApplyFnBundle:
   apply_fn: ApplyFn
   input_polymophic_shapes: Any | None = None
   polymorphic_constraints: Sequence[str] = ()
-  jax_export_kwargs: Mapping[str, Any] | None = None
+  jax_export_kwargs: Mapping[str, Any] = dataclasses.field(default_factory=dict)
 
 
 SERVING_DEFAULT_KEY = 'serving_default'
@@ -89,9 +90,17 @@ class JaxModel:
         ),
         constraints=apply_fn_bundle.polymorphic_constraints,
     )
+
+    compile_options_per_platform = compile_options_util.generate_xla_compile_options(
+        native_serialization_platforms=apply_fn_bundle.jax_export_kwargs.get(
+            'platforms', None
+        ),
+        jax_mesh=self._jax_mesh,
+    )
     return jax2npt.convert(
         fun_jax=apply_fn_bundle.apply_fn,
         args_spec=args_specs,
         kwargs_spec={},
         jax_export_kwargs=apply_fn_bundle.jax_export_kwargs,
+        xla_compile_options_per_platform=compile_options_per_platform,
     )

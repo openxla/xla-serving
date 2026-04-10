@@ -28,6 +28,7 @@ py_library(
     srcs = ["jax_model.py"],
     deps = [
         ":utils",
+        "//third_party/neptune/model/_src/core:compile_options_util",
         "//third_party/neptune/model/_src/core:shlo_function",
         "//third_party/neptune/model/_src/core:shlo_type",
         "//third_party/neptune/model/_src/jax2npt:__init__",

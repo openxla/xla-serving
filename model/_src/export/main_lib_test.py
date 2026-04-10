@@ -23,6 +23,7 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
     model = jax_model.JaxModel(
         apply_fn_bundle=jax_model.ApplyFnBundle(
             apply_fn=lambda params, inputs: {'out': inputs['x'] * params['w']},
+            jax_export_kwargs={'platforms': ['cpu']},
         ),
         params={'w': jnp.array([2.0], dtype=jnp.float32)},
     )
@@ -44,6 +45,13 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
     orchestration_path = pathlib.Path(export_path) / orchestration_filename
     pipelines_proto = orchestration_pb2.Pipelines.FromString(
         orchestration_path.read_bytes()
+    )
+    manifest_proto.objects[
+        'serving_default'
+    ].function.body.stable_hlo_body.supplemental_info[
+        'xla_compile_options'
+    ].ClearField(
+        'inlined_bytes'
     )
 
     with self.subTest(name='validate_manifest_proto'):
@@ -129,6 +137,20 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
                   }
                 }
               }
+              body {
+                stable_hlo_body {
+                  calling_convention_version: 10
+                  lowering_platforms: "cpu"
+                  module_kept_var_idx: 0
+                  module_kept_var_idx: 1
+                  supplemental_info {
+                    key: "xla_compile_options"
+                    value {
+                      mime_type: "application/protobuf; type=neptune_model_manifest.CompileOptionsProtoMap"
+                    }
+                  }
+                }
+              }
               visibility: PUBLIC
             }
           }
@@ -163,7 +185,9 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
           self,
           expected_manifest_proto,
           manifest_proto,
-          ignored_fields=['objects.function.body.stable_hlo_body'],
+          ignored_fields=[
+              'objects.function.body.stable_hlo_body.stable_hlo',
+          ],
       )
 
     with self.subTest(name='validate_orchestration_proto'):
@@ -281,6 +305,7 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
         apply_fn_bundle=jax_model.ApplyFnBundle(
             apply_fn=lambda params, x: x * params['w'],
             input_polymophic_shapes='b,_',
+            jax_export_kwargs={'platforms': ['cpu']},
         ),
         params={'w': jnp.array([2.0], dtype=jnp.float32)},
     )
