@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -140,15 +141,24 @@ class BazelBuildProtos(build_py):
 
     super().run()
 
+init_path = os.path.join(os.path.dirname(__file__), "__init__.py")
 
-# Grab any existing packages before the build runs (like your _src folder)
+with open(init_path, "r", encoding="utf-8") as f:
+  version_match = re.search(
+      r"^__version__\s*=\s*['\"]([^'\"]+)['\"]", f.read(), re.MULTILINE
+  )
+  if version_match:
+    __version__ = version_match.group(1)
+  else:
+    raise RuntimeError("Unable to find __version__ string in __init__.py")
+
+
 discovered_packages = [
     f"neptune_model.{pkg}" for pkg in find_packages(where=".")
 ]
 
 setup(
-    name="neptune-model",
-    version="0.0.1",
+    version=__version__,
     packages=["neptune_model"] + discovered_packages,
     package_dir={
         "neptune_model": ".",
@@ -156,7 +166,6 @@ setup(
         "neptune_model.protos": "protos",
     },
     package_data={
-        # Adding a catch-all for nested folders so every py/pyi file gets grabbed
         "": ["*.py", "*.pyi"],
     },
     include_package_data=True,

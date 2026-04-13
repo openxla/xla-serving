@@ -1,0 +1,101 @@
+name: Auto-Release Neptune Model
+
+on:
+  push:
+    branches: [ "main" ] # Triggers automatically when code is merged to main
+  workflow_dispatch:
+
+# CRITICAL PERMISSIONS
+permissions:
+  contents: write    # Required to create the GitHub Release
+
+jobs:
+  # ==========================================
+  # JOB 1: THE SCOUT
+  # ==========================================
+  check-version:
+    name: Check Version
+    runs-on: ubuntu-latest
+    # We must explicitly map the step outputs to Job outputs so Job 2 can see them
+    outputs:
+      is_new: ${{ steps.release_check.outputs.is_new }}
+      version: ${{ steps.version_check.outputs.version }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect Version in __init__.py
+        id: version_check
+        working-directory: ./model
+        run: |
+          VERSION=$(python -c "import re; print(re.search(r'''__version__\s*=\s*['\"]([^'\"]+)['\"]''', open('__init__.py').read()).group(1))")
+          echo "Found version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if Release Already Exists
+        id: release_check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "v${{ steps.version_check.outputs.version }}" > /dev/null 2>&1; then
+            echo "Release already exists. Skipping build."
+            echo "is_new=false" >> $GITHUB_OUTPUT
+          else
+            echo "New version detected!"
+            echo "is_new=true" >> $GITHUB_OUTPUT
+          fi
+
+  # ==========================================
+  # JOB 2: THE BUILDER
+  # ==========================================
+  build-and-publish:
+    name: Build and Publish
+    runs-on: ubuntu-latest
+    # 1. Wait for Job 1 to finish
+    needs: check-version
+    # 2. ONLY run this entire job if Job 1 found a new version
+    if: needs.check-version.outputs.is_new == 'true'
+
+    steps:
+      # We have to checkout again because this Job runs on a brand new server!
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Bazelisk
+        uses: bazelbuild/setup-bazelisk@v3
+
+      - name: Cache Bazel Build
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel
+          key: ${{ runner.os }}-bazel-${{ hashFiles('MODULE.bazel', 'WORKSPACE') }}
+          restore-keys: |
+            ${{ runner.os }}-bazel-
+
+      - name: Install Python Build Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build setuptools wheel
+
+      - name: Build the Neptune Model Wheel
+        env:
+          NEPTUNE_ROOT_DIR: ${{ github.workspace }}
+        working-directory: ./model
+        run: python -m build --wheel --no-isolation
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: ./model
+        run: |
+          # Notice how we pull the version number from Job 1's outputs!
+          VERSION="v${{ needs.check-version.outputs.version }}"
+          gh release create "$VERSION" dist/*.whl \
+            --title "Neptune Model $VERSION" \
+            --notes "Automated release for version $VERSION"
