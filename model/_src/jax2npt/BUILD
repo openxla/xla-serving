@@ -48,6 +48,10 @@ py_library(
 py_library(
     name = "__init__",
     srcs = ["__init__.py"],
+    visibility = [
+        "//third_party/py/neptune_model:__pkg__",
+        "@neptune//model:__subpackages__",
+    ],
     deps = [
         ":constants",
         ":main_lib",
@@ -69,7 +73,6 @@ pytype_strict_test(
         "@jax//:experimental_layout",
         "@neptune//model/_src/core:shlo_type",
         "@numpy",
-        "@orbax//:experimental_model_core",
         "@xla//xla:xla_data_proto_py_pb2",
     ],
 )
