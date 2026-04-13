@@ -27,9 +27,18 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
         ),
         params={'w': jnp.array([2.0], dtype=jnp.float32)},
     )
+    batch_options = orchestration_pb2.BatchOptions(
+        batch_component=orchestration_pb2.BatchOptions.MODEL_FUNCTION,
+        max_batch_size=8,
+        allowed_batch_sizes=[2, 4, 8],
+        batch_timeout_micros=1000,
+        max_enqueued_batches=10,
+        num_batch_threads=2,
+    )
     cfg = serving_config.ServingConfig(
         serving_signature='serving_default',
         input_signature={'x': jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.float32)},
+        batch_options=batch_options,
     )
     export_path = self.create_tempdir().full_path
     main_lib.save(
@@ -287,6 +296,16 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
               role: ROLE_MODEL
               function_name: "serving_default"
               weights_name: "weights"
+            }
+            batch_options {
+              batch_component: MODEL_FUNCTION
+              max_batch_size: 8
+              batch_timeout_micros: 1000
+              allowed_batch_sizes: 2
+              allowed_batch_sizes: 4
+              allowed_batch_sizes: 8
+              num_batch_threads: 2
+              max_enqueued_batches: 10
             }
           }
         }

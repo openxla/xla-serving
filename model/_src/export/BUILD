@@ -53,7 +53,11 @@ pytype_strict_test(
 py_library(
     name = "serving_config",
     srcs = ["serving_config.py"],
-    deps = ["@jaxtyping"],
+    deps = [
+        "//third_party/neptune/protos:orchestration_py_pb2",
+        "@com_google_absl_py//absl/logging",
+        "@jaxtyping",
+    ],
 )
 
 py_library(
@@ -68,6 +72,17 @@ py_library(
 py_library(
     name = "constants",
     srcs = ["constants.py"],
+)
+
+pytype_strict_test(
+    name = "serving_config_test",
+    srcs = ["serving_config_test.py"],
+    deps = [
+        ":serving_config",
+        "//third_party/neptune/protos:orchestration_py_pb2",
+        "@com_google_absl_py//absl/testing:absltest",
+        "@com_google_absl_py//absl/testing:parameterized",
+    ],
 )
 
 pytype_strict_test(

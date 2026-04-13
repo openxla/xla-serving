@@ -279,6 +279,8 @@ def _update_save_bundle(
       )
   )
   pipeline_proto.components.extend(components)
+  if cfg.batch_options is not None:
+    pipeline_proto.batch_options.CopyFrom(cfg.batch_options)
 
   save_bundle.pipelines.name_to_pipeline[cfg.serving_signature].CopyFrom(
       pipeline_proto
