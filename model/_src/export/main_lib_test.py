@@ -300,6 +300,87 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
     with self.subTest(name='checkpoint_exists'):
       self.assertTrue((pathlib.Path(export_path) / 'checkpoint').is_dir())
 
+  def test_save_model_with_concretization(self):
+    """Tests that save() works with concretized polymorphic shapes."""
+    model = jax_model.JaxModel(
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=lambda params, x: {'out': x['input'] * params['w']},
+            input_polymophic_shapes={'input': 'b,_'},
+            input_polymorphic_shape_symbol_values={'b': [1, 2]},
+            jax_export_kwargs={'platforms': ['cpu']},
+        ),
+        params={'w': jnp.array([2.0], dtype=jnp.float32)},
+    )
+    cfg = serving_config.ServingConfig(
+        serving_signature='serving_default',
+        input_signature={
+            'input': jax.ShapeDtypeStruct(shape=('b', 1), dtype=jnp.float32)
+        },
+    )
+    export_path = self.create_tempdir().full_path
+    main_lib.save(
+        model=model,
+        export_path=export_path,
+        serving_configs=[cfg],
+    )
+
+    manifest_proto = persistence_lib.load(export_path)
+    self.assertIn('serving_default', manifest_proto.objects)
+
+    with self.subTest(name='validate_manifest_proto_concretization'):
+      # When multiple functions are saved for a signature, they are stored
+      # as a poly_fn with concrete_functions in the manifest.
+      obj = manifest_proto.objects['serving_default']
+      self.assertTrue(obj.HasField('poly_fn'))
+      self.assertLen(obj.poly_fn.concrete_functions, 2)
+      # Check the signature of one of the concrete functions (e.g., b=1).
+      # Input is ((params, inputs), kwargs)
+      input_tuple = obj.poly_fn.concrete_functions[0].signature.input.tuple
+      # Params (first element of first tuple)
+      self.assertEqual(
+          input_tuple.elements[0]
+          .tuple.elements[0]
+          .dict.string_to_type['w']
+          .leaf.tensor_type.shape.shape_with_known_rank.dimension_sizes[0]
+          .size,
+          1,
+      )
+      # Inputs (second element of first tuple)
+      # The first dimension of the input should be 1 for the first concrete function.
+      self.assertEqual(
+          input_tuple.elements[0]
+          .tuple.elements[1]
+          .dict.string_to_type['input']
+          .leaf.tensor_type.shape.shape_with_known_rank.dimension_sizes[0]
+          .size,
+          1,
+      )
+
+    orchestration_filename = manifest_proto.supplemental_info[
+        'orchestration'
+    ].file_system_location.string_path
+    orchestration_path = pathlib.Path(export_path) / orchestration_filename
+    pipelines_proto = orchestration_pb2.Pipelines.FromString(
+        orchestration_path.read_bytes()
+    )
+
+    with self.subTest(name='validate_orchestration_proto_polymorphism'):
+      pipeline = pipelines_proto.name_to_pipeline['serving_default']
+      # The first dimension of the first input should be dynamic (size 0 in proto for None)
+      input_type = (
+          pipeline.signature.input.tuple.elements[0]
+          .tuple.elements[0]
+          .dict.string_to_type['input']
+          .leaf.tensor_type
+      )
+      self.assertTrue(input_type.shape.HasField('shape_with_known_rank'))
+      # In this proto representation, a dynamic dimension often has no size set.
+      self.assertFalse(
+          input_type.shape.shape_with_known_rank.dimension_sizes[0].HasField(
+              'size'
+          )
+      )
+
   def test_update_save_bundle_for_jax_model_with_polymorphic_shape(self):
     """Tests that _update_save_bundle_for_jax_model works with polymorphic shapes."""
     model = jax_model.JaxModel(
@@ -311,7 +392,6 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
         params={'w': jnp.array([2.0], dtype=jnp.float32)},
     )
     input_signature = jax.ShapeDtypeStruct(shape=('b', 1), dtype=jnp.float32)
-    input_polymophic_shapes = 'b,_'
     serving_signature = 'serving_default'
     save_bundle = main_lib.NeptuneModelSaveBundle()
 

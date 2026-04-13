@@ -28,6 +28,50 @@ from neptune_model._src.export import serving_config
 from neptune_model.protos import orchestration_pb2
 
 
+def _infer_polymorphic_signature(
+    concrete_signatures: Sequence[jaxtyping.PyTree[shlo_type.ShloTensorSpec]],
+) -> jaxtyping.PyTree[shlo_type.ShloTensorSpec]:
+  """Infers a polymorphic signature from a sequence of concrete signatures.
+
+  E.g.
+  Given a sequence of concrete signatures:
+  (
+      {'inputs': (ShloTensorSpec(shape=(1, 3), dtype=jnp.float32}),}
+      {'inputs': (ShloTensorSpec(shape=(2, 3), dtype=jnp.float32}),}
+  )
+
+  Infer a polymorphic signature for them:
+    {'inputs': (ShloTensorSpec(shape=(None, 3), dtype=jnp.float32}),)}
+  since the first dimension is different across provided signatures.
+
+
+  Args:
+    concrete_signatures: A sequence of concrete signatures where each signature
+      contains shape dtype spec with concrete shapes.
+
+  Returns:
+    A polymorphic signature where shape may contain None to indicate
+    polymorphic shapes. If shapes of all input signatures are concrete and the
+    same, the output signature will be the same as the input signature and have
+    concrete shapes.
+  """
+  if not concrete_signatures:
+    return {}
+
+  def _infer_spec(*specs: shlo_type.ShloTensorSpec) -> shlo_type.ShloTensorSpec:
+    if not specs:
+      raise ValueError("`specs` must not be empty.")
+    shapes = zip(*(s.shape for s in specs))
+    poly_shape = [dims[0] if len(set(dims)) == 1 else None for dims in shapes]
+    return shlo_type.ShloTensorSpec(poly_shape, specs[0].dtype)
+
+  return jax.tree_util.tree_map(
+      _infer_spec,
+      *concrete_signatures,
+      is_leaf=lambda x: isinstance(x, shlo_type.ShloTensorSpec),
+  )
+
+
 @dataclasses.dataclass
 class NeptuneModelSaveBundle:
   """A bundle of objects to be saved in the Neptune model format.
@@ -138,15 +182,34 @@ def _update_save_bundle_for_jax_model(
     ValueError: If model.apply_fn is a Mapping but method_key is not provided
       or if the provided method_key is not found in the mapping.
   """
-  model_shlo_function = model.get_shlo_function(
+  model_shlo_functions = model.get_shlo_functions(
       input_signature=input_signature,
       method_key=method_key,
   )
-  save_bundle.manifest_objects[serving_signature] = model_shlo_function
+  if len(model_shlo_functions) == 1:
+    save_bundle.manifest_objects[serving_signature] = model_shlo_functions[0]
+  elif len(model_shlo_functions) > 1:
+    save_bundle.manifest_objects[serving_signature] = tuple(
+        model_shlo_functions
+    )
+  else:
+    raise ValueError("No SHLO functions found for model.")
 
+  # Infer the polymorphic signature for the model function by combining the
+  # input and output signatures of all SHLO functions. Multiple functions may
+  # exist if polymorphic shapes were concretized into multiple discrete
+  # signatures.
+  model_function_sig = _infer_polymorphic_signature(
+      [func.input_signature for func in model_shlo_functions]
+  ), _infer_polymorphic_signature(
+      [func.output_signature for func in model_shlo_functions]
+  )
   return (
-      _calculate_jax_model_input_sig(model_shlo_function.input_signature),
-      model_shlo_function.output_signature,
+      # The internal SHLO function signature includes the model parameters as
+      # the first argument. We exclude them here to create the external-facing
+      # input signature that only contains the actual user inputs.
+      _calculate_jax_model_input_sig(model_function_sig[0]),
+      model_function_sig[1],
   )
 
 
