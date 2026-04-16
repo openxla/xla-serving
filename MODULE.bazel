@@ -36,7 +36,6 @@ archive_override(
     urls = ["https://github.com/openxla/xla/archive/d776fe25fde3bb0f28485ccd7947ade00e3d3bf4.tar.gz"],
 )
 
-
 ## Tensorflow dependencies for common runtime, Tensor etc.
 
 bazel_dep(name = "tensorflow", repo_name = "org_tensorflow")
@@ -47,6 +46,8 @@ archive_override(
     urls = ["https://github.com/tensorflow/tensorflow/archive/8eddcee72d37971d3620570d31c9e9ec69a35aac.zip"],
 )
 
+tf_third_party = use_extension("@org_tensorflow//third_party/extensions:third_party.bzl", "third_party_ext")
+use_repo(tf_third_party, "tf_runtime")
 
 # TODO: upstreaming in cl/822016400 copybara:strip
 single_version_override(
