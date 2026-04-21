@@ -3,6 +3,14 @@ load("@rules_python//python:defs.bzl", "py_library", "py_test")
 package(default_visibility = ["//third_party/neptune:__subpackages__"])
 
 py_library(
+    name = "__init__",
+    srcs = ["__init__.py"],
+    deps = [
+        ":converter",
+    ],
+)
+
+py_library(
     name = "utils",
     srcs = ["utils.py"],
 )

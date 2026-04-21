@@ -9,12 +9,17 @@ py_library(
         ":constants",
         ":jax_model",
         ":serving_config",
+        ":utils",
         "//third_party/neptune/model/_src/core:orchestration_proto_utils",
         "//third_party/neptune/model/_src/core:persistence_lib",
         "//third_party/neptune/model/_src/core:saveable",
         "//third_party/neptune/model/_src/core:shlo_type",
         "//third_party/neptune/model/_src/core:type_proto_utils",
         "//third_party/neptune/model/_src/jax2npt:__init__",
+        "//third_party/neptune/model/_src/processors:jax_processor",
+        "//third_party/neptune/model/_src/processors:processor",
+        "//third_party/neptune/model/_src/processors:tf_processor",
+        "//third_party/neptune/model/_src/tf2npt:__init__",
         "//third_party/neptune/protos:orchestration_py_pb2",
         "@com_google_absl_py//absl/logging",
         "@jax",
@@ -54,6 +59,7 @@ py_library(
     name = "serving_config",
     srcs = ["serving_config.py"],
     deps = [
+        "//third_party/neptune/model/_src/processors:processor",
         "//third_party/neptune/protos:orchestration_py_pb2",
         "@com_google_absl_py//absl/logging",
         "@jaxtyping",
@@ -64,8 +70,10 @@ py_library(
     name = "utils",
     srcs = ["utils.py"],
     deps = [
+        "//third_party/neptune/model/_src/core:shlo_type",
         "@jax",
         "@jaxtyping",
+        "@numpy",
     ],
 )
 
@@ -102,11 +110,30 @@ pytype_strict_test(
 )
 
 pytype_strict_test(
+    name = "main_lib_orchestration_test",
+    srcs = ["main_lib_orchestration_test.py"],
+    data = glob(["testdata/**/*"]),
+    deps = [
+        ":jax_model",
+        ":main_lib",
+        ":serving_config",
+        "//third_party/neptune/model/_src/core:persistence_lib",
+        "//third_party/neptune/model/_src/processors:processor",
+        "//third_party/neptune/model/_src/processors:tf_processor",
+        "//third_party/neptune/protos:orchestration_py_pb2",
+        "//third_party/neptune/protos:tf_concrete_function_handle_py_pb2",
+        "//third_party/py/tensorflow",
+        "@com_google_absl_py//absl/testing:absltest",
+        "@jax",
+    ],
+)
+
+pytype_strict_test(
     name = "utils_test",
     srcs = ["utils_test.py"],
     deps = [
-        ":jax_model",
         ":utils",
+        "//third_party/neptune/model/_src/core:shlo_type",
         "@com_google_absl_py//absl/testing:absltest",
         "@com_google_absl_py//absl/testing:parameterized",
         "@jax",

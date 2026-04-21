@@ -23,7 +23,6 @@ in Neptune's format.
 from collections.abc import Sequence
 import dataclasses
 import pathlib
-from typing import Any
 
 from absl import logging
 import jax
@@ -31,6 +30,7 @@ import jaxtyping
 import orbax.checkpoint as ocp
 
 from neptune_model._src import jax2npt
+from neptune_model._src import tf2npt
 from neptune_model._src.core import orchestration_proto_utils
 from neptune_model._src.core import persistence_lib
 from neptune_model._src.core import saveable
@@ -39,51 +39,11 @@ from neptune_model._src.core import type_proto_utils
 from neptune_model._src.export import constants
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import serving_config
+from neptune_model._src.export import utils
+from neptune_model._src.processors import jax_processor
+from neptune_model._src.processors import processor
+from neptune_model._src.processors import tf_processor
 from neptune_model.protos import orchestration_pb2
-
-
-def _infer_polymorphic_signature(
-    concrete_signatures: Sequence[jaxtyping.PyTree[shlo_type.ShloTensorSpec]],
-) -> jaxtyping.PyTree[shlo_type.ShloTensorSpec]:
-  """Infers a polymorphic signature from a sequence of concrete signatures.
-
-  E.g.
-  Given a sequence of concrete signatures:
-  (
-      {'inputs': (ShloTensorSpec(shape=(1, 3), dtype=jnp.float32}),}
-      {'inputs': (ShloTensorSpec(shape=(2, 3), dtype=jnp.float32}),}
-  )
-
-  Infer a polymorphic signature for them:
-    {'inputs': (ShloTensorSpec(shape=(None, 3), dtype=jnp.float32}),)}
-  since the first dimension is different across provided signatures.
-
-
-  Args:
-    concrete_signatures: A sequence of concrete signatures where each signature
-      contains shape dtype spec with concrete shapes.
-
-  Returns:
-    A polymorphic signature where shape may contain None to indicate
-    polymorphic shapes. If shapes of all input signatures are concrete and the
-    same, the output signature will be the same as the input signature and have
-    concrete shapes.
-  """
-  if not concrete_signatures:
-    return {}
-
-  def _infer_spec(*specs: shlo_type.ShloTensorSpec) -> shlo_type.ShloTensorSpec:
-    if not specs:
-      raise ValueError("`specs` must not be empty.")
-    shapes = zip(*(s.shape for s in specs))
-    poly_shape = [dims[0] if len(set(dims)) == 1 else None for dims in shapes]
-    return shlo_type.ShloTensorSpec(poly_shape, specs[0].dtype)
-
-  return jax.tree_util.tree_map(
-      _infer_spec,
-      *concrete_signatures,
-      is_leaf=lambda x: isinstance(x, shlo_type.ShloTensorSpec),
-  )
 
 
 @dataclasses.dataclass
@@ -93,7 +53,12 @@ class NeptuneModelSaveBundle:
   Attributes:
     manifest_objects: A dictionary of saveable objects to be saved in the
       manifest.
+    model_params: The model parameters to be saved in the checkpoint.
     pipelines: The pipeline definitions for model orchestration.
+    tf_prepared_functions: Tracks all TF processor prepared functions. During
+      export, TF functions will be saved as TF SavedModel format in a
+      subdirectory of the export path and added to the exported model's
+      supplementals.
   """
 
   manifest_objects: dict[str, saveable.Saveable] = dataclasses.field(
@@ -103,202 +68,168 @@ class NeptuneModelSaveBundle:
   pipelines: orchestration_pb2.Pipelines = dataclasses.field(
       default_factory=orchestration_pb2.Pipelines
   )
+  tf_prepared_functions: dict[str, tf2npt.PreparedFunction] = dataclasses.field(
+      default_factory=dict
+  )
 
 
 @dataclasses.dataclass
 class PipelineNode:
-  """A node in the pipeline graph.
+  """A node in the model execution pipeline.
 
   Attributes:
-    node: The node function.
-    role: The role of this node, e.g., preprocessor, model, or postprocessor.
+    processor: The processor to execute.
+    role: The role of the component in the pipeline.
   """
 
-  node: jax_model.JaxModel
+  processor: processor.Processor
   role: orchestration_pb2.Role
 
 
-Signature = tuple[
-    jaxtyping.PyTree[shlo_type.ShloTensorSpec],
-    jaxtyping.PyTree[shlo_type.ShloTensorSpec],
-]  # (input_signature, output_signature)
-
-
-def _calculate_jax_model_input_sig(
-    apply_fn_input_signature: jaxtyping.PyTree[shlo_type.ShloTensorSpec],
-) -> jaxtyping.PyTree[shlo_type.ShloTensorSpec]:
-  """Calculates the input signature for a JAX model function by excluding the model parameters.
-
-  Args:
-    apply_fn_input_signature: The input signature of the `apply_fn`, which is
-      expected to have exactly two positional arguments: the model parameters
-      and the actual inputs.
-
-  Returns:
-    The input signature excluding the model parameters, structured as
-    `((args,), kwargs)`.
-  """
-  if (
-      # Already arg-kwarg split if the input signature is a sequence of two
-      # elements, where the first element is a sequence of positional arguments 
-      # and the second element is a dictionary of keyword arguments.
-      isinstance(apply_fn_input_signature, Sequence)
-      and len(apply_fn_input_signature) == 2
-      and isinstance(apply_fn_input_signature[0], Sequence)
-      and isinstance(apply_fn_input_signature[1], dict)
-  ):
-    pos_args, kwargs = apply_fn_input_signature
-  else:
-    pos_args = apply_fn_input_signature
-    kwargs = {}
-  if not isinstance(pos_args, Sequence):
-    raise ValueError(
-        "The positional-arguments part of apply_fn_input_signature must be a"
-        f" sequence. Got: {pos_args}"
-    )
-  if len(pos_args) != 2:
-    raise ValueError(
-        "The positional part of apply_fn_input_signature must have exactly"
-        f" two elements. Got: {pos_args}"
-    )
-  return ((pos_args[1],), kwargs)
-
-
-def _update_save_bundle_for_jax_model(
+def _build_pipeline_nodes(
     model: jax_model.JaxModel,
-    method_key: str | None,
-    input_signature: jaxtyping.PyTree,
-    serving_signature: str,
-    save_bundle: NeptuneModelSaveBundle,
-) -> Signature:
-  """Converts a JAX model to a Saveable SHLO function and updates the save bundle.
+    cfg: serving_config.ServingConfig,
+) -> Sequence[PipelineNode]:
+  """Builds a sequence of PipelineNodes for the given model and serving config.
 
-  This function takes a JaxModel and input signatures, potentially selects a
-  specific method from the model's apply_fn if it's a mapping, and then converts
-  it into a Saveable object using jax2npt.convert., and adds it to the
-  save_bundleShloFunction
+  The pipeline nodes are created based on the processing configuration in the
+  serving config.
 
   Args:
-    model: The JaxModel instance to convert.
-    method_key: Optional key to select a specific function if model.apply_fn is
-      a Mapping. Required if model.apply_fn is a Mapping.
-    input_signature: A PyTree representing the structure, shapes, and dtypes of
-      the model inputs.
-    serving_signature: The key to use for the converted function in the
-      save_bundle.
-    save_bundle: The NeptuneModelSaveBundle to update with the converted
-      function.
+    model: The JAX model being exported.
+    cfg: The serving configuration for this model.
 
   Returns:
-    A tuple containing the input and output signatures of the converted
-    function.
-  Raises:
-    ValueError: If model.apply_fn is a Mapping but method_key is not provided
-      or if the provided method_key is not found in the mapping.
+    A sequence of PipelineNodes. The ordering of the nodes is going to be
+    preserved in the exported model.
   """
-  model_shlo_functions = model.get_shlo_functions(
-      input_signature=input_signature,
-      method_key=method_key,
+
+  jax_processor_inst = jax_processor.JaxProcessor(
+      model=model,
+      name=cfg.serving_signature,
+      method_key=cfg.method_key,
   )
-  if len(model_shlo_functions) == 1:
-    save_bundle.manifest_objects[serving_signature] = model_shlo_functions[0]
-  elif len(model_shlo_functions) > 1:
-    save_bundle.manifest_objects[serving_signature] = tuple(
-        model_shlo_functions
+
+  model_node = PipelineNode(
+      processor=jax_processor_inst,
+      role=orchestration_pb2.ROLE_MODEL,
+  )
+
+  match cfg.processing:
+    case processor.SequentialProcessing() as sequential_processing:
+      pre_nodes = [
+          PipelineNode(p, orchestration_pb2.ROLE_PREPROCESSOR)
+          for p in sequential_processing.preprocessors
+      ]
+      post_nodes = [
+          PipelineNode(p, orchestration_pb2.ROLE_POSTPROCESSOR)
+          for p in sequential_processing.postprocessors
+      ]
+      return [*pre_nodes, model_node, *post_nodes]
+    case None:
+      return [model_node]
+    case _:
+      raise ValueError(f"Unknown processing type: {type(cfg.processing)}")
+
+
+def _update_save_bundle_with_pipeline_node(
+    serving_signature: str,
+    pipeline_node: PipelineNode,
+    input_signature: jaxtyping.PyTree,
+    save_bundle: NeptuneModelSaveBundle,
+) -> tuple[jaxtyping.PyTree, jaxtyping.PyTree]:
+  """Processes the pipeline node.
+
+  Args:
+    serving_signature: The serving signature of the pipeline.
+    pipeline_node: The pipeline node to process.
+    input_signature: The input signature of the pipeline node.
+    save_bundle: The NeptuneModelSaveBundle to update.
+
+  Returns:
+    A tuple (input_signature, output_signature), where
+    input_signature is the input signature of the pipeline node, and
+    output_signature is the output signature of the pipeline node.
+  """
+
+  suppress_x64_outputs = (
+      pipeline_node.role == orchestration_pb2.ROLE_PREPROCESSOR
+      and not jax.config.jax_enable_x64
+  )
+  prepared_processor = pipeline_node.processor.prepare(
+      input_signature,
+      suppress_x64_outputs=suppress_x64_outputs,
+  )
+  save_bundle.manifest_objects[prepared_processor.name] = (
+      prepared_processor.to_npt_saveable()
+  )
+
+  if isinstance(prepared_processor, tf_processor.PreparedTfProcessor):
+    save_bundle.tf_prepared_functions[prepared_processor.name] = (
+        prepared_processor.prepared_function
     )
-  else:
-    raise ValueError("No SHLO functions found for model.")
 
-  # Infer the polymorphic signature for the model function by combining the
-  # input and output signatures of all SHLO functions. Multiple functions may
-  # exist if polymorphic shapes were concretized into multiple discrete
-  # signatures.
-  model_function_sig = _infer_polymorphic_signature(
-      [func.input_signature for func in model_shlo_functions]
-  ), _infer_polymorphic_signature(
-      [func.output_signature for func in model_shlo_functions]
+  save_bundle.pipelines.name_to_pipeline[serving_signature].components.append(
+      orchestration_pb2.Component(
+          function_name=prepared_processor.name,
+          role=pipeline_node.role,
+          weights_name=prepared_processor.weights_name,
+      )
   )
+
   return (
-      # The internal SHLO function signature includes the model parameters as
-      # the first argument. We exclude them here to create the external-facing
-      # input signature that only contains the actual user inputs.
-      _calculate_jax_model_input_sig(model_function_sig[0]),
-      model_function_sig[1],
+      prepared_processor.input_signature,
+      prepared_processor.output_signature,
   )
-
-
-def _create_pipeline(model: jax_model.JaxModel) -> Sequence[PipelineNode]:
-  return [PipelineNode(node=model, role=orchestration_pb2.ROLE_MODEL)]
 
 
 def _update_save_bundle(
-    pipeline: Sequence[PipelineNode],
+    pipeline_nodes: Sequence[PipelineNode],
     cfg: serving_config.ServingConfig,
     save_bundle: NeptuneModelSaveBundle,
 ) -> None:
   """Processes a pipeline of nodes and updates the save bundle.
 
-  Currently, only nodes with role MODEL are supported.
-
   Args:
-    pipeline: A sequence of PipelineNodes to process.
+    pipeline_nodes: A sequence of PipelineNodes to process.
     cfg: The serving configuration to use for conversion.
     save_bundle: The NeptuneModelSaveBundle to update.
-
-  Raises:
-    ValueError: If a node with an unsupported role is encountered.
   """
-  components = []
-  pipeline_input_signature: (
-      jaxtyping.PyTree[shlo_type.ShloTensorSpec] | None
-  ) = None
-  pipeline_output_signature: (
-      jaxtyping.PyTree[shlo_type.ShloTensorSpec] | None
-  ) = None
-  for i, node in enumerate(pipeline):
-    node_signature: Signature
-    if node.role == orchestration_pb2.ROLE_MODEL:
-      node_signature = _update_save_bundle_for_jax_model(
-          model=node.node,
-          method_key=cfg.method_key,
-          input_signature=cfg.input_signature,
-          serving_signature=cfg.serving_signature,
-          save_bundle=save_bundle,
-      )
-      components.append(
-          orchestration_pb2.Component(
-              role=node.role,
-              function_name=cfg.serving_signature,
-              weights_name=constants.WEIGHTS_NAME,
-          )
-      )
-    else:
-      raise ValueError(f"Unsupported role: {node.role}")
-    if i == 0:
-      pipeline_input_signature = node_signature[0]
-    if i == len(pipeline) - 1:
-      pipeline_output_signature = node_signature[1]
 
-  assert pipeline_input_signature is not None
-  assert pipeline_output_signature is not None
-  pipeline_proto = orchestration_pb2.Pipeline()
+  pipeline_input_signature: jaxtyping.PyTree | None = None
+  pipeline_output_signature: jaxtyping.PyTree | None = None
+  input_signature: jaxtyping.PyTree = utils.to_shlo_tensor_spec(
+      cfg.input_signature
+  )
+
+  for node in pipeline_nodes:
+    node_input_signature, node_output_signature = (
+        _update_save_bundle_with_pipeline_node(
+            cfg.serving_signature,
+            node,
+            input_signature,
+            save_bundle,
+        )
+    )
+    pipeline_input_signature = pipeline_input_signature or node_input_signature
+    pipeline_output_signature = node_output_signature
+    input_signature = node_output_signature
+
+  pipeline_proto = save_bundle.pipelines.name_to_pipeline[cfg.serving_signature]
   pipeline_proto.signature.CopyFrom(
       type_proto_utils.to_function_signature_proto(
-          pipeline_input_signature, pipeline_output_signature
+          pipeline_input_signature,
+          pipeline_output_signature,
       )
   )
   pipeline_proto.named_signature.CopyFrom(
       orchestration_proto_utils.to_named_signature_proto(
-          pipeline_input_signature, pipeline_output_signature
-      )
+          pipeline_input_signature,
+          pipeline_output_signature,
+      ),
   )
-  pipeline_proto.components.extend(components)
   if cfg.batch_options is not None:
     pipeline_proto.batch_options.CopyFrom(cfg.batch_options)
-
-  save_bundle.pipelines.name_to_pipeline[cfg.serving_signature].CopyFrom(
-      pipeline_proto
-  )
 
 
 def save(
@@ -321,12 +252,36 @@ def save(
   )
   save_bundle = NeptuneModelSaveBundle()
   for cfg in serving_configs:
-    pipeline = _create_pipeline(model)
     _update_save_bundle(
-        pipeline=pipeline,
+        pipeline_nodes=_build_pipeline_nodes(model, cfg),
         cfg=cfg,
         save_bundle=save_bundle,
     )
+
+  supplementals: dict[str, persistence_lib.GlobalSupplemental] = {
+      constants.ORCHESTRATION_SUPPLEMENTAL_NAME: (
+          persistence_lib.GlobalSupplemental(
+              orchestration_proto_utils.serialize_pipelines_proto(
+                  save_bundle.pipelines
+              ),
+              constants.DEFAULT_ORCHESTRATION_SUPPLEMENTAL_FILENAME,
+          )
+      ),
+  }
+  if save_bundle.tf_prepared_functions:
+    trackable_resources = [
+        cfg.processing.options.tf_trackable_resources
+        for cfg in serving_configs
+        if cfg.processing is not None
+        and cfg.processing.options.tf_trackable_resources is not None
+    ]
+
+    tf_supplemental = tf2npt.save_tf_functions(
+        export_path,
+        save_bundle.tf_prepared_functions,
+        trackable_resources=trackable_resources,
+    )
+    supplementals.update(tf_supplemental)
 
   checkpoint_dir = (
       pathlib.Path(export_path) / constants.DEFAULT_CHECKPOINT_SUBDIR
@@ -347,16 +302,7 @@ def save(
 
   save_options = persistence_lib.SaveOptions(
       version=2,
-      supplementals={
-          constants.ORCHESTRATION_SUPPLEMENTAL_NAME: (
-              persistence_lib.GlobalSupplemental(
-                  orchestration_proto_utils.serialize_pipelines_proto(
-                      save_bundle.pipelines
-                  ),
-                  constants.DEFAULT_ORCHESTRATION_SUPPLEMENTAL_FILENAME,
-              )
-          )
-      },
+      supplementals=supplementals,
   )
 
   persistence_lib.save(

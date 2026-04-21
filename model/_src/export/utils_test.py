@@ -12,14 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Callable
-
 from absl.testing import absltest
 from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
 
-from neptune_model._src.export import jax_model
+from neptune_model._src.core import shlo_type
 from neptune_model._src.export import utils
 
 
@@ -27,21 +25,62 @@ class UtilsTest(parameterized.TestCase):
 
   def test_to_jax_spec_with_valid_input(self):
     self.assertEqual(
-        utils.to_jax_spec(
-            (jnp.ones((2, 3)), {'a': jnp.zeros((4,), dtype=jnp.int32)})
-        ),
+        utils.to_jax_spec((
+            jnp.ones((2, 3)),
+            {
+                'a': jnp.zeros((4,), dtype=jnp.int32),
+                'b': jax.ShapeDtypeStruct(shape=(2,), dtype=jnp.float32),
+            },
+        )),
         (
             jax.ShapeDtypeStruct(shape=(2, 3), dtype=jnp.float32),
-            {'a': jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.int32)},
+            {
+                'a': jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.int32),
+                'b': jax.ShapeDtypeStruct(shape=(2,), dtype=jnp.float32),
+            },
         ),
     )
 
   def test_to_jax_spec_invalid_input(self):
     tree = (jnp.ones((2, 3)), {'a': 1})  # Integer lacks shape/dtype
     with self.assertRaisesRegex(
-        ValueError, 'All leaf nodes must have "shape" and "dtype"'
+        ValueError, 'Failed to convert 1 to jax.ShapeDtypeStruct'
     ):
       utils.to_jax_spec(tree)
+
+  def test_to_shlo_tensor_spec_valid(self):
+    self.assertEqual(
+        utils.to_shlo_tensor_spec((
+            jax.ShapeDtypeStruct(shape=(2, 3), dtype=jnp.float32),
+            {
+                'a': jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.int32),
+                'b': shlo_type.ShloTensorSpec(
+                    shape=(2,), dtype=shlo_type.ShloDType.f32
+                ),
+            },
+        )),
+        (
+            shlo_type.ShloTensorSpec(
+                shape=(2, 3), dtype=shlo_type.ShloDType.f32
+            ),
+            {
+                'a': shlo_type.ShloTensorSpec(
+                    shape=(4,), dtype=shlo_type.ShloDType.i32
+                ),
+                'b': shlo_type.ShloTensorSpec(
+                    shape=(2,), dtype=shlo_type.ShloDType.f32
+                ),
+            },
+        ),
+    )
+
+  def test_to_shlo_tensor_spec_invalid_input(self):
+    tree = (jnp.ones((2, 3)), {'a': 1})
+    with self.assertRaisesRegex(
+        ValueError, 'Failed to convert 1 to ShloTensorSpec'
+    ):
+      utils.to_shlo_tensor_spec(tree)
+
 
 if __name__ == '__main__':
   absltest.main()

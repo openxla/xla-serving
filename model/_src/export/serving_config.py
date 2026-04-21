@@ -17,10 +17,12 @@
 from collections.abc import Sequence
 import dataclasses
 import itertools
+from typing import Any
 
 from absl import logging
 import jaxtyping
 
+from neptune_model._src.processors import processor
 from neptune_model.protos import orchestration_pb2
 
 
@@ -37,24 +39,23 @@ class ServingConfig:
       represented as a JAX PyTree.
     batch_options: Optional batching configuration to use when serving the
       model.
+    processing: Optional processing configuration. If not provided, only a JAX
+      model will be exported. If provided, the JAX model will be augmented by
+      the processors defined in the processing pipeline.
   """
 
   serving_signature: str = "serving_default"
   method_key: str | None = None
   # TODO: Evaluate if we need to make this a sequence of PyTrees.
   input_signature: jaxtyping.PyTree = None
-
   batch_options: orchestration_pb2.BatchOptions | None = None
+  processing: processor.Processing | None = None
 
   def __post_init__(self):
     """Validates the batch options."""
-    if (
-        self.batch_options is None
-        or self.batch_options.batch_component
-        in (
-            orchestration_pb2.BatchOptions.BATCH_COMPONENT_UNSPECIFIED,
-            orchestration_pb2.BatchOptions.NO_BATCHING,
-        )
+    if self.batch_options is None or self.batch_options.batch_component in (
+        orchestration_pb2.BatchOptions.BATCH_COMPONENT_UNSPECIFIED,
+        orchestration_pb2.BatchOptions.NO_BATCHING,
     ):
       return
 

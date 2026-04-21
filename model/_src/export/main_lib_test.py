@@ -22,8 +22,6 @@ import jax.numpy as jnp
 
 from .net.proto2.contrib.pyutil import compare
 from neptune_model._src.core import persistence_lib
-from neptune_model._src.core import saveable
-from neptune_model._src.core import shlo_type
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import main_lib
 from neptune_model._src.export import serving_config
@@ -51,7 +49,9 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
     )
     cfg = serving_config.ServingConfig(
         serving_signature='serving_default',
-        input_signature={'x': jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.float32)},
+        input_signature={
+            'x': jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.float32)
+        },
         batch_options=batch_options,
     )
     export_path = self.create_tempdir().full_path
@@ -379,7 +379,8 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
           1,
       )
       # Inputs (second element of first tuple)
-      # The first dimension of the input should be 1 for the first concrete function.
+      # The first dimension of the input should be 1 for the first concrete
+      # function.
       self.assertEqual(
           input_tuple.elements[0]
           .tuple.elements[1]
@@ -399,7 +400,8 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
 
     with self.subTest(name='validate_orchestration_proto_polymorphism'):
       pipeline = pipelines_proto.name_to_pipeline['serving_default']
-      # The first dimension of the first input should be dynamic (size 0 in proto for None)
+      # The first dimension of the first input should be dynamic
+      # (size 0 in proto for None)
       input_type = (
           pipeline.signature.input.tuple.elements[0]
           .tuple.elements[0]
@@ -413,72 +415,6 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
               'size'
           )
       )
-
-  def test_update_save_bundle_for_jax_model_with_polymorphic_shape(self):
-    """Tests that _update_save_bundle_for_jax_model works with polymorphic shapes."""
-    model = jax_model.JaxModel(
-        apply_fn_bundle=jax_model.ApplyFnBundle(
-            apply_fn=lambda params, x: x * params['w'],
-            input_polymophic_shapes='b,_',
-            jax_export_kwargs={'platforms': ['cpu']},
-        ),
-        params={'w': jnp.array([2.0], dtype=jnp.float32)},
-    )
-    input_signature = jax.ShapeDtypeStruct(shape=('b', 1), dtype=jnp.float32)
-    serving_signature = 'serving_default'
-    save_bundle = main_lib.NeptuneModelSaveBundle()
-
-    input_sig, output_sig = main_lib._update_save_bundle_for_jax_model(
-        model=model,
-        method_key=None,
-        input_signature=input_signature,
-        serving_signature=serving_signature,
-        save_bundle=save_bundle,
-    )
-
-    with self.subTest('adds_to_save_bundle'):
-      self.assertIn(serving_signature, save_bundle.manifest_objects)
-      self.assertIsInstance(
-          save_bundle.manifest_objects[serving_signature],
-          saveable.Saveable,
-      )
-
-    with self.subTest('check_input_signature'):
-      # input_sig = ((input_tree,), kwargs_tree)
-      # input is ShapeDtypeStruct(shape=('b', 1), dtype=float32)
-      self.assertEqual(input_sig[0][0].shape, [None, 1])
-      self.assertEqual(input_sig[0][0].dtype, shlo_type.ShloDType.f32)
-
-    with self.subTest('check_output_signature'):
-      self.assertEqual(output_sig.shape, [None, 1])
-      self.assertEqual(output_sig.dtype, shlo_type.ShloDType.f32)
-
-  def test_calculate_jax_model_input_sig(self):
-    params_spec = shlo_type.ShloTensorSpec(
-        shape=[1], dtype=shlo_type.ShloDType.f32
-    )
-    input_spec = shlo_type.ShloTensorSpec(
-        shape=[4], dtype=shlo_type.ShloDType.f32
-    )
-    kw_spec = shlo_type.ShloTensorSpec(shape=[2], dtype=shlo_type.ShloDType.f32)
-
-    with self.subTest(name='with_kwargs'):
-      apply_fn_input_sig = ((params_spec, input_spec), {'kw': kw_spec})
-      input_sig = main_lib._calculate_jax_model_input_sig(apply_fn_input_sig)
-      self.assertEqual(input_sig, ((input_spec,), {'kw': kw_spec}))
-
-    with self.subTest(name='without_kwargs'):
-      apply_fn_input_sig = (params_spec, input_spec)
-      input_sig = main_lib._calculate_jax_model_input_sig(apply_fn_input_sig)
-      self.assertEqual(input_sig, ((input_spec,), {}))
-
-    with self.subTest(name='not_sequence_fails'):
-      with self.assertRaisesRegex(ValueError, 'must be a sequence'):
-        main_lib._calculate_jax_model_input_sig(params_spec)
-
-    with self.subTest(name='wrong_num_pos_args_fails'):
-      with self.assertRaisesRegex(ValueError, 'must have exactly two elements'):
-        main_lib._calculate_jax_model_input_sig((params_spec,))
 
 
 if __name__ == '__main__':

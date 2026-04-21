@@ -23,7 +23,7 @@ import jaxtyping
 
 
 def _shape_dtype_equal(tree1: Any, tree2: Any) -> bool:
-  return tree1.shape == tree2.shape and tree1.dtype == tree2.dtype
+  return tuple(tree1.shape) == tuple(tree2.shape) and tree1.dtype == tree2.dtype
 
 
 class NptTestCase(parameterized.TestCase):  # pylint: disable=g-doc-args
