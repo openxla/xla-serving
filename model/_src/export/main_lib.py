@@ -102,6 +102,10 @@ def _build_pipeline_nodes(
   Returns:
     A sequence of PipelineNodes. The ordering of the nodes is going to be
     preserved in the exported model.
+
+  Raises:
+    ValueError: If processing configuration is inconsistent with serving config
+    batch options.
   """
 
   jax_processor_inst = jax_processor.JaxProcessor(
@@ -125,6 +129,25 @@ def _build_pipeline_nodes(
           PipelineNode(p, orchestration_pb2.ROLE_POSTPROCESSOR)
           for p in sequential_processing.postprocessors
       ]
+      if cfg.batch_options is not None:
+        if (
+            cfg.batch_options.batch_component
+            == orchestration_pb2.BatchOptions.PRE_PROCESSOR_AND_MODEL_FUNCTION
+            and not pre_nodes
+        ):
+          raise ValueError(
+              'Batch component is set to PRE_PROCESSOR_AND_MODEL_FUNCTION, but'
+              ' there are no preprocessors.'
+          )
+        if (
+            cfg.batch_options.batch_component
+            == orchestration_pb2.BatchOptions.MODEL_FUNCTION_AND_POST_PROCESSOR
+            and not post_nodes
+        ):
+          raise ValueError(
+              'Batch component is set to POST_PROCESSOR_AND_MODEL_FUNCTION, but'
+              ' there are no postprocessors.'
+          )
       return [*pre_nodes, model_node, *post_nodes]
     case None:
       return [model_node]
@@ -286,7 +309,7 @@ def save(
     serving_configs: The serving configurations.
   """
   logging.info(
-      "Saving model=%s to export_path=%s with serving_configs=%s",
+      'Saving model=%s to export_path=%s with serving_configs=%s',
       model,
       export_path,
       serving_configs,

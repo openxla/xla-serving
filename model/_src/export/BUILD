@@ -101,10 +101,10 @@ pytype_strict_test(
         ":main_lib",
         ":serving_config",
         "//third_party/neptune/model/_src/core:persistence_lib",
-        "//third_party/neptune/model/_src/core:saveable",
-        "//third_party/neptune/model/_src/core:shlo_type",
+        "//third_party/neptune/model/_src/processors:processor",
         "//third_party/neptune/protos:orchestration_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
+        "@com_google_absl_py//absl/testing:parameterized",
         "@jax",
     ],
 )

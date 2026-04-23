@@ -17,6 +17,7 @@
 import pathlib
 
 from absl.testing import absltest
+from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
 
@@ -25,6 +26,7 @@ from neptune_model._src.core import persistence_lib
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import main_lib
 from neptune_model._src.export import serving_config
+from neptune_model._src.processors import processor
 from neptune_model.protos import orchestration_pb2
 
 
@@ -487,6 +489,52 @@ class ValidateSaveParamsTest(absltest.TestCase):
                   input_signature={'x': jax.ShapeDtypeStruct((), jnp.float32)},
                   method_key='invalid_key',
               )
+          ],
+      )
+
+
+class BatchOptionsForProcessorsTest(parameterized.TestCase):
+
+  @parameterized.named_parameters(
+      (
+          'requires_preprocessor',
+          orchestration_pb2.BatchOptions.PRE_PROCESSOR_AND_MODEL_FUNCTION,
+          (
+              'Batch component is set to PRE_PROCESSOR_AND_MODEL_FUNCTION, but'
+              ' there are no preprocessors.'
+          ),
+      ),
+      (
+          'requires_postprocessor',
+          orchestration_pb2.BatchOptions.MODEL_FUNCTION_AND_POST_PROCESSOR,
+          (
+              'Batch component is set to POST_PROCESSOR_AND_MODEL_FUNCTION, but'
+              ' there are no postprocessors.'
+          ),
+      ),
+  )
+  def test_batch_component_requires_processors(
+      self, batch_component, expected_error
+  ):
+    with self.assertRaisesRegex(ValueError, expected_error):
+      main_lib.save(
+          jax_model.JaxModel(
+              apply_fn_bundle=jax_model.ApplyFnBundle(apply_fn=lambda p, x: x),
+          ),
+          'test_path',
+          [
+              serving_config.ServingConfig(
+                  serving_signature='serving_default',
+                  input_signature={'x': jax.ShapeDtypeStruct((), jnp.float32)},
+                  processing=processor.SequentialProcessing(
+                      preprocessors=[], postprocessors=[]
+                  ),
+                  batch_options=orchestration_pb2.BatchOptions(
+                      batch_component=batch_component,
+                      max_batch_size=8,
+                      max_enqueued_batches=10,
+                  ),
+              ),
           ],
       )
 
