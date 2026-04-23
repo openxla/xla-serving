@@ -19,5 +19,7 @@ py_library_providing_imports_info(
         "//third_party/neptune/model/_src/export:jax_model",
         "//third_party/neptune/model/_src/export:main_lib",
         "//third_party/neptune/model/_src/export:serving_config",
+        "//third_party/neptune/model/_src/processors:processor",
+        "//third_party/neptune/model/_src/processors:tf_processor",
     ],
 )
