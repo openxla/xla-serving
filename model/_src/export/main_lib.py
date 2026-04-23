@@ -129,7 +129,7 @@ def _build_pipeline_nodes(
     case None:
       return [model_node]
     case _:
-      raise ValueError(f"Unknown processing type: {type(cfg.processing)}")
+      raise ValueError(f'Unknown processing type: {type(cfg.processing)}')
 
 
 def _update_save_bundle_with_pipeline_node(
@@ -232,6 +232,47 @@ def _update_save_bundle(
     pipeline_proto.batch_options.CopyFrom(cfg.batch_options)
 
 
+def _validate_save_params(
+    model: jax_model.JaxModel,
+    serving_configs: Sequence[serving_config.ServingConfig],
+) -> None:
+  """Validates the save parameters for the given model and serving configs.
+
+  Should be used for validations that cross multiple serving configs and the
+  JAX model.
+
+  Args:
+    model: The JAX model being exported.
+    serving_configs: The serving configurations to validate.
+
+  Raises:
+    ValueError: If save params are not valid.
+  """
+  serving_signatures = {cfg.serving_signature for cfg in serving_configs}
+  if len(serving_signatures) != len(serving_configs):
+    raise ValueError(
+        'Serving signatures must be unique across all serving configs'
+    )
+
+  for cfg in serving_configs:
+    if not cfg.input_signature:
+      raise ValueError(
+          f'Serving config {cfg.serving_signature!r} must have input signature'
+      )
+    if cfg.method_key is None and len(model.method_keys()) != 1:
+      raise ValueError(
+          f'Serving config {cfg.serving_signature!r} does not specify a'
+          ' method key, but the JAX model has more than one apply_fn:'
+          f' {list(model.method_keys())}. Please specify a method key'
+          ' explicitly.'
+      )
+    if cfg.method_key is not None and cfg.method_key not in model.method_keys():
+      raise ValueError(
+          f'Serving config {cfg.serving_signature!r} method key'
+          f' `{cfg.method_key!r}` does not exist in the JAX model'
+      )
+
+
 def save(
     model: jax_model.JaxModel,
     export_path: str,
@@ -250,6 +291,7 @@ def save(
       export_path,
       serving_configs,
   )
+  _validate_save_params(model, serving_configs)
   save_bundle = NeptuneModelSaveBundle()
   for cfg in serving_configs:
     _update_save_bundle(

@@ -417,5 +417,79 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
       )
 
 
+class ValidateSaveParamsTest(absltest.TestCase):
+
+  def test_duplicate_serving_signatures(self):
+    with self.assertRaisesRegex(
+        ValueError, 'Serving signatures must be unique'
+    ):
+      main_lib.save(
+          jax_model.JaxModel(
+              apply_fn_bundle=jax_model.ApplyFnBundle(apply_fn=lambda p, x: x),
+          ),
+          'test_path',
+          [
+              serving_config.ServingConfig(
+                  serving_signature='serving_default',
+                  input_signature={'x': jax.ShapeDtypeStruct((), jnp.float32)},
+              ),
+              serving_config.ServingConfig(
+                  serving_signature='serving_default',
+                  input_signature={'x': jax.ShapeDtypeStruct((), jnp.float32)},
+              ),
+          ],
+      )
+
+  def test_missing_input_signature(self):
+    with self.assertRaisesRegex(ValueError, 'must have input signature'):
+      main_lib.save(
+          jax_model.JaxModel(
+              apply_fn_bundle=jax_model.ApplyFnBundle(apply_fn=lambda p, x: x),
+          ),
+          'test_path',
+          [
+              serving_config.ServingConfig(
+                  serving_signature='serving_default',
+                  input_signature=None,
+              )
+          ],
+      )
+
+  def test_ambiguous_method_key(self):
+    with self.assertRaisesRegex(ValueError, 'does not specify a method key'):
+      main_lib.save(
+          model=jax_model.JaxModel(
+              apply_fn_bundle={
+                  'key1': jax_model.ApplyFnBundle(apply_fn=lambda p, x: x),
+                  'key2': jax_model.ApplyFnBundle(apply_fn=lambda p, x: x),
+              },
+          ),
+          export_path='test_path',
+          serving_configs=[
+              serving_config.ServingConfig(
+                  serving_signature='serving_default',
+                  input_signature={'x': jax.ShapeDtypeStruct((), jnp.float32)},
+                  method_key=None,
+              )
+          ],
+      )
+
+  def test_invalid_method_key(self):
+    with self.assertRaisesRegex(ValueError, 'does not exist in the JAX model'):
+      main_lib.save(
+          jax_model.JaxModel(
+              apply_fn_bundle=jax_model.ApplyFnBundle(apply_fn=lambda p, x: x),
+          ),
+          'test_path',
+          [
+              serving_config.ServingConfig(
+                  serving_signature='serving_default',
+                  input_signature={'x': jax.ShapeDtypeStruct((), jnp.float32)},
+                  method_key='invalid_key',
+              )
+          ],
+      )
+
+
 if __name__ == '__main__':
   absltest.main()

@@ -31,10 +31,10 @@ class ServingConfig:
   """Serving config for a Jax model.
 
   Attributes:
-    serving_signature: The key of the serving signature, used to identify a
-      specific exported model function. Defaults to "serving_default".
+    serving_signature: The name that uniquely identifies this serving config
+      in the serving pipeline. Defaults to "serving_default".
     method_key: An optional key used to select a specific `apply_fn` from the
-      model.
+      model. If not provided, the model must only have one `apply_fn`.
     input_signature: The expected structure and shape of inputs for the model,
       represented as a JAX PyTree.
     batch_options: Optional batching configuration to use when serving the

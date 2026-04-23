@@ -83,7 +83,7 @@ def _concretize_polymorphic_shapes(
     )
 
   logging.info(
-      "%s Concretizing polymorphic shapes for symbols %s with values %s.",
+      '%s Concretizing polymorphic shapes for symbols %s with values %s.',
       constants.LOG_PREFIX,
       symbol_names,
       symbol_value_combos,
@@ -109,8 +109,8 @@ def _concretize_spec(
       d_str = str(d)
       if d_str not in symbol_to_value:
         raise ValueError(
-            f"Symbol '{d_str}' not found in symbol_to_value map:"
-            f" {symbol_to_value}"
+            f'Symbol {d_str!r} not found in symbol_to_value map:'
+            f' {symbol_to_value}'
         )
       concrete_shape.append(symbol_to_value[d_str])
   return jax.ShapeDtypeStruct(tuple(concrete_shape), symbolic_spec.dtype)
@@ -126,6 +126,8 @@ class ApplyFnBundle:
       `shapes_specs` in `jax.export.symbolic_args_specs`.
     polymorphic_constraints: Constraints on polymorphic dimensions, for
       `constraints` in `jax.export.symbolic_args_specs`.
+    input_polymorphic_shape_symbol_values: A mapping of symbol names to values
+      for the symbols in `input_polymophic_shapes`.
     jax_export_kwargs: Keyword arguments for `jax.export.export`. Current
       available kwargs are platforms, _override_lowering_rules, disabled_checks.
       See
@@ -173,6 +175,9 @@ class JaxModel:
   def params(self) -> jaxtyping.PyTree | None:
     return self._params
 
+  def method_keys(self) -> Sequence[str]:
+    return list(self._apply_fn_bundle.keys())
+
   @property
   def jax_mesh(self) -> jax.sharding.Mesh | None:
     return self._jax_mesh
@@ -184,7 +189,13 @@ class JaxModel:
   ) -> Sequence[shlo_function.ShloFunction]:
     """Returns the SHLO function for the given method and input signature."""
     if method_key is None:
-      method_key = next(iter(self._apply_fn_bundle))
+      if len(self._apply_fn_bundle) != 1:
+        raise ValueError(
+            'Method key is not specified but model has more than one apply_fn'
+        )
+      (method_key,) = self._apply_fn_bundle.keys()
+    if method_key not in self._apply_fn_bundle:
+      raise ValueError(f'Method key {method_key!r} not found in ApplyFnBundle')
     apply_fn_bundle = self._apply_fn_bundle[method_key]
 
     args_specs = jax_export.symbolic_args_specs(
@@ -205,7 +216,7 @@ class JaxModel:
 
     compile_options_per_platform = compile_options_util.generate_xla_compile_options(
         native_serialization_platforms=apply_fn_bundle.jax_export_kwargs.get(
-            "platforms", None
+            'platforms', None
         ),
         jax_mesh=self._jax_mesh,
     )
