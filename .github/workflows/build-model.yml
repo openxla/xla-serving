@@ -55,3 +55,19 @@ jobs:
         run: |
           # Run the build command we perfected
           python -m build --wheel --no-isolation
+
+      - name: Install the Built Wheel
+        # The wildcard *.whl will grab whatever version was just built
+        run: pip install ./model/dist/*.whl
+
+      - name: Verify Package Import
+        run: |
+          # 1. Change directory away from the repository code!
+          # This forces Python to use the installed wheel instead of the local files.
+          cd /tmp
+          # 2. Try importing the package and printing the version
+          python -c "
+          import neptune_model
+          print('✅ Successfully imported neptune_model!')
+          print(f'📦 Version: {neptune_model.__version__}')
+          "
