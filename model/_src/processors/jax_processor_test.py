@@ -88,6 +88,35 @@ class JaxProcessorTest(compare.Proto2Assertions, absltest.TestCase):
       self.assertEqual(output_sig.shape, [None, 1])
       self.assertEqual(output_sig.dtype, shlo_type.ShloDType.f32)
 
+  def test_shlo_function_data_names(self):
+    def _apply_fn(params, x):
+      return x * params['layer1']['w'] + params['layer1']['b']
+
+    model = jax_model.JaxModel(
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=_apply_fn,
+            jax_export_kwargs={'platforms': ['cpu']},
+        ),
+        params={
+            'layer1': {'w': jnp.array([2.0]), 'b': jnp.array([1.0])},
+            'layer2': {'w': jnp.array([3.0]), 'b': jnp.array([4.0])},
+        },
+    )
+
+    processor = jax_processor.JaxProcessor(
+        name='serving_default',
+        model=model,
+    )
+    input_signature = jax.ShapeDtypeStruct(shape=(1,), dtype=jnp.float32)
+    prepared = processor.prepare(input_signature)
+
+    shlo_fns = prepared.shlo_fns
+    self.assertLen(shlo_fns, 1)
+    self.assertEqual(
+        shlo_fns[0].data_names,
+        ['layer1.b', 'layer1.w', 'layer2.b', 'layer2.w'],
+    )
+
 
 if __name__ == '__main__':
   absltest.main()

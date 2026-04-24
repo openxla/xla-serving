@@ -186,6 +186,7 @@ class JaxModel:
       self,
       input_signature: jaxtyping.PyTree[shlo_type.ShloTensorSpec],
       method_key: str | None = None,
+      model_param_names: Sequence[str] | None = None,
   ) -> Sequence[shlo_function.ShloFunction]:
     """Returns the SHLO function for the given method and input signature."""
     if method_key is None:
@@ -227,6 +228,7 @@ class JaxModel:
             kwargs_spec={},
             jax_export_kwargs=apply_fn_bundle.jax_export_kwargs,
             xla_compile_options_per_platform=compile_options_per_platform,
+            model_param_names=model_param_names,
         )
         for args_spec in args_specs_list
     )

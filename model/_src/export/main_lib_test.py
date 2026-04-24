@@ -176,6 +176,7 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
                   }
                 }
               }
+              data_names: "w"
               visibility: PUBLIC
             }
           }

@@ -163,8 +163,17 @@ class JaxProcessor:
     if not self.name:
       raise ValueError("JaxProcessor name must not be empty")
 
+    # Instructs the runtime to only load the model parameters from the
+    # checkpoint, not all keys present in the checkpoint.
+    param_names_tree = jax.tree.map_with_path(
+        lambda path, _: jax.tree_util.keystr(path, simple=True, separator="."),
+        self.model.params,
+    )
+
     shlo_functions = self.model.get_shlo_functions(
-        utils.to_jax_spec(input_signature), self.method_key
+        utils.to_jax_spec(input_signature),
+        self.method_key,
+        model_param_names=jax.tree.leaves(param_names_tree),
     )
 
     if not shlo_functions:
