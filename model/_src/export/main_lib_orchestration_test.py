@@ -135,6 +135,7 @@ class MainLibOrchestrationTest(compare.Proto2Assertions, absltest.TestCase):
           'model_with_tf_processors/manifest.textproto',
           ignored_fields=[
               'objects.function.body.stable_hlo_body.stable_hlo.inlined_bytes',
+              'objects.function.body.stable_hlo_body.supplemental_info.inlined_bytes',
           ],
       )
 

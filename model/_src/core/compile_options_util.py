@@ -23,19 +23,15 @@ from google.protobuf import descriptor
 from google.protobuf import text_format
 import jax
 
-from .google.protobuf import any_pb2
-from .platforms.xla.service.jellyfish import tpu_compilation_environment_pb2 as tpu_comp_env_pb2
-from .platforms.xla.service.jellyfish.python import tpu_compilation_environment as tpu_comp_env
 from neptune_model.protos import manifest_pb2
 from neptune_model.xla import xla_data_pb2
-from tensorflow.compiler.xla import xla_pb2  # pylint: disable=g-direct-tensorflow-import
 from tensorflow.compiler.xla.pjrt.proto import compile_options_pb2  # pylint: disable=g-direct-tensorflow-import
 
 # A mapping between XLAflag names and protobuf field names.
 
 
 def _generate_compilation_options(
-    compile_environment: xla_pb2.CompilationEnvironmentsProto | None = None,
+    compile_environment,
     jax_mesh: jax.sharding.Mesh | None = None,
 ) -> compile_options_pb2.CompileOptionsProto:
   """Generates the compilation options for the given compilation environment."""
@@ -43,33 +39,33 @@ def _generate_compilation_options(
   executable_build_options = compile_options_pb2.ExecutableBuildOptionsProto()
   if compile_environment is not None:
     executable_build_options.comp_envs.CopyFrom(compile_environment)
-    executable_build_options.num_replicas = 1
-    executable_build_options.num_partitions = 1
-    executable_build_options.device_ordinal = -1
-    executable_build_options.process_count = 1
-    executable_build_options.allow_spmd_sharding_propagation_to_parameters.append(
-        False
-    )
-    executable_build_options.allow_spmd_sharding_propagation_to_output.append(
-        False
-    )
-    # Set the device assignment to a single-replica. If the jax mesh is
-    # provided, we will set the device assignment to the jax mesh.
-    if jax_mesh is not None:
-      partition = 0
-      device_assignment = xla_data_pb2.DeviceAssignmentProto()
-      device_assignment.replica_count = 1
-      for d in jax_mesh.devices.flat:
-        computation_device = (
-            xla_data_pb2.DeviceAssignmentProto.ComputationDevice()
-        )
-        computation_device.replica_device_ids.append(d.id)
-        device_assignment.computation_devices.append(computation_device)
-        partition += 1
-      # Reset num_partitions to the number of devices in the mesh.
-      executable_build_options.num_partitions = partition
-      device_assignment.computation_count = partition
-      executable_build_options.device_assignment.CopyFrom(device_assignment)
+  executable_build_options.num_replicas = 1
+  executable_build_options.num_partitions = 1
+  executable_build_options.device_ordinal = -1
+  executable_build_options.process_count = 1
+  executable_build_options.allow_spmd_sharding_propagation_to_parameters.append(
+      False
+  )
+  executable_build_options.allow_spmd_sharding_propagation_to_output.append(
+      False
+  )
+  # Set the device assignment to a single-replica. If the jax mesh is
+  # provided, we will set the device assignment to the jax mesh.
+  if jax_mesh is not None:
+    partition = 0
+    device_assignment = xla_data_pb2.DeviceAssignmentProto()
+    device_assignment.replica_count = 1
+    for d in jax_mesh.devices.flat:
+      computation_device = (
+          xla_data_pb2.DeviceAssignmentProto.ComputationDevice()
+      )
+      computation_device.replica_device_ids.append(d.id)
+      device_assignment.computation_devices.append(computation_device)
+      partition += 1
+    # Reset num_partitions to the number of devices in the mesh.
+    executable_build_options.num_partitions = partition
+    device_assignment.computation_count = partition
+    executable_build_options.device_assignment.CopyFrom(device_assignment)
   executable_build_options.use_shardy_partitioner = (
       jax.config.jax_use_shardy_partitioner
   )
