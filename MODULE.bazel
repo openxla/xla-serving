@@ -5,6 +5,7 @@ bazel_dep(name = "abseil-cpp", version = "20260107.1")
 bazel_dep(name = "abseil-py", version = "2.1.0", repo_name = "absl_py")
 bazel_dep(name = "bazel_features", version = "1.36.0")
 bazel_dep(name = "bazel_skylib", version = "1.8.2")
+bazel_dep(name = "boringssl", version = "0.20250818.0")
 bazel_dep(name = "grpc", version = "1.78.0", repo_name = "com_github_grpc_grpc")
 bazel_dep(name = "nlohmann_json", version = "3.11.3")
 bazel_dep(name = "platforms", version = "1.0.0")
@@ -42,6 +43,8 @@ bazel_dep(name = "tensorflow", repo_name = "org_tensorflow")
 archive_override(
     module_name = "tensorflow",
     integrity = "sha256-njpeCBGJhixHCuxWpy56wzFqtKHcBp/qGL3t+NZCWuw=",
+    patch_strip = 1,
+    patches = ["//third_party/tensorflow:saved_model.patch"],
     strip_prefix = "tensorflow-8eddcee72d37971d3620570d31c9e9ec69a35aac",
     urls = ["https://github.com/tensorflow/tensorflow/archive/8eddcee72d37971d3620570d31c9e9ec69a35aac.zip"],
 )

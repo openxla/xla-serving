@@ -1,0 +1,16 @@
+diff --git a/tensorflow/cc/saved_model/BUILD b/tensorflow/cc/saved_model/BUILD
+index 1234567..89abcde 100644
+--- a/tensorflow/cc/saved_model/BUILD
++++ b/tensorflow/cc/saved_model/BUILD
+@@ -110,7 +110,7 @@
+         "//tensorflow:tflite_converter": ["//tensorflow/core:direct_session"] + if_google([
+             "//tensorflow/core/platform/default/build_config:tensorflow_platform_specific",
+         ]),
+-        "//conditions:default": if_static([
+-            "//tensorflow/core:all_kernels",
+-            "//tensorflow/core:direct_session",
+-        ]) + if_google(if_static(["//tensorflow/core/platform/default/build_config:tensorflow_platform_specific"])),
++        "//conditions:default": [
++            "//tensorflow/core:all_kernels",
++            "//tensorflow/core:direct_session",
++        ],
