@@ -22,7 +22,7 @@ from neptune_model._src.core import shlo_type
 from neptune_model._src.core import test_utils
 from neptune_model._src.core import type_proto_utils
 from neptune_model.protos import type_pb2
-from neptune_model.xla import xla_data_pb2
+from neptune_model.xla import xla_data_pb2  # pylint: disable=g-direct-tensorflow-import
 
 
 class ShloTensorSpecToTensorTypeProtoTest(

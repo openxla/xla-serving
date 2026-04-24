@@ -28,7 +28,7 @@ import numpy as np
 from neptune_model._src.core import shlo_type
 from neptune_model._src.jax2npt import typing
 from neptune_model.protos import manifest_pb2
-from neptune_model.xla import xla_data_pb2
+from neptune_model.xla import xla_data_pb2  # pylint: disable=g-direct-tensorflow-import
 
 
 def get_physical_dtype(dtype) -> shlo_type.ShloDType | None:

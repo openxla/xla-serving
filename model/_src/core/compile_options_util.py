@@ -24,8 +24,8 @@ from google.protobuf import text_format
 import jax
 
 from neptune_model.protos import manifest_pb2
-from neptune_model.xla import xla_data_pb2
-from tensorflow.compiler.xla.pjrt.proto import compile_options_pb2  # pylint: disable=g-direct-tensorflow-import
+from neptune_model.xla import xla_data_pb2  # pylint: disable=g-direct-tensorflow-import
+from neptune_model.xla.pjrt.proto import compile_options_pb2  # pylint: disable=g-direct-tensorflow-import
 
 # A mapping between XLAflag names and protobuf field names.
 
