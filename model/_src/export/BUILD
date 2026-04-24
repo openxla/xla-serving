@@ -1,6 +1,9 @@
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
-package(default_visibility = ["@neptune//model:__subpackages__"])
+package(default_visibility = [
+    "@neptune//examples:__subpackages__",
+    "@neptune//model:__subpackages__",
+])
 
 py_library(
     name = "main_lib",

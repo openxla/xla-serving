@@ -74,8 +74,12 @@ def to_shlo_tensor_spec(
     if isinstance(x, shlo_type.ShloTensorSpec):
       return x
     try:
+      if hasattr(x.dtype, 'as_numpy_dtype'):
+        np_dtype = np.dtype(x.dtype.as_numpy_dtype())
+      else:
+        np_dtype = np.dtype(x.dtype)
       return shlo_type.ShloTensorSpec(
-          x.shape, shlo_type.np_dtype_to_shlo_dtype(np.dtype(x.dtype))
+          x.shape, shlo_type.np_dtype_to_shlo_dtype(np_dtype)
       )
     except Exception as err:
       raise ValueError(f'Failed to convert {x!r} to ShloTensorSpec') from err
