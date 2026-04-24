@@ -1,6 +1,6 @@
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
-package(default_visibility = ["//third_party/neptune/model:__subpackages__"])
+package(default_visibility = ["@neptune//model:__subpackages__"])
 
 py_library(
     name = "typing",
@@ -13,12 +13,12 @@ py_library(
     srcs = ["utils.py"],
     deps = [
         ":typing",
-        "//third_party/neptune/model/_src/core:shlo_type",
-        "//third_party/neptune/protos:manifest_py_pb2",
         "@jax",
         "@jax//:experimental_layout",
         "@jax//:extend_sharding",
         "@jaxtyping",
+        "@neptune//model/_src/core:shlo_type",
+        "@neptune//protos:manifest_py_pb2",
         "@numpy",
         "@xla//xla:xla_data_proto_py_pb2",
     ],
@@ -31,12 +31,12 @@ py_library(
         ":constants",
         ":typing",
         ":utils",
-        "//third_party/neptune/model/_src/core:shlo_function",
-        "//third_party/neptune/model/_src/core:unstructured_data",
-        "//third_party/neptune/model/_src/core:value",
-        "//third_party/neptune/protos:manifest_py_pb2",
         "@jax",
         "@jax//:experimental_layout",
+        "@neptune//model/_src/core:shlo_function",
+        "@neptune//model/_src/core:unstructured_data",
+        "@neptune//model/_src/core:value",
+        "@neptune//protos:manifest_py_pb2",
     ],
 )
 
@@ -63,11 +63,11 @@ pytype_strict_test(
     },
     deps = [
         ":utils",
-        "//third_party/neptune/model/_src/core:shlo_type",
         "@com_google_absl_py//absl/testing:absltest",
         "@com_google_absl_py//absl/testing:parameterized",
         "@jax",
         "@jax//:experimental_layout",
+        "@neptune//model/_src/core:shlo_type",
         "@numpy",
         "@orbax//:experimental_model_core",
         "@xla//xla:xla_data_proto_py_pb2",
@@ -77,17 +77,17 @@ pytype_strict_test(
 pytype_strict_test(
     name = "main_lib_test",
     srcs = ["main_lib_test.py"],
-    data = ["//third_party/neptune/model/_src/test_utils:mnist_jax_model_expected_manifest.textproto"],
+    data = ["@neptune//model/_src/test_utils:mnist_jax_model_expected_manifest.textproto"],
     shard_count = 4,
     deps = [
         ":main_lib",
-        "//third_party/neptune/model/_src/core:persistence_lib",
-        "//third_party/neptune/model/_src/test_utils:jax_mnist",
-        "//third_party/neptune/protos:manifest_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
         "@com_google_absl_py//absl/testing:parameterized",
         "@jax",
         "@jax//:experimental_mesh_utils",
+        "@neptune//model/_src/core:persistence_lib",
+        "@neptune//model/_src/test_utils:jax_mnist",
+        "@neptune//protos:manifest_py_pb2",
         "@orbax//:checkpoint",
     ],
 )

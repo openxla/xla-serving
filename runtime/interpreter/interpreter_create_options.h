@@ -1,0 +1,88 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_INTERPRETER_CREATE_OPTIONS_H_
+#define THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_INTERPRETER_CREATE_OPTIONS_H_
+
+#include <cstdint>
+#include <memory>
+#include <string>
+
+#include "absl/base/nullability.h"  // from @abseil-cpp
+#include "protos/manifest.pb.h"  // from @neptune
+#include "runtime/core/allocator.h"  // from @neptune
+#include "runtime/core/default_allocator.h"  // from @neptune
+#include "runtime/core/stablehlo_optimizer.h"  // from @neptune
+#include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
+#include "tsl/platform/protobuf.h"  // from @tsl
+
+namespace neptune {
+
+// LINT.IfChange(InterpreterCreateOptions)
+// The options to create the interpreter. This is a virtual class to allow
+// subclasses to add more options. Therefore, one should always use the pointer
+// or reference instead of the object itself.
+struct InterpreterCreateOptions {
+  virtual ~InterpreterCreateOptions() = default;
+
+  // Optional: The name of the model.
+  std::string model_name;
+  // Optional: The version of the model.
+  int64_t model_version = 0;
+  // The path to the model. It should be the parent directory of the model's
+  // manifest proto.
+  std::string model_path;
+  // The inter-op thread pool to use for executing the model. It can't be null.
+  // Not owned.
+  tsl::thread::ThreadPool* execute_worker_thread_pool = nullptr;
+  // The IFRT client to use for executing the model.
+  std::shared_ptr<xla::ifrt::Client> ifrt_client = nullptr;
+  // The intra-op thread pool to use for executing the model. It can't be null.
+  // Not owned.
+  tsl::thread::ThreadPool* computation_thread_pool = nullptr;
+  // The compilation environment proto to use for `xla::ExecutableBuildOptions`.
+  tsl::protobuf::Message* absl_nullable compilation_env = nullptr;
+  int min_num_batch_threads = 1;
+  int min_max_enqueued_batches = 1;
+  std::unique_ptr<StablehloOptimizer> optimizer = nullptr;
+  // The default allocator is DefaultAllocator. It can be overridden to a
+  // custom allocator which extends Allocator.
+  Allocator* absl_nonnull allocator = DefaultAllocator::GetInstance();
+  // The platform name to use for `xla::ExecutableBuildOptions`. If not set,
+  // the default platform name will be "TPU".
+  // platform_name should be the name of neptune_model_manifest::Platform name.
+  std::string platform_name = neptune_model_manifest::Platform_Name(
+      neptune_model_manifest::Platform::TPU);
+  // If true, the interpreter will only load the pipeline when it is requested.
+  bool lazy_loading_pipelines = false;
+  // If true, the device assignment in the manifest will be ignored.
+  bool ignore_device_assignment_in_manifest = false;
+  // If true, in-graph batching is enabled. If false, in-graph batching is
+  // disabled, but callers can still do out-of-graph batching.
+  bool enable_batching = true;
+  // Providing a thread pool enables loading checkpoints in the background.
+  // A null pointer disables background checkpoint loading. Not owned.
+  tsl::thread::ThreadPool* absl_nullable checkpoint_loader_thread_pool =
+      nullptr;
+  // Persistent compilation cache for single-host serving. If nullptr, the
+  // compilation cache is disabled.
+  std::unique_ptr<IfrtPersistentCompilationCache>
+      persistent_compilation_cache = nullptr;
+};
+// LINT.ThenChange(//depot//third_party/neptune/runtime/interpreter/interpreter.cc:InterpreterCreateOptionsValidation)
+}  // namespace neptune
+
+#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_INTERPRETER_CREATE_OPTIONS_H_

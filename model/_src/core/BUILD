@@ -1,6 +1,6 @@
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
-package(default_visibility = ["//third_party/neptune/model:__subpackages__"])
+package(default_visibility = ["@neptune//model:__subpackages__"])
 
 py_library(
     name = "function",
@@ -16,8 +16,8 @@ pytype_strict_test(
     srcs = ["unstructured_data_test.py"],
     deps = [
         ":unstructured_data",
-        "//third_party/neptune/protos:manifest_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
+        "@neptune//protos:manifest_py_pb2",
     ],
 )
 
@@ -28,10 +28,10 @@ pytype_strict_test(
         ":shlo_type",
         ":test_utils",
         ":type_proto_utils",
-        "//third_party/neptune/protos:type_py_pb2",
         "//third_party/py/google/protobuf",
         "@com_google_absl_py//absl/testing:absltest",
         "@com_google_absl_py//absl/testing:parameterized",
+        "@neptune//protos:type_py_pb2",
         "@xla//xla:xla_data_proto_py_pb2",
     ],
 )
@@ -81,7 +81,7 @@ py_library(
     srcs = ["unstructured_data.py"],
     deps = [
         ":file_utils",
-        "//third_party/neptune/protos:manifest_py_pb2",
+        "@neptune//protos:manifest_py_pb2",
     ],
 )
 
@@ -99,8 +99,8 @@ py_library(
     srcs = ["value.py"],
     deps = [
         ":shlo_type",
-        "//third_party/neptune/protos:manifest_py_pb2",
         "@jaxtyping",
+        "@neptune//protos:manifest_py_pb2",
     ],
 )
 
@@ -146,9 +146,9 @@ py_library(
     srcs = ["type_proto_utils.py"],
     deps = [
         ":shlo_type",
-        "//third_party/neptune/protos:type_py_pb2",
         "@jax",
         "@jaxtyping",
+        "@neptune//protos:type_py_pb2",
     ],
 )
 
@@ -164,14 +164,14 @@ py_library(
     deps = [
         "//platforms/xla/service/jellyfish:tpu_compilation_environment_py_pb2",
         "//platforms/xla/service/jellyfish/python:tpu_compilation_environment",
-        "//third_party/neptune/protos:manifest_py_pb2",
         "//third_party/py/absl/flags",
         "//third_party/py/google/protobuf",
-        "//third_party/tensorflow/compiler/xla:xla_py_pb2",
-        "//third_party/tensorflow/compiler/xla/pjrt/proto:compile_options_py_pb2",
         "@com_google_protobuf//:protobuf",  # any_py_pb2
         "@jax",
+        "@neptune//protos:manifest_py_pb2",
         "@xla//xla:xla_data_proto_py_pb2",
+        "@xla//xla:xla_py_pb2",
+        "@xla//xla/pjrt/proto:compile_options_py_pb2",
     ],
 )
 
@@ -193,8 +193,8 @@ py_library(
         ":type_proto_utils",
         ":unstructured_data",
         ":value",
-        "//third_party/neptune/protos:manifest_py_pb2",
         "@com_google_absl_py//absl/logging",
+        "@neptune//protos:manifest_py_pb2",
     ],
 )
 
@@ -215,8 +215,8 @@ py_library(
         ":metadata",
         ":saveable",
         ":unstructured_data",
-        "//third_party/neptune/protos:manifest_py_pb2",
         "@com_google_absl_py//absl/logging",
+        "@neptune//protos:manifest_py_pb2",
     ],
 )
 
@@ -228,8 +228,8 @@ pytype_strict_test(
         ":manifest_utils",
         ":serializable_function",
         ":unstructured_data",
-        "//third_party/neptune/protos:manifest_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
+        "@neptune//protos:manifest_py_pb2",
     ],
 )
 
@@ -247,9 +247,9 @@ pytype_strict_test(
         ":shlo_type",
         ":unstructured_data",
         ":value",
-        "//third_party/neptune/protos:manifest_py_pb2",
-        "//third_party/neptune/protos:type_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
+        "@neptune//protos:manifest_py_pb2",
+        "@neptune//protos:type_py_pb2",
     ],
 )
 
@@ -260,10 +260,10 @@ py_library(
         ":constants",
         ":shlo_type",
         ":type_proto_utils",
-        "//third_party/neptune/protos:manifest_py_pb2",
-        "//third_party/neptune/protos:orchestration_py_pb2",
         "@jax",
         "@jaxtyping",
+        "@neptune//protos:manifest_py_pb2",
+        "@neptune//protos:orchestration_py_pb2",
     ],
 )
 

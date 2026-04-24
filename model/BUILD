@@ -16,10 +16,10 @@ py_library_providing_imports_info(
     lib_rule = pytype_strict_library,
     visibility = ["//visibility:public"],
     deps = [
-        "//third_party/neptune/model/_src/export:jax_model",
-        "//third_party/neptune/model/_src/export:main_lib",
-        "//third_party/neptune/model/_src/export:serving_config",
-        "//third_party/neptune/model/_src/processors:processor",
-        "//third_party/neptune/model/_src/processors:tf_processor",
+        "@neptune//model/_src/export:jax_model",
+        "@neptune//model/_src/export:main_lib",
+        "@neptune//model/_src/export:serving_config",
+        "@neptune//model/_src/processors:processor",
+        "@neptune//model/_src/processors:tf_processor",
     ],
 )

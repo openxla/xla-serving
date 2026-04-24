@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package neptune.serving;
+
+import "runtime/serving/gcp/proto/model.proto";
+import "runtime/serving/gcp/proto/predict.proto";
+
+option cc_enable_arenas = true;
+
+message PredictLog {
+  PredictRequest request = 1;
+  PredictResponse response = 2;
+}
+
+// Metadata logged along with the request logs.
+message LogMetadata {
+  ModelSpec model_spec = 1;
+  repeated string model_tags = 3;
+  int64 timestamp_secs = 4;        // Seconds since epoch.
+  string dc = 5;                   // Datacenter where the request was logged.
+  string request_origin = 6;       // Request origin identifier.
+  string request_criticality = 7;  // Request QoS.
+}
+
+// Logged model inference request.
+message PredictionLog {
+  LogMetadata log_metadata = 1;
+  oneof log_type {
+    PredictLog predict_log = 2;
+    // More log types will be added here.
+  }
+}

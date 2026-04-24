@@ -3,7 +3,7 @@ load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("//storage/binfs:binfs.bzl", "pytype_strict_binary_par")
 load("@rules_python//python:proto.bzl", "py_proto_library")
 
-package(default_visibility = ["//third_party/neptune/model/cli:__subpackages__"])
+package(default_visibility = ["@neptune//model/cli:__subpackages__"])
 
 pytype_strict_binary_par(
     name = "npt-cli",
@@ -25,11 +25,11 @@ py_library(
     srcs = ["printer.py"],
     deps = [
         ":constants",
-        "//third_party/neptune/protos:manifest_py_pb2",
-        "//third_party/neptune/protos:orchestration_py_pb2",
-        "//third_party/neptune/protos:type_py_pb2",
         "//third_party/py/google/protobuf",
-        "//third_party/tensorflow/compiler/xla/pjrt/proto:compile_options_py_pb2",
+        "@neptune//protos:manifest_py_pb2",
+        "@neptune//protos:orchestration_py_pb2",
+        "@neptune//protos:type_py_pb2",
+        "@xla//xla/pjrt/proto:compile_options_py_pb2",
     ],
 )
 
@@ -39,11 +39,11 @@ py_test(
     deps = [
         ":printer",
         ":redaction_test_py_pb2",
-        "//third_party/neptune/protos:manifest_py_pb2",
-        "//third_party/neptune/protos:type_py_pb2",
-        "//third_party/tensorflow/compiler/xla/pjrt/proto:compile_options_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
         "@com_google_absl_py//absl/testing:parameterized",
+        "@neptune//protos:manifest_py_pb2",
+        "@neptune//protos:type_py_pb2",
+        "@xla//xla/pjrt/proto:compile_options_py_pb2",
     ],
 )
 
@@ -53,17 +53,17 @@ py_library(
     deps = [
         ":constants",
         ":printer",
-        "//third_party/neptune/model/_src/core:file_utils",
-        "//third_party/neptune/model/_src/core:persistence_lib",
-        "//third_party/neptune/protos:manifest_py_pb2",
-        "//third_party/neptune/protos:orchestration_py_pb2",
-        "//third_party/neptune/protos:tf_concrete_function_handle_py_pb2",
         "//third_party/py/google/protobuf",
         "//third_party/py/jax/extend",
         "//third_party/py/rich",
         "//third_party/py/typer",
         "//third_party/py/typing_extensions",
         "@jax",
+        "@neptune//model/_src/core:file_utils",
+        "@neptune//model/_src/core:persistence_lib",
+        "@neptune//protos:manifest_py_pb2",
+        "@neptune//protos:orchestration_py_pb2",
+        "@neptune//protos:tf_concrete_function_handle_py_pb2",
     ],
 )
 

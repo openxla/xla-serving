@@ -19,7 +19,7 @@ licenses(["notice"])
 package_group(
     name = "internal",
     packages = [
-        "//third_party/neptune/...",
+        "//...",
     ],
 )
 

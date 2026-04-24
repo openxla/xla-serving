@@ -1,6 +1,6 @@
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
-package(default_visibility = ["//third_party/neptune/model:__subpackages__"])
+package(default_visibility = ["@neptune//model:__subpackages__"])
 
 py_library(
     name = "main_lib",
@@ -10,20 +10,20 @@ py_library(
         ":jax_model",
         ":serving_config",
         ":utils",
-        "//third_party/neptune/model/_src/core:orchestration_proto_utils",
-        "//third_party/neptune/model/_src/core:persistence_lib",
-        "//third_party/neptune/model/_src/core:saveable",
-        "//third_party/neptune/model/_src/core:shlo_type",
-        "//third_party/neptune/model/_src/core:type_proto_utils",
-        "//third_party/neptune/model/_src/jax2npt:__init__",
-        "//third_party/neptune/model/_src/processors:jax_processor",
-        "//third_party/neptune/model/_src/processors:processor",
-        "//third_party/neptune/model/_src/processors:tf_processor",
-        "//third_party/neptune/model/_src/tf2npt:__init__",
-        "//third_party/neptune/protos:orchestration_py_pb2",
         "@com_google_absl_py//absl/logging",
         "@jax",
         "@jaxtyping",
+        "@neptune//model/_src/core:orchestration_proto_utils",
+        "@neptune//model/_src/core:persistence_lib",
+        "@neptune//model/_src/core:saveable",
+        "@neptune//model/_src/core:shlo_type",
+        "@neptune//model/_src/core:type_proto_utils",
+        "@neptune//model/_src/jax2npt:__init__",
+        "@neptune//model/_src/processors:jax_processor",
+        "@neptune//model/_src/processors:processor",
+        "@neptune//model/_src/processors:tf_processor",
+        "@neptune//model/_src/tf2npt:__init__",
+        "@neptune//protos:orchestration_py_pb2",
         "@orbax//:checkpoint",
     ],
 )
@@ -34,14 +34,14 @@ py_library(
     deps = [
         ":constants",
         ":utils",
-        "//third_party/neptune/model/_src/core:compile_options_util",
-        "//third_party/neptune/model/_src/core:shlo_function",
-        "//third_party/neptune/model/_src/core:shlo_type",
-        "//third_party/neptune/model/_src/jax2npt:__init__",
-        "//third_party/neptune/model/_src/jax2npt:typing",
         "@com_google_absl_py//absl/logging",
         "@jax",
         "@jaxtyping",
+        "@neptune//model/_src/core:compile_options_util",
+        "@neptune//model/_src/core:shlo_function",
+        "@neptune//model/_src/core:shlo_type",
+        "@neptune//model/_src/jax2npt:__init__",
+        "@neptune//model/_src/jax2npt:typing",
     ],
 )
 
@@ -59,10 +59,10 @@ py_library(
     name = "serving_config",
     srcs = ["serving_config.py"],
     deps = [
-        "//third_party/neptune/model/_src/processors:processor",
-        "//third_party/neptune/protos:orchestration_py_pb2",
         "@com_google_absl_py//absl/logging",
         "@jaxtyping",
+        "@neptune//model/_src/processors:processor",
+        "@neptune//protos:orchestration_py_pb2",
     ],
 )
 
@@ -70,9 +70,9 @@ py_library(
     name = "utils",
     srcs = ["utils.py"],
     deps = [
-        "//third_party/neptune/model/_src/core:shlo_type",
         "@jax",
         "@jaxtyping",
+        "@neptune//model/_src/core:shlo_type",
         "@numpy",
     ],
 )
@@ -87,9 +87,9 @@ pytype_strict_test(
     srcs = ["serving_config_test.py"],
     deps = [
         ":serving_config",
-        "//third_party/neptune/protos:orchestration_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
         "@com_google_absl_py//absl/testing:parameterized",
+        "@neptune//protos:orchestration_py_pb2",
     ],
 )
 
@@ -100,12 +100,12 @@ pytype_strict_test(
         ":jax_model",
         ":main_lib",
         ":serving_config",
-        "//third_party/neptune/model/_src/core:persistence_lib",
-        "//third_party/neptune/model/_src/processors:processor",
-        "//third_party/neptune/protos:orchestration_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
         "@com_google_absl_py//absl/testing:parameterized",
         "@jax",
+        "@neptune//model/_src/core:persistence_lib",
+        "@neptune//model/_src/processors:processor",
+        "@neptune//protos:orchestration_py_pb2",
     ],
 )
 
@@ -117,14 +117,14 @@ pytype_strict_test(
         ":jax_model",
         ":main_lib",
         ":serving_config",
-        "//third_party/neptune/model/_src/core:persistence_lib",
-        "//third_party/neptune/model/_src/processors:processor",
-        "//third_party/neptune/model/_src/processors:tf_processor",
-        "//third_party/neptune/protos:orchestration_py_pb2",
-        "//third_party/neptune/protos:tf_concrete_function_handle_py_pb2",
         "//third_party/py/tensorflow",
         "@com_google_absl_py//absl/testing:absltest",
         "@jax",
+        "@neptune//model/_src/core:persistence_lib",
+        "@neptune//model/_src/processors:processor",
+        "@neptune//model/_src/processors:tf_processor",
+        "@neptune//protos:orchestration_py_pb2",
+        "@neptune//protos:tf_concrete_function_handle_py_pb2",
     ],
 )
 
@@ -133,9 +133,9 @@ pytype_strict_test(
     srcs = ["utils_test.py"],
     deps = [
         ":utils",
-        "//third_party/neptune/model/_src/core:shlo_type",
         "@com_google_absl_py//absl/testing:absltest",
         "@com_google_absl_py//absl/testing:parameterized",
         "@jax",
+        "@neptune//model/_src/core:shlo_type",
     ],
 )
