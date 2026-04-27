@@ -1,6 +1,11 @@
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
+config_setting(
+    name = "enable_tf",
+    values = {"define": "ENABLE_TF=1"},
+)
+
 cc_binary(
     name = "jsv_serving_main",
     srcs = ["main.cc"],
@@ -38,6 +43,10 @@ cc_library(
     hdrs = [
         "orbax_grpc_server.h",
     ],
+    defines = select({
+        ":enable_tf": ["ENABLE_TF=1"],
+        "//conditions:default": [],
+    }),
     deps = [
         ":flags",
         ":grpc_status_utils",
@@ -60,7 +69,6 @@ cc_library(
         "@neptune//runtime/serving/gcp/proto:predict_cc_proto",
         "@neptune//runtime/serving/gcp/proto:prediction_service_cc_grpc_proto",
         "@neptune//runtime/serving/gcp/proto:prediction_service_cc_proto",
-        "@neptune//runtime/tensorflow:tf_compatible_interpreter_create_options",
         "@neptune//runtime/tensorflow/utils:tf_to_host_buffer",
         "@org_tensorflow//tensorflow/core/framework:tensor",
         "@tsl//tsl/profiler/lib:traceme",
@@ -78,7 +86,10 @@ cc_library(
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",
-    ],
+    ] + select({
+        ":enable_tf": ["@neptune//runtime/tensorflow:tf_compatible_interpreter_create_options"],
+        "//conditions:default": ["@neptune//runtime/interpreter:interpreter_create_options"],
+    }),
 )
 
 cc_library(

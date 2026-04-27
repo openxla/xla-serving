@@ -37,7 +37,11 @@
 #include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
 #include "runtime/serving/gcp/proto/model.pb.h"  // from @neptune
 #include "runtime/serving/gcp/proto/prediction_service.pb.h"  // from @neptune
-#include "runtime/tensorflow/tf_compatible_interpreter_create_options.h"  // from @neptune
+#if ENABLE_TF == 1
+  include "third_party/neptune/runtime/tensorflow/tf_compatible_interpreter_create_options.h"
+#else
+  #include "runtime/interpreter/interpreter_create_options.h"  // from @neptune  
+#endif
 #include "runtime/tensorflow/utils/tf_to_host_buffer.h"  // from @neptune
 #include "runtime/serving/gcp/server/grpc_status_utils.h"  // from @neptune
 #include "xla/pjrt/pjrt_api.h"  // from @xla
@@ -128,8 +132,13 @@ absl::StatusOr<std::unique_ptr<OrbaxGrpcServer>> OrbaxGrpcServer::Create(
           tsl::Env::Default(), tsl::ThreadOptions(),
           "OrbaxCheckpointLoaderThreadPool", kThreadPoolNumThreads);
   // Support model version in ModelRunner if we see use cases.
-  auto create_options =
-      std::make_unique<neptune::TfCompatibleInterpreterCreateOptions>();
+  #if ENABLE_TF == 1
+    auto create_options =
+        std::make_unique<neptune::TfCompatibleInterpreterCreateOptions>();
+  #else
+    auto create_options = std::make_unique<neptune::InterpreterCreateOptions>();
+  #endif
+
   create_options->checkpoint_loader_thread_pool =
       checkpoint_loader_thread_pool.get();
   create_options->model_name = model_name;
