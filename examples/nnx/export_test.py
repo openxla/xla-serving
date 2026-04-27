@@ -16,7 +16,9 @@
 
 import os
 from absl.testing import absltest
+import numpy as np
 from .third_party.neptune.examples.nnx import export
+from .third_party.neptune.runtime.python import orbax_model_runner
 
 
 class ExportTest(absltest.TestCase):
@@ -29,6 +31,18 @@ class ExportTest(absltest.TestCase):
     self.assertTrue(
         os.path.isfile(os.path.join(export_path, 'orchestration.pb'))
     )
+
+    # Run the model using Orbax ModelRunner
+    runner = orbax_model_runner.ModelRunner(model_path=export_path)
+    inputs = {
+        'feature_1': np.zeros((2, 1), dtype=np.int32),
+        'feature_2': np.zeros((2, 1), dtype=np.int32),
+        'feature_3': np.zeros((2, 1), dtype=np.int32),
+        'feature_4': np.zeros((2, 1), dtype=np.int32),
+    }
+    outputs = runner.signature('serving_default').run_with_dict_return(**inputs)
+    self.assertIn('pred', outputs)
+    self.assertEqual(outputs['pred'].shape, (2, 1, 1))
 
 
 if __name__ == '__main__':

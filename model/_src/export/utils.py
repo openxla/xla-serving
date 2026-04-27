@@ -50,7 +50,7 @@ def to_jax_spec(tree: jaxtyping.PyTree) -> jaxtyping.PyTree:
           f'Failed to convert {x!r} to jax.ShapeDtypeStruct'
       ) from err
 
-  return jax.tree_util.tree_map(_convert_leaf, tree)
+  return jax.tree.map(_convert_leaf, tree)
 
 
 def to_shlo_tensor_spec(
@@ -70,18 +70,27 @@ def to_shlo_tensor_spec(
       ShloTensorSpec.
   """
 
-  def _convert_leaf(x: Any) -> shlo_type.ShloTensorSpec:
+  def _convert_leaf(path, x: Any) -> shlo_type.ShloTensorSpec:
     if isinstance(x, shlo_type.ShloTensorSpec):
       return x
+
+    # ShloTensorSpec.name is propagated to the named signature and
+    # can also be used as by processors as a preferred name (e.g.
+    # for the SignatureDef in the TF SavedModel).
+    if hasattr(x, 'name') and x.name is not None:
+      name = x.name
+    else:
+      name = jax.tree_util.keystr(path, simple=True, separator='.')
+
     try:
       if hasattr(x.dtype, 'as_numpy_dtype'):
         np_dtype = np.dtype(x.dtype.as_numpy_dtype())
       else:
         np_dtype = np.dtype(x.dtype)
       return shlo_type.ShloTensorSpec(
-          x.shape, shlo_type.np_dtype_to_shlo_dtype(np_dtype)
+          x.shape, shlo_type.np_dtype_to_shlo_dtype(np_dtype), name=name
       )
     except Exception as err:
       raise ValueError(f'Failed to convert {x!r} to ShloTensorSpec') from err
 
-  return jax.tree_util.tree_map(_convert_leaf, tree)
+  return jax.tree.map_with_path(_convert_leaf, tree)

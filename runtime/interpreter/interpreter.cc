@@ -494,8 +494,8 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateStableHloRunnerOp(
   TF_RETURN_IF_ERROR(builder.SetConfig(kIfrtLoadedVariableRegistry,
                                        ifrt_loaded_variable_registry));
   TF_RETURN_IF_ERROR(builder.SetConfig(kWeights, weight_names));
-  TF_RETURN_IF_ERROR(builder.SetConfig(kCompilationEnvProto,
-                                       create_options.compilation_env));
+  TF_RETURN_IF_ERROR(
+      builder.SetConfig(kCompilationEnvProto, create_options.compilation_env));
   if (compile_options != nullptr) {
     TF_RETURN_IF_ERROR(builder.SetConfig(kXlaCompileOptions, *compile_options));
   }
@@ -509,9 +509,8 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateStableHloRunnerOp(
   // the manifest.
   TF_ASSIGN_OR_RETURN(
       AssignedDevices assigned_devices,
-      GetAssignedDevices(
-          manifest, *stable_hlo_funcs[0], compile_options,
-          create_options.ignore_device_assignment_in_manifest));
+      GetAssignedDevices(manifest, *stable_hlo_funcs[0], compile_options,
+                         create_options.ignore_device_assignment_in_manifest));
   TF_RETURN_IF_ERROR(builder.SetConfig(
       kAssignedDevices,
       std::make_shared<const AssignedDevices>(std::move(assigned_devices))));
@@ -719,15 +718,6 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadStableHloRunnerOp(
     // It is possible that multiple pipelines share the set of weights. So it is
     // okay if `inserted` is true.
     auto [iter, inserted] = weight_sets_.try_emplace(weights_name);
-    // A set of weights is uniquely identified by the `weights_name`. A given
-    // set of weights can be shared by multiple pipelines. At the moment, we
-    // only allow one set of weights. It is not clear if we will have a case
-    // where we need multiple sets of weights.
-    if (weight_sets_.size() > 1) {
-      return absl::UnimplementedError(
-          "Model has more than one weights name. Only a single shared "
-          "weights_name is supported at the moment.");
-    }
     // We should always try to load the weights, since only used weights by
     // the provided `stablehlo_funcs` will be loaded, and `stablehlo_funcs`
     // across pipelines may need different weights in the same set.
@@ -812,28 +802,40 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
     NamedSignature named_signature =
         keyword_arguments_based ? GetNamedSignatureOfComponent(component)
                                 : NamedSignature{};
-    TF_ASSIGN_OR_RETURN(std::string key, GetKeyFromProcessorMimeType(*func));
-    TF_ASSIGN_OR_RETURN(OptionalFunctionHandler * handler,
-                        optional_function_handler_router_.GetHandler(key));
 
-    bool pre_data_conversion = true;
-    if (component_index == 0 &&
-        component.role() == neptune_model_orchestration::ROLE_PREPROCESSOR) {
-      pre_data_conversion = batching_config.batch_preprocessing;
+    std::vector<std::unique_ptr<Kernel>> sub_graph;
+
+    if (func->body().has_stable_hlo_body()) {
+      TF_ASSIGN_OR_RETURN(std::unique_ptr<Kernel> op,
+                          LoadStableHloRunnerOp(component.function_name(),
+                                                component.weights_name(),
+                                                named_signature.inputs,
+                                                named_signature.outputs));
+      sub_graph.push_back(std::move(op));
+    } else {
+      TF_ASSIGN_OR_RETURN(std::string key, GetKeyFromProcessorMimeType(*func));
+      TF_ASSIGN_OR_RETURN(OptionalFunctionHandler * handler,
+                          optional_function_handler_router_.GetHandler(key));
+
+      bool pre_data_conversion = true;
+      if (component_index == 0 &&
+          component.role() == neptune_model_orchestration::ROLE_PREPROCESSOR) {
+        pre_data_conversion = batching_config.batch_preprocessing;
+      }
+      bool post_data_conversion = true;
+      if (component_index == components.size() - 1 &&
+          component.role() == neptune_model_orchestration::ROLE_POSTPROCESSOR) {
+        post_data_conversion = batching_config.batch_postprocessing;
+      }
+      TF_ASSIGN_OR_RETURN(
+          sub_graph, handler->HandleFunction(
+                         create_options_->model_path, *func, *create_options_,
+                         pre_data_conversion, post_data_conversion,
+                         named_signature.inputs, named_signature.outputs));
     }
-    bool post_data_conversion = true;
-    if (component_index == components.size() - 1 &&
-        component.role() == neptune_model_orchestration::ROLE_POSTPROCESSOR) {
-      post_data_conversion = batching_config.batch_postprocessing;
-    }
-    TF_ASSIGN_OR_RETURN(
-        std::vector<std::unique_ptr<Kernel>> sub_graph,
-       handler->HandleFunction(create_options_->model_path, *func,
-                                *create_options_, pre_data_conversion,
-                                post_data_conversion, named_signature.inputs,
-                                named_signature.outputs));
-   if (component.role() == neptune_model_orchestration::ROLE_PREPROCESSOR) {
-       preprocessors.push_back(std::move(sub_graph));
+
+    if (component.role() == neptune_model_orchestration::ROLE_PREPROCESSOR) {
+      preprocessors.push_back(std::move(sub_graph));
     } else if (component.role() ==
                neptune_model_orchestration::ROLE_POSTPROCESSOR) {
       postprocessors.push_back(std::move(sub_graph));
@@ -1147,8 +1149,21 @@ absl::StatusOr<KernelIODataType> Interpreter::GetModelInputDataType(
   // simple query, instead of loading the graph and getting the data type from
   // the first kernel, we just infer the data type.
   auto& pipeline = graph_bundle->pipeline;
-  if (pipeline.pre_processor_names().empty()) {
-    return KernelIODataType::kHostBuffer;
+
+  absl::string_view pre_processor_name;
+  for (const auto& component : pipeline.components()) {
+    if (component.role() == neptune_model_orchestration::ROLE_PREPROCESSOR) {
+      pre_processor_name = component.function_name();
+      break;
+    }
+  }
+  if (pre_processor_name.empty()) {
+    // Fall back to the legacy field.
+    if (!pipeline.pre_processor_names().empty()) {
+      pre_processor_name = pipeline.pre_processor_names(0);
+    } else {
+      return KernelIODataType::kHostBuffer;
+    }
   }
 
   bool pre_processor_in_batching =
@@ -1158,10 +1173,13 @@ absl::StatusOr<KernelIODataType> Interpreter::GetModelInputDataType(
        pipeline.batch_options().batch_component() ==
            BatchOptions::PRE_PROCESSOR_AND_MODEL_FUNCTION);
 
-  absl::string_view pre_processor_name = pipeline.pre_processor_names(0);
   TF_ASSIGN_OR_RETURN(
       const neptune_model_manifest::Function* func,
       GetFunctionByObjectName(manifest_objects_, pre_processor_name));
+
+  if (func->body().has_stable_hlo_body()) {
+    return KernelIODataType::kHostBuffer;
+  }
 
   TF_ASSIGN_OR_RETURN(std::string key, GetKeyFromProcessorMimeType(*func));
   TF_ASSIGN_OR_RETURN(OptionalFunctionHandler * handler,
@@ -1194,6 +1212,10 @@ absl::StatusOr<KernelIODataType> Interpreter::GetModelOutputDataType(
   TF_ASSIGN_OR_RETURN(
       const neptune_model_manifest::Function* func,
       GetFunctionByObjectName(manifest_objects_, post_processor_name));
+
+  if (func->body().has_stable_hlo_body()) {
+    return KernelIODataType::kHostBuffer;
+  }
 
   TF_ASSIGN_OR_RETURN(std::string key, GetKeyFromProcessorMimeType(*func));
   TF_ASSIGN_OR_RETURN(OptionalFunctionHandler * handler,

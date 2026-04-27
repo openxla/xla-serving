@@ -55,20 +55,28 @@ class UtilsTest(parameterized.TestCase):
             {
                 'a': jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.int32),
                 'b': shlo_type.ShloTensorSpec(
-                    shape=(2,), dtype=shlo_type.ShloDType.f32
+                    shape=(2,),
+                    dtype=shlo_type.ShloDType.f32,
+                    name='foo',
                 ),
             },
         )),
         (
             shlo_type.ShloTensorSpec(
-                shape=(2, 3), dtype=shlo_type.ShloDType.f32
+                shape=(2, 3),
+                dtype=shlo_type.ShloDType.f32,
+                name='0',
             ),
             {
                 'a': shlo_type.ShloTensorSpec(
-                    shape=(4,), dtype=shlo_type.ShloDType.i32
+                    shape=(4,),
+                    dtype=shlo_type.ShloDType.i32,
+                    name='1.a',
                 ),
                 'b': shlo_type.ShloTensorSpec(
-                    shape=(2,), dtype=shlo_type.ShloDType.f32
+                    shape=(2,),
+                    dtype=shlo_type.ShloDType.f32,
+                    name='foo',
                 ),
             },
         ),

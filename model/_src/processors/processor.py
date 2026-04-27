@@ -14,13 +14,14 @@
 
 """Neptune model processing pipelines describe how to orchestrate processors around a model."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 import dataclasses
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 import jaxtyping
 
 from neptune_model._src.core import saveable
+from neptune_model._src.core import value
 
 
 class PreparedProcessor(Protocol):
@@ -43,6 +44,20 @@ class PreparedProcessor(Protocol):
     ...
 
   def to_npt_saveable(self) -> saveable.Saveable:
+    ...
+
+  def on_persist(
+      self,
+  ) -> Callable[[str], Mapping[str, value.ExternalValue]] | None:
+    """A callback that runs prior to saving the processor during the export.
+
+    Returns:
+      The function that can be used to save extra objects
+      for the processor. The function takes the export path as an argument
+      and returns a mapping of object names to ExternalValues that should be
+      saved for this processor. Returns None if no extra objects should be
+      saved.
+    """
     ...
 
 
@@ -133,4 +148,3 @@ class SequentialProcessing:
   options: ProcessingOptions = dataclasses.field(
       default_factory=ProcessingOptions
   )
-

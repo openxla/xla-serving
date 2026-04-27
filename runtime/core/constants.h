@@ -63,6 +63,9 @@ inline constexpr char kTfSavedModelMimeType[] =
     "application/x.tensorflow-saved-model";
 inline constexpr char kTfConcreteFunctionHandleMimeType[] =
     "application/protobuf; "
+    "type=neptune_model_tf_concrete_function_handle.TfConcreteFunctionHandle";
+inline constexpr char kTfConcreteFunctionHandleMimeTypeLegacy[] =
+    "application/protobuf; "
     "type=orbax_model_tf_concrete_function_handle.TfConcreteFunctionHandle";
 
 }  // namespace neptune

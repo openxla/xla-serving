@@ -61,8 +61,7 @@ namespace {
 struct TfConcreteFunctionHandle {
  public:
   static TfConcreteFunctionHandle FromProto(
-      const third_party_neptune_protos::TfConcreteFunctionHandle&
-          proto) {
+      const third_party_neptune_protos::TfConcreteFunctionHandle& proto) {
     return TfConcreteFunctionHandle{
         .fn_name = std::string(proto.fn_name()),
         .input_names = {proto.input_names().begin(), proto.input_names().end()},
@@ -87,8 +86,7 @@ absl::StatusOr<TfConcreteFunctionHandle> GetTfConcreteFunctionHandle(
       std::string full_path,
       GetAbsoluteFileSystemPath(model_path, tf_body.file_system_location()));
 
-  third_party_neptune_protos::TfConcreteFunctionHandle
-      handle_proto;
+  third_party_neptune_protos::TfConcreteFunctionHandle handle_proto;
   VLOG(4) << "Reading TF concrete function handle from: " << full_path;
   TF_RETURN_IF_ERROR(
       tsl::ReadBinaryProto(tsl::Env::Default(), full_path, &handle_proto));
@@ -125,8 +123,8 @@ absl::StatusOr<std::vector<std::unique_ptr<Kernel>>>
 TfCompatibleOptionalFunctionHandler::HandleFunction(
     absl::string_view model_path,
     const neptune_model_manifest::Function& function,
-    const InterpreterCreateOptions& create_options,
-    bool pre_data_conversion, bool post_data_conversion,
+    const InterpreterCreateOptions& create_options, bool pre_data_conversion,
+    bool post_data_conversion,
     const neptune_model_orchestration::NamedTensorTypeList* named_inputs,
     const neptune_model_orchestration::NamedTensorTypeList* named_outputs) {
   if (!function.has_body()) {
@@ -142,7 +140,9 @@ TfCompatibleOptionalFunctionHandler::HandleFunction(
   std::unique_ptr<Kernel> tf_kernel;
 
   TF_RETURN_IF_ERROR(CheckMimeAndDataType(
-      tf_body, {kTfConcreteFunctionHandleMimeType},
+      tf_body,
+      {kTfConcreteFunctionHandleMimeTypeLegacy,
+       kTfConcreteFunctionHandleMimeType},
       neptune_model_manifest::UnstructuredData::kFileSystemLocation,
       "Function body for TF Function"));
 
@@ -230,6 +230,9 @@ TfCompatibleOptionalFunctionHandler::HandleFunction(
 }
 
 static const bool kUnused = []() {
+  RegisterOptionalFunctionHandlerFactory<
+      TfCompatibleOptionalFunctionHandlerFactory>(
+      kTfConcreteFunctionHandleMimeTypeLegacy);
   RegisterOptionalFunctionHandlerFactory<
       TfCompatibleOptionalFunctionHandlerFactory>(
       kTfConcreteFunctionHandleMimeType);

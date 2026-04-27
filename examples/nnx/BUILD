@@ -19,7 +19,6 @@ py_library(
     deps = [
         ":model",
         "//third_party/py/flax/nnx",
-        "@com_google_absl_py//absl/logging",
         "@jax",
         "@neptune//model/_src/export:jax_model",
         "@neptune//model/_src/export:main_lib",
@@ -44,5 +43,7 @@ py_test(
     deps = [
         ":export",
         "@com_google_absl_py//absl/testing:absltest",
+        "@neptune//runtime/python:orbax_model_runner",
+        "@numpy",
     ],
 )

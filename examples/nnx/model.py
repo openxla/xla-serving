@@ -165,7 +165,9 @@ NUM_PREDICTION_TYPES = 1
 
 def build_model(
     rngs: nnx.Rngs,
-) -> Model:
+    *,
+    separate_embedding_layer: bool = False,
+) -> tuple[EmbeddingLayer, Model]:
   """Build the recommender model with two towers and a prediction layer."""
   embedding_layer = EmbeddingLayer(
       embedding_specs=ALL_FEATURES,
@@ -206,9 +208,16 @@ def build_model(
 
   prediction_layer = nnx.Linear(384, NUM_PREDICTION_TYPES, rngs=rngs)
 
-  return Model(
-      embedding_layer=embedding_layer,
+  if separate_embedding_layer:
+    model_embedding_layer = None
+  else:
+    model_embedding_layer = embedding_layer
+
+  model = Model(
+      embedding_layer=model_embedding_layer,
       request_tower=request_tower,
       candidate_tower=candidate_tower,
       prediction_layer=prediction_layer,
   )
+
+  return embedding_layer, model

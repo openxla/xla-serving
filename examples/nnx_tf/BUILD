@@ -48,6 +48,9 @@ py_test(
     srcs = ["export_test.py"],
     deps = [
         ":export",
+        "//third_party/py/tensorflow:tensorflow_no_contrib",
         "@com_google_absl_py//absl/testing:absltest",
+        "@neptune//runtime/python:orbax_model_runner",
+        "@numpy",
     ],
 )
