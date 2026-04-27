@@ -30,6 +30,7 @@ dependencies = [
     'numpy',
     'protobuf',
     'orbax-checkpoint >=0.9.0',
+    'tensorflow>=2.15.0',
 ]
 
 dynamic = ['version']

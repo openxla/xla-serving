@@ -67,8 +67,25 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Bazelisk
-        uses: bazelbuild/setup-bazelisk@v3
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Disable Android configuration
+        run: |
+          # 1. Clear the variables
+          echo "ANDROID_HOME=" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=" >> $GITHUB_ENV
+          # 2. Nuke the empty ghost folders so Bazel gives up searching
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/lib/android-sdk
 
       - name: Cache Bazel Build
         uses: actions/cache@v4
