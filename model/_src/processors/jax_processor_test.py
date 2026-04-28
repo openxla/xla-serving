@@ -60,7 +60,7 @@ class JaxProcessorTest(compare.Proto2Assertions, absltest.TestCase):
     model = jax_model.JaxModel(
         apply_fn_bundle=jax_model.ApplyFnBundle(
             apply_fn=lambda params, x: x * params['w'],
-            input_polymophic_shapes='b,_',
+            input_polymorphic_shapes='b,_',
             jax_export_kwargs={'platforms': ['cpu']},
         ),
         params={'w': jnp.array([2.0], dtype=jnp.float32)},

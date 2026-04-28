@@ -122,12 +122,12 @@ class ApplyFnBundle:
 
   Attributes:
     apply_fn: The function to apply.
-    input_polymophic_shapes: Polymorphic shapes for function inputs, for
+    input_polymorphic_shapes: Polymorphic shapes for function inputs, for
       `shapes_specs` in `jax.export.symbolic_args_specs`.
     polymorphic_constraints: Constraints on polymorphic dimensions, for
       `constraints` in `jax.export.symbolic_args_specs`.
     input_polymorphic_shape_symbol_values: A mapping of symbol names to values
-      for the symbols in `input_polymophic_shapes`.
+      for the symbols in `input_polymorphic_shapes`.
     jax_export_kwargs: Keyword arguments for `jax.export.export`. Current
       available kwargs are platforms, _override_lowering_rules, disabled_checks.
       See
@@ -135,7 +135,7 @@ class ApplyFnBundle:
   """
 
   apply_fn: ApplyFn
-  input_polymophic_shapes: Any | None = None
+  input_polymorphic_shapes: Any | None = None
   polymorphic_constraints: Sequence[str] = ()
   input_polymorphic_shape_symbol_values: Mapping[str, Sequence[int]] | None = (
       None
@@ -203,7 +203,7 @@ class JaxModel:
         args=utils.to_jax_spec((self.params, input_signature)),
         shapes_specs=(
             '...',
-            apply_fn_bundle.input_polymophic_shapes,
+            apply_fn_bundle.input_polymorphic_shapes,
         ),
         constraints=apply_fn_bundle.polymorphic_constraints,
     )

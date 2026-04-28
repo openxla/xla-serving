@@ -63,7 +63,7 @@ def export_model(export_path: str):
       model=jax_model.JaxModel(
           apply_fn_bundle=jax_model.ApplyFnBundle(
               apply_fn=apply_fn,
-              input_polymophic_shapes={
+              input_polymorphic_shapes={
                   'feature_1': 'b, _, _',
                   'feature_2': 'b, _, _',
                   'feature_3': 'b, _, _',

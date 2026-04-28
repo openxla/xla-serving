@@ -341,7 +341,7 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
     model = jax_model.JaxModel(
         apply_fn_bundle=jax_model.ApplyFnBundle(
             apply_fn=lambda params, x: {'out': x['input'] * params['w']},
-            input_polymophic_shapes={'input': 'b,_'},
+            input_polymorphic_shapes={'input': 'b,_'},
             input_polymorphic_shape_symbol_values={'b': [1, 2]},
             jax_export_kwargs={'platforms': ['cpu']},
         ),
