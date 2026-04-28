@@ -494,8 +494,8 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateStableHloRunnerOp(
   TF_RETURN_IF_ERROR(builder.SetConfig(kIfrtLoadedVariableRegistry,
                                        ifrt_loaded_variable_registry));
   TF_RETURN_IF_ERROR(builder.SetConfig(kWeights, weight_names));
-  TF_RETURN_IF_ERROR(builder.SetConfig(kCompilationEnvProto,
-                                       create_options.compilation_env));
+  TF_RETURN_IF_ERROR(
+      builder.SetConfig(kCompilationEnvProto, create_options.compilation_env));
   if (compile_options != nullptr) {
     TF_RETURN_IF_ERROR(builder.SetConfig(kXlaCompileOptions, *compile_options));
   }
@@ -509,9 +509,8 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateStableHloRunnerOp(
   // the manifest.
   TF_ASSIGN_OR_RETURN(
       AssignedDevices assigned_devices,
-      GetAssignedDevices(
-          manifest, *stable_hlo_funcs[0], compile_options,
-          create_options.ignore_device_assignment_in_manifest));
+      GetAssignedDevices(manifest, *stable_hlo_funcs[0], compile_options,
+                         create_options.ignore_device_assignment_in_manifest));
   TF_RETURN_IF_ERROR(builder.SetConfig(
       kAssignedDevices,
       std::make_shared<const AssignedDevices>(std::move(assigned_devices))));
@@ -828,12 +827,12 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
     }
     TF_ASSIGN_OR_RETURN(
         std::vector<std::unique_ptr<Kernel>> sub_graph,
-       handler->HandleFunction(create_options_->model_path, *func,
+        handler->HandleFunction(create_options_->model_path, *func,
                                 *create_options_, pre_data_conversion,
                                 post_data_conversion, named_signature.inputs,
                                 named_signature.outputs));
-   if (component.role() == neptune_model_orchestration::ROLE_PREPROCESSOR) {
-       preprocessors.push_back(std::move(sub_graph));
+    if (component.role() == neptune_model_orchestration::ROLE_PREPROCESSOR) {
+      preprocessors.push_back(std::move(sub_graph));
     } else if (component.role() ==
                neptune_model_orchestration::ROLE_POSTPROCESSOR) {
       postprocessors.push_back(std::move(sub_graph));
@@ -1147,8 +1146,21 @@ absl::StatusOr<KernelIODataType> Interpreter::GetModelInputDataType(
   // simple query, instead of loading the graph and getting the data type from
   // the first kernel, we just infer the data type.
   auto& pipeline = graph_bundle->pipeline;
-  if (pipeline.pre_processor_names().empty()) {
-    return KernelIODataType::kHostBuffer;
+
+  absl::string_view pre_processor_name;
+  for (const auto& component : pipeline.components()) {
+    if (component.role() == neptune_model_orchestration::ROLE_PREPROCESSOR) {
+      pre_processor_name = component.function_name();
+      break;
+    }
+  }
+  if (pre_processor_name.empty()) {
+    // Fall back to the legacy field.
+    if (!pipeline.pre_processor_names().empty()) {
+      pre_processor_name = pipeline.pre_processor_names(0);
+    } else {
+      return KernelIODataType::kHostBuffer;
+    }
   }
 
   bool pre_processor_in_batching =
@@ -1158,7 +1170,6 @@ absl::StatusOr<KernelIODataType> Interpreter::GetModelInputDataType(
        pipeline.batch_options().batch_component() ==
            BatchOptions::PRE_PROCESSOR_AND_MODEL_FUNCTION);
 
-  absl::string_view pre_processor_name = pipeline.pre_processor_names(0);
   TF_ASSIGN_OR_RETURN(
       const neptune_model_manifest::Function* func,
       GetFunctionByObjectName(manifest_objects_, pre_processor_name));
