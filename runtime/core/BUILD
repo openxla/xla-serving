@@ -44,6 +44,7 @@ cc_library(
         "//learning/infra/mira/experimental/orbax_model/core:__pkg__",
         "//learning/serving/servolab:__subpackages__",
         "//learning/tfx/pipeline/infra_validation:__pkg__",
+        "//quality/qrewrite/testing/guitar:__pkg__",
         "//smartass/brain/util:__pkg__",
     ],
     deps = [
