@@ -64,7 +64,7 @@ def _infer_polymorphic_signature(
       raise ValueError("`specs` must not be empty.")
     shapes = zip(*(s.shape for s in specs))
     poly_shape = [dims[0] if len(set(dims)) == 1 else None for dims in shapes]
-    return shlo_type.ShloTensorSpec(poly_shape, specs[0].dtype)
+    return dataclasses.replace(specs[0], shape=poly_shape)
 
   return jax.tree_util.tree_map(
       _infer_spec,
