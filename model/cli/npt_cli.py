@@ -15,8 +15,7 @@
 """Command line interface for Neptune Model.
 
 npt-cli is a command line interface for Neptune Model. It allows users to
-inspect
-an exported Neptune Model.
+inspect an exported Neptune Model.
 """
 
 from collections.abc import Sequence
@@ -43,5 +42,10 @@ def main(unused_argv: Sequence[str]) -> None:
   cli()
 
 
-if __name__ == '__main__':
+def run() -> None:
+  """Runs the NPT CLI."""
   app.run(main, argv=sys.argv[:1])
+
+
+if __name__ == '__main__':
+  run()

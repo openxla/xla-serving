@@ -29,8 +29,10 @@ dependencies = [
     'jaxtyping',
     'numpy',
     'protobuf',
+    'rich',
     'orbax-checkpoint >=0.9.0',
     'tensorflow>=2.15.0',
+    'typer',
 ]
 
 dynamic = ['version']
@@ -47,6 +49,9 @@ package-dir = {"" = "."}
 [project.urls]
 homepage = 'http://github.com/AI-Hypercomputer/neptune'
 repository = 'http://github.com/AI-Hypercomputer/neptune'
+
+[project.scripts]
+npt-cli = 'neptune_model.cli.npt_cli:run'
 
 [project.optional-dependencies]
 testing = [
