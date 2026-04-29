@@ -84,7 +84,6 @@ def export_model(export_path: str):
                           fn=embedding_layer,
                       )
                   ],
-                  postprocessors=[],
                   options=processor.ProcessingOptions(
                       tf_trackable_resources=[embedding_layer]
                   ),

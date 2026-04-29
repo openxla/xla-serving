@@ -128,9 +128,8 @@ class SequentialProcessing:
     )
   """
 
-  preprocessors: Sequence[Processor]
-  postprocessors: Sequence[Processor]
+  preprocessors: Sequence[Processor] = dataclasses.field(default_factory=list)
+  postprocessors: Sequence[Processor] = dataclasses.field(default_factory=list)
   options: ProcessingOptions = dataclasses.field(
       default_factory=ProcessingOptions
   )
-
