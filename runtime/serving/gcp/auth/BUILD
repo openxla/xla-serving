@@ -4,7 +4,10 @@ cc_library(
     name = "utils",
     srcs = ["utils.cc"],
     hdrs = ["utils.h"],
-    visibility = ["@neptune//runtime/serving/gcp:__subpackages__"],
+    visibility = [
+        "@neptune//examples:__subpackages__",
+        "@neptune//runtime/serving/gcp:__subpackages__",
+    ],
     deps = [
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/log:check",

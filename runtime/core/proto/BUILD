@@ -3,6 +3,7 @@ load("@rules_proto//proto:defs.bzl", "proto_library")
 
 package(default_visibility = [
     "//learning/infra/mira/experimental/orbax_model:__subpackages__",
+    "@neptune//examples:__subpackages__",
     "@neptune//runtime:__subpackages__",
 ])
 

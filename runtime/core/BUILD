@@ -255,6 +255,7 @@ cc_library(
     hdrs = ["host_buffer.h"],
     visibility = [
         ":core_users",
+        "@neptune//examples:__subpackages__",
         "@neptune//runtime/interpreter:interpreter_users",
     ],
     deps = [
