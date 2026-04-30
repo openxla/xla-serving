@@ -9,6 +9,7 @@ py_library(
     deps = [
         "@jaxtyping",
         "@neptune//model/_src/core:saveable",
+        "@neptune//model/_src/core:value",
     ],
 )
 
@@ -21,9 +22,12 @@ py_library(
         "@neptune//model/_src/core:saveable",
         "@neptune//model/_src/core:shlo_function",
         "@neptune//model/_src/core:shlo_type",
+        "@neptune//model/_src/core:value",
         "@neptune//model/_src/export:constants",
         "@neptune//model/_src/export:jax_model",
         "@neptune//model/_src/export:utils",
+        "@neptune//model/_src/jax2npt:__init__",
+        "@orbax//:checkpoint",
     ],
 )
 
@@ -45,6 +49,7 @@ py_library(
     deps = [
         "@jaxtyping",
         "@neptune//model/_src/core:saveable",
+        "@neptune//model/_src/core:value",
         "@neptune//model/_src/tf2npt:__init__",
     ],
 )

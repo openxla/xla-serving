@@ -21,13 +21,12 @@ py_library(
         "@neptune//model/_src/core:saveable",
         "@neptune//model/_src/core:shlo_type",
         "@neptune//model/_src/core:type_proto_utils",
-        "@neptune//model/_src/jax2npt:__init__",
+        "@neptune//model/_src/core:value",
         "@neptune//model/_src/processors:jax_processor",
         "@neptune//model/_src/processors:processor",
         "@neptune//model/_src/processors:tf_processor",
         "@neptune//model/_src/tf2npt:__init__",
         "@neptune//protos:orchestration_py_pb2",
-        "@orbax//:checkpoint",
     ],
 )
 

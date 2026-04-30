@@ -20,22 +20,20 @@ JAX functions to SHLO functions, and `persistence_lib` to save them
 in Neptune's format.
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, MutableSequence, Sequence
 import dataclasses
-import pathlib
 
 from absl import logging
 import jax
 import jaxtyping
-import orbax.checkpoint as ocp
 
-from neptune_model._src import jax2npt
 from neptune_model._src import tf2npt
 from neptune_model._src.core import orchestration_proto_utils
 from neptune_model._src.core import persistence_lib
 from neptune_model._src.core import saveable
 from neptune_model._src.core import shlo_type
 from neptune_model._src.core import type_proto_utils
+from neptune_model._src.core import value
 from neptune_model._src.export import constants
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import serving_config
@@ -59,6 +57,7 @@ class NeptuneModelSaveBundle:
       export, TF functions will be saved as TF SavedModel format in a
       subdirectory of the export path and added to the exported model's
       supplementals.
+    on_persist_fns: A list of callbacks to run prior to persisting the model.
   """
 
   manifest_objects: dict[str, saveable.Saveable] = dataclasses.field(
@@ -71,6 +70,9 @@ class NeptuneModelSaveBundle:
   tf_prepared_functions: dict[str, tf2npt.PreparedFunction] = dataclasses.field(
       default_factory=dict
   )
+  on_persist_fns: MutableSequence[
+      Callable[[str], Mapping[str, value.ExternalValue]]
+  ] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
@@ -112,6 +114,8 @@ def _build_pipeline_nodes(
       model=model,
       name=cfg.serving_signature,
       method_key=cfg.method_key,
+      checkpoint_path=constants.DEFAULT_CHECKPOINT_SUBDIR,
+      weights_name=constants.WEIGHTS_NAME,
   )
 
   model_node = PipelineNode(
@@ -186,6 +190,10 @@ def _update_save_bundle_with_pipeline_node(
   save_bundle.manifest_objects[prepared_processor.name] = (
       prepared_processor.to_npt_saveable()
   )
+
+  on_persist_fn = prepared_processor.on_persist()
+  if on_persist_fn is not None:
+    save_bundle.on_persist_fns.append(on_persist_fn)
 
   if isinstance(prepared_processor, tf_processor.PreparedTfProcessor):
     save_bundle.tf_prepared_functions[prepared_processor.name] = (
@@ -348,22 +356,10 @@ def save(
     )
     supplementals.update(tf_supplemental)
 
-  checkpoint_dir = (
-      pathlib.Path(export_path) / constants.DEFAULT_CHECKPOINT_SUBDIR
-  )
-  checkpointer = ocp.Checkpointer(ocp.StandardCheckpointHandler())
-  checkpointer.save(
-      checkpoint_dir,
-      model.params,
-      force=True,
-  )
-  save_module = {
-      constants.WEIGHTS_NAME: jax2npt.convert_path_to_value(
-          constants.DEFAULT_CHECKPOINT_SUBDIR,
-          constants.ORBAX_CHECKPOINT_MIME_TYPE,
-      ),
-      **save_bundle.manifest_objects,
-  }
+  save_module = save_bundle.manifest_objects.copy()
+
+  for on_persist_fn in save_bundle.on_persist_fns:
+    save_module.update(on_persist_fn(export_path))
 
   save_options = persistence_lib.SaveOptions(
       version=2,

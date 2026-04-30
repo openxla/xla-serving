@@ -14,7 +14,7 @@
 
 """TensorFlow processor for Neptune."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 import dataclasses
 from typing import Any
 
@@ -22,6 +22,7 @@ import jaxtyping
 
 from neptune_model._src import tf2npt
 from neptune_model._src.core import saveable
+from neptune_model._src.core import value
 
 
 @dataclasses.dataclass(frozen=True)
@@ -45,6 +46,11 @@ class PreparedTfProcessor:
 
   def to_npt_saveable(self) -> saveable.Saveable:
     return self.prepared_function.serializable_fn
+
+  def on_persist(
+      self,
+  ) -> Callable[[str], Mapping[str, value.ExternalValue]] | None:
+    return None
 
 
 @dataclasses.dataclass(frozen=True)

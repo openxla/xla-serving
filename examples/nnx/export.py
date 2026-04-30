@@ -32,7 +32,7 @@ def export_model(export_path: str):
   """Exports the NNX recommender model using Neptune."""
 
   rngs = nnx.Rngs(0)
-  model = nnx_model.build_model(rngs)
+  _, model = nnx_model.build_model(rngs)
 
   model_graph, model_params, model_rest_state = nnx.split(
       model, nnx.filterlib.Not(nnx.RngState), ...

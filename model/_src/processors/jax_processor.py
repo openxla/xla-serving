@@ -14,16 +14,20 @@
 
 """JAX processor for Neptune."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
 import dataclasses
+import pathlib
 from typing import Any
 
 import jax
 import jaxtyping
+import orbax.checkpoint as ocp
 
+from neptune_model._src import jax2npt
 from neptune_model._src.core import saveable
 from neptune_model._src.core import shlo_function
 from neptune_model._src.core import shlo_type
+from neptune_model._src.core import value
 from neptune_model._src.export import constants
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import utils
@@ -121,22 +125,43 @@ class PreparedJaxProcessor:
   input_signature: jaxtyping.PyTree
   output_signature: jaxtyping.PyTree
   shlo_fns: Sequence[shlo_function.ShloFunction]
+  checkpoint_save_fn: (
+      Callable[[str], Mapping[str, value.ExternalValue]] | None
+  ) = None
+  weights_name: str | None = None
 
   @property
-  def weights_name(self) -> str | None:
-    return constants.WEIGHTS_NAME
+  def checkpoint_path(self) -> str | None:
+    return self.checkpoint_path or constants.DEFAULT_CHECKPOINT_SUBDIR
 
   def to_npt_saveable(self) -> saveable.Saveable:
     return self.shlo_fns[0] if len(self.shlo_fns) == 1 else tuple(self.shlo_fns)
 
+  def on_persist(
+      self,
+  ) -> Callable[[str], Mapping[str, value.ExternalValue]] | None:
+    return self.checkpoint_save_fn
+
 
 @dataclasses.dataclass(frozen=True)
 class JaxProcessor:
-  """JAX processor for Neptune."""
+  """JAX processor for Neptune.
+
+  Attributes:
+    name: The name of the JAX processor.
+    model: The JAX model to process.
+    method_key: The method key of the JAX model to process.
+    checkpoint_path: The path to the checkpoint directory. If None, a default
+      path will be used.
+    weights_name: The name of the weights file. If None, a default name will be
+      used.
+  """
 
   name: str
   model: jax_model.JaxModel
   method_key: str | None = None
+  checkpoint_path: str | None = None
+  weights_name: str | None = None
 
   def prepare(
       self,
@@ -191,9 +216,44 @@ class JaxProcessor:
         [func.output_signature for func in shlo_functions]
     )
 
+    if self.model.params is not None:
+      if self.checkpoint_path == constants.DEFAULT_CHECKPOINT_SUBDIR:
+        # Backward compatibility: if the checkpoint path is the default
+        # checkpoint subdirectory, this is the main exported JAX model
+        # and we place it under the default checkpoint subdirectory.
+        checkpoint_path = self.checkpoint_path
+      else:
+        checkpoint_path = (
+            self.checkpoint_path or f"processor_checkpoint/{self.name}"
+        )
+
+      def _save_checkpoint(
+          model_path: str,
+      ) -> Mapping[str, value.ExternalValue]:
+        checkpointer = ocp.Checkpointer(ocp.StandardCheckpointHandler())
+        checkpointer.save(
+            pathlib.Path(model_path) / checkpoint_path,
+            self.model.params,
+            force=True,
+        )
+
+        weights_name = self.weights_name or f"params_{self.name}"
+        return {
+            weights_name: jax2npt.convert_path_to_value(
+                checkpoint_path,
+                constants.ORBAX_CHECKPOINT_MIME_TYPE,
+            )
+        }
+
+      checkpoint_save_fn = _save_checkpoint
+    else:
+      checkpoint_save_fn = None
+
     return PreparedJaxProcessor(
         self.name,
         jax_input_signature,
         jax_output_signature,
         shlo_functions,
+        checkpoint_save_fn=checkpoint_save_fn,
+        weights_name=self.weights_name,
     )
