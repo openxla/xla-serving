@@ -9,7 +9,7 @@ config_setting(
 cc_binary(
     name = "jsv_serving_main",
     srcs = ["main.cc"],
-    linkstatic = 0,
+    linkopts = ["-Wl,--allow-multiple-definition"],
     deps = [
         ":jsv_grpc_server",
         "@abseil-cpp//absl/flags:flag",
