@@ -28,7 +28,7 @@
 #include "include/grpcpp/server.h"  // from @com_github_grpc_grpc
 #include "include/grpcpp/server_builder.h"  // from @com_github_grpc_grpc
 #include "runtime/serving/gcp/auth/utils.h"  // from @neptune
-#include "runtime/serving/gcp/server/orbax_grpc_server.h"  // from @neptune
+#include "runtime/serving/gcp/server/orbax_callback_grpc_server.h"  // from @neptune
 #include "xla/tsl/platform/status.h"  // from @xla
 
 ABSL_FLAG(int, port, 8500, "Port for the gRPC server to listen on.");
@@ -51,7 +51,7 @@ ABSL_FLAG(bool, use_insecure_grpc_credentials, false,
 
 void RunServer() {
   std::string server_address = absl::StrCat("[::]:", absl::GetFlag(FLAGS_port));
-  auto service_or = neptune::serving::OrbaxGrpcServer::Create(
+  auto service_or = neptune::serving::OrbaxCallbackGrpcServer::Create(
       absl::GetFlag(FLAGS_model_name), absl::GetFlag(FLAGS_model_path));
   TF_CHECK_OK(service_or.status());
 

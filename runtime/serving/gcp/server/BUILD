@@ -11,7 +11,7 @@ cc_binary(
     srcs = ["main.cc"],
     linkopts = ["-Wl,--allow-multiple-definition"],
     deps = [
-        ":jsv_grpc_server",
+        ":jsv_callback_grpc_server",
         "@abseil-cpp//absl/flags:flag",
         "@abseil-cpp//absl/flags:parse",
         "@abseil-cpp//absl/log",
