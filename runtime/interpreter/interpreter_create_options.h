@@ -50,6 +50,8 @@ struct InterpreterCreateOptions {
   tsl::thread::ThreadPool* execute_worker_thread_pool = nullptr;
   // The IFRT client to use for executing the model.
   std::shared_ptr<xla::ifrt::Client> ifrt_client = nullptr;
+  // The IFRT client to use for host execution.
+  std::shared_ptr<xla::ifrt::Client> host_ifrt_client = nullptr;
   // The intra-op thread pool to use for executing the model. It can't be null.
   // Not owned.
   tsl::thread::ThreadPool* computation_thread_pool = nullptr;

@@ -20,6 +20,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -121,6 +122,27 @@ absl::Status ValidateStableHlo(
     // TODO b/401364010: Verify all have the same number of inputs and outputs.
   }
   return absl::OkStatus();
+}
+
+bool ShouldShloRunOnHost(
+    absl::Span<const neptune_model_manifest::Function* absl_nonnull const>
+        funcs,
+    absl::string_view platform_name) {
+  if (platform_name == "cpu") {
+    return true;
+  }
+  for (auto* func : funcs) {
+    const auto& platforms = func->body().stable_hlo_body().lowering_platforms();
+    if (platforms.empty()) {
+      return false;
+    }
+    for (const auto& platform : platforms) {
+      if (platform == "tpu" || platform == "cuda" || platform == "rocm") {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 absl::StatusOr<std::string> GetKeyFromProcessorMimeType(
@@ -686,9 +708,14 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadStableHloRunnerOp(
 
   TF_RETURN_IF_ERROR(ValidateStableHlo(stablehlo_funcs));
 
-  TF_ASSIGN_OR_RETURN(
-      std::optional<xla::CompileOptionsProto> compile_options,
-      GetCompileOptions(stablehlo_funcs, create_options_->platform_name));
+  bool running_on_host =
+      ShouldShloRunOnHost(stablehlo_funcs, create_options_->platform_name);
+
+  std::string platform_name =
+      running_on_host ? "cpu" : create_options_->platform_name;
+
+  TF_ASSIGN_OR_RETURN(std::optional<xla::CompileOptionsProto> compile_options,
+                      GetCompileOptions(stablehlo_funcs, platform_name));
 
   // This should never happen since we have a check earlier to ensure there is
   // at least one StableHLO function. Still keep this check here out of extra
@@ -742,12 +769,16 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadStableHloRunnerOp(
     }
   }
   LOG(INFO) << "Adding StableHlo function: " << model_function_name;
+  std::shared_ptr<xla::ifrt::Client> ifrt_client =
+      running_on_host ? (create_options_->host_ifrt_client != nullptr
+                             ? create_options_->host_ifrt_client
+                             : create_options_->ifrt_client)
+                      : create_options_->ifrt_client;
   return CreateStableHloRunnerOp(
       stablehlo_funcs, manifest_, loaded_weight_names, named_inputs,
       named_outputs,
       compile_options.has_value() ? &compile_options.value() : nullptr,
-      create_options_->ifrt_client, *create_options_,
-      create_options_->computation_thread_pool,
+      ifrt_client, *create_options_, create_options_->computation_thread_pool,
       &ifrt_loaded_variable_registry_);
 }
 
