@@ -20,7 +20,7 @@ py_library(
     ],
 )
 
-pytype_strict_binary(
+py_binary(
     name = "run_export",
     srcs = ["run_export.py"],
     deps = [
