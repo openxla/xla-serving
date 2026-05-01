@@ -146,9 +146,8 @@ absl::Status StableHloRunnerOp::RunInternal(ExecuteContext& context) {
     std::vector<Value> flat_inputs_values;
     // Use strict_match=false because named_values may contain values not used
     // by this kernel.
-    TF_RETURN_IF_ERROR(input_signature_->FillArgs(flat_inputs_values,
-                                                  context.named_values,
-                                                  /*strict_match=*/false));
+    TF_RETURN_IF_ERROR(
+        input_signature_->FillArgs(flat_inputs_values, context.named_values));
     TF_ASSIGN_OR_RETURN(inputs, internal::UnpackFromValues<HostBuffer>(
                                     std::move(flat_inputs_values)));
   } else {

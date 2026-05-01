@@ -87,9 +87,9 @@ class FlatSignature {
   // corresponding names in `specs_`. If `strict_match` is true, unknown or
   // overlapping keyword arguments will raise an error; otherwise, they will be
   // ignored.
-  absl::Status FillArgs(std::vector<Value>& args,
-                        const absl::flat_hash_map<std::string, Value>& kwargs,
-                        bool strict_match = true) const;
+  absl::Status FillArgs(
+      std::vector<Value>& args,
+      const absl::flat_hash_map<std::string, Value>& kwargs) const;
 
   // Unflattens a list of values to a map. The input `Value`s will be moved to
   // the output.

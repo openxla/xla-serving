@@ -226,8 +226,7 @@ absl::Status TfSavedModelFunctionRunnerOp::RunInternal(
   if (input_signature_) {
     inputs_values_storage.reserve(num_inputs);
     TF_RETURN_IF_ERROR(input_signature_->FillArgs(inputs_values_storage,
-                                                  context.named_values,
-                                                  /*strict_match=*/false));
+                                                  context.named_values));
     if (inputs_values_storage.size() != num_inputs) {
       return absl::InvalidArgumentError(absl::StrFormat(
           "TfSavedModelFunctionRunnerOp expects %d inputs after signature "

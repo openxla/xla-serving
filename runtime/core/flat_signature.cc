@@ -112,8 +112,7 @@ absl::StatusOr<int> FlatSignature::GetIndexFromName(
 
 absl::Status FlatSignature::FillArgs(
     std::vector<Value>& args,
-    const absl::flat_hash_map<std::string, Value>& kwargs,
-    bool strict_match) const {
+    const absl::flat_hash_map<std::string, Value>& kwargs) const {
   if (args.size() > specs_.size()) {
     return absl::InvalidArgumentError(
         absl::StrCat("args.size(): ", args.size(),
@@ -139,47 +138,41 @@ absl::Status FlatSignature::FillArgs(
 
   // Add the keyword arguments.
   args.resize(specs_.size());
-  if (strict_match) {
-    for (const auto& [name, value] : kwargs) {
-      TF_ASSIGN_OR_RETURN(int index, GetIndexFromName(name));
-      if (args[index].HasValue()) {
+  for (int i = 0; i < specs_.size(); ++i) {
+    if (i < num_original_args) {
+      // If positional args are provided and its corresponding spec has a name,
+      // the kwarg can't have the same name.
+      if (specs_[i].name.has_value() && kwargs.contains(*specs_[i].name)) {
         return absl::InvalidArgumentError(
-            absl::StrCat("Trying to set the value at name \"", name,
-                         "\" with index ", index, " but it is already set."));
+            absl::StrCat("Trying to set the value at name \"", *specs_[i].name,
+                         "\" with index ", i,
+                         " but it is already set by "
+                         "positional args."));
       }
-      args[index] = value;
+      // Skip the original args.
+      continue;
     }
-    // Add the default values and check if all the values are set.
-    for (int i = num_original_args; i < specs_.size(); ++i) {
+    if (!specs_[i].name.has_value()) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("The spec at index ", i, " does not have a name."));
+    }
+    const std::string& name = *specs_[i].name;
+    auto it = kwargs.find(name);
+    if (it != kwargs.end()) {
       if (args[i].HasValue()) {
-        continue;
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Trying to set the value at name \"", name, "\" with index ", i,
+            " but it is already set. The signature spec_ has duplicate "
+            "names."));
       }
-      if (!specs_[i].default_value.HasValue()) {
-        return absl::InvalidArgumentError(
-            absl::StrFormat("The value at index %d with name \"%s\" is not set "
-                            "and does not have a default value.",
-                            i, specs_[i].name.value_or("null")));
-      }
+      args[i] = it->second;
+    } else if (specs_[i].default_value.HasValue()) {
       args[i] = specs_[i].default_value;
-    }
-  } else {
-    for (int i = num_original_args; i < specs_.size(); ++i) {
-      if (!specs_[i].name.has_value()) {
-        return absl::InvalidArgumentError(
-            absl::StrCat("The spec at index ", i, " does not have a name."));
-      }
-      const std::string& name = *specs_[i].name;
-      auto it = kwargs.find(name);
-      if (it != kwargs.end()) {
-        args[i] = it->second;
-      } else if (specs_[i].default_value.HasValue()) {
-        args[i] = specs_[i].default_value;
-      } else {
-        return absl::InvalidArgumentError(
-            absl::StrFormat("The value at index %d with name \"%s\" is not set "
-                            "and does not have a default value.",
-                            i, specs_[i].name.value_or("null")));
-      }
+    } else {
+      return absl::InvalidArgumentError(
+          absl::StrFormat("The value at index %d with name \"%s\" is not set "
+                          "and does not have a default value.",
+                          i, specs_[i].name.value_or("null")));
     }
   }
   return absl::OkStatus();
