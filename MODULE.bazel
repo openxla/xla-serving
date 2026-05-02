@@ -3,6 +3,7 @@ module(name = "neptune")
 # go/keep-sorted start
 bazel_dep(name = "abseil-cpp", version = "20260107.1")
 bazel_dep(name = "abseil-py", version = "2.1.0", repo_name = "absl_py")
+bazel_dep(name = "aspect_bazel_lib", version = "2.7.2")
 bazel_dep(name = "bazel_features", version = "1.36.0")
 bazel_dep(name = "bazel_skylib", version = "1.8.2")
 bazel_dep(name = "boringssl", version = "0.20250818.0")
@@ -14,6 +15,7 @@ bazel_dep(name = "pybind11_abseil", version = "202402.0")
 bazel_dep(name = "pybind11_bazel", version = "2.13.6")
 bazel_dep(name = "pybind11_protobuf", version = "0.0.0-20250210-f02a2b7")
 bazel_dep(name = "rules_cc", version = "0.2.8")
+bazel_dep(name = "rules_oci", version = "1.7.2")
 bazel_dep(name = "rules_python", version = "1.8.4")
 # go/keep-sorted end
 
@@ -83,6 +85,19 @@ use_repo(
 
 python_version_ext = use_extension("@xla//third_party/extensions:python_version.bzl", "python_version_ext")
 use_repo(python_version_ext, "python_version_repo")
+
+##############################################################
+# OCI for building C++ runtime images
+##############################################################
+
+oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
+oci.pull(
+    name = "distroless_cc",
+    digest = "sha256:6970a2b2cb07c68f3e15d1b5d2ba857e53da911d5d321f48a842d6b0d26984cf",
+    image = "gcr.io/distroless/cc-debian12",
+    platforms = ["linux/amd64"],
+)
+use_repo(oci, "distroless_cc")
 
 ##############################################################
 # Dependencies defined in rules_ml_toolchain

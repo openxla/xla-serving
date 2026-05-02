@@ -1,3 +1,8 @@
+load("@aspect_bazel_lib//lib:tar.bzl", "tar")
+
+# The following configuration is only for the public OSS version.
+# import oss_only_module
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_push")
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
@@ -23,6 +28,30 @@ cc_binary(
         "@neptune//runtime/serving/gcp/auth:utils",
         "@xla//xla/tsl/platform:status",
     ],
+)
+
+# The following configuration is only for the public OSS version.
+# import oss_only_module
+# Package the binary in tar layer.
+tar(
+    name = "neptune_serving",
+    srcs = [":jsv_serving_main"],
+)
+
+# 3. Define the Image
+oci_image(
+    name = "neptune_serving_image",
+    base = "@distroless_cc",
+    entrypoint = ["/runtime/serving/gcp/server/jsv_serving_main"],
+    tars = [":neptune_serving"],
+)
+
+# 4. Define the Push destination, e.g. command:
+# bazel run //runtime/serving/gcp/server:neptune_serving_pusher -- --repository=us-docker.pkg.dev/my-project/my-repo/image
+oci_push(
+    name = "neptune_serving_pusher",
+    image = ":neptune_serving_image",
+    repository = "gcr.io/neptune-serving-engine/cpu-jax-only",
 )
 
 cc_library(
@@ -118,7 +147,6 @@ cc_library(
         "@neptune//runtime/serving/gcp/proto:predict_cc_proto",
         "@neptune//runtime/serving/gcp/proto:prediction_service_cc_grpc_proto",
         "@neptune//runtime/serving/gcp/proto:prediction_service_cc_proto",
-        "@neptune//runtime/tensorflow:tf_compatible_interpreter_create_options",
         "@neptune//runtime/tensorflow/utils:tf_to_host_buffer",
         "@org_tensorflow//tensorflow/core/framework:tensor",
         "@tsl//tsl/profiler/lib:traceme",
@@ -135,7 +163,10 @@ cc_library(
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",
-    ],
+    ] + select({
+        ":enable_tf": ["@neptune//runtime/tensorflow:tf_compatible_interpreter_create_options"],
+        "//conditions:default": ["@neptune//runtime/interpreter:interpreter_create_options"],
+    }),
 )
 
 cc_library(
