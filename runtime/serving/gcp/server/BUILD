@@ -26,6 +26,7 @@ cc_binary(
         "@com_github_grpc_grpc//:grpc++",
         "@com_github_grpc_grpc//:grpc++_reflection",
         "@neptune//runtime/serving/gcp/auth:utils",
+        "@tsl//tsl/platform:platform_port",
         "@xla//xla/tsl/platform:status",
     ],
 )

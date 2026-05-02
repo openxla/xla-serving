@@ -18,8 +18,9 @@
 // handling requests.
 #include <memory>
 #include <string>
-#include "absl/flags/parse.h"  // from @abseil-cpp
+
 #include "absl/flags/flag.h"  // from @abseil-cpp
+#include "absl/flags/parse.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
@@ -30,6 +31,7 @@
 #include "runtime/serving/gcp/auth/utils.h"  // from @neptune
 #include "runtime/serving/gcp/server/orbax_callback_grpc_server.h"  // from @neptune
 #include "xla/tsl/platform/status.h"  // from @xla
+#include "tsl/platform/init_main.h"  // from @tsl
 
 ABSL_FLAG(int, port, 8500, "Port for the gRPC server to listen on.");
 
@@ -76,7 +78,7 @@ void RunServer() {
 }
 
 int main(int argc, char* argv[]) {
-  absl::ParseCommandLine(argc, argv);
+  tsl::port::InitMain(argv[0], &argc, &argv);
   RunServer();
   return 0;
 }
