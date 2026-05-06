@@ -17,7 +17,7 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
-#include "protos/type.pb.h"  // from @neptune
+#include "neptune_model/protos/type.pb.h"  // from @neptune
 #include "xla/xla_data.pb.h"  // from @xla
 
 namespace neptune {

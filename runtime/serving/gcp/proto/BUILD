@@ -1,6 +1,6 @@
 load("@com_github_grpc_grpc//bazel:cc_grpc_library.bzl", "cc_grpc_library")
-load("@rules_proto//proto:defs.bzl", "proto_library")
 load("@com_google_protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
 
 package(default_visibility = [
     "//learning/infra/mira/experimental/orbax_model:__subpackages__",
@@ -12,6 +12,7 @@ package(default_visibility = [
 proto_library(
     name = "get_model_metadata_proto",
     srcs = ["get_model_metadata.proto"],
+    import_prefix = "neptune_model",
     deps = [
         ":model_proto",
         "@com_google_protobuf//:any_proto",
@@ -29,6 +30,7 @@ cc_proto_library(
 proto_library(
     name = "model_proto",
     srcs = ["model.proto"],
+    import_prefix = "neptune_model",
 )
 
 cc_proto_library(
@@ -40,6 +42,7 @@ cc_proto_library(
 proto_library(
     name = "predict_proto",
     srcs = ["predict.proto"],
+    import_prefix = "neptune_model",
     deps = [
         ":model_proto",
         "@neptune//runtime/core/proto:host_buffer_proto",
@@ -55,6 +58,7 @@ cc_proto_library(
 proto_library(
     name = "prediction_service_proto",
     srcs = ["prediction_service.proto"],
+    import_prefix = "neptune_model",
     deps = [
         ":get_model_metadata_proto",
         ":predict_proto",
@@ -64,6 +68,7 @@ proto_library(
 proto_library(
     name = "prediction_log_proto",
     srcs = ["prediction_log.proto"],
+    import_prefix = "neptune_model",
     deps = [
         ":model_proto",
         ":predict_proto",

@@ -22,3 +22,7 @@ common --repository_cache=~/.bazel_repository_cache
 # TODO: update to c++20
 build --cxxopt=-std=c++17
 build --cxxopt=-fsized-deallocation
+
+# Prevent Bazel from creating __init__.py files for virtual imports
+# (otherwise we can't use import_prefix on proto_library rules).
+common --incompatible_default_to_explicit_init_py

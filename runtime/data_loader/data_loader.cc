@@ -23,7 +23,7 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
+#include "neptune_model/protos/manifest.pb.h"  // from @neptune
 
 namespace neptune {
 

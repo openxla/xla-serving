@@ -38,9 +38,9 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
-#include "protos/orchestration.pb.h"  // from @neptune
-#include "protos/type.pb.h"  // from @neptune
+#include "neptune_model/protos/manifest.pb.h"  // from @neptune
+#include "neptune_model/protos/orchestration.pb.h"  // from @neptune
+#include "neptune_model/protos/type.pb.h"  // from @neptune
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
 #include "runtime/core/constants.h"  // from @neptune
 #include "runtime/core/flat_signature.h"  // from @neptune

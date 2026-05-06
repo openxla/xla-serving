@@ -10,6 +10,7 @@ package(default_visibility = [
 proto_library(
     name = "host_buffer_proto",
     srcs = ["host_buffer.proto"],
+    import_prefix = "neptune_model",
     deps = [
         "@xla//xla/python/ifrt:dtype_proto",
         "@xla//xla/python/ifrt:shape_proto",

@@ -20,7 +20,7 @@
 #include <string>
 
 #include "absl/base/nullability.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
+#include "neptune_model/protos/manifest.pb.h"  // from @neptune
 #include "runtime/core/allocator.h"  // from @neptune
 #include "runtime/core/default_allocator.h"  // from @neptune
 #include "runtime/core/stablehlo_optimizer.h"  // from @neptune

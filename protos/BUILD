@@ -7,6 +7,7 @@ package(default_visibility = ["//visibility:public"])
 proto_library(
     name = "type_proto",
     srcs = ["type.proto"],
+    import_prefix = "neptune_model",
     deps = [
         "@xla//xla:xla_data_proto",
     ],
@@ -25,6 +26,7 @@ py_proto_library(
 proto_library(
     name = "manifest_proto",
     srcs = ["manifest.proto"],
+    import_prefix = "neptune_model",
     deps = [
         ":type_proto",
         "@xla//xla/pjrt/proto:compile_options_proto",
@@ -44,6 +46,7 @@ py_proto_library(
 proto_library(
     name = "orchestration_proto",
     srcs = ["orchestration.proto"],
+    import_prefix = "neptune_model",
     deps = [
         ":type_proto",
     ],
@@ -62,6 +65,7 @@ py_proto_library(
 proto_library(
     name = "tf_concrete_function_handle_proto",
     srcs = ["tf_concrete_function_handle.proto"],
+    import_prefix = "neptune_model",
 )
 
 cc_proto_library(

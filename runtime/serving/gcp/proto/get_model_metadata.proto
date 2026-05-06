@@ -17,8 +17,8 @@ edition = "2024";
 package neptune.serving;
 
 import "google/protobuf/any.proto";
-import "protos/orchestration.proto";
-import "protos/type.proto";
+import "neptune_model/protos/orchestration.proto";
+import "neptune_model/protos/type.proto";
 import "runtime/serving/gcp/proto/model.proto";
 
 message SignatureDef {

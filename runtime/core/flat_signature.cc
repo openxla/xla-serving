@@ -26,8 +26,8 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
-#include "protos/type.pb.h"  // from @neptune
+#include "neptune_model/protos/manifest.pb.h"  // from @neptune
+#include "neptune_model/protos/type.pb.h"  // from @neptune
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
 #include "xla/tsl/platform/errors.h"  // from @xla

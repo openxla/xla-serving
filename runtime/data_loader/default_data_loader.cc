@@ -35,7 +35,7 @@
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
+#include "neptune_model/protos/manifest.pb.h"  // from @neptune
 #include "runtime/core/constants.h"  // from @neptune
 #include "runtime/core/ifrt_device_utils.h"  // from @neptune
 #include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune

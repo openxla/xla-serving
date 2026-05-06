@@ -3,7 +3,7 @@ load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("//storage/binfs:binfs.bzl", "pytype_strict_binary_par")
 load("@rules_python//python:proto.bzl", "py_proto_library")
 
-package(default_visibility = ["@neptune//model/cli:__subpackages__"])
+package(default_visibility = ["@neptune//neptune_model/cli:__subpackages__"])
 
 pytype_strict_binary_par(
     name = "npt-cli",
@@ -58,8 +58,8 @@ py_library(
         "//third_party/py/typer",
         "//third_party/py/typing_extensions",
         "@com_google_protobuf//:protobuf",
-        "@neptune//model/_src/core:file_utils",
-        "@neptune//model/_src/core:persistence_lib",
+        "@neptune//neptune_model/_src/core:file_utils",
+        "@neptune//neptune_model/_src/core:persistence_lib",
         "@neptune//protos:manifest_py_pb2",
         "@neptune//protos:orchestration_py_pb2",
         "@neptune//protos:tf_concrete_function_handle_py_pb2",
@@ -75,6 +75,7 @@ py_library(
 proto_library(
     name = "redaction_test_proto",
     srcs = ["redaction_test.proto"],
+    import_prefix = "neptune_model",
 )
 
 py_proto_library(

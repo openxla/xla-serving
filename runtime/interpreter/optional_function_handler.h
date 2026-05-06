@@ -20,8 +20,8 @@
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
-#include "protos/orchestration.pb.h"  // from @neptune
+#include "neptune_model/protos/manifest.pb.h"  // from @neptune
+#include "neptune_model/protos/orchestration.pb.h"  // from @neptune
 #include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
 #include "runtime/kernel/kernel.h"  // from @neptune
 #include "runtime/kernel/kernel_io_data_type.h"  // from @neptune

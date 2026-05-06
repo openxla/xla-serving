@@ -25,7 +25,7 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
+#include "neptune_model/protos/manifest.pb.h"  // from @neptune
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
 #include "runtime/interpreter/manifest_utils.h"  // from @neptune
 #include "google/protobuf/message.h"
