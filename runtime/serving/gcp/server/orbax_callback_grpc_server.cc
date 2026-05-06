@@ -216,15 +216,18 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
   {
     tsl::profiler::TraceMe traceme_serialization("ConvertOutputs");
     for (const auto& [name, value] : *output_with_names) {
-      neptune::HostBuffer host_buffer;
+      absl::StatusOr<neptune::HostBuffer> host_buffer;
       if (output_is_tensor) {
-        absl::StatusOr<neptune::HostBuffer> host_buffer =
-                            ToHostBuffer(value.Get<tensorflow::Tensor>());
+         host_buffer = ToHostBuffer(value.Get<tensorflow::Tensor>());
       } else {
         host_buffer = value.Get<neptune::HostBuffer>();
       }
+      if (!host_buffer.ok()) {
+        reactor->Finish(ToGrpcStatus(host_buffer.status()));
+        return reactor;
+      }
       HostBufferProto host_buffer_proto =
-          HostBuffer::ToHostBufferProto(std::move(host_buffer));
+          HostBuffer::ToHostBufferProto(std::move(*host_buffer));
       (*response->mutable_outputs())[name] = std::move(host_buffer_proto);
     }
   }
