@@ -26,7 +26,7 @@ py_library(
     deps = [
         "//third_party/py/tensorflow",
         "@neptune//model/_src/core:shlo_type",
-        "@numpy",
+        "@neptune_pypi//numpy",
     ],
 )
 
@@ -36,8 +36,6 @@ py_library(
     deps = [
         ":type_conversion",
         "//third_party/py/tensorflow",
-        "@jax",
-        "@jaxtyping",
         "@neptune//model/_src/core:file_utils",
         "@neptune//model/_src/core:persistence_lib",
         "@neptune//model/_src/core:serializable_function",
@@ -45,7 +43,9 @@ py_library(
         "@neptune//model/_src/core:unstructured_data",
         "@neptune//protos:manifest_py_pb2",
         "@neptune//protos:tf_concrete_function_handle_py_pb2",
-        "@numpy",
+        "@neptune_pypi//jax",
+        "@neptune_pypi//jaxtyping",
+        "@neptune_pypi//numpy",
         "@org_tensorflow//tensorflow/core:protos_all_py_pb2",
     ],
 )
@@ -56,7 +56,7 @@ py_test(
     deps = [
         ":type_conversion",
         "//third_party/py/tensorflow",
-        "@com_google_absl_py//absl/testing:absltest",
+        "@absl_py//absl/testing:absltest",
         "@neptune//model/_src/core:shlo_type",
     ],
 )
@@ -68,10 +68,10 @@ py_test(
         ":converter",
         "//third_party/py/chex",
         "//third_party/py/tensorflow",
-        "@com_google_absl_py//absl/testing:absltest",
-        "@com_google_absl_py//absl/testing:parameterized",
-        "@jax",
+        "@absl_py//absl/testing:absltest",
+        "@absl_py//absl/testing:parameterized",
         "@neptune//model/_src/core:test_utils",
+        "@neptune_pypi//jax",
         "@org_tensorflow//tensorflow/core:protos_all_py_pb2",
     ],
 )
@@ -84,12 +84,12 @@ py_test(
         ":converter",
         "//third_party/py/chex",
         "//third_party/py/tensorflow:tensorflow_no_contrib",
-        "@com_google_absl_py//absl/testing:absltest",
-        "@com_google_absl_py//absl/testing:parameterized",
-        "@jax",
-        "@jaxtyping",
+        "@absl_py//absl/testing:absltest",
+        "@absl_py//absl/testing:parameterized",
         "@neptune//model/_src/core:persistence_lib",
         "@neptune//protos:manifest_py_pb2",
         "@neptune//protos:tf_concrete_function_handle_py_pb2",
+        "@neptune_pypi//jax",
+        "@neptune_pypi//jaxtyping",
     ],
 )

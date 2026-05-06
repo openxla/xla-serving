@@ -7,9 +7,9 @@ py_library(
     name = "processor",
     srcs = ["processor.py"],
     deps = [
-        "@jaxtyping",
         "@neptune//model/_src/core:saveable",
         "@neptune//model/_src/core:value",
+        "@neptune_pypi//jaxtyping",
     ],
 )
 
@@ -17,8 +17,6 @@ py_library(
     name = "jax_processor",
     srcs = ["jax_processor.py"],
     deps = [
-        "@jax",
-        "@jaxtyping",
         "@neptune//model/_src/core:saveable",
         "@neptune//model/_src/core:shlo_function",
         "@neptune//model/_src/core:shlo_type",
@@ -27,7 +25,9 @@ py_library(
         "@neptune//model/_src/export:jax_model",
         "@neptune//model/_src/export:utils",
         "@neptune//model/_src/jax2npt:__init__",
-        "@orbax//:checkpoint",
+        "@neptune_pypi//jax",
+        "@neptune_pypi//jaxtyping",
+        "@neptune_pypi//orbax_checkpoint",
     ],
 )
 
@@ -36,10 +36,10 @@ py_test(
     srcs = ["jax_processor_test.py"],
     deps = [
         ":jax_processor",
-        "@com_google_absl_py//absl/testing:absltest",
-        "@jax",
+        "@absl_py//absl/testing:absltest",
         "@neptune//model/_src/core:shlo_type",
         "@neptune//model/_src/export:jax_model",
+        "@neptune_pypi//jax",
     ],
 )
 
@@ -47,10 +47,10 @@ py_library(
     name = "tf_processor",
     srcs = ["tf_processor.py"],
     deps = [
-        "@jaxtyping",
         "@neptune//model/_src/core:saveable",
         "@neptune//model/_src/core:value",
         "@neptune//model/_src/tf2npt:__init__",
+        "@neptune_pypi//jaxtyping",
     ],
 )
 
@@ -60,7 +60,7 @@ py_test(
     deps = [
         ":tf_processor",
         "//third_party/py/tensorflow",
-        "@com_google_absl_py//absl/testing:absltest",
+        "@absl_py//absl/testing:absltest",
         "@neptune//model/_src/core:shlo_type",
         "@neptune//model/_src/core:test_utils",
         "@neptune//model/_src/tf2npt:converter",

@@ -7,62 +7,56 @@ py_library(
     srcs = ["function.py"],
     deps = [
         ":shlo_type",
-        "@jaxtyping",
+        "@neptune_pypi//jaxtyping",
     ],
 )
 
-pytype_strict_test(
+py_test(
     name = "unstructured_data_test",
     srcs = ["unstructured_data_test.py"],
     deps = [
         ":unstructured_data",
-        "@com_google_absl_py//absl/testing:absltest",
+        "@absl_py//absl/testing:absltest",
         "@neptune//protos:manifest_py_pb2",
     ],
 )
 
-pytype_strict_test(
+py_test(
     name = "type_proto_utils_test",
     srcs = ["type_proto_utils_test.py"],
     deps = [
         ":shlo_type",
         ":test_utils",
         ":type_proto_utils",
-        "//third_party/py/google/protobuf",
-        "@com_google_absl_py//absl/testing:absltest",
-        "@com_google_absl_py//absl/testing:parameterized",
+        "@absl_py//absl/testing:absltest",
+        "@absl_py//absl/testing:parameterized",
+        "@com_google_protobuf//:protobuf",
         "@neptune//protos:type_py_pb2",
         "@xla//xla:xla_data_proto_py_pb2",
     ],
 )
 
-pytype_strict_test(
+py_test(
     name = "device_assignment_test",
     srcs = ["device_assignment_test.py"],
     deps = [
         ":device_assignment",
-        "//learning/brain/research/jax:tpu_support",
         "//testing/pybase:parameterized",
-        "//third_party/py/jax/experimental:topologies",
-        "@com_google_absl_py//absl/testing:absltest",
-        "@jax",
-        "@jax//:experimental_mesh_utils",
-        "@numpy",
+        "@absl_py//absl/testing:absltest",
+        "@neptune_pypi//jax",
+        "@neptune_pypi//numpy",
     ],
 )
 
-pytype_strict_test(
+py_test(
     name = "compile_options_util_test",
     srcs = ["compile_options_util_test.py"],
     deps = [
         ":compile_options_util",
-        "//platforms/xla/service/jellyfish:tpu_compilation_environment_py_pb2",
-        "//platforms/xla/service/jellyfish/python:tpu_compilation_environment",
-        "//third_party/py/google/protobuf",
-        "@com_google_absl_py//absl/testing:absltest",
-        "@com_google_absl_py//absl/testing:parameterized",
-        "@jax",
-        "@jax//:experimental_mesh_utils",
+        "@absl_py//absl/testing:absltest",
+        "@absl_py//absl/testing:parameterized",
+        "@com_google_protobuf//:protobuf",
+        "@neptune_pypi//jax",
     ],
 )
 
@@ -99,18 +93,14 @@ py_library(
     srcs = ["value.py"],
     deps = [
         ":shlo_type",
-        "@jaxtyping",
         "@neptune//protos:manifest_py_pb2",
+        "@neptune_pypi//jaxtyping",
     ],
 )
 
 py_library(
     name = "file_utils",
     srcs = ["file_utils.py"],
-    deps = [
-        "//pyglib:gfile",
-        "//pyglib/contrib/gpathlib:gpath",
-    ],
 )
 
 py_library(
@@ -126,7 +116,7 @@ py_library(
     name = "shlo_type",
     srcs = ["shlo_type.py"],
     deps = [
-        "@numpy",
+        "@neptune_pypi//numpy",
         "@xla//xla:xla_data_proto_py_pb2",
     ],
 )
@@ -135,9 +125,9 @@ py_library(
     name = "test_utils",
     srcs = ["test_utils.py"],
     deps = [
-        "@com_google_absl_py//absl/testing:parameterized",
-        "@jax",
-        "@jaxtyping",
+        "@absl_py//absl/testing:parameterized",
+        "@neptune_pypi//jax",
+        "@neptune_pypi//jaxtyping",
     ],
 )
 
@@ -146,29 +136,26 @@ py_library(
     srcs = ["type_proto_utils.py"],
     deps = [
         ":shlo_type",
-        "@jax",
-        "@jaxtyping",
         "@neptune//protos:type_py_pb2",
+        "@neptune_pypi//jax",
+        "@neptune_pypi//jaxtyping",
     ],
 )
 
 py_library(
     name = "device_assignment",
     srcs = ["device_assignment.py"],
-    deps = ["@jax"],
+    deps = ["@neptune_pypi//jax"],
 )
 
 py_library(
     name = "compile_options_util",
     srcs = ["compile_options_util.py"],
     deps = [
-        "//platforms/xla/service/jellyfish:tpu_compilation_environment_py_pb2",
-        "//platforms/xla/service/jellyfish/python:tpu_compilation_environment",
-        "//third_party/py/absl/flags",
-        "//third_party/py/google/protobuf",
+        "@absl_py//absl/flags",
         "@com_google_protobuf//:protobuf",  # any_py_pb2
-        "@jax",
         "@neptune//protos:manifest_py_pb2",
+        "@neptune_pypi//jax",
         "@xla//xla:xla_data_proto_py_pb2",
         "@xla//xla:xla_py_pb2",
         "@xla//xla/pjrt/proto:compile_options_py_pb2",
@@ -193,7 +180,7 @@ py_library(
         ":type_proto_utils",
         ":unstructured_data",
         ":value",
-        "@com_google_absl_py//absl/logging",
+        "@absl_py//absl/logging",
         "@neptune//protos:manifest_py_pb2",
     ],
 )
@@ -215,12 +202,12 @@ py_library(
         ":metadata",
         ":saveable",
         ":unstructured_data",
-        "@com_google_absl_py//absl/logging",
+        "@absl_py//absl/logging",
         "@neptune//protos:manifest_py_pb2",
     ],
 )
 
-pytype_strict_test(
+py_test(
     name = "manifest_utils_test",
     srcs = ["manifest_utils_test.py"],
     deps = [
@@ -228,12 +215,12 @@ pytype_strict_test(
         ":manifest_utils",
         ":serializable_function",
         ":unstructured_data",
-        "@com_google_absl_py//absl/testing:absltest",
+        "@absl_py//absl/testing:absltest",
         "@neptune//protos:manifest_py_pb2",
     ],
 )
 
-pytype_strict_test(
+py_test(
     name = "persistence_lib_test",
     srcs = ["persistence_lib_test.py"],
     deps = [
@@ -247,7 +234,7 @@ pytype_strict_test(
         ":shlo_type",
         ":unstructured_data",
         ":value",
-        "@com_google_absl_py//absl/testing:absltest",
+        "@absl_py//absl/testing:absltest",
         "@neptune//protos:manifest_py_pb2",
         "@neptune//protos:type_py_pb2",
     ],
@@ -260,20 +247,20 @@ py_library(
         ":constants",
         ":shlo_type",
         ":type_proto_utils",
-        "@jax",
-        "@jaxtyping",
         "@neptune//protos:manifest_py_pb2",
         "@neptune//protos:orchestration_py_pb2",
+        "@neptune_pypi//jax",
+        "@neptune_pypi//jaxtyping",
     ],
 )
 
-pytype_strict_test(
+py_test(
     name = "orchestration_proto_utils_test",
     srcs = ["orchestration_proto_utils_test.py"],
     deps = [
         ":orchestration_proto_utils",
         ":shlo_type",
-        "@com_google_absl_py//absl/testing:absltest",
-        "@com_google_absl_py//absl/testing:parameterized",
+        "@absl_py//absl/testing:absltest",
+        "@absl_py//absl/testing:parameterized",
     ],
 )

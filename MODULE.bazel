@@ -145,4 +145,21 @@ python.defaults(
 python.toolchain(python_version = "3.11")
 python.toolchain(python_version = "3.12")
 python.toolchain(python_version = "3.13")
-python.toolchain(python_version = "3.14")
+
+## Python dependency management
+pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
+
+[
+    pip.parse(
+        hub_name = "neptune_pypi",
+        python_version = version,
+        requirements_lock = "//model:requirements_{}_lock.txt".format(version.replace(".", "_")),
+    )
+    for version in [
+        "3.11",
+        "3.12",
+        "3.13",
+    ]
+]
+
+use_repo(pip, "neptune_pypi")

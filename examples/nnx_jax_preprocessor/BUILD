@@ -9,14 +9,14 @@ py_library(
     srcs = ["export.py"],
     deps = [
         "//third_party/py/flax/nnx",
-        "@jax",
         "@neptune//examples/nnx:model",
         "@neptune//model/_src/export:jax_model",
         "@neptune//model/_src/export:main_lib",
         "@neptune//model/_src/export:serving_config",
         "@neptune//model/_src/processors:jax_processor",
         "@neptune//model/_src/processors:processor",
-        "@orbax//:checkpoint",
+        "@neptune_pypi//jax",
+        "@neptune_pypi//orbax_checkpoint",
     ],
 )
 
@@ -26,7 +26,7 @@ py_binary(
     deps = [
         ":export",
         "//third_party/py/absl:app",
-        "//third_party/py/absl/flags",
+        "@absl_py//absl/flags",
     ],
 )
 
@@ -35,6 +35,6 @@ py_test(
     srcs = ["export_test.py"],
     deps = [
         ":export",
-        "@com_google_absl_py//absl/testing:absltest",
+        "@absl_py//absl/testing:absltest",
     ],
 )

@@ -1,6 +1,6 @@
 load("@rules_license//rules:license.bzl", "license")
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
-load("//devtools/python/blaze:strict.bzl", "py_library_providing_imports_info")
+load("@rules_python//python:pip.bzl", "compile_pip_requirements")
 
 licenses(["notice"])
 
@@ -9,11 +9,9 @@ license(
     package_name = "neptune-model",
 )
 
-py_library_providing_imports_info(
+py_library(
     name = "neptune_model",
     srcs = ["__init__.py"],
-    lazy_imports = True,
-    lib_rule = pytype_strict_library,
     visibility = ["//visibility:public"],
     deps = [
         "@neptune//model/_src/export:jax_model",
@@ -22,4 +20,25 @@ py_library_providing_imports_info(
         "@neptune//model/_src/processors:processor",
         "@neptune//model/_src/processors:tf_processor",
     ],
+)
+
+compile_pip_requirements(
+    name = "requirements_3_11",
+    srcs = ["pyproject.toml"],
+    python_version = "3.11",
+    requirements_txt = "requirements_3_11_lock.txt",
+)
+
+compile_pip_requirements(
+    name = "requirements_3_12",
+    srcs = ["pyproject.toml"],
+    python_version = "3.12",
+    requirements_txt = "requirements_3_12_lock.txt",
+)
+
+compile_pip_requirements(
+    name = "requirements_3_13",
+    srcs = ["pyproject.toml"],
+    python_version = "3.13",
+    requirements_txt = "requirements_3_13_lock.txt",
 )
