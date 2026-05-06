@@ -40,6 +40,7 @@
 #include "runtime/kernel/kernel_builder_constants.h"  // from @neptune
 #include "runtime/kernel/kernel_builder_context.h"  // from @neptune
 #include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
+#include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @neptune
 #include "google/protobuf/message.h"
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
@@ -113,6 +114,14 @@ absl::StatusOr<std::unique_ptr<Kernel>> StableHloRunnerOp::Create(
   } else if (!absl::IsNotFound(output_sig_status.status())) {
     return output_sig_status.status();
   }
+  absl::StatusOr<ServingCoreSelector*> serving_core_selector_status =
+      context.GetConfig<ServingCoreSelector*>(kServingCoreSelector);
+  ServingCoreSelector* serving_core_selector = nullptr;
+  if (serving_core_selector_status.ok()) {
+    serving_core_selector = *serving_core_selector_status;
+  } else if (!absl::IsNotFound(serving_core_selector_status.status())) {
+    return serving_core_selector_status.status();
+  }
 
   TF_ASSIGN_OR_RETURN(
       std::unique_ptr<StableHloRunner> stablehlo_runner,
@@ -122,8 +131,7 @@ absl::StatusOr<std::unique_ptr<Kernel>> StableHloRunnerOp::Create(
                                : std::nullopt,
           ifrt_client, persistent_compilation_cache,
           ifrt_loaded_variable_registry, weights, compilation_environment_proto,
-          thread_pool, *optimizer, assigned_devices,
-          /*serving_core_selector=*/nullptr));
+          thread_pool, *optimizer, assigned_devices, serving_core_selector));
 
   return absl::WrapUnique(new StableHloRunnerOp(std::move(stablehlo_runner),
                                                 std::move(input_sig),

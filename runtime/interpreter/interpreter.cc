@@ -521,6 +521,8 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateStableHloRunnerOp(
   if (compile_options != nullptr) {
     TF_RETURN_IF_ERROR(builder.SetConfig(kXlaCompileOptions, *compile_options));
   }
+  TF_RETURN_IF_ERROR(builder.SetConfig(kServingCoreSelector,
+                                       create_options.serving_core_selector));
   TF_RETURN_IF_ERROR(
       builder.SetConfig(kStablehloOptimizer, create_options.optimizer.get()));
 
@@ -999,8 +1001,14 @@ absl::StatusOr<DataLoader::LoadResult> Interpreter::LoadWeights(
                   create_options_ != nullptr
                       ? create_options_->checkpoint_loader_thread_pool
                       : nullptr}));
+  const bool is_portable_executable =
+      create_options_ != nullptr &&
+      create_options_->serving_core_selector != nullptr &&
+      assigned_devices.num_replicas == 1 &&
+      assigned_devices.num_cores_per_replica == 1;
   return data_loader->Load(external, create_options_->model_path,
-                           &assigned_devices, &manifest_, stablehlo_funcs);
+                           is_portable_executable ? nullptr : &assigned_devices,
+                           &manifest_, stablehlo_funcs);
 }
 
 absl::StatusOr<const KernelGraph* absl_nonnull> Interpreter::GetOrCreateGraph(

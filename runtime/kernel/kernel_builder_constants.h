@@ -39,6 +39,8 @@ inline constexpr absl::string_view kFunctionFlatInputSignature =
     "function_flat_input_signature";
 inline constexpr absl::string_view kFunctionFlatOutputSignature =
     "function_flat_output_signature";
+inline constexpr absl::string_view kServingCoreSelector =
+    "serving_core_selector";
 
 }  // namespace neptune
 

@@ -25,6 +25,7 @@
 #include "runtime/core/default_allocator.h"  // from @neptune
 #include "runtime/core/stablehlo_optimizer.h"  // from @neptune
 #include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
+#include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @neptune
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "tsl/platform/protobuf.h"  // from @tsl
@@ -83,6 +84,9 @@ struct InterpreterCreateOptions {
   // compilation cache is disabled.
   std::unique_ptr<IfrtPersistentCompilationCache>
       persistent_compilation_cache = nullptr;
+  // Core selector for balancing serving load for IFRT portable executables. If
+  // nullptr, LB-policy-based core selection is disabled.
+  ServingCoreSelector* absl_nullable serving_core_selector = nullptr;
 };
 // LINT.ThenChange(//depot//third_party/neptune/runtime/interpreter/interpreter.cc:InterpreterCreateOptionsValidation)
 }  // namespace neptune

@@ -290,6 +290,7 @@ cc_library(
         "@neptune//runtime/core:default_allocator",
         "@neptune//runtime/core:stablehlo_optimizer",
         "@neptune//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",
+        "@neptune//runtime/libs/ifrt/serving_core_selector",
         "@tsl//tsl/platform:protobuf",
         "@xla//xla/python/ifrt",
         "@xla//xla/tsl/platform:env",

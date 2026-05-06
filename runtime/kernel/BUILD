@@ -134,6 +134,7 @@ cc_library(
         "@neptune//runtime/core:value",
         "@neptune//runtime/core:value_utils",
         "@neptune//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",
+        "@neptune//runtime/libs/ifrt/serving_core_selector",
         "@tsl//tsl/profiler/lib:traceme",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/pjrt/proto:compile_options_proto_cc",
