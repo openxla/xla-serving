@@ -45,11 +45,17 @@
 #include "runtime/tensorflow/utils/tf_to_host_buffer.h"  // from @neptune
 #include "runtime/serving/gcp/server/grpc_status_utils.h"  // from @neptune
 #include "xla/pjrt/pjrt_api.h"  // from @xla
-#include "xla/pjrt/plugin/xla_cpu/cpu_client_options.h"  // from @xla
-#include "xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"  // from @xla
-#include "xla/pjrt/plugin/xla_gpu/xla_gpu_client_options.h"  // from @xla
-#include "xla/pjrt/plugin/xla_gpu/xla_gpu_pjrt_client.h"  // from @xla
-#include "xla/pjrt/plugin/xla_tpu/xla_tpu_pjrt_client.h"  // from @xla
+#if defined(PLATFORM_CPU)
+  #include "xla/pjrt/plugin/xla_cpu/cpu_client_options.h"  // from @xla
+  #include "xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"  // from @xla
+#endif
+#if defined(PLATFORM_CUDA)
+  #include "xla/pjrt/plugin/xla_gpu/xla_gpu_client_options.h"  // from @xla
+  #include "xla/pjrt/plugin/xla_gpu/xla_gpu_pjrt_client.h"  // from @xla
+#endif
+#if defined(PLATFORM_CLOUD_TPU)
+  #include "xla/pjrt/plugin/xla_tpu/xla_tpu_pjrt_client.h"  // from @xla
+#endif
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
 #include "xla/tsl/platform/env.h"  // from @xla
@@ -92,20 +98,29 @@ OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
   LOG(INFO) << "PJRT plugin initialized for PJRT platform: '" << pjrt_platform
             << "'. Getting client.";
   std::shared_ptr<xla::ifrt::Client> client;
+#if defined(PLATFORM_CPU)
   if (pjrt_platform == "cpu") {
     TF_ASSIGN_OR_RETURN(auto pjrt_client,
                         xla::GetXlaPjrtCpuClient(xla::CpuClientOptions()));
     client = xla::ifrt::PjRtClient::Create(std::move(pjrt_client));
-  } else if (pjrt_platform == "tpu") {
+  } else
+#endif
+#if defined(PLATFORM_CLOUD_TPU)
+  if (pjrt_platform == "tpu") {
     TF_ASSIGN_OR_RETURN(auto pjrt_client, xla::GetXlaPjrtTpuClient());
     client = xla::ifrt::PjRtClient::Create(std::move(pjrt_client));
-  } else if (pjrt_platform == "gpu") {
+  } else
+#endif
+#if defined(PLATFORM_CUDA)
+  if (pjrt_platform == "gpu") {
     TF_ASSIGN_OR_RETURN(auto pjrt_client,
                         xla::GetXlaPjrtGpuClient(xla::GpuClientOptions()));
     client = xla::ifrt::PjRtClient::Create(std::move(pjrt_client));
-  } else {
+  } else
+#endif
+  {
     return absl::InvalidArgumentError(
-        absl::StrCat("Unsupported PJRT platform: ", pjrt_platform));
+        absl::StrCat("Unsupported or uncompiled PJRT platform: ", pjrt_platform));
   }
   LOG(INFO) << "Orbax Server initialized for Orbax platform: " << orbax_platform
             << " (Device count: " << client->device_count() << ")";
