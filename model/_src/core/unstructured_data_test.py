@@ -80,6 +80,16 @@ class UnstructuredDataTest(absltest.TestCase):
     ):
       unstructured_data.write_inlined_data_to_file(proto, dirname, filename)
 
+  def test_write_inlined_data_to_file_traversal(self):
+    proto = manifest_pb2.UnstructuredData()
+    proto.inlined_string = "hello"
+    dirname = self.create_tempdir().full_path
+    filename = "../data.txt"
+    with self.assertRaisesRegex(
+        ValueError, "contains directory traversal component"
+    ):
+      unstructured_data.write_inlined_data_to_file(proto, dirname, filename)
+
   def test_maybe_write_inlined_string_to_file(self):
     proto = manifest_pb2.UnstructuredData()
     proto.inlined_string = "hello"

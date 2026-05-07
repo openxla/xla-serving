@@ -77,6 +77,10 @@ def write_inlined_data_to_file(
   """
   if relative_filepath.startswith("/"):
     raise ValueError(f"{relative_filepath=} is an absolute path")
+  if ".." in pathlib.Path(relative_filepath).parts:
+    raise ValueError(
+        f"{relative_filepath=} contains directory traversal component '..'"
+    )
   case_name = proto.WhichOneof("data")
   if case_name == "file_system_location":
     raise ValueError("Can only write inlined data (string or bytes) to a file.")
