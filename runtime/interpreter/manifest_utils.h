@@ -74,7 +74,8 @@ absl::Status CheckMimeType(
 // `allowed_data_type`. See `CheckMimeType` for `description`.
 absl::Status CheckDataType(
     const neptune_model_manifest::UnstructuredData& unstructured_data,
-    neptune_model_manifest::UnstructuredData::DataCase allowed_data_type,
+    absl::Span<const neptune_model_manifest::UnstructuredData::DataCase>
+        allowed_data_types,
     absl::string_view description);
 
 // Returns error if there is a mismatch between the mime/data type of
@@ -83,7 +84,8 @@ absl::Status CheckDataType(
 absl::Status CheckMimeAndDataType(
     const neptune_model_manifest::UnstructuredData& unstructured_data,
     absl::Span<const absl::string_view> allowed_mime_types,
-    neptune_model_manifest::UnstructuredData::DataCase allowed_data_type,
+    absl::Span<const neptune_model_manifest::UnstructuredData::DataCase>
+        allowed_data_types,
     absl::string_view description);
 
 // Gets the model's manifest given the `model_path`.

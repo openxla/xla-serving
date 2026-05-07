@@ -426,26 +426,33 @@ absl::Status CheckMimeType(
 
 absl::Status CheckDataType(
     const neptune_model_manifest::UnstructuredData& unstructured_data,
-    neptune_model_manifest::UnstructuredData::DataCase allowed_data_type,
+    absl::Span<const neptune_model_manifest::UnstructuredData::DataCase>
+        allowed_data_types,
     absl::string_view description) {
-  if (unstructured_data.data_case() == allowed_data_type) {
-    return absl::OkStatus();
+  for (const auto& allowed_data_type : allowed_data_types) {
+    if (unstructured_data.data_case() == allowed_data_type) {
+      return absl::OkStatus();
+    }
   }
-
+  std::vector<std::string> allowed_data_type_names;
+  for (const auto& allowed_data_type : allowed_data_types) {
+    allowed_data_type_names.push_back(GetDataCaseName(allowed_data_type));
+  }
   return absl::InvalidArgumentError(absl::StrFormat(
       "%s: only data type \"%s\" is supported, but got data type \"%s\".",
-      description, GetDataCaseName(allowed_data_type),
+      description, absl::StrJoin(allowed_data_type_names, "\" or \""),
       GetDataCaseName(unstructured_data.data_case())));
 }
 
 absl::Status CheckMimeAndDataType(
     const neptune_model_manifest::UnstructuredData& unstructured_data,
     absl::Span<const absl::string_view> allowed_mime_types,
-    neptune_model_manifest::UnstructuredData::DataCase allowed_data_type,
+    absl::Span<const neptune_model_manifest::UnstructuredData::DataCase>
+        allowed_data_types,
     absl::string_view description) {
   TF_RETURN_IF_ERROR(
       CheckMimeType(unstructured_data, allowed_mime_types, description));
-  return CheckDataType(unstructured_data, allowed_data_type, description);
+  return CheckDataType(unstructured_data, allowed_data_types, description);
 }
 
 absl::StatusOr<neptune_model_manifest::Manifest> GetManifest(
@@ -653,7 +660,7 @@ absl::StatusOr<std::optional<xla::CompileOptionsProto>> GetCompileOptions(
       TF_RETURN_IF_ERROR(CheckMimeAndDataType(
           xla_options_it->second,
           {kXlaCompileOptionsMimeType, kXlaCompileOptionsMimeTypeLegacy},
-          neptune_model_manifest::UnstructuredData::kInlinedBytes,
+          {neptune_model_manifest::UnstructuredData::kInlinedBytes},
           "xla_compile_options supplemental"));
       std::optional<neptune_model_manifest::CompileOptionsProtoMap>
           compile_options_map;
@@ -764,7 +771,7 @@ absl::StatusOr<neptune_model_orchestration::Pipelines> GetOexOrchestration(
       orchestration,
       {kOexOrchestrationMultiPipelineMimeType,
        kOexOrchestrationMultiPipelineMimeTypeLegacy},
-      neptune_model_manifest::UnstructuredData::kFileSystemLocation,
+      {neptune_model_manifest::UnstructuredData::kFileSystemLocation},
       "Orchestration"));
 
   TF_ASSIGN_OR_RETURN(std::string orchestration_path,

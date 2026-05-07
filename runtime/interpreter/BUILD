@@ -203,6 +203,8 @@ cc_library(
         "@neptune//runtime/kernel/batching:batch_runner_op",
         "@neptune//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",  # buildcleaner: keep
         "@tsl//tsl/platform:context",
+        "@tsl//tsl/platform:env",
+        "@tsl//tsl/platform:path",
         "@tsl//tsl/profiler/lib:traceme",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/python/ifrt",

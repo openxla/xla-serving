@@ -175,7 +175,7 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
       symbolic_module_bundle = std::nullopt;
 
   for (const auto& spec : stablehlo->specs()) {
-    if (spec.mlir_module_string.empty()) {
+    if (spec.mlir_module_string().empty()) {
       return absl::InvalidArgumentError(
           "StableHlo spec should have a non-empty MLIR module string");
     }
@@ -185,7 +185,7 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
     //
     // Deserialize the string to the MLIR module.
     auto loader = std::make_unique<StableHloLoader>();
-    TF_ASSIGN_OR_RETURN(auto module, loader->Load(spec.mlir_module_string));
+    TF_ASSIGN_OR_RETURN(auto module, loader->Load(spec.mlir_module_string()));
     if (!module) {
       return absl::FailedPreconditionError("Failed to load StableHlo module");
     }

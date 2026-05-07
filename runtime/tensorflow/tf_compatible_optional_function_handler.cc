@@ -143,7 +143,7 @@ TfCompatibleOptionalFunctionHandler::HandleFunction(
       tf_body,
       {kTfConcreteFunctionHandleMimeTypeLegacy,
        kTfConcreteFunctionHandleMimeType},
-      neptune_model_manifest::UnstructuredData::kFileSystemLocation,
+      {neptune_model_manifest::UnstructuredData::kFileSystemLocation},
       "Function body for TF Function"));
 
   TF_ASSIGN_OR_RETURN(auto tf_concrete_function_handle,

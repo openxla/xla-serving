@@ -18,6 +18,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "absl/log/log.h"  // from @abseil-cpp
@@ -54,8 +55,16 @@ class StableHlo {
     // Specs of outputs.
     std::vector<ArgSpec> outputs;
 
-    // The MLIR module string (in StableHLO dialect).
-    absl::string_view mlir_module_string;
+    // The MLIR module (in StableHLO dialect). Can be owned string or view.
+    std::variant<std::string, absl::string_view> mlir_module;
+
+    // Returns a view of the MLIR module string.
+    absl::string_view mlir_module_string() const {
+      if (std::holds_alternative<std::string>(mlir_module)) {
+        return std::get<std::string>(mlir_module);
+      }
+      return std::get<absl::string_view>(mlir_module);
+    }
 
     // Sorted indices of inputs that are actually passed to the main function in
     // MLIR module. The other inputs are unused and don't need to be passed.

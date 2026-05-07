@@ -62,7 +62,7 @@ absl::StatusOr<std::string> GetTfSavedModelDirPath(
 
   TF_RETURN_IF_ERROR(CheckMimeAndDataType(
       tf_saved_model_supplement, {kTfSavedModelMimeType},
-      neptune_model_manifest::UnstructuredData::kFileSystemLocation,
+      {neptune_model_manifest::UnstructuredData::kFileSystemLocation},
       "TF SavedModel supplement"));
 
   return GetAbsoluteFileSystemPath(

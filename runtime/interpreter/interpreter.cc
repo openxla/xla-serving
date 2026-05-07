@@ -22,6 +22,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "absl/base/nullability.h"  // from @abseil-cpp
@@ -73,6 +74,7 @@
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 #include "tsl/platform/context.h"  // from @tsl
+#include "tsl/platform/path.h"  // from @tsl
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
 ABSL_FLAG(bool, jsv_enable_parallel_loading_pipelines, true,
@@ -412,9 +414,42 @@ absl::StatusOr<FlatSignature> LoadPipelineOutputSignature(
   return GetOutputFlatSignature(pipeline.signature().output());
 }
 
+absl::StatusOr<std::variant<std::string, absl::string_view>>
+GetStableHloMlirString(
+    absl::string_view model_path,
+    const neptune_model_manifest::StableHloFunctionBody& stable_hlo_body) {
+  switch (stable_hlo_body.stable_hlo().data_case()) {
+    case neptune_model_manifest::UnstructuredData::kInlinedBytes:
+      return std::variant<std::string, absl::string_view>(
+          absl::string_view(stable_hlo_body.stable_hlo().inlined_bytes()));
+    case neptune_model_manifest::UnstructuredData::kFileSystemLocation: {
+      // The file system location should contain a relative path with respect to
+      // the `model_path`.
+      std::string mlir_path = tsl::io::JoinPath(
+          model_path,
+          stable_hlo_body.stable_hlo().file_system_location().string_path());
+      std::string mlir_module_string;
+      absl::Status status = tsl::ReadFileToString(
+          tsl::Env::Default(), mlir_path, &mlir_module_string);
+      if (!status.ok()) {
+        LOG(ERROR) << "Failed to read StableHlo MLIR module from file: "
+                   << status;
+        return status;
+      }
+      return std::variant<std::string, absl::string_view>(
+          std::move(mlir_module_string));
+    }
+    default:
+      return absl::InvalidArgumentError(
+          "StableHlo function body does not contain inlined bytes or file "
+          "system location.");
+  }
+}
+
 // Builds an in-memory representation `StableHlo` of StableHLOs from
 // proto representations in `Function`s.
 absl::StatusOr<std::unique_ptr<StableHlo>> BuildStableHloFromFunctions(
+    absl::string_view model_path,
     absl::Span<const neptune_model_manifest::Function* const>
         stable_hlo_funcs) {
   std::vector<StableHlo::Spec> stablehlo_specs;
@@ -425,13 +460,17 @@ absl::StatusOr<std::unique_ptr<StableHlo>> BuildStableHloFromFunctions(
                         GetOutputSpec(*func));
     TF_RETURN_IF_ERROR(CheckMimeAndDataType(
         func->body().stable_hlo_body().stable_hlo(), {kStableHloMimeType},
-        neptune_model_manifest::UnstructuredData::kInlinedBytes,
+        {neptune_model_manifest::UnstructuredData::kInlinedBytes,
+         neptune_model_manifest::UnstructuredData::kFileSystemLocation},
         "StableHlo MLIR module"));
+    std::variant<std::string, absl::string_view> mlir_module;
+    TF_ASSIGN_OR_RETURN(
+        mlir_module,
+        GetStableHloMlirString(model_path, func->body().stable_hlo_body()));
     stablehlo_specs.push_back(StableHlo::Spec{
         .inputs = std::move(input_specs),
         .outputs = std::move(output_specs),
-        .mlir_module_string =
-            func->body().stable_hlo_body().stable_hlo().inlined_bytes(),
+        .mlir_module = std::move(mlir_module),
         .mlir_module_kept_var_idx =
             {func->body().stable_hlo_body().module_kept_var_idx().begin(),
              func->body().stable_hlo_body().module_kept_var_idx().end()},
@@ -491,8 +530,9 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateStableHloRunnerOp(
     tsl::thread::ThreadPool* computation_thread_pool,
     IfrtLoadedVariableRegistry* ifrt_loaded_variable_registry) {
   KernelBuilderContext builder;
-  TF_ASSIGN_OR_RETURN(std::unique_ptr<StableHlo> stablehlo,
-                      BuildStableHloFromFunctions(stable_hlo_funcs));
+  TF_ASSIGN_OR_RETURN(
+      std::unique_ptr<StableHlo> stablehlo,
+      BuildStableHloFromFunctions(create_options.model_path, stable_hlo_funcs));
   TF_RETURN_IF_ERROR(builder.SetConfig(
       kStableHlo, std::shared_ptr<StableHlo>(std::move(stablehlo))));
   if (named_inputs != nullptr) {

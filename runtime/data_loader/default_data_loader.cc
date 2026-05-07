@@ -77,7 +77,7 @@ absl::Status ValidateLoadInputs(
   }
   TF_RETURN_IF_ERROR(CheckMimeAndDataType(
       value_to_load.data(), {kOrbaxCheckpointMimeType},
-      neptune_model_manifest::UnstructuredData::kFileSystemLocation,
+      {neptune_model_manifest::UnstructuredData::kFileSystemLocation},
       "Checkpoint value"));
   if (!model_path.has_value()) {
     return absl::InvalidArgumentError(

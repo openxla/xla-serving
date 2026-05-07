@@ -23,6 +23,7 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "protos/manifest.pb.h"  // from @neptune
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
@@ -52,7 +53,8 @@ absl::StatusOr<StableHlo::Spec> BuildSpec(
   return StableHlo::Spec{
       .inputs = std::move(input_spec),
       .outputs = std::move(output_spec),
-      .mlir_module_string = stable_hlo_body.stable_hlo().inlined_bytes(),
+      .mlir_module =
+          absl::string_view(stable_hlo_body.stable_hlo().inlined_bytes()),
       .mlir_module_kept_var_idx =
           {stable_hlo_body.module_kept_var_idx().begin(),
            stable_hlo_body.module_kept_var_idx().end()},
