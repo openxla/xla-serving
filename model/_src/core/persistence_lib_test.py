@@ -205,6 +205,23 @@ class PersistenceLibTest(absltest.TestCase):
     ):
       persistence_lib.load(target_dir)
 
+  def test_load_fails_with_absolute_manifest_path(self):
+    target_dir: str = self.create_tempdir().full_path
+
+    path = os.path.join(target_dir, 'neptune_model_version.txt')
+    file_content = f"""
+    version: "{constants.MANIFEST_VERSION}"
+    mime_type: "{constants.MANIFEST_MIME_TYPE}"
+    manifest_file_path: "/absolute/path/manifest.pb"
+    """
+    with file_utils.open_file(path, 'w') as f:
+      f.write(file_content)
+
+    with self.assertRaisesRegex(
+        ValueError, 'Manifest file path must be relative'
+    ):
+      persistence_lib.load(target_dir)
+
 
 class TestShloFunctionSupplementalInfo(
     shlo_function.ShloFunctionSupplementalInfo

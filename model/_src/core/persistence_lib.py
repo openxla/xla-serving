@@ -135,6 +135,10 @@ def load(saved_state_dir: str) -> manifest_pb2.Manifest:
     raise ValueError(f'Unsupported manifest version "{model_version.version}"')
   if model_version.mime_type != constants.MANIFEST_MIME_TYPE:
     raise ValueError(f'Unsupported manifest type "{model_version.mime_type}"')
+  if pathlib.Path(model_version.manifest_file_path).is_absolute():
+    raise ValueError(
+        f'Manifest file path must be relative, got "{model_version.manifest_file_path}"'
+    )
 
   manifest_path = (
       pathlib.Path(saved_state_dir) / model_version.manifest_file_path

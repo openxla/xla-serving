@@ -347,6 +347,11 @@ def _read_proto_from_data(
 ) -> None:
   """Reads a proto from the given UnstructuredData."""
   if data.HasField('file_system_location'):
+    if os.path.isabs(data.file_system_location.string_path):
+      _bail(
+          'File system location must be relative, got'
+          f' "{data.file_system_location.string_path}"'
+      )
     with file_utils.open_file(
         os.path.join(model_base_dir, data.file_system_location.string_path),
         'rb',

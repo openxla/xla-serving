@@ -67,6 +67,18 @@ py_library(
     ],
 )
 
+py_test(
+    name = "show_test",
+    srcs = ["show_test.py"],
+    deps = [
+        ":show",
+        "//third_party/py/typer",
+        "@absl_py//absl/testing:absltest",
+        "@neptune//protos:manifest_py_pb2",
+        "@neptune//protos:type_py_pb2",
+    ],
+)
+
 py_library(
     name = "constants",
     srcs = ["constants.py"],
