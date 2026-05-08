@@ -19,7 +19,7 @@ jobs:
         jax-version: ["newest"]
         # include:
         #   - python-version: "3.10"
-        #     jax-version: "0.4.34"  # keep in sync with minimum version in model/pyproject.toml
+        #     jax-version: "0.4.34"  # keep in sync with minimum version in neptune_model/pyproject.toml
 
 
     steps:
@@ -73,14 +73,14 @@ jobs:
         env:
           # Tell setup.py that the repo root is the GitHub workspace root!
           NEPTUNE_ROOT_DIR: ${{ github.workspace }}
-        working-directory: ./model
+        working-directory: ./neptune_model
         run: |
           # Run the build command we perfected
           python -m build --wheel --no-isolation
 
       - name: Install the Built Wheel
         # The wildcard *.whl will grab whatever version was just built
-        run: pip install ./model/dist/*.whl
+        run: pip install ./neptune_model/dist/*.whl
 
       - name: Verify Package Import
         run: |

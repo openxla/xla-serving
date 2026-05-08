@@ -1,6 +1,9 @@
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
-package(default_visibility = ["@neptune//model:__subpackages__"])
+package(default_visibility = [
+    "//third_party/py/neptune_model:__subpackages__",
+    "@neptune//neptune_model:__subpackages__",
+])
 
 py_library(
     name = "typing",
@@ -13,7 +16,7 @@ py_library(
     srcs = ["utils.py"],
     deps = [
         ":typing",
-        "@neptune//model/_src/core:shlo_type",
+        "@neptune//neptune_model/_src/core:shlo_type",
         "@neptune//protos:manifest_py_pb2",
         "@neptune_pypi//jax",
         "@neptune_pypi//jaxtyping",
@@ -29,9 +32,9 @@ py_library(
         ":constants",
         ":typing",
         ":utils",
-        "@neptune//model/_src/core:shlo_function",
-        "@neptune//model/_src/core:unstructured_data",
-        "@neptune//model/_src/core:value",
+        "@neptune//neptune_model/_src/core:shlo_function",
+        "@neptune//neptune_model/_src/core:unstructured_data",
+        "@neptune//neptune_model/_src/core:value",
         "@neptune//protos:manifest_py_pb2",
         "@neptune_pypi//jax",
     ],
@@ -62,7 +65,7 @@ py_test(
         ":utils",
         "@absl_py//absl/testing:absltest",
         "@absl_py//absl/testing:parameterized",
-        "@neptune//model/_src/core:shlo_type",
+        "@neptune//neptune_model/_src/core:shlo_type",
         "@neptune_pypi//jax",
         "@neptune_pypi//numpy",
         "@xla//xla:xla_data_proto_py_pb2",
@@ -72,14 +75,14 @@ py_test(
 py_test(
     name = "main_lib_test",
     srcs = ["main_lib_test.py"],
-    data = ["@neptune//model/_src/test_utils:mnist_jax_model_expected_manifest.textproto"],
+    data = ["@neptune//neptune_model/_src/test_utils:mnist_jax_model_expected_manifest.textproto"],
     shard_count = 4,
     deps = [
         ":main_lib",
         "@absl_py//absl/testing:absltest",
         "@absl_py//absl/testing:parameterized",
-        "@neptune//model/_src/core:persistence_lib",
-        "@neptune//model/_src/test_utils:jax_mnist",
+        "@neptune//neptune_model/_src/core:persistence_lib",
+        "@neptune//neptune_model/_src/test_utils:jax_mnist",
         "@neptune//protos:manifest_py_pb2",
         "@neptune_pypi//jax",
         "@neptune_pypi//orbax_checkpoint",

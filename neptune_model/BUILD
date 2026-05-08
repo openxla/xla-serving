@@ -14,11 +14,11 @@ py_library(
     srcs = ["__init__.py"],
     visibility = ["//visibility:public"],
     deps = [
-        "@neptune//model/_src/export:jax_model",
-        "@neptune//model/_src/export:main_lib",
-        "@neptune//model/_src/export:serving_config",
-        "@neptune//model/_src/processors:processor",
-        "@neptune//model/_src/processors:tf_processor",
+        "@neptune//neptune_model/_src/export:jax_model",
+        "@neptune//neptune_model/_src/export:main_lib",
+        "@neptune//neptune_model/_src/export:serving_config",
+        "@neptune//neptune_model/_src/processors:processor",
+        "@neptune//neptune_model/_src/processors:tf_processor",
     ],
 )
 

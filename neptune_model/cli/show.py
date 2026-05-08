@@ -22,6 +22,10 @@ from google.protobuf import message
 from google.protobuf import text_format
 import jax.extend as jex
 from jax.interpreters import mlir
+import rich
+import typer
+from typing_extensions import Annotated
+
 from neptune_model._src.core import file_utils
 from neptune_model._src.core import persistence_lib
 from neptune_model.cli import constants
@@ -29,9 +33,6 @@ from neptune_model.cli import printer
 from neptune_model.protos import manifest_pb2
 from neptune_model.protos import orchestration_pb2
 from neptune_model.protos import tf_concrete_function_handle_pb2
-import rich
-import typer
-from typing_extensions import Annotated
 
 
 def _bail(msg: str) -> NoReturn:

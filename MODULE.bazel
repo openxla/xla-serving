@@ -153,7 +153,7 @@ pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
     pip.parse(
         hub_name = "neptune_pypi",
         python_version = version,
-        requirements_lock = "//model:requirements_{}_lock.txt".format(version.replace(".", "_")),
+        requirements_lock = "//neptune_model:requirements_{}_lock.txt".format(version.replace(".", "_")),
     )
     for version in [
         "3.11",

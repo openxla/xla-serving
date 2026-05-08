@@ -27,7 +27,7 @@ jobs:
 
       - name: Detect Version in __init__.py
         id: version_check
-        working-directory: ./model
+        working-directory: ./neptune_model
         run: |
           VERSION=$(python -c "import re; print(re.search(r'''__version__\s*=\s*['\"]([^'\"]+)['\"]''', open('__init__.py').read()).group(1))")
           echo "Found version: $VERSION"
@@ -103,13 +103,13 @@ jobs:
       - name: Build the Neptune Model Wheel
         env:
           NEPTUNE_ROOT_DIR: ${{ github.workspace }}
-        working-directory: ./model
+        working-directory: ./neptune_model
         run: python -m build --wheel --no-isolation
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        working-directory: ./model
+        working-directory: ./neptune_model
         run: |
           # Notice how we pull the version number from Job 1's outputs!
           VERSION="v${{ needs.check-version.outputs.version }}"
