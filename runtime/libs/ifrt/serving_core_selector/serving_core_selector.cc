@@ -15,7 +15,6 @@
 #include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @neptune
 
 #include <cstddef>
-#include <string>
 
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
@@ -53,8 +52,7 @@ tsl::DeviceReservation ServingCoreSelector::ReserveDevice(
     // for the given program. The null `selector` indicates that this
     // `DeviceReservation` isn't made through any selector.
     core_selection_counter
-        ->GetCell(std::string(program_fingerprint),
-                  absl::StrCat(execution_count))
+        ->GetCell(program_fingerprint, absl::StrCat(execution_count))
         ->IncrementBy(1);
     core_selection_counter_by_device_id_only
         ->GetCell(absl::StrCat(execution_count))
@@ -65,8 +63,7 @@ tsl::DeviceReservation ServingCoreSelector::ReserveDevice(
   tsl::DeviceReservation reservation =
       device_selector_->ReserveDevice(program_fingerprint);
   core_selection_counter
-      ->GetCell(std::string(program_fingerprint),
-                absl::StrCat(reservation.device_index()))
+      ->GetCell(program_fingerprint, absl::StrCat(reservation.device_index()))
       ->IncrementBy(1);
   core_selection_counter_by_device_id_only
       ->GetCell(absl::StrCat(reservation.device_index()))

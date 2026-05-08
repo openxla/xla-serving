@@ -105,7 +105,7 @@ void RecordExecutedBatchSize(absl::string_view model_name,
           << ", model_version: " << model_version
           << ", batch_size: " << batch_size;
   executed_batch_size_counter
-      ->GetCell(std::string(model_name), absl::StrCat(model_version),
+      ->GetCell(model_name, absl::StrCat(model_version),
                 absl::StrCat(batch_size))
       ->IncrementBy(1);
 }
@@ -137,7 +137,7 @@ void RecordPaddingSize(int32_t padding_size, absl::string_view model_name,
           << ", model_version: " << model_version
           << ", execution_batch_size: " << execution_batch_size;
   padding_size_sampler
-      ->GetCell(std::string(model_name), absl::StrCat(model_version),
+      ->GetCell(model_name, absl::StrCat(model_version),
                 absl::StrCat(execution_batch_size))
       ->Add(static_cast<double>(padding_size));
 }
@@ -151,8 +151,8 @@ void RecordBatchCosts(const std::string& model_name, int64_t model_version,
           << ", processed_size: " << processed_size
           << ", cost_type: " << cost_type << ", total_cost: " << total_cost;
   batch_costs_sampler
-      ->GetCell(std::string(model_name), absl::StrCat(model_version),
-                std::to_string(processed_size), std::string(cost_type))
+      ->GetCell(model_name, absl::StrCat(model_version),
+                std::to_string(processed_size), cost_type)
       ->Add(absl::ToDoubleMicroseconds(total_cost));
 }
 
