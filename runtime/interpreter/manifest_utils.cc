@@ -37,6 +37,8 @@
 #include "absl/strings/substitute.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "protos/manifest.pb.h"  // from @neptune
+#include "protos/xla/pjrt/proto/compile_options.pb.h"  // from @neptune
+#include "protos/xla/xla_data.pb.h"  // from @neptune
 #include "protos/orchestration.pb.h"  // from @neptune
 #include "protos/type.pb.h"  // from @neptune
 #include "runtime/core/constants.h"  // from @neptune
@@ -69,6 +71,15 @@ using type::Tuple;
 using type::Type;
 
 namespace {
+
+template <typename To, typename From>
+absl::StatusOr<To> ConvertProto(const From& from) {
+  To to;
+  if (!to.ParseFromString(from.SerializeAsString())) {
+    return absl::InternalError("Failed to convert proto via serialization.");
+  }
+  return to;
+}
 
 // Orbax model version metadata (internal representation).
 struct ModelVersionMetadata {
@@ -214,10 +225,12 @@ absl::StatusOr<AssignedDevices> InferAssignedDevicesFromFunctionSignature(
   TF_RETURN_IF_ERROR(FlattenType(stable_hlo_func.signature().input(), leafs));
 
   for (const auto& leaf : leafs) {
-    xla::OpSharding sharding = leaf.tensor_type().sharding();
+    TF_ASSIGN_OR_RETURN(
+        xla::OpSharding xla_sharding,
+        ConvertProto<xla::OpSharding>(leaf.tensor_type().sharding()));
     TF_ASSIGN_OR_RETURN(xla::HloSharding hlo_sharding,
-                        xla::HloSharding::FromProto(sharding));
-    VLOG(2) << "sharding: " << sharding << " have "
+                        xla::HloSharding::FromProto(xla_sharding));
+    VLOG(2) << "sharding: " << xla_sharding << " have "
             << hlo_sharding.TotalNumTiles() << " tiles.";
     max_num_devices = std::max(max_num_devices, hlo_sharding.TotalNumTiles());
   }
@@ -297,12 +310,15 @@ absl::StatusOr<ArgSpec> ConvertToArgSpec(
     const neptune_model_type::TensorType& type) {
   TF_ASSIGN_OR_RETURN(xla::ifrt::DType dtype, ToIfrtDType(type.dtype()));
   TF_ASSIGN_OR_RETURN(ArgShape shape, ToArgShape(type.shape()));
-  xla::OpSharding sharding = type.sharding();
+  TF_ASSIGN_OR_RETURN(xla::OpSharding xla_sharding,
+                      ConvertProto<xla::OpSharding>(type.sharding()));
   TF_ASSIGN_OR_RETURN(xla::HloSharding hlo_sharding,
-                      xla::HloSharding::FromProto(sharding));
+                      xla::HloSharding::FromProto(xla_sharding));
   std::optional<xla::Layout> layout = std::nullopt;
   if (type.has_layout()) {
-    TF_ASSIGN_OR_RETURN(layout, xla::Layout::FromProto(type.layout()));
+    TF_ASSIGN_OR_RETURN(xla::LayoutProto xla_layout,
+                        ConvertProto<xla::LayoutProto>(type.layout()));
+    TF_ASSIGN_OR_RETURN(layout, xla::Layout::FromProto(xla_layout));
   }
   return ArgSpec{
       .dtype = std::move(dtype),
@@ -675,10 +691,13 @@ absl::StatusOr<std::optional<xla::CompileOptionsProto>> GetCompileOptions(
       auto compile_options_it =
           compile_options_map->map().find(absl::AsciiStrToLower(platform_name));
       if (compile_options_it != compile_options_map->map().end()) {
+        TF_ASSIGN_OR_RETURN(
+            xla::CompileOptionsProto xla_opts,
+            ConvertProto<xla::CompileOptionsProto>(compile_options_it->second));
         if (!compile_options.has_value()) {
-          compile_options = compile_options_it->second;
+          compile_options = xla_opts;
         } else if (!google::protobuf::util::MessageDifferencer::Equivalent(
-                       compile_options.value(), compile_options_it->second)) {
+                       compile_options.value(), xla_opts)) {
           // Ensure that the compile options are consistent across all
           // functions.
           return absl::InvalidArgumentError(

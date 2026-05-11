@@ -72,9 +72,19 @@ class BazelBuildProtos(build_py):
             relative_path = os.path.relpath(root, gen_root)
             parts = relative_path.split(os.sep)
 
-            # STRIP BAZEL EXTERNAL PATHS:
-            # If the path starts with 'external/xla~/' (or any repo), drop the first two folders
-            if parts[0] == "external" and len(parts) > 2:
+            # Map local paths to package paths
+            prefix = tuple(parts[:5])
+            if prefix == (
+                "third_party",
+                "neptune",
+                "protos",
+                "neptune_model",
+                "xla",
+            ):
+              parts = ["xla"] + parts[5:]
+            elif prefix[:3] == ("third_party", "neptune", "protos"):
+              parts = ["protos"] + parts[3:]
+            elif prefix[:1] == ("external",):
               parts = parts[2:]
 
             pkg_name = "xla" if "xla" in f or "xla" in root else "protos"
@@ -82,7 +92,7 @@ class BazelBuildProtos(build_py):
               parts = [pkg_name] + parts
             target_dir = os.path.join(this_dir, *parts)
 
-            # FIX 1 & 2: Create intermediate folders AND proper init files safely
+            # Create intermediate folders AND proper init files safely.
             current_path = this_dir
             for part in parts:
               if part and part != ".":
@@ -112,26 +122,36 @@ class BazelBuildProtos(build_py):
             with open(dest_path, "r", encoding="utf-8") as file:
               content = file.read()
 
-            # 1. Catch deeply nested 'from' imports (e.g., from xla.pjrt.proto import...)
-            content = content.replace("from xla.", "from neptune_model.xla.")
+            # 1. Catch deeply nested 'from' imports
+            content = content.replace(
+                "from protos.neptune_model.xla", "from neptune_model.xla"
+            )
             content = content.replace(
                 "from protos.", "from neptune_model.protos."
             )
+            content = content.replace("from xla.", "from neptune_model.xla.")
 
-            # 2. Catch standard 'import' statements (e.g., import xla.pjrt.proto)
+            # 2. Catch standard 'import' statements
             content = content.replace(
-                "import xla.", "import neptune_model.xla."
+                "import protos.neptune_model.xla", "import neptune_model.xla"
             )
             content = content.replace(
                 "import protos.", "import neptune_model.protos."
             )
-
-            # 3. Catch exact top-level imports just in case Bazel generates them
             content = content.replace(
-                "from xla import ", "from neptune_model.xla import "
+                "import xla.", "import neptune_model.xla."
+            )
+
+            # 3. Catch exact top-level imports
+            content = content.replace(
+                "from protos.neptune_model.xla import ",
+                "from neptune_model.xla import ",
             )
             content = content.replace(
                 "from protos import ", "from neptune_model.protos import "
+            )
+            content = content.replace(
+                "from xla import ", "from neptune_model.xla import "
             )
 
             with open(dest_path, "w", encoding="utf-8") as file:
@@ -154,6 +174,7 @@ class BazelBuildProtos(build_py):
           self.distribution.packages.append(pkg)
 
     super().run()
+
 
 init_path = os.path.join(os.path.dirname(__file__), "__init__.py")
 
