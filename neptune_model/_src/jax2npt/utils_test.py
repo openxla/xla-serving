@@ -22,7 +22,7 @@ import jax.numpy as jnp
 import numpy as np
 from neptune_model._src.core import shlo_type
 from neptune_model._src.jax2npt import utils
-from neptune_model.xla import xla_data_pb2  # pylint: disable=g-direct-tensorflow-import
+from neptune_model.protos.xla import xla_data_pb2
 
 
 def _get_spec():

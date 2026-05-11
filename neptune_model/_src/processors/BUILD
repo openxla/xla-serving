@@ -47,6 +47,7 @@ py_library(
     name = "tf_processor",
     srcs = ["tf_processor.py"],
     deps = [
+        "@neptune//neptune_model/_src/core:persistence_lib",
         "@neptune//neptune_model/_src/core:saveable",
         "@neptune//neptune_model/_src/core:value",
         "@neptune//neptune_model/_src/tf2npt:__init__",

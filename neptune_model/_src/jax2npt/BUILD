@@ -18,10 +18,10 @@ py_library(
         ":typing",
         "@neptune//neptune_model/_src/core:shlo_type",
         "@neptune//protos:manifest_py_pb2",
+        "@neptune//protos/xla:xla_vendored_py_pb2",
         "@neptune_pypi//jax",
         "@neptune_pypi//jaxtyping",
         "@neptune_pypi//numpy",
-        "@xla//xla:xla_data_proto_py_pb2",
     ],
 )
 
@@ -66,9 +66,9 @@ py_test(
         "@absl_py//absl/testing:absltest",
         "@absl_py//absl/testing:parameterized",
         "@neptune//neptune_model/_src/core:shlo_type",
+        "@neptune//protos/xla:xla_vendored_py_pb2",
         "@neptune_pypi//jax",
         "@neptune_pypi//numpy",
-        "@xla//xla:xla_data_proto_py_pb2",
     ],
 )
 

@@ -1,5 +1,9 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = [
+  "grpcio-tools",
+  "setuptools>=61.0", 
+  "wheel",
+]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -29,18 +33,12 @@ dependencies = [
     'jaxtyping',
     'numpy',
     'protobuf',
-    'rich',
-    'orbax-checkpoint >=0.9.0',
-    'tensorflow>=2.15.0',
+    'rich == 14.3.0',  # Pin to avoid rich.table import issue.
+    'orbax-checkpoint >= 0.9.0',
     'typer',
 ]
 
 dynamic = ['version']
-
-
-[tool.setuptools]
-# Force setuptools to look for these specific folders
-package-dir = {"" = "."}
 
 [tool.setuptools.package-data]
 # Ensure the generated python files are treated as data if they aren't standard .py
@@ -54,6 +52,11 @@ repository = 'http://github.com/AI-Hypercomputer/neptune'
 npt-cli = 'neptune_model.cli.npt_cli:run'
 
 [project.optional-dependencies]
+
+tf = [
+    'tensorflow>=2.15.0',
+]
+
 testing = [
     'pytest',
     'pytest-xdist',

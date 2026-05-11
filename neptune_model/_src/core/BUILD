@@ -35,7 +35,7 @@ py_test(
         "@absl_py//absl/testing:parameterized",
         "@com_google_protobuf//:protobuf",
         "@neptune//protos:type_py_pb2",
-        "@xla//xla:xla_data_proto_py_pb2",
+        "@neptune//protos/xla:xla_vendored_py_pb2",
     ],
 )
 
@@ -119,8 +119,8 @@ py_library(
     name = "shlo_type",
     srcs = ["shlo_type.py"],
     deps = [
+        "@neptune//protos/xla:xla_vendored_py_pb2",
         "@neptune_pypi//numpy",
-        "@xla//xla:xla_data_proto_py_pb2",
     ],
 )
 
@@ -158,10 +158,8 @@ py_library(
         "@absl_py//absl/flags",
         "@com_google_protobuf//:protobuf",  # any_py_pb2
         "@neptune//protos:manifest_py_pb2",
+        "@neptune//protos/xla:xla_vendored_py_pb2",
         "@neptune_pypi//jax",
-        "@xla//xla:xla_data_proto_py_pb2",
-        "@xla//xla:xla_py_pb2",
-        "@xla//xla/pjrt/proto:compile_options_py_pb2",
     ],
 )
 

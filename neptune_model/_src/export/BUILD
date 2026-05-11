@@ -8,6 +8,7 @@ package(default_visibility = [
 py_library(
     name = "main_lib",
     srcs = ["main_lib.py"],
+    pytype_deps = ["@neptune//neptune_model/_src/tf2npt:__init__"],
     deps = [
         ":constants",
         ":jax_model",
@@ -23,7 +24,6 @@ py_library(
         "@neptune//neptune_model/_src/processors:jax_processor",
         "@neptune//neptune_model/_src/processors:processor",
         "@neptune//neptune_model/_src/processors:tf_processor",
-        "@neptune//neptune_model/_src/tf2npt:__init__",
         "@neptune//protos:orchestration_py_pb2",
         "@neptune_pypi//jax",
         "@neptune_pypi//jaxtyping",

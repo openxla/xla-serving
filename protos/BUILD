@@ -8,7 +8,7 @@ proto_library(
     name = "type_proto",
     srcs = ["type.proto"],
     deps = [
-        "@xla//xla:xla_data_proto",
+        "@neptune//protos/xla:xla_vendored_proto",
     ],
 )
 
@@ -27,7 +27,7 @@ proto_library(
     srcs = ["manifest.proto"],
     deps = [
         ":type_proto",
-        "@xla//xla/pjrt/proto:compile_options_proto",
+        "@neptune//protos/xla:xla_vendored_proto",
     ],
 )
 

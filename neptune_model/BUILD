@@ -21,24 +21,3 @@ py_library(
         "@neptune//neptune_model/_src/processors:tf_processor",
     ],
 )
-
-compile_pip_requirements(
-    name = "requirements_3_11",
-    srcs = ["pyproject.toml"],
-    python_version = "3.11",
-    requirements_txt = "requirements_3_11_lock.txt",
-)
-
-compile_pip_requirements(
-    name = "requirements_3_12",
-    srcs = ["pyproject.toml"],
-    python_version = "3.12",
-    requirements_txt = "requirements_3_12_lock.txt",
-)
-
-compile_pip_requirements(
-    name = "requirements_3_13",
-    srcs = ["pyproject.toml"],
-    python_version = "3.13",
-    requirements_txt = "requirements_3_13_lock.txt",
-)

@@ -22,13 +22,13 @@ in Neptune's format.
 
 from collections.abc import Callable, Mapping, MutableSequence, Sequence
 import dataclasses
+from typing import Any
 
 from absl import logging
 import jax
 import jaxtyping
 
-from neptune_model._src import tf2npt
-from neptune_model._src.core import orchestration_proto_utils
+from neptune_model._src.core import orchestration_proto_utils  # pylint: disable=g-import-not-at-top
 from neptune_model._src.core import persistence_lib
 from neptune_model._src.core import saveable
 from neptune_model._src.core import shlo_type
@@ -67,7 +67,7 @@ class NeptuneModelSaveBundle:
   pipelines: orchestration_pb2.Pipelines = dataclasses.field(
       default_factory=orchestration_pb2.Pipelines
   )
-  tf_prepared_functions: dict[str, tf2npt.PreparedFunction] = dataclasses.field(
+  tf_prepared_functions: dict[str, Any] = dataclasses.field(
       default_factory=dict
   )
   on_persist_fns: MutableSequence[
@@ -349,7 +349,7 @@ def save(
         and cfg.processing.options.tf_trackable_resources is not None
     ]
 
-    tf_supplemental = tf2npt.save_tf_functions(
+    tf_supplemental = tf_processor.save_tf_functions(
         export_path,
         save_bundle.tf_prepared_functions,
         trackable_resources=trackable_resources,

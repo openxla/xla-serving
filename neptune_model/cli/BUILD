@@ -29,7 +29,7 @@ py_library(
         "@neptune//protos:manifest_py_pb2",
         "@neptune//protos:orchestration_py_pb2",
         "@neptune//protos:type_py_pb2",
-        "@xla//xla/pjrt/proto:compile_options_py_pb2",
+        "@neptune//protos/xla:xla_vendored_py_pb2",
     ],
 )
 
@@ -43,6 +43,7 @@ py_test(
         "@absl_py//absl/testing:parameterized",
         "@neptune//protos:manifest_py_pb2",
         "@neptune//protos:type_py_pb2",
+        "@neptune//protos/xla:xla_vendored_py_pb2",
     ],
 )
 
