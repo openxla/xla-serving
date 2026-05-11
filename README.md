@@ -1,12 +1,5 @@
 # Neptune Serving Engine
 
-<!-- copybara:strip_begin -->
-TODO: Create a public description.
-go/neptune-serving-engine
-
-<!-- copybara:strip_end -->
-
-
 Neptune Serving Engine (NSE) is a general-purpose inference runtime for the
 XLA-based (TPU) software ecosystem. It is designed to be a modular
 infrastructure component that can be plugged into a variety of higher
