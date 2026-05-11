@@ -19,9 +19,7 @@ cc_library(
         "@nlohmann_json//:json",
         "@tensorstore//tensorstore:data_type",
         "@xla//xla:xla_data_proto_cc",
-        "@xla//xla/hlo/ir:hlo_sharding",
         "@xla//xla/python/ifrt",
-        "@xla//xla/python/pjrt_ifrt:xla_ifrt",
         "@xla//xla/tsl/platform:statusor",
     ],
 )
@@ -124,7 +122,6 @@ cc_library(
     hdrs = ["shared.h"],
     deps = [
         "@abseil-cpp//absl/status:statusor",
-        "@nlohmann_json//:json",
         "@tensorstore//tensorstore:context",
         "@tensorstore//tensorstore/kvstore/file",  # for OSS
         "@tensorstore//tensorstore/util:result",

@@ -16,7 +16,7 @@ syntax = "proto3";
 
 package neptune_model_type;
 
-import "xla/xla_data.proto";
+import "protos/xla/xla_data.proto";
 
 message FunctionSignature {
   Type input = 1;
@@ -76,9 +76,9 @@ message TensorType {
 
   // TODO: Replace `xla.OpSharding`
   // with a sharding annotation language that has stability guarantees.
-  optional xla.OpSharding sharding = 3;
+  optional neptune_model.xla.OpSharding sharding = 3;
 
-  optional xla.LayoutProto layout = 4;
+  optional neptune_model.xla.LayoutProto layout = 4;
 }
 
 message Shape {
