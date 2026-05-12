@@ -16,7 +16,6 @@ package_group(
         "//runtime/...",
         "//smartass/brain/lemming/...",
         "//smartass/brain/server/...",
-        "//tasks/predictions/pctr/serving/models/...",
     ],
 )
 
