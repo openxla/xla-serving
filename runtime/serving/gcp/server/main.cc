@@ -74,6 +74,7 @@ void RunServer() {
   options.sink_in_invariant_ops = absl::GetFlag(FLAGS_sink_in_invariant_ops);
   options.cost_threshold = absl::GetFlag(FLAGS_cost_threshold);
 
+  LOG(INFO) << "Server address: " << server_address;
   auto service_or = neptune::serving::OrbaxCallbackGrpcServer::Create(
       absl::GetFlag(FLAGS_model_name), absl::GetFlag(FLAGS_model_path),
       options);
@@ -94,13 +95,24 @@ void RunServer() {
   builder.AddListeningPort(server_address, *creds);
   builder.RegisterService(service_or.value().get());
   std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
+  if (server == nullptr) {
+    LOG(FATAL) << "Failed to build server and start server";
+  }
   LOG(INFO) << "JAX Serving listening on " << server_address;
 
   server->Wait();
 }
 
 int main(int argc, char* argv[]) {
+  absl::ParseCommandLine(argc, argv);
   tsl::port::InitMain(argv[0], &argc, &argv);
+  LOG(INFO) << "Starting Neptune Server on GCP with flags: "
+            << absl::GetFlag(FLAGS_model_name) << " "
+            << absl::GetFlag(FLAGS_model_path) << " "
+            << absl::GetFlag(FLAGS_server_private_key_path) << " "
+            << absl::GetFlag(FLAGS_server_cert_chain_path) << " "
+            << absl::GetFlag(FLAGS_client_cert_chain_path) << " "
+            << absl::GetFlag(FLAGS_use_insecure_grpc_credentials);
   RunServer();
   return 0;
 }

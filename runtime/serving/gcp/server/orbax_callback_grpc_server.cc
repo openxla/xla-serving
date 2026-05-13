@@ -108,6 +108,7 @@ OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
                                 absl::string_view model_path,
                                 const OrbaxCallbackGrpcServerOptions& options) {
   std::string orbax_platform = absl::GetFlag(FLAGS_orbax_grpc_server_platform);
+  LOG(INFO) << "Creating Orbax Server for Orbax platform: " << orbax_platform;
   std::string pjrt_platform = orbax_platform;
   if (orbax_platform == "cuda") {
     pjrt_platform = "gpu";

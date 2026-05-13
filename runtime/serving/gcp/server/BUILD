@@ -119,7 +119,10 @@ JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS = [
     "@org_tensorflow//tensorflow/core/framework:tensor",
     "@tsl//tsl/profiler/lib:traceme",
 ] + select({
-    ":enable_tf": ["@neptune//runtime/tensorflow:tf_compatible_interpreter_create_options"],
+    ":enable_tf": [
+        "@neptune//runtime/tensorflow:tf_compatible_interpreter_create_options",
+        "@neptune//runtime/tensorflow:interpreter_tensorflow_support",
+    ],
     "//conditions:default": ["@neptune//runtime/interpreter:interpreter_create_options"],
 })
 
