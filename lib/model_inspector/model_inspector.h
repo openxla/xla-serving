@@ -52,6 +52,8 @@ class ModelInspector {
   absl::StatusOr<BatchAccessor> GetBatchAccessor(
       absl::string_view pipeline_name) const;
 
+  std::vector<BatchAccessor> GetBatchAccessor() const;
+
  private:
   ModelInspector(neptune_model_orchestration::Pipelines pipelines,
                  neptune_model_manifest::Manifest manifest)

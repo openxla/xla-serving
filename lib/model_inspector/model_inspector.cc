@@ -114,4 +114,15 @@ neptune::ModelInspector::GetBatchAccessor(
   return BatchAccessor(pipeline.batch_options());
 }
 
+std::vector<neptune::BatchAccessor> neptune::ModelInspector::GetBatchAccessor()
+    const {
+  std::vector<neptune::BatchAccessor> accessors;
+  for (const auto& pair : pipelines_.name_to_pipeline()) {
+    if (pair.second.has_batch_options()) {
+      accessors.push_back(BatchAccessor(pair.second.batch_options()));
+    }
+  }
+  return accessors;
+}
+
 }  // namespace neptune
