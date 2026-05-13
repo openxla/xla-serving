@@ -25,7 +25,6 @@ from setuptools import find_packages
 from setuptools import setup
 from setuptools.command.build_py import build_py
 
-
 ROOT_DIR = pathlib.Path(__file__).parent.resolve()
 PACKAGE_NAME = "neptune_model"
 PROTOS_SRC_DIR = ROOT_DIR / "protos"
@@ -171,6 +170,14 @@ def ensure_init_files():
 
 class GenerateProtosAndBuild(build_py):
   """Generates Python protos prior to building."""
+
+  def find_package_modules(self, package, package_dir):
+    modules = super().find_package_modules(package, package_dir)
+    return [
+        (pkg, mod, path)
+        for pkg, mod, path in modules
+        if not mod.endswith("_test") and mod != "test_utils"
+    ]
 
   def run(self):
     staged_protos = stage_protos()
