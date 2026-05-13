@@ -4,6 +4,7 @@ package(default_visibility = [
     "//learning/infra/mira/experimental/orbax_model/tensorflow:__subpackages__",
     "//learning/serving/servables/tfrt:__subpackages__",
     "//smartass/brain/server:__subpackages__",
+    "//tasks/predictions/pctr/serving/models:__subpackages__",
     "@neptune//runtime/python:__subpackages__",
     "@neptune//runtime/serving:__subpackages__",
     "@neptune//runtime/tensorflow:__subpackages__",
