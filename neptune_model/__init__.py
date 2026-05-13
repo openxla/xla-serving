@@ -52,7 +52,7 @@ sys.meta_path.insert(0, _XlaInterceptor())
 
 # TODO: Add exports.
 
-__version__ = "0.0.6"
+__version__ = "0.0.7"
 
 
 from neptune_model._src.export.jax_model import ApplyFnBundle
