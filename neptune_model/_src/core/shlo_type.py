@@ -21,7 +21,7 @@ from typing import Any, Optional, TypeAlias
 
 import numpy as np
 
-from neptune_model.xla import xla_data_pb2  # pylint: disable=g-direct-tensorflow-import
+from neptune_model.protos.xla import xla_data_pb2  # pylint: disable=g-direct-tensorflow-import
 
 
 Sharding: TypeAlias = xla_data_pb2.OpSharding

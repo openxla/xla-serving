@@ -14,42 +14,6 @@
 
 """Defines exported symbols for Neptune Model."""
 
-import importlib
-import importlib.abc
-import importlib.machinery
-import sys
-
-
-class _XlaRedirectLoader(importlib.abc.Loader):
-
-  def __init__(self, tf_module):
-    self.tf_module = tf_module
-
-  def create_module(self, spec):
-    return self.tf_module
-
-  def exec_module(self, module):
-    pass
-
-
-class _XlaInterceptor(importlib.abc.MetaPathFinder):
-
-  def find_spec(self, fullname, path, target=None):
-    if fullname.startswith("neptune_model.xla.") and fullname.endswith("_pb2"):
-      tf_name = fullname.replace("neptune_model.xla", "tensorflow.compiler.xla")
-      try:
-        tf_module = importlib.import_module(tf_name)
-        return importlib.machinery.ModuleSpec(
-            fullname, _XlaRedirectLoader(tf_module)
-        )
-      except ModuleNotFoundError:
-        pass
-    return None
-
-
-sys.meta_path.insert(0, _XlaInterceptor())
-
-
 # TODO: Add exports.
 
 __version__ = "0.0.7"

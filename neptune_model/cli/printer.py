@@ -24,7 +24,7 @@ from neptune_model.cli import constants
 from neptune_model.protos import manifest_pb2
 from neptune_model.protos import orchestration_pb2
 from neptune_model.protos import type_pb2
-from neptune_model.xla.pjrt.proto import compile_options_pb2  # pylint: disable=g-direct-tensorflow-import
+from neptune_model.protos.xla.pjrt.proto import compile_options_pb2  # pylint: disable=g-direct-tensorflow-import
 
 
 _BatchComponent = orchestration_pb2.BatchOptions.BatchComponent
