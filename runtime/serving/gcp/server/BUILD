@@ -92,6 +92,7 @@ JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS = [
     "@abseil-cpp//absl/container:flat_hash_map",
     "@abseil-cpp//absl/flags:flag",
     "@abseil-cpp//absl/log",
+    "@abseil-cpp//absl/log:check",
     "@abseil-cpp//absl/status",
     "@abseil-cpp//absl/status:statusor",
     "@abseil-cpp//absl/strings",
@@ -126,7 +127,10 @@ cc_library(
     name = "jsv_callback_grpc_server_cpu",
     srcs = ["orbax_callback_grpc_server.cc"],
     hdrs = ["orbax_callback_grpc_server.h"],
-    defines = ["PLATFORM_CPU"],
+    defines = ["PLATFORM_CPU"] + select({
+        ":enable_tf": ["ENABLE_TF=1"],
+        "//conditions:default": [],
+    }),
     deps = JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS + [
         "@xla//xla/pjrt/plugin/xla_cpu:cpu_client_options",
         "@xla//xla/pjrt/plugin/xla_cpu:cpu_static_registration",
@@ -138,7 +142,10 @@ cc_library(
     name = "jsv_callback_grpc_server_gpu",
     srcs = ["orbax_callback_grpc_server.cc"],
     hdrs = ["orbax_callback_grpc_server.h"],
-    defines = ["PLATFORM_CUDA"],
+    defines = ["PLATFORM_CUDA"] + select({
+        ":enable_tf": ["ENABLE_TF=1"],
+        "//conditions:default": [],
+    }),
     deps = JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS + [
         "@xla//xla/pjrt/plugin/xla_gpu:gpu_static_registration",
         "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_client_options",
@@ -150,7 +157,10 @@ cc_library(
     name = "jsv_callback_grpc_server_tpu",
     srcs = ["orbax_callback_grpc_server.cc"],
     hdrs = ["orbax_callback_grpc_server.h"],
-    defines = ["PLATFORM_CLOUD_TPU"],
+    defines = ["PLATFORM_CLOUD_TPU"] + select({
+        ":enable_tf": ["ENABLE_TF=1"],
+        "//conditions:default": [],
+    }),
     deps = JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS + [
         "@xla//xla/pjrt/plugin/xla_tpu:xla_tpu_pjrt_client",
     ],

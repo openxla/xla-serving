@@ -21,6 +21,7 @@
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/flags/declare.h"  // from @abseil-cpp
 #include "absl/flags/flag.h"  // from @abseil-cpp
+#include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
@@ -73,13 +74,39 @@ namespace {
 
 static constexpr char kDefaultServingSignatureDefKey[] = "serving_default";
 
+#if ENABLE_TF == 1
+tensorflow::tfrt_stub::SavedModel::Options GetSavedModelOptions(
+    const OrbaxCallbackGrpcServerOptions& server_options) {
+  static tensorflow::tfrt_stub::Runtime* default_runtime =
+      tensorflow::tfrt_stub::Runtime::Create(
+          tensorflow::tfrt_stub::WrapDefaultWorkQueue(
+              tfrt::CreateMultiThreadedWorkQueue(8, 8)))
+          .release();
+  CHECK(default_runtime);
+  tensorflow::tfrt_stub::SavedModel::Options options(default_runtime);
+  options.enable_lazy_loading = server_options.enable_lazy_loading;
+  options.lazy_loading_use_graph_executor =
+      server_options.lazy_loading_use_graph_executor;
+  options.graph_execution_options.enable_mlrt = server_options.enable_mlrt;
+  options.graph_execution_options.compile_options.allow_xla_cpu =
+      server_options.allow_xla_cpu;
+  options.graph_execution_options.compile_options.hoist_invariant_ops =
+      server_options.hoist_invariant_ops;
+  options.graph_execution_options.compile_options.sink_in_invariant_ops =
+      server_options.sink_in_invariant_ops;
+  options.graph_execution_options.compile_options.cost_threshold =
+      server_options.cost_threshold;
+  return options;
+}
 
+#endif
 
 }  // namespace
 
 absl::StatusOr<std::unique_ptr<OrbaxCallbackGrpcServer>>
 OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
-                                absl::string_view model_path) {
+                                absl::string_view model_path,
+                                const OrbaxCallbackGrpcServerOptions& options) {
   std::string orbax_platform = absl::GetFlag(FLAGS_orbax_grpc_server_platform);
   std::string pjrt_platform = orbax_platform;
   if (orbax_platform == "cuda") {
@@ -138,26 +165,28 @@ OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
   #if ENABLE_TF == 1
     auto create_options =
         std::make_unique<neptune::TfCompatibleInterpreterCreateOptions>();
-  #else
-    auto create_options = std::make_unique<neptune::InterpreterCreateOptions>();
-  #endif
+    create_options->tfrt_options.saved_model_options =
+        GetSavedModelOptions(options);
+#else
+  auto create_options = std::make_unique<neptune::InterpreterCreateOptions>();
+#endif
 
-  create_options->checkpoint_loader_thread_pool =
-      checkpoint_loader_thread_pool.get();
-  create_options->model_name = model_name;
-  create_options->model_version = 0;
-  create_options->model_path = model_path;
+    create_options->checkpoint_loader_thread_pool =
+        checkpoint_loader_thread_pool.get();
+    create_options->model_name = model_name;
+    create_options->model_version = 0;
+    create_options->model_path = model_path;
   create_options->execute_worker_thread_pool = execute_worker_thread_pool.get();
-  create_options->ifrt_client = client;
-  create_options->computation_thread_pool = computation_thread_pool.get();
-  create_options->platform_name = orbax_platform;
-  std::unique_ptr<neptune::Interpreter> interpreter;
-  TF_ASSIGN_OR_RETURN(interpreter,
-                      neptune::Interpreter::Create(std::move(create_options)));
-  return std::make_unique<OrbaxCallbackGrpcServer>(
-      model_name, std::move(interpreter), client,
+    create_options->ifrt_client = client;
+    create_options->computation_thread_pool = computation_thread_pool.get();
+    create_options->platform_name = orbax_platform;
+    std::unique_ptr<neptune::Interpreter> interpreter;
+    TF_ASSIGN_OR_RETURN(interpreter,
+                        neptune::Interpreter::Create(std::move(create_options)));
+    return std::make_unique<OrbaxCallbackGrpcServer>(
+        model_name, std::move(interpreter), client,
       std::move(execute_worker_thread_pool), std::move(computation_thread_pool),
-      std::move(checkpoint_loader_thread_pool));
+        std::move(checkpoint_loader_thread_pool));
 }
 
 grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(

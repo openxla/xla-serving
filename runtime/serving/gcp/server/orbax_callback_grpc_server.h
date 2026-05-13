@@ -15,6 +15,7 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_ORBAX_CALLBACK_GRPC_SERVER_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_ORBAX_CALLBACK_GRPC_SERVER_H_
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -34,7 +35,18 @@
 namespace neptune {
 namespace serving {
 
+struct OrbaxCallbackGrpcServerOptions {
+  bool enable_lazy_loading = true;
+  bool lazy_loading_use_graph_executor = true;
+  bool enable_mlrt = true;
+  bool allow_xla_cpu = true;
+  bool hoist_invariant_ops = true;
+  bool sink_in_invariant_ops = true;
+  int64_t cost_threshold = 10000;
+};
+
 class OrbaxCallbackGrpcServer final
+
     : public neptune::serving::PredictionService::CallbackService {
  public:
   OrbaxCallbackGrpcServer(OrbaxCallbackGrpcServer&& other) = default;
@@ -59,7 +71,9 @@ class OrbaxCallbackGrpcServer final
         interpreter_(std::move(interpreter)) {}
 
   static absl::StatusOr<std::unique_ptr<OrbaxCallbackGrpcServer>> Create(
-      absl::string_view model_name, absl::string_view model_path);
+      absl::string_view model_name, absl::string_view model_path,
+      const OrbaxCallbackGrpcServerOptions& options =
+          OrbaxCallbackGrpcServerOptions());
 
   // Handles the GetModelMetadata RPC.
   grpc::ServerUnaryReactor* GetModelMetadata(

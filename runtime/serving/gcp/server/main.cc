@@ -16,6 +16,7 @@
 //
 // This file is responsible for setting up the server, loading models, and
 // handling requests.
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -51,10 +52,31 @@ ABSL_FLAG(bool, use_insecure_grpc_credentials, false,
           "Whether to use insecure credentials for the server. WARNING: THIS "
           "SHOULD NOT BE USED IN PRODUCTION.");
 
+ABSL_FLAG(bool, enable_lazy_loading, true, "Enable lazy loading");
+ABSL_FLAG(bool, lazy_loading_use_graph_executor, true,
+          "Lazy loading use graph executor");
+ABSL_FLAG(bool, enable_mlrt, true, "Enable MLRT");
+ABSL_FLAG(bool, allow_xla_cpu, true, "Allow XLA CPU");
+ABSL_FLAG(bool, hoist_invariant_ops, true, "Hoist invariant ops");
+ABSL_FLAG(bool, sink_in_invariant_ops, true, "Sink in invariant ops");
+ABSL_FLAG(int64_t, cost_threshold, 10000, "Cost threshold");
+
 void RunServer() {
   std::string server_address = absl::StrCat("[::]:", absl::GetFlag(FLAGS_port));
+
+  neptune::serving::OrbaxCallbackGrpcServerOptions options;
+  options.enable_lazy_loading = absl::GetFlag(FLAGS_enable_lazy_loading);
+  options.lazy_loading_use_graph_executor =
+      absl::GetFlag(FLAGS_lazy_loading_use_graph_executor);
+  options.enable_mlrt = absl::GetFlag(FLAGS_enable_mlrt);
+  options.allow_xla_cpu = absl::GetFlag(FLAGS_allow_xla_cpu);
+  options.hoist_invariant_ops = absl::GetFlag(FLAGS_hoist_invariant_ops);
+  options.sink_in_invariant_ops = absl::GetFlag(FLAGS_sink_in_invariant_ops);
+  options.cost_threshold = absl::GetFlag(FLAGS_cost_threshold);
+
   auto service_or = neptune::serving::OrbaxCallbackGrpcServer::Create(
-      absl::GetFlag(FLAGS_model_name), absl::GetFlag(FLAGS_model_path));
+      absl::GetFlag(FLAGS_model_name), absl::GetFlag(FLAGS_model_path),
+      options);
   TF_CHECK_OK(service_or.status());
 
   grpc::ServerBuilder builder;
