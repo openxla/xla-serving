@@ -20,9 +20,33 @@ from typing import Any
 
 import jaxtyping
 
-from neptune_model._src import tf2npt
+from neptune_model._src.core import persistence_lib
 from neptune_model._src.core import saveable
 from neptune_model._src.core import value
+
+
+def _require_tf2npt():
+  try:
+    from neptune_model._src import tf2npt  # pylint: disable=g-import-not-at-top
+  except ImportError as e:
+    raise ImportError(
+        'Failed to import tf2npt. Please make sure that TF support is enabled.'
+    ) from e
+
+  return tf2npt
+
+
+def save_tf_functions(
+    export_path: str,
+    tf_prepared_functions: Mapping[str, Any],
+    trackable_resources: Any = None,
+) -> dict[str, persistence_lib.GlobalSupplemental]:
+  """Saves TensorFlow functions to a TF SavedModel."""
+  return _require_tf2npt().save_tf_functions(
+      export_path,
+      tf_prepared_functions,
+      trackable_resources=trackable_resources,
+  )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -30,7 +54,7 @@ class PreparedTfProcessor:
   """TensorFlow processor that is prepared for export."""
 
   name: str
-  prepared_function: tf2npt.PreparedFunction
+  prepared_function: Any
 
   @property
   def input_signature(self) -> jaxtyping.PyTree:
@@ -70,7 +94,7 @@ class TfProcessor:
     if not self.name:
       raise ValueError('TfProcessor name must not be empty')
 
-    prepared_function = tf2npt.prepare_function(
+    prepared_function = _require_tf2npt().prepare_function(
         self.name,
         self.fn,
         input_signature=input_signature,

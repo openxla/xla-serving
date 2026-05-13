@@ -33,9 +33,8 @@ dependencies = [
     'jaxtyping',
     'numpy',
     'protobuf',
-    'rich',
-    'orbax-checkpoint >=0.9.0',
-    'tensorflow>=2.15.0',
+    'rich == 14.3.0',  # Pin to avoid rich.table import issue.
+    'orbax-checkpoint >= 0.9.0',
     'typer',
 ]
 
@@ -53,6 +52,11 @@ repository = 'http://github.com/AI-Hypercomputer/neptune'
 npt-cli = 'neptune_model.cli.npt_cli:run'
 
 [project.optional-dependencies]
+
+tf = [
+    'tensorflow>=2.15.0',
+]
+
 testing = [
     'pytest',
     'pytest-xdist',

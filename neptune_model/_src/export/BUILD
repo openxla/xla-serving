@@ -23,7 +23,6 @@ py_library(
         "@neptune//neptune_model/_src/processors:jax_processor",
         "@neptune//neptune_model/_src/processors:processor",
         "@neptune//neptune_model/_src/processors:tf_processor",
-        "@neptune//neptune_model/_src/tf2npt:__init__",
         "@neptune//protos:orchestration_py_pb2",
         "@neptune_pypi//jax",
         "@neptune_pypi//jaxtyping",
