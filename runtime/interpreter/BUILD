@@ -278,6 +278,36 @@ cc_library(
 )
 
 cc_library(
+    name = "interpreter_with_jax_processing_test_lib",
+    testonly = 1,
+    srcs = ["interpreter_with_jax_processing_test.cc"],
+    data = [
+        "//learning/infra/mira/experimental/orbax_model/interpreter/testdata:simple_model_with_jax_processing",
+    ],
+    visibility = [
+        "@neptune//runtime/interpreter/google:__subpackages__",
+    ],
+    deps = [
+        ":interpreter",
+        ":interpreter_create_options",
+        ":interpreter_test_base",
+        "//devtools/build/runtime:get_runfiles_dir",
+        "//testing/base/public:gunit_for_library_testonly",
+        "//testing/base/public:gunit_main",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/types:span",
+        "@neptune//runtime/core:host_buffer",
+        "@neptune//runtime/core:host_buffer_matcher",
+        "@neptune//runtime/core:host_buffer_test_utils",
+        "@neptune//runtime/core:value",
+        "@neptune//runtime/core:value_matcher",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/tsl/platform:statusor",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "interpreter_create_options",
     hdrs = ["interpreter_create_options.h"],
     visibility = [

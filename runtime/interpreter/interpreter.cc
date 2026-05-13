@@ -884,26 +884,35 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
     NamedSignature named_signature =
         keyword_arguments_based ? GetNamedSignatureOfComponent(component)
                                 : NamedSignature{};
-    TF_ASSIGN_OR_RETURN(std::string key, GetKeyFromProcessorMimeType(*func));
-    TF_ASSIGN_OR_RETURN(OptionalFunctionHandler * handler,
-                        optional_function_handler_router_.GetHandler(key));
+    std::vector<std::unique_ptr<Kernel>> sub_graph;
+    if (func->body().has_stable_hlo_body()) {
+      TF_ASSIGN_OR_RETURN(std::unique_ptr<Kernel> shlo_kernel,
+                          LoadStableHloRunnerOp(component.function_name(),
+                                                component.weights_name(),
+                                                named_signature.inputs,
+                                                named_signature.outputs));
+      sub_graph.push_back(std::move(shlo_kernel));
+    } else {
+      TF_ASSIGN_OR_RETURN(std::string key, GetKeyFromProcessorMimeType(*func));
+      TF_ASSIGN_OR_RETURN(OptionalFunctionHandler * handler,
+                          optional_function_handler_router_.GetHandler(key));
 
-    bool pre_data_conversion = true;
-    if (component_index == 0 &&
-        component.role() == neptune_model_orchestration::ROLE_PREPROCESSOR) {
-      pre_data_conversion = batching_config.batch_preprocessing;
+      bool pre_data_conversion = true;
+      if (component_index == 0 &&
+          component.role() == neptune_model_orchestration::ROLE_PREPROCESSOR) {
+        pre_data_conversion = batching_config.batch_preprocessing;
+      }
+      bool post_data_conversion = true;
+      if (component_index == components.size() - 1 &&
+          component.role() == neptune_model_orchestration::ROLE_POSTPROCESSOR) {
+        post_data_conversion = batching_config.batch_postprocessing;
+      }
+      TF_ASSIGN_OR_RETURN(
+          sub_graph, handler->HandleFunction(
+                         create_options_->model_path, *func, *create_options_,
+                         pre_data_conversion, post_data_conversion,
+                         named_signature.inputs, named_signature.outputs));
     }
-    bool post_data_conversion = true;
-    if (component_index == components.size() - 1 &&
-        component.role() == neptune_model_orchestration::ROLE_POSTPROCESSOR) {
-      post_data_conversion = batching_config.batch_postprocessing;
-    }
-    TF_ASSIGN_OR_RETURN(
-        std::vector<std::unique_ptr<Kernel>> sub_graph,
-        handler->HandleFunction(create_options_->model_path, *func,
-                                *create_options_, pre_data_conversion,
-                                post_data_conversion, named_signature.inputs,
-                                named_signature.outputs));
     if (component.role() == neptune_model_orchestration::ROLE_PREPROCESSOR) {
       preprocessors.push_back(std::move(sub_graph));
     } else if (component.role() ==
@@ -1252,6 +1261,9 @@ absl::StatusOr<KernelIODataType> Interpreter::GetModelInputDataType(
   TF_ASSIGN_OR_RETURN(
       const neptune_model_manifest::Function* func,
       GetFunctionByObjectName(manifest_objects_, pre_processor_name));
+  if (func->body().has_stable_hlo_body()) {
+    return KernelIODataType::kHostBuffer;
+  }
 
   TF_ASSIGN_OR_RETURN(std::string key, GetKeyFromProcessorMimeType(*func));
   TF_ASSIGN_OR_RETURN(OptionalFunctionHandler * handler,
@@ -1284,6 +1296,9 @@ absl::StatusOr<KernelIODataType> Interpreter::GetModelOutputDataType(
   TF_ASSIGN_OR_RETURN(
       const neptune_model_manifest::Function* func,
       GetFunctionByObjectName(manifest_objects_, post_processor_name));
+  if (func->body().has_stable_hlo_body()) {
+    return KernelIODataType::kHostBuffer;
+  }
 
   TF_ASSIGN_OR_RETURN(std::string key, GetKeyFromProcessorMimeType(*func));
   TF_ASSIGN_OR_RETURN(OptionalFunctionHandler * handler,
