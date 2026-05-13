@@ -221,6 +221,7 @@ def convert(
   exported = exported_creator(*args_spec, **kwargs_spec)
   return jax_exported_to_shlo_fn(
       exported,
+      xla_compile_options_per_platform,
       model_param_names=model_param_names,
       model_inputs_layout=model_inputs_layout,
   )
