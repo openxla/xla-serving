@@ -101,7 +101,12 @@ jobs:
           pip install build setuptools wheel grpcio-tools
 
       - name: Build the Neptune Model Wheel
-        run: python -m build --wheel --no-isolation
+        run: python -m build --wheel
+
+      - name: Install and Test the Built Wheel
+        run: |
+          pip install .[tf,test]
+          pytest neptune_model/
 
       - name: Create GitHub Release
         env:
