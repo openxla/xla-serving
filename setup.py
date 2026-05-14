@@ -159,7 +159,8 @@ def compile_protos(staged):
 
   args = [
       "protoc",
-      f"--proto_path={pathlib.Path(grpc_tools.__file__).parent / "_proto"}",
+      "--proto_path="
+      + str(pathlib.Path(grpc_tools.__file__).parent / "_proto"),
       f"--proto_path={PROTOS_STAGING_DIR}",
       f"--python_out={ROOT_DIR}",
       f"--pyi_out={ROOT_DIR}",

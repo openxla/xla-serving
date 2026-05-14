@@ -54,6 +54,7 @@ addopts = "--ignore=neptune_model/protos"
 
 tf = [
     'tensorflow>=2.15.0',
+    'tf_keras',
 ]
 
 test = [
