@@ -16,7 +16,7 @@
 
 # TODO: Add exports.
 
-__version__ = "0.0.7"
+__version__ = "0.0.8"
 
 
 from neptune_model._src.export.jax_model import ApplyFnBundle
