@@ -287,6 +287,12 @@ class SharedBatchScheduler
       const QueueOptions& options, ProcessBatchCallback process_batch_callback,
       std::unique_ptr<BatchScheduler<TaskType>>* queue);
 
+  bool use_global_scheduler() const {
+    return options_.use_global_scheduler;
+  }
+
+  bool rank_queues() const { return options_.rank_queues; }
+
  protected:
   explicit SharedBatchScheduler(const Options& options);
 

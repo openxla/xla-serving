@@ -36,6 +36,7 @@ cc_library(
         "@neptune//runtime/core/batching:shared_batch_scheduler",
         "@neptune//runtime/core/batching:threadsafe_status",
         "@neptune//runtime/kernel",
+        "@neptune//runtime/kernel/batching:batch_options_utils",
         "@org_tensorflow//tensorflow/core/common_runtime:cost_constants",
         "@org_tensorflow//tensorflow/core/common_runtime:cost_measurement",
         "@org_tensorflow//tensorflow/core/common_runtime:cost_util",
@@ -131,5 +132,6 @@ cc_library(
         "@abseil-cpp//absl/strings:string_view",
         "@neptune//protos:orchestration_cc_proto",
         "@neptune//runtime/core/batching:batch_scheduler",
+        "@xla//xla/tsl/platform:criticality",
     ],
 )

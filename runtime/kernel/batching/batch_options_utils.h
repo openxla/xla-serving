@@ -21,6 +21,7 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "protos/orchestration.pb.h"  // from @neptune
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
+#include "xla/tsl/platform/criticality.h"  // from @xla
 
 namespace neptune {
 
@@ -40,6 +41,12 @@ absl::StatusOr<std::string> GetBatchPaddingPolicyString(
 
 absl::StatusOr<MixedPriorityBatchingPolicy> GetMixedPriorityBatchingPolicy(
     BatchOptions::MixedPriorityBatchingPolicy mixed_priority_batching_policy);
+
+absl::string_view MixedPriorityBatchingPolicyToString(
+    MixedPriorityBatchingPolicy policy);
+
+absl::string_view CriticalityToString(
+    tsl::criticality::Criticality criticality);
 
 }  // namespace neptune
 

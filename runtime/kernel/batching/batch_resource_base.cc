@@ -50,6 +50,7 @@
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "runtime/core/incremental_barrier.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
+#include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
 #include "runtime/kernel/batching/warmup.h"  // from @neptune
 #include "runtime/kernel/kernel.h"  // from @neptune
 #include "xla/python/ifrt/shape.h"  // from @xla
@@ -98,6 +99,16 @@ static auto* batch_costs_sampler = tsl::monitoring::Sampler<4>::New(
     // It's 27 buckets with the last bucket being 2^26 to DBL_MAX;
     // so the limits are [1, 2, 4, 8, ..., 64 * 1024 * 1024 (~64s), DBL_MAX].
     tsl::monitoring::Buckets::Exponential(1, 2, 27));
+
+static auto* request_counter = tsl::monitoring::Counter<8>::New(
+    "/orbax/serving/batching/request_count",
+    "Counts input requests by batching configuration: model_name, "
+    "model_version, use_global_scheduler, rank_queues, "
+    "mixed_priority_batching_policy, enable_priority_queue, "
+    "batch_padding_policy and request criticality.",
+    "model_name", "model_version", "use_global_scheduler", "rank_queues",
+    "mixed_priority_batching_policy", "enable_priority_queue",
+    "batch_padding_policy", "criticality");
 
 void RecordExecutedBatchSize(absl::string_view model_name,
                              int64_t model_version, int32_t batch_size) {
@@ -154,6 +165,24 @@ void RecordBatchCosts(const std::string& model_name, int64_t model_version,
       ->GetCell(model_name, absl::StrCat(model_version),
                 std::to_string(processed_size), cost_type)
       ->Add(absl::ToDoubleMicroseconds(total_cost));
+}
+
+void RecordInputBatchConfig(
+    absl::string_view model_name, int64_t model_version,
+    bool use_global_scheduler, bool rank_queues,
+    MixedPriorityBatchingPolicy mixed_priority_batching_policy,
+    bool enable_priority_queue, absl::string_view batch_padding_policy,
+    tsl::criticality::Criticality criticality) {
+  request_counter
+      ->GetCell(std::string(model_name), absl::StrCat(model_version),
+                use_global_scheduler ? "true" : "false",
+                rank_queues ? "true" : "false",
+                std::string(MixedPriorityBatchingPolicyToString(
+                    mixed_priority_batching_policy)),
+                enable_priority_queue ? "true" : "false",
+                std::string(batch_padding_policy),
+                std::string(CriticalityToString(criticality)))
+      ->IncrementBy(1);
 }
 
 // Returns the sum of the task sizes. The caller must guarantee that the
@@ -280,6 +309,14 @@ absl::Status BatchResourceBase::RegisterInput(
     }
     batch_components->inputs.push_back(host_buffer);
   }
+
+  RecordInputBatchConfig(
+      context->metadata.model_name, context->metadata.model_version,
+      batcher_->use_global_scheduler(), batcher_->rank_queues(),
+      batcher_queue_options_.mixed_priority_batching_policy,
+      batcher_queue_options_.enable_priority_queue,
+      batcher_queue_options_.batch_padding_policy,
+      batch_components->criticality());
 
   batch_components->context = context;
   batch_components->num_outputs = num_outputs;

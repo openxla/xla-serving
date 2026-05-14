@@ -19,8 +19,10 @@
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "protos/orchestration.pb.h"  // from @neptune
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
+#include "xla/tsl/platform/criticality.h"  // from @xla
 
 namespace neptune {
 
@@ -58,6 +60,37 @@ absl::StatusOr<MixedPriorityBatchingPolicy> GetMixedPriorityBatchingPolicy(
           absl::StrCat("Unsupported mixed priority batching policy: ",
                        mixed_priority_batching_policy));
   }
+}
+
+absl::string_view MixedPriorityBatchingPolicyToString(
+    MixedPriorityBatchingPolicy policy) {
+  switch (policy) {
+    case MixedPriorityBatchingPolicy::kLowPriorityPaddingWithMaxBatchSize:
+      return kLowPriorityPaddingWithMaxBatchSizeAttrValue;
+    case MixedPriorityBatchingPolicy::
+        kLowPriorityPaddingWithNextAllowedBatchSize:
+      return kLowPriorityPaddingWithNextAllowedBatchSizeAttrValue;
+    case MixedPriorityBatchingPolicy::kPriorityIsolation:
+      return kPriorityIsolationAttrValue;
+    case MixedPriorityBatchingPolicy::kPriorityMerge:
+      return kPriorityMergeAttrValue;
+  }
+  return "unknown_mixed_priority_batching_policy";
+}
+
+absl::string_view CriticalityToString(
+    tsl::criticality::Criticality criticality) {
+  switch (criticality) {
+    case tsl::criticality::Criticality::kSheddable:
+      return "sheddable";
+    case tsl::criticality::Criticality::kSheddablePlus:
+      return "sheddable_plus";
+    case tsl::criticality::Criticality::kCritical:
+      return "critical";
+    case tsl::criticality::Criticality::kCriticalPlus:
+      return "critical_plus";
+  }
+  return "unknown_criticality";
 }
 
 }  // namespace neptune
