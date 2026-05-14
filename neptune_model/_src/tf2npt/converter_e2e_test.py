@@ -15,21 +15,17 @@
 import os
 
 from absl.testing import absltest
-from absl.testing import parameterized
 import tensorflow as tf
 
-from .net.proto2.contrib.pyutil import compare
 from google.protobuf import text_format
 from neptune_model._src.core import persistence_lib
+from neptune_model._src.core import test_utils
 from neptune_model._src.tf2npt import converter
 from neptune_model.protos import manifest_pb2
 from neptune_model.protos import tf_concrete_function_handle_pb2
 
 
-class Tf2NptE2eTest(
-    tf.test.TestCase,
-    parameterized.TestCase,
-):
+class Tf2NptE2eTest(test_utils.NptTestCase, tf.test.TestCase):
 
   def setUp(self):
     super().setUp()
@@ -109,8 +105,7 @@ class Tf2NptE2eTest(
     expected_manifest_proto = text_format.Parse(
         expected_manifest_proto_text, manifest_pb2.Manifest()
     )
-    compare.assertProto2Equal(
-        self,
+    self.assertProtosEqual(
         expected_manifest_proto,
         manifest_proto,
     )
@@ -121,8 +116,7 @@ class Tf2NptE2eTest(
     with open(os.path.join(save_dir_path, 'pre.pb'), 'rb') as f:
       pre_processor_proto.ParseFromString(f.read())
 
-    compare.assertProto2Equal(
-        self,
+    self.assertProtosEqual(
         tf_concrete_function_handle_pb2.TfConcreteFunctionHandle(
             fn_name='pre',
             input_names=['a'],
@@ -137,8 +131,7 @@ class Tf2NptE2eTest(
     with open(os.path.join(save_dir_path, 'post.pb'), 'rb') as f:
       post_processor_proto.ParseFromString(f.read())
 
-    compare.assertProto2Equal(
-        self,
+    self.assertProtosEqual(
         tf_concrete_function_handle_pb2.TfConcreteFunctionHandle(
             fn_name='post',
             input_names=['b', 'c'],

@@ -135,7 +135,6 @@ def jax_exported_to_shlo_fn(
       name_leaves=True,
   )
   supplemental_info_ = {}
-
   if xla_compile_options_per_platform is not None:
     supplemental_info_[constants.XLA_COMPILE_OPTIONS] = (
         XlaCompileOptionsSupplementalInfo(xla_compile_options_per_platform)

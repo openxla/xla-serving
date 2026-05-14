@@ -19,9 +19,9 @@ import jax
 import jax.numpy as jnp
 import tensorflow as tf
 
-from .net.proto2.contrib.pyutil import compare
 from google.protobuf import text_format
 from neptune_model._src.core import persistence_lib
+from neptune_model._src.core import test_utils
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import main_lib
 from neptune_model._src.export import serving_config
@@ -31,7 +31,7 @@ from neptune_model.protos import orchestration_pb2
 from neptune_model.protos import tf_concrete_function_handle_pb2
 
 
-class MainLibOrchestrationTest(compare.Proto2Assertions, absltest.TestCase):
+class MainLibOrchestrationTest(test_utils.NptTestCase):
 
   def setUp(self):
     super().setUp()
@@ -57,8 +57,7 @@ class MainLibOrchestrationTest(compare.Proto2Assertions, absltest.TestCase):
         expected_proto_text, type(actual_proto)()
     )
 
-    compare.assertProto2Equal(
-        self,
+    self.assertProtosEqual(
         expected_proto,
         actual_proto,
         ignored_fields=ignored_fields,
@@ -135,7 +134,7 @@ class MainLibOrchestrationTest(compare.Proto2Assertions, absltest.TestCase):
           'model_with_tf_processors/manifest.textproto',
           ignored_fields=[
               'objects.function.body.stable_hlo_body.stable_hlo.inlined_bytes',
-              'objects.function.body.stable_hlo_body.supplemental_info.inlined_bytes',
+              'objects.function.body.stable_hlo_body.supplemental_info',
           ],
       )
 

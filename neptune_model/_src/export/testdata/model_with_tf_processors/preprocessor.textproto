@@ -1,0 +1,5 @@
+# proto-file: third_party/neptune/protos/tf_concrete_function_handle.proto
+# proto-message: TfConcreteFunctionHandle
+fn_name: "pre"
+input_names: "x"
+output_names: "output_0"

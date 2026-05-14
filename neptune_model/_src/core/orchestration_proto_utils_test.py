@@ -15,12 +15,12 @@
 from absl.testing import absltest
 from absl.testing import parameterized
 
-from .net.proto2.contrib.pyutil import compare
 from neptune_model._src.core import orchestration_proto_utils
 from neptune_model._src.core import shlo_type
+from neptune_model._src.core import test_utils
 
 
-class OrchestrationProtoUtilsTest(compare.Proto2Assertions, parameterized.TestCase):
+class OrchestrationProtoUtilsTest(test_utils.NptTestCase):
 
   @parameterized.named_parameters(
       dict(
@@ -98,13 +98,14 @@ class OrchestrationProtoUtilsTest(compare.Proto2Assertions, parameterized.TestCa
         orchestration_proto_utils._calculate_named_signature(signature)
     else:
       self.assertEqual(
-          orchestration_proto_utils._calculate_named_signature(signature), expected
+          orchestration_proto_utils._calculate_named_signature(signature),
+          expected,
       )
 
   def test_to_named_signature_proto(self):
     proto = orchestration_proto_utils.to_named_signature_proto(
         shlo_type.ShloTensorSpec([1], shlo_type.ShloDType.f32, name='a'),
-        shlo_type.ShloTensorSpec([2], shlo_type.ShloDType.i32, name='b')
+        shlo_type.ShloTensorSpec([2], shlo_type.ShloDType.i32, name='b'),
     )
     expected_proto = """
       inputs {
@@ -126,7 +127,7 @@ class OrchestrationProtoUtilsTest(compare.Proto2Assertions, parameterized.TestCa
         }
       }
     """
-    self.assertProto2Equal(expected_proto, proto)
+    self.assertProtosEqual(expected_proto, proto)
 
   def test_to_named_signature_proto_fail(self):
     with self.assertRaisesRegex(ValueError, 'must have not None names'):

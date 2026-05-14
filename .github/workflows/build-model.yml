@@ -88,3 +88,8 @@ jobs:
           print('✅ Successfully imported neptune_model!')
           print(f'📦 Version: {neptune_model.__version__}')
           "
+
+      - name: Install Test Dependencies and Run Pytest
+        run: |
+          pip install .[test,tf]
+          pytest neptune_model/

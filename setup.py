@@ -136,6 +136,19 @@ def stage_protos():
   # subdirectory to ensure they're importable via 'neptune_model.protos.xla'.
   staged.extend(stage_xla_protos(pkg_stage_root / "protos" / "xla"))
 
+  # Stage test-only files located inside the package root directory.
+  pkg_root = ROOT_DIR / PACKAGE_NAME
+  for src in pkg_root.rglob("*_test.proto"):
+    rel_to_pkg = src.relative_to(pkg_root)
+    dst = pkg_stage_root / rel_to_pkg
+    rewrite_proto_file(
+        src,
+        dst,
+        NEPTUNE_PROTOS_IMPORT_PREFIX_MAPPING,
+        NEPTUNE_PROTOS_NAMES_MAPPING,
+    )
+    staged.append(dst.relative_to(PROTOS_STAGING_DIR))
+
   return staged
 
 
@@ -176,7 +189,9 @@ class GenerateProtosAndBuild(build_py):
     return [
         (pkg, mod, path)
         for pkg, mod, path in modules
-        if not mod.endswith("_test") and mod != "test_utils"
+        if not mod.endswith("_test")
+        and mod != "test_utils"
+        and not mod.endswith("_test_pb2")
     ]
 
   def run(self):
@@ -206,6 +221,9 @@ setup(
     packages=find_packages(where="."),
     package_data={
         PACKAGE_NAME: ["**/*.pyi"],
+    },
+    exclude_package_data={
+        PACKAGE_NAME: ["**/*_test_pb2.pyi"],
     },
     include_package_data=True,
     cmdclass={

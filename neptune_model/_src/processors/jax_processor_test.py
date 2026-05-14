@@ -16,13 +16,13 @@ from absl.testing import absltest
 import jax
 import jax.numpy as jnp
 
-from .net.proto2.contrib.pyutil import compare
 from neptune_model._src.core import shlo_type
+from neptune_model._src.core import test_utils
 from neptune_model._src.export import jax_model
 from neptune_model._src.processors import jax_processor
 
 
-class JaxProcessorTest(compare.Proto2Assertions, absltest.TestCase):
+class JaxProcessorTest(test_utils.NptTestCase):
 
   def test_calculate_jax_model_input_sig(self):
     params_spec = shlo_type.ShloTensorSpec(

@@ -47,13 +47,16 @@ repository = 'http://github.com/AI-Hypercomputer/neptune'
 [project.scripts]
 npt-cli = 'neptune_model.cli.npt_cli:run'
 
+[tool.pytest.ini_options]
+addopts = "--ignore=neptune_model/protos"
+
 [project.optional-dependencies]
 
 tf = [
     'tensorflow>=2.15.0',
 ]
 
-testing = [
+test = [
     'chex',
     'flax',
     'pytest',

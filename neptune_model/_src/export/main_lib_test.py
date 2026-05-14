@@ -21,8 +21,8 @@ from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
 
-from .net.proto2.contrib.pyutil import compare
 from neptune_model._src.core import persistence_lib
+from neptune_model._src.core import test_utils
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import main_lib
 from neptune_model._src.export import serving_config
@@ -30,7 +30,7 @@ from neptune_model._src.processors import processor
 from neptune_model.protos import orchestration_pb2
 
 
-class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
+class SaveModelTest(test_utils.NptTestCase):
 
   def test_save_model_with_one_config(self):
     """Tests that save() runs."""
@@ -70,13 +70,6 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
     orchestration_path = pathlib.Path(export_path) / orchestration_filename
     pipelines_proto = orchestration_pb2.Pipelines.FromString(
         orchestration_path.read_bytes()
-    )
-    manifest_proto.objects[
-        'serving_default'
-    ].function.body.stable_hlo_body.supplemental_info[
-        'xla_compile_options'
-    ].ClearField(
-        'inlined_bytes'
     )
 
     with self.subTest(name='validate_manifest_proto'):
@@ -168,12 +161,6 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
                   lowering_platforms: "cpu"
                   module_kept_var_idx: 0
                   module_kept_var_idx: 1
-                  supplemental_info {
-                    key: "xla_compile_options"
-                    value {
-                      mime_type: "application/protobuf; type=neptune_model_manifest.CompileOptionsProtoMap"
-                    }
-                  }
                 }
               }
               data_names: "w"
@@ -207,12 +194,12 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
           }
         }
       """
-      compare.assertProto2Equal(
-          self,
+      self.assertProtosEqual(
           expected_manifest_proto,
           manifest_proto,
           ignored_fields=[
               'objects.function.body.stable_hlo_body.stable_hlo',
+              'objects.function.body.stable_hlo_body.supplemental_info',
           ],
       )
 
@@ -327,8 +314,7 @@ class SaveModelTest(compare.Proto2Assertions, absltest.TestCase):
           }
         }
       """
-      compare.assertProto2Equal(
-          self,
+      self.assertProtosEqual(
           expected_pipelines_proto,
           pipelines_proto,
       )

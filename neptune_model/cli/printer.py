@@ -233,7 +233,7 @@ def redact_byte_fields(msg: message.Message):
 
   for fd, value in msg.ListFields():
     if fd.type == descriptor.FieldDescriptor.TYPE_BYTES:
-      if fd.label == descriptor.FieldDescriptor.LABEL_REPEATED:
+      if fd.is_repeated:
         fields = getattr(msg, fd.name)
         field_lengths = [len(field) for field in fields]
         del fields[:]
@@ -258,7 +258,7 @@ def redact_byte_fields(msg: message.Message):
             field_len = len(value[k])
             if field_len > 0:
               value[k] = redacted(field_len)
-      elif fd.label == descriptor.FieldDescriptor.LABEL_REPEATED:
+      elif fd.is_repeated:
         for entry in value:
           redact_byte_fields(entry)
       else:

@@ -24,13 +24,12 @@ from jax.experimental import mesh_utils
 import jax.numpy as jnp
 import orbax.checkpoint as ocp
 
-from .net.proto2.contrib.pyutil import compare
 from google.protobuf import text_format
 from neptune_model._src.core import persistence_lib as npt_core
+from neptune_model._src.core import test_utils
 from neptune_model._src.jax2npt import main_lib
 from neptune_model._src.test_utils import jax_mnist
 from neptune_model.protos import manifest_pb2
-
 
 os.environ['XLA_FLAGS'] = '--xla_force_host_platform_device_count=8'
 
@@ -44,7 +43,7 @@ def _get_shape_dtype_struct(param):
   return jax.tree_util.tree_map(_get_shape_dtype_struct, param)
 
 
-class MainLibTest(parameterized.TestCase):
+class MainLibTest(test_utils.NptTestCase):
 
   @parameterized.named_parameters(
       dict(
@@ -347,14 +346,15 @@ class MainLibTest(parameterized.TestCase):
     expected_manifest_proto = text_format.Parse(
         expected_manifest_proto_text, manifest_pb2.Manifest()
     )
-    compare.assertProto2Equal(
-        self,
+
+    self.assertProtosEqual(
         manifest_proto,
         expected_manifest_proto,
         ignored_fields=[
             'objects.function.body.stable_hlo_body.stable_hlo.inlined_bytes'
         ],
     )
+
     self.assertIn(
         b'ML\xef',
         manifest_proto.objects[
@@ -448,8 +448,7 @@ class MainLibTest(parameterized.TestCase):
         expected_manifest_proto_text, manifest_pb2.Manifest()
     )
 
-    compare.assertProto2Equal(
-        self,
+    self.assertProtosEqual(
         manifest_proto,
         expected_manifest_proto,
         ignored_fields=[

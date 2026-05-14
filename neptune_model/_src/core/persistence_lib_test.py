@@ -18,22 +18,21 @@ import os
 
 from absl.testing import absltest
 
-from .net.proto2.contrib.pyutil import compare
 from neptune_model._src.core import constants
 from neptune_model._src.core import device_assignment
 from neptune_model._src.core import file_utils
-from neptune_model._src.core import function
 from neptune_model._src.core import persistence_lib
 from neptune_model._src.core import serializable_function
 from neptune_model._src.core import shlo_function
 from neptune_model._src.core import shlo_type
+from neptune_model._src.core import test_utils
 from neptune_model._src.core import unstructured_data
 from neptune_model._src.core import value
 from neptune_model.protos import manifest_pb2
 from neptune_model.protos import type_pb2
 
 
-class PersistenceLibTest(absltest.TestCase):
+class PersistenceLibTest(test_utils.NptTestCase):
 
   def test_save_succeeds_with_all_fields(self):
     target_dir: str = self.create_tempdir().full_path
@@ -139,8 +138,7 @@ class PersistenceLibTest(absltest.TestCase):
         ),
     )
 
-    compare.assertProto2Equal(
-        self,
+    self.assertProtosEqual(
         expected_manifest,
         actual_manifest,
     )
@@ -227,6 +225,8 @@ class TestShloFunctionSupplementalInfo(
     shlo_function.ShloFunctionSupplementalInfo
 ):
 
+  __test__ = False
+
   def __init__(self, b: bytes):
     self._bytes = b
 
@@ -240,6 +240,8 @@ class TestShloFunctionSupplementalInfo(
 
 
 class TestShloFunction(shlo_function.ShloFunction):
+
+  __test__ = False
 
   def __init__(self, b: bytes):
     self.bytes = b
@@ -330,6 +332,8 @@ class TestShloFunction(shlo_function.ShloFunction):
 
 
 class TestSerializableFunction(serializable_function.SerializableFunction):
+
+  __test__ = False
 
   def __init__(self, b: bytes):
     self.input_signature = shlo_type.ShloTensorSpec(
