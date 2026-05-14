@@ -22,7 +22,7 @@ import jax
 import jax.numpy as jnp
 from orbax import checkpoint as ocp
 
-from .third_party.neptune.examples.nnx import model as nnx_model
+from examples.nnx import model as nnx_model
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import main_lib
 from neptune_model._src.export import serving_config

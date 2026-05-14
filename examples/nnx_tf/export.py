@@ -21,7 +21,7 @@ from flax import nnx
 import orbax.checkpoint as ocp
 import tensorflow as tf
 
-from .third_party.neptune.examples.nnx_tf import model as nnx_tf_model
+from examples.nnx_tf import model as nnx_tf_model
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import main_lib
 from neptune_model._src.export import serving_config

@@ -17,7 +17,7 @@
 from flax import nnx
 import tensorflow as tf
 
-from .third_party.neptune.examples.nnx import model as nnx_model
+from examples.nnx import model as nnx_model
 
 EmbeddingSpec = nnx_model.EmbeddingSpec
 Tower = nnx_model.Tower

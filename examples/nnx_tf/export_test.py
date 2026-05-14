@@ -16,7 +16,7 @@
 
 import os
 from absl.testing import absltest
-from .third_party.neptune.examples.nnx_tf import export
+from examples.nnx_tf import export
 
 
 class ExportTest(absltest.TestCase):

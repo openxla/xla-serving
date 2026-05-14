@@ -16,7 +16,7 @@
 
 import os
 from absl.testing import absltest
-from .third_party.neptune.examples.nnx_jax_preprocessor import export
+from examples.nnx_jax_preprocessor import export
 
 
 class ExportTest(absltest.TestCase):

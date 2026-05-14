@@ -16,7 +16,7 @@
 
 from absl import app
 from absl import flags
-from .third_party.neptune.examples.nnx_jax_preprocessor import export
+from examples.nnx_jax_preprocessor import export
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
