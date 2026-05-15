@@ -72,6 +72,10 @@ class Interpreter {
   absl::StatusOr<FunctionFlatSignature> GetPipelineSignature(
       absl::string_view pipeline_name) const;
 
+  // Returns the pipeline proto for the given pipeline name.
+  absl::StatusOr<neptune_model_orchestration::Pipeline> GetPipelineProto(
+      absl::string_view pipeline_name) const;
+
   // Runs a pipeline in the model with the given inputs. `pipeline_name` is the
   // name of the pipeline to run. `positional_inputs` is a list of positional
   // inputs. `keyword_inputs` is a map of keyword inputs. They will be merged
@@ -139,6 +143,8 @@ class Interpreter {
   // time-consuming tasks not suitable for the production environment will be
   // disallowed.
   absl::Status MarkFullyInitialized();
+
+  std::string GetModelName() const { return create_options_->model_name; }
 
  private:
   // TODO: Remove this peer class once JSV fully supports

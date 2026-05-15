@@ -287,9 +287,55 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::GetModelMetadata(
     grpc::CallbackServerContext* context,
     const neptune::serving::GetModelMetadataRequest* request,
     neptune::serving::GetModelMetadataResponse* response) {
+  VLOG(4) << "Received GetModelMetadataRequest: " << request->DebugString();
   grpc::ServerUnaryReactor* reactor = context->DefaultReactor();
-  reactor->Finish(
-      grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Not implemented"));
+
+  if (interpreter_ == nullptr) {
+    reactor->Finish(grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
+                                 "Interpreter not initialized."));
+    return reactor;
+  }
+
+  if (request->model_spec().name() != interpreter_->GetModelName()) {
+    reactor->Finish(grpc::Status(
+        grpc::StatusCode::FAILED_PRECONDITION,
+        absl::StrCat("Model name mismatch: got [", request->model_spec().name(),
+                     "] but expected [", interpreter_->GetModelName(), "]")));
+    return reactor;
+  }
+
+  absl::string_view signature_name =
+      request->model_spec().signature_name().empty()
+          ? absl::string_view(kDefaultServingSignatureDefKey)
+          : absl::string_view(request->model_spec().signature_name());
+
+  auto pipeline_or = interpreter_->GetPipelineProto(signature_name);
+  if (!pipeline_or.ok()) {
+    reactor->Finish(ToGrpcStatus(pipeline_or.status()));
+    return reactor;
+  }
+  const auto& pipeline = pipeline_or.value();
+
+  response->mutable_model_spec()->CopyFrom(request->model_spec());
+
+  for (const auto& field : request->metadata_field()) {
+    if (field == "signature_def") {
+      neptune::serving::SignatureDefMap signature_def_map;
+      auto& sig_def =
+          (*signature_def_map
+                .mutable_signature_def())[std::string(signature_name)];
+      *sig_def.mutable_signature() = pipeline.signature();
+      if (pipeline.has_named_signature()) {
+        *sig_def.mutable_named_signature() = pipeline.named_signature();
+      }
+
+      google::protobuf::Any any;
+      any.PackFrom(signature_def_map);
+      (*response->mutable_metadata())["signature_def"] = any;
+    }
+  }
+
+  reactor->Finish(grpc::Status::OK);
   return reactor;
 }
 

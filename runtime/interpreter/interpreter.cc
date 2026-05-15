@@ -661,6 +661,13 @@ absl::StatusOr<FunctionFlatSignature> Interpreter::GetPipelineSignature(
   return graph_bundle->signature;
 }
 
+absl::StatusOr<neptune_model_orchestration::Pipeline>
+Interpreter::GetPipelineProto(absl::string_view pipeline_name) const {
+  TF_ASSIGN_OR_RETURN(const GraphBundle* graph_bundle,
+                      GetGraphBundle(pipeline_name));
+  return graph_bundle->pipeline;
+}
+
 absl::Status Interpreter::Load() {
   TF_ASSIGN_OR_RETURN(manifest_, GetManifest(create_options_->model_path));
 
