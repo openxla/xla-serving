@@ -39,5 +39,5 @@ message HostBufferProto {
 
 // Wrapper for a repeated string field, used when dtype is str.
 message StringArray {
-  repeated string elements = 1;
+  repeated bytes elements = 1;
 }
