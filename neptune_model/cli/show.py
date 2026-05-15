@@ -273,7 +273,7 @@ def _show_function_details(
         table.add_row(
             'Data names',
             f'{len(fn.data_names)} total: \n'
-            f'{printer.pad("\n".join(fn.data_names), " - ")}',
+            + printer.pad("\n".join(fn.data_names), " - "),
         )
       else:
         table.add_row(
