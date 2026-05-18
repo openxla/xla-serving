@@ -17,6 +17,7 @@ package_group(
         "//smartass/brain/lemming/...",
         "//smartass/brain/server/...",
         "//tasks/predictions/pctr/serving/models/...",
+        "//video/youtube/discovery/ml_infra/...",
     ],
 )
 
