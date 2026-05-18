@@ -114,7 +114,6 @@ cc_library(
         "@neptune//runtime/core:type",
         "@neptune//runtime/kernel:kernel_builder_context",
         "@tsl//tsl/platform:path",
-        "@xla//xla:debug_options_flags",
         "@xla//xla:shape_util",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/hlo/ir:hlo_sharding",
