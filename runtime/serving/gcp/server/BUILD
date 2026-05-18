@@ -138,9 +138,6 @@ cc_library(
         "@xla//xla/pjrt/plugin/xla_cpu:cpu_client_options",
         "@xla//xla/pjrt/plugin/xla_cpu:cpu_static_registration",
         "@xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
-        "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_client_options",
-        "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
-        "@xla//xla/pjrt/plugin/xla_tpu:xla_tpu_pjrt_client",
     ],
 )
 
@@ -154,11 +151,9 @@ cc_library(
     }),
     deps = JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS + [
         "@xla//xla/pjrt/plugin/xla_cpu:cpu_client_options",
-        "@xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
         "@xla//xla/pjrt/plugin/xla_gpu:gpu_static_registration",
         "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_client_options",
         "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
-        "@xla//xla/pjrt/plugin/xla_tpu:xla_tpu_pjrt_client",
     ],
 )
 
@@ -172,9 +167,6 @@ cc_library(
     }),
     deps = JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS + [
         "@xla//xla/pjrt/plugin/xla_cpu:cpu_client_options",
-        "@xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
-        "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_client_options",
-        "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
         "@xla//xla/pjrt/plugin/xla_tpu:xla_tpu_pjrt_client",
     ],
 )
