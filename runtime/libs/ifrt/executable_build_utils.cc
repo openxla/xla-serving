@@ -26,6 +26,7 @@
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 #include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
 #include "xla/debug_options_flags.h"  // from @xla
+#include "xla/pjrt/pjrt_compiler.h"  // from @xla
 #include "xla/pjrt/pjrt_executable.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
@@ -122,7 +123,8 @@ absl::StatusOr<xla::ifrt::LoadedExecutableRef> BuildIfrtExecutable(
         .Await();
   };
 
-  if (persistent_compilation_cache == nullptr) {
+  if (persistent_compilation_cache == nullptr ||
+      ifrt_client->platform_id() == xla::CpuId()) {
     return execute_compile_and_load(
         std::move(hlo_program), std::make_unique<xla::ifrt::XlaCompileOptions>(
                                     xla_compile_options, devices));
