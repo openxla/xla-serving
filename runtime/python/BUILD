@@ -1,0 +1,112 @@
+load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+package_group(
+    name = "friends",
+    packages = [],
+)
+
+package_group(
+    name = "internal",
+    packages = [],
+)
+
+package(default_visibility = [
+    ":internal",
+])
+
+pybind_extension(
+    name = "model_runner",
+    srcs = ["model_runner.cc"],
+    visibility = [
+        ":friends",
+        ":internal",
+    ],
+    deps = [
+        ":ifrt_client_factory",
+        ":numpy_utils",
+        "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:string_view",
+        "@nanobind_bazel//:nanobind",
+        "@neptune//runtime/core:host_buffer",
+        "@neptune//runtime/core:value",
+        "@neptune//runtime/interpreter",
+        "@neptune//runtime/kernel:kernel_io_data_type",
+        "@neptune//runtime/tensorflow:interpreter_tensorflow_support",  # buildcleaner: keep
+        "@neptune//runtime/tensorflow:tf_compatible_interpreter_create_options",
+        "@org_tensorflow//tensorflow/core:framework",
+        "@org_tensorflow//tensorflow/core:protos_all_cc",
+        "@xla//xla:xla_data_proto_cc",
+        "@xla//xla/pjrt/plugin/xla_cpu:cpu_client_options",
+        "@xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
+        "@xla//xla/python:nb_numpy",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/python/pjrt_ifrt",
+        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:statusor",
+        "@xla//xla/tsl/python/lib/core:numpy",
+    ],
+)
+
+cc_library(
+    name = "numpy_utils",
+    srcs = ["numpy_utils.cc"],
+    hdrs = ["numpy_utils.h"],
+    copts = ["-fexceptions"],  # go/cpp-3p-exceptions
+    features = ["-use_header_modules"],  # Required for -fexceptions.
+    deps = [
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:str_format",
+        "@abseil-cpp//absl/types:span",
+        "@nanobind_bazel//:nanobind",
+        "@neptune//runtime/core:allocator",
+        "@neptune//runtime/core:default_allocator",
+        "@neptune//runtime/core:host_buffer",
+        "@neptune//runtime/tensorflow/utils:ifrt_tensor_utils",
+        "@org_tensorflow//tensorflow/core:framework",
+        "@org_tensorflow//tensorflow/core:protos_all_cc",
+        "@org_tensorflow//third_party/py/numpy:headers",
+        "@tsl//tsl/platform:tstring",
+        "@xla//third_party/python_runtime:headers",
+        "@xla//xla:xla_data_proto_cc",
+        "@xla//xla/python:nb_numpy",
+        "@xla//xla/python:types",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/tsl/platform:errors",
+        "@xla//xla/tsl/platform:statusor",
+        "@xla//xla/tsl/python/lib/core:numpy",
+    ],
+)
+
+cc_library(
+    name = "ifrt_client_factory",
+    srcs = ["ifrt_client_factory.cc"],
+    hdrs = ["ifrt_client_factory.h"],
+    visibility = [":internal"],
+    deps = [
+        "@abseil-cpp//absl/base:no_destructor",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/functional:any_invocable",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@xla//xla/pjrt/plugin/xla_cpu:cpu_client_options",
+        "@xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
+        "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_client_options",
+        "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
+        "@xla//xla/pjrt/plugin/xla_tpu:xla_tpu_pjrt_client",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/python/pjrt_ifrt",
+        "@xla//xla/tsl/platform:statusor",
+    ],
+)

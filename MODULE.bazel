@@ -3,21 +3,24 @@ module(name = "neptune")
 # go/keep-sorted start
 bazel_dep(name = "abseil-cpp", version = "20260107.1")
 bazel_dep(name = "abseil-py", version = "2.1.0", repo_name = "absl_py")
-bazel_dep(name = "aspect_bazel_lib", version = "2.7.2")
-bazel_dep(name = "bazel_features", version = "1.36.0")
-bazel_dep(name = "bazel_skylib", version = "1.8.2")
+bazel_dep(name = "aspect_bazel_lib", version = "2.11.0")
+bazel_dep(name = "bazel_features", version = "1.43.0")
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "boringssl", version = "0.20250818.0")
+bazel_dep(name = "bzip2", version = "1.0.8.bcr.4")
 bazel_dep(name = "grpc", version = "1.78.0", repo_name = "com_github_grpc_grpc")
-bazel_dep(name = "nlohmann_json", version = "3.11.3")
+bazel_dep(name = "highway", version = "1.3.0", repo_name = "com_google_highway")
+bazel_dep(name = "nanobind_bazel", version = "2.12.0")
+bazel_dep(name = "nlohmann_json", version = "3.12.0.bcr.1")
 bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "protobuf", version = "32.1", repo_name = "com_google_protobuf")
 bazel_dep(name = "pybind11_abseil", version = "202402.0")
-bazel_dep(name = "pybind11_bazel", version = "2.13.6")
+bazel_dep(name = "pybind11_bazel", version = "3.0.1")
 bazel_dep(name = "pybind11_protobuf", version = "0.0.0-20250210-f02a2b7")
-bazel_dep(name = "rules_cc", version = "0.2.8")
+bazel_dep(name = "riegeli", version = "0.0.0-20250822-9f2744d")
+bazel_dep(name = "rules_cc", version = "0.2.17")
 bazel_dep(name = "rules_oci", version = "1.7.2")
 bazel_dep(name = "rules_python", version = "1.8.4")
-bazel_dep(name = "highway", version = "1.3.0", repo_name = "com_google_highway")
 # go/keep-sorted end
 
 # To calculate integrity:
@@ -38,6 +41,13 @@ archive_override(
     integrity = "sha256-KbDo2aHsNuKUx28fPhTYU4z18LCTaPDVPfl8K1aWqmY=",
     strip_prefix = "xla-d776fe25fde3bb0f28485ccd7947ade00e3d3bf4",
     urls = ["https://github.com/openxla/xla/archive/d776fe25fde3bb0f28485ccd7947ade00e3d3bf4.tar.gz"],
+)
+
+xla_third_party = use_extension("@xla//third_party/extensions:third_party.bzl", "third_party_ext")
+
+override_repo(
+    xla_third_party,
+    riegeli = "riegeli",
 )
 
 ## Tensorflow dependencies for common runtime, Tensor etc.
