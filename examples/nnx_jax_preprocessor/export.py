@@ -90,6 +90,7 @@ def export_model(export_path: str):
               'feature_3': 'b, _',
               'feature_4': 'b, _',
           },
+          jax_export_kwargs={'platforms': ['cpu']},
       ),
       params=emb_params,
   )
