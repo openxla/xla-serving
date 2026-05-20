@@ -13,3 +13,8 @@
 # limitations under the License.
 
 """Required __init__ file for package."""
+
+import os
+
+# Workaround for TensorFlow 2.16 Keras compatibility.
+os.environ['TF_USE_LEGACY_KERAS'] = '1'
