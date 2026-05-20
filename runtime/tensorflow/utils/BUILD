@@ -5,6 +5,7 @@ package(default_visibility = [
     "//learning/serving/servables/tfrt:__subpackages__",
     "//smartass/brain/server:__subpackages__",
     "//tasks/predictions/pctr/serving/models:__subpackages__",
+    "//video/youtube/discovery/ml_infra/clients/lrm/plum:__subpackages__",
     "@neptune//runtime/python:__subpackages__",
     "@neptune//runtime/serving:__subpackages__",
     "@neptune//runtime/tensorflow:__subpackages__",
