@@ -26,9 +26,6 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "xla/pjrt/plugin/xla_cpu/cpu_client_options.h"  // from @xla
 #include "xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"  // from @xla
-#include "xla/pjrt/plugin/xla_gpu/xla_gpu_client_options.h"  // from @xla
-#include "xla/pjrt/plugin/xla_gpu/xla_gpu_pjrt_client.h"  // from @xla
-#include "xla/pjrt/plugin/xla_tpu/xla_tpu_pjrt_client.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
@@ -70,13 +67,6 @@ absl::StatusOr<std::shared_ptr<xla::ifrt::Client>> CreateIfrtClient(
   if (platform == "cpu") {
     TF_ASSIGN_OR_RETURN(auto pjrt_client,
                         xla::GetXlaPjrtCpuClient(xla::CpuClientOptions()));
-    return xla::ifrt::PjRtClient::Create(std::move(pjrt_client));
-  } else if (platform == "tpu") {
-    TF_ASSIGN_OR_RETURN(auto pjrt_client, xla::GetXlaPjrtTpuClient());
-    return xla::ifrt::PjRtClient::Create(std::move(pjrt_client));
-  } else if (platform == "cuda") {
-    TF_ASSIGN_OR_RETURN(auto pjrt_client,
-                        xla::GetXlaPjrtGpuClient(xla::GpuClientOptions()));
     return xla::ifrt::PjRtClient::Create(std::move(pjrt_client));
   }
 

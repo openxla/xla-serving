@@ -56,9 +56,6 @@
 #include "tensorflow/core/framework/tensor_shape.h"  // from @org_tensorflow
 #include "tensorflow/core/framework/types.pb.h"  // from @org_tensorflow
 
-ABSL_FLAG(std::string, orbax_model_runner_platform, "tpu",
-          "The platform to use. It can be cpu, tpu, or cuda");
-
 namespace nb = ::nanobind;
 
 namespace {
@@ -178,7 +175,7 @@ class ModelRunner : public std::enable_shared_from_this<ModelRunner> {
 
  private:
   ModelRunner(absl::string_view model_name, absl::string_view model_path) {
-    LOG(INFO) << "Using ModelRunner to load Orbax model '" << model_name
+    LOG(INFO) << "Using ModelRunner to load model '" << model_name
               << "' from: " << model_path;
     ThrowIfError(Initialize(model_name, model_path),
                  "Failed to initialize ModelRunner");
@@ -198,7 +195,7 @@ class ModelRunner : public std::enable_shared_from_this<ModelRunner> {
 
 absl::Status ModelRunner::Initialize(absl::string_view model_name,
                                      absl::string_view model_path) {
-  std::string platform = absl::GetFlag(FLAGS_orbax_model_runner_platform);
+  std::string platform = "cpu";
   TF_ASSIGN_OR_RETURN(client_, neptune::CreateIfrtClient(platform));
   if (platform == "cpu") {
     host_ifrt_client_ = client_;
@@ -211,14 +208,14 @@ absl::Status ModelRunner::Initialize(absl::string_view model_name,
             << ". Device count: " << client_->device_count();
 
   execute_worker_thread_pool_ = std::make_unique<tsl::thread::ThreadPool>(
-      tsl::Env::Default(), tsl::ThreadOptions(), "OrbaxExecutionThreadPool",
-      kThreadPoolNumThreads);
+      tsl::Env::Default(), tsl::ThreadOptions(),
+      "ModelRunnerExecutionThreadPool", kThreadPoolNumThreads);
   computation_thread_pool_ = std::make_unique<tsl::thread::ThreadPool>(
-      tsl::Env::Default(), tsl::ThreadOptions(), "OrbaxComputationThreadPool",
-      kThreadPoolNumThreads);
+      tsl::Env::Default(), tsl::ThreadOptions(),
+      "ModelRunnerComputationThreadPool", kThreadPoolNumThreads);
   checkpoint_loader_thread_pool_ = std::make_unique<tsl::thread::ThreadPool>(
       tsl::Env::Default(), tsl::ThreadOptions(),
-      "OrbaxCheckpointLoaderThreadPool", kThreadPoolNumThreads);
+      "ModelRunnerCheckpointLoaderThreadPool", kThreadPoolNumThreads);
   // Support model version in ModelRunner if we see use cases.
   auto create_options =
       std::make_unique<neptune::TfCompatibleInterpreterCreateOptions>();
@@ -294,8 +291,7 @@ ModelRunner::Signature::RunWithMapReturn(nb::args args, nb::kwargs kwargs) {
   std::unordered_map<std::string, xla::nb_numpy_ndarray> output_arrays;
   for (const auto& [name, value] : output_values) {
     output_arrays[name] = GetNbArrayFromValue(
-        value,
-        *interpreter_->GetModelOutputDataType(pipeline_name_));
+        value, *interpreter_->GetModelOutputDataType(pipeline_name_));
   }
 
   return output_arrays;
@@ -304,6 +300,8 @@ ModelRunner::Signature::RunWithMapReturn(nb::args args, nb::kwargs kwargs) {
 }  // namespace
 
 NB_MODULE(model_runner, m) {
+  tsl::ImportNumpy();
+
   nb::class_<ModelRunner>(m, "ModelRunner")
       .def(nb::new_(&ModelRunner::Create),
            nb::arg("model_name") = "called_from_python", nb::arg("model_path"))
