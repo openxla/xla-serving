@@ -579,6 +579,10 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateStableHloRunnerOp(
       kAssignedDevices,
       std::make_shared<const AssignedDevices>(std::move(assigned_devices))));
 
+  if (create_options.streamed_output_callback != nullptr) {
+    TF_RETURN_IF_ERROR(builder.SetConfig(
+        kStreamedOutputCallback, create_options.streamed_output_callback));
+  }
   return GetGlobalKernelRegistry().Create("StableHloRunnerOp", builder);
 }
 

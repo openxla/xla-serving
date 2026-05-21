@@ -80,7 +80,9 @@ class StableHloRunner {
       absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
       ServingCoreSelector* absl_nullable serving_core_selector,
       std::unique_ptr<H2DTransferExecutorFactory>
-          h2d_transfer_executor_factory = nullptr);
+          h2d_transfer_executor_factory = nullptr,
+      std::function<void(absl::flat_hash_map<std::string, HostBuffer>)>
+          streamed_output_callback = nullptr);
 
   // Movable but not copyable.
   StableHloRunner(StableHloRunner&& other) = default;
@@ -160,6 +162,7 @@ class StableHloRunner {
     absl::flat_hash_map<xla::ifrt::DeviceId,
                         std::vector<xla::ifrt::ShardingRef>>
         portable_single_device_shardings;
+    std::optional<int64_t> callback_id;
 
     CachedExecutableBundle() = default;
     // Move only
@@ -310,8 +313,9 @@ class StableHloRunner {
       StablehloOptimizer* absl_nullable optimizer,
       absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
       ServingCoreSelector* absl_nullable serving_core_selector,
-      std::unique_ptr<H2DTransferExecutorFactory>
-          h2d_transfer_executor_factory);
+      std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory,
+      std::function<void(absl::flat_hash_map<std::string, HostBuffer>)>
+          streamed_output_callback = nullptr);
 
   using SharedCachedExecutableBundle = std::shared_ptr<CachedExecutableBundle>;
 
@@ -392,6 +396,8 @@ class StableHloRunner {
   ServingCoreSelector* absl_nullable serving_core_selector_;
 
   std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory_;
+  std::function<void(absl::flat_hash_map<std::string, HostBuffer>)>
+      streamed_output_callback_;
 
   absl::flat_hash_map<xla::ifrt::DeviceListRef,
                       std::unique_ptr<ResourcesPerDeviceList>>

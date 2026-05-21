@@ -16,13 +16,16 @@
 #define THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_INTERPRETER_CREATE_OPTIONS_H_
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 
 #include "absl/base/nullability.h"  // from @abseil-cpp
+#include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "protos/manifest.pb.h"  // from @neptune
 #include "runtime/core/allocator.h"  // from @neptune
 #include "runtime/core/default_allocator.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @neptune
 #include "runtime/core/stablehlo_optimizer.h"  // from @neptune
 #include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
 #include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @neptune
@@ -87,6 +90,9 @@ struct InterpreterCreateOptions {
   // Core selector for balancing serving load for IFRT portable executables. If
   // nullptr, LB-policy-based core selection is disabled.
   ServingCoreSelector* absl_nullable serving_core_selector = nullptr;
+
+  std::function<void(absl::flat_hash_map<std::string, HostBuffer>)>
+      streamed_output_callback = nullptr;
 };
 // LINT.ThenChange(//depot//third_party/neptune/runtime/interpreter/interpreter.cc:InterpreterCreateOptionsValidation)
 }  // namespace neptune

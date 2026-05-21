@@ -17,6 +17,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <iterator>
 #include <memory>
 #include <numeric>
@@ -33,6 +34,7 @@
 #include "absl/container/flat_hash_set.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/log/vlog_is_on.h"  // from @abseil-cpp
 #include "absl/memory/memory.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
@@ -57,6 +59,7 @@
 #include "runtime/core/stablehlo.h"  // from @neptune
 #include "runtime/core/stablehlo_optimizer.h"  // from @neptune
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
+#include "runtime/core/streaming/stream.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
 #include "runtime/interpreter/manifest_utils.h"  // from @neptune
 #include "runtime/libs/ifrt/executable_build_utils.h"  // from @neptune
@@ -308,12 +311,13 @@ StableHloRunner::StableHloRunner(
     std::vector<std::string> weights,
     xla::ifrt::DeviceListRef assigned_device_list,
     tsl::protobuf::Message* compilation_environment_proto,
-    IfrtPersistentCompilationCache* absl_nullable
-        persistent_compilation_cache,
+    IfrtPersistentCompilationCache* absl_nullable persistent_compilation_cache,
     StablehloOptimizer* absl_nullable optimizer,
     absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
     ServingCoreSelector* absl_nullable serving_core_selector,
-    std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory)
+    std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory,
+    std::function<void(absl::flat_hash_map<std::string, neptune::HostBuffer>)>
+        streamed_output_callback)
     : loaded_stablehlo_(std::move(loaded_stablehlo)),
       compile_options_(std::move(compile_options)),
       assigned_device_list_(std::move(assigned_device_list)),
@@ -325,15 +329,14 @@ StableHloRunner::StableHloRunner(
       optimizer_(optimizer),
       assigned_devices_(std::move(assigned_devices)),
       serving_core_selector_(serving_core_selector),
-      h2d_transfer_executor_factory_(std::move(h2d_transfer_executor_factory)) {
-}
+      h2d_transfer_executor_factory_(std::move(h2d_transfer_executor_factory)),
+      streamed_output_callback_(std::move(streamed_output_callback)) {}
 
 absl::StatusOr<std::unique_ptr<StableHloRunner>> StableHloRunner::Create(
     absl_nonnull std::shared_ptr<StableHlo> stablehlo,
     std::optional<xla::CompileOptionsProto> compile_options,
     absl_nonnull std::shared_ptr<xla::ifrt::Client> client,
-    IfrtPersistentCompilationCache* absl_nullable
-        persistent_compilation_cache,
+    IfrtPersistentCompilationCache* absl_nullable persistent_compilation_cache,
     IfrtLoadedVariableRegistry* absl_nonnull ifrt_loaded_variable_registry,
     std::vector<std::string> weights,
     tsl::protobuf::Message* absl_nullable compilation_environment_proto,
@@ -341,7 +344,9 @@ absl::StatusOr<std::unique_ptr<StableHloRunner>> StableHloRunner::Create(
     StablehloOptimizer* absl_nullable optimizer,
     absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
     ServingCoreSelector* absl_nullable serving_core_selector,
-    std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory) {
+    std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory,
+    std::function<void(absl::flat_hash_map<std::string, neptune::HostBuffer>)>
+        streamed_output_callback) {
   if (!stablehlo) {
     return absl::InvalidArgumentError(
         "`StableHlo` should be non-null when creating `StableHloRunner`");
@@ -384,7 +389,8 @@ absl::StatusOr<std::unique_ptr<StableHloRunner>> StableHloRunner::Create(
       std::move(client), ifrt_loaded_variable_registry, std::move(weights),
       assigned_device_list, compilation_environment_proto,
       persistent_compilation_cache, optimizer, assigned_devices,
-      serving_core_selector, std::move(h2d_transfer_executor_factory)));
+      serving_core_selector, std::move(h2d_transfer_executor_factory),
+      std::move(streamed_output_callback)));
   TF_RETURN_IF_ERROR(runner->Init(thread_pool));
   return runner;
 }
@@ -446,7 +452,17 @@ StableHloRunner::CreateExecutableSynchronously(
 
   if (VLOG_IS_ON(1)) {
     DumpMlirOpToFile("stablehlo_module_after_refinement",
-                          module_bundle->module.get());
+                     module_bundle->module.get());
+  }
+
+  TF_ASSIGN_OR_RETURN(
+      std::optional<int64_t> callback_id,
+      neptune::CreateStreamCallbackId(module_bundle->module.get()));
+
+  if (VLOG_IS_ON(1)) {
+    neptune::DumpMlirOpToFile(
+        "stablehlo_module_after_populate_stream_host_callback",
+        module_bundle->module.get());
   }
 
   if (optimizer_ != nullptr) {
@@ -502,6 +518,8 @@ StableHloRunner::CreateExecutableSynchronously(
   executable_bundle->program_fingerprint_with_timestamp =
       GetProgramFingerprintWithTimestamp(
           executable_bundle->ifrt_executable, absl::Now());
+
+  executable_bundle->callback_id = callback_id;
 
   return executable_bundle;
 }
@@ -725,6 +743,33 @@ absl::StatusOr<std::vector<HostBuffer>> StableHloRunner::Execute(
       SharedCachedExecutableBundle executable_bundle,
       LookUpOrCreateExecutable(input_shapes, input_dtypes).Await());
 
+  int64_t current_request_id = launch_id_.fetch_add(1);
+
+  // The runtime assumes the streaming implementation will be a sync call so
+  // that once the Execute() returns, the streaming is done.
+  std::optional<neptune::ScopedStreamCallback> scoped_stream_callback;
+  if (executable_bundle->callback_id.has_value() &&
+      streamed_output_callback_ != nullptr) {
+    // The lifetime of `StableHloRunner` will outlive all the outstanding
+    // streaming requests, so it is safe to capture `this` to access the
+    // `streamed_output_callback_`.
+    auto wrapped_callback =
+        [this](absl::flat_hash_map<std::string, neptune::HostBuffer> host_buffers) {
+          if (this->streamed_output_callback_) {
+            this->streamed_output_callback_(std::move(host_buffers));
+          }
+        };
+
+    // TODO: Propagate the model name to the stream callback
+    // registry for recording latency metrics.
+    TF_ASSIGN_OR_RETURN(auto* stream_callback_registry,
+                        neptune::GetGlobalStreamCallbackRegistry());
+    TF_ASSIGN_OR_RETURN(scoped_stream_callback,
+                        stream_callback_registry->Register(
+                            /*model_name=*/"", *executable_bundle->callback_id,
+                            current_request_id, std::move(wrapped_callback)));
+  }
+
   // Find the resources per the device(s) to use. If the executable is portable,
   // use the core selector to reserve a device first.
   tsl::DeviceReservation device_reservation(/*device_index=*/-1,
@@ -818,7 +863,7 @@ absl::StatusOr<std::vector<HostBuffer>> StableHloRunner::Execute(
           absl::MakeSpan(inputs_with_weights),
           /*options=*/
           {
-              .launch_id = static_cast<int32_t>(launch_id_.fetch_add(1)),
+              .launch_id = static_cast<int32_t>(current_request_id),
               .fill_status = true,
           },
           /*devices=*/

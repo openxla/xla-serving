@@ -14,6 +14,7 @@
 
 #include "runtime/kernel/stablehlo_runner_op.h"  // from @neptune
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -123,6 +124,16 @@ absl::StatusOr<std::unique_ptr<Kernel>> StableHloRunnerOp::Create(
     return serving_core_selector_status.status();
   }
 
+  absl::StatusOr<
+      std::function<void(absl::flat_hash_map<std::string, HostBuffer>)>>
+      streamed_output_callback = context.GetConfig<
+          std::function<void(absl::flat_hash_map<std::string, HostBuffer>)>>(
+          kStreamedOutputCallback);
+  if (!streamed_output_callback.ok() &&
+      !absl::IsNotFound(streamed_output_callback.status())) {
+    return streamed_output_callback.status();
+  }
+
   TF_ASSIGN_OR_RETURN(
       std::unique_ptr<StableHloRunner> stablehlo_runner,
       StableHloRunner::Create(
@@ -131,7 +142,9 @@ absl::StatusOr<std::unique_ptr<Kernel>> StableHloRunnerOp::Create(
                                : std::nullopt,
           ifrt_client, persistent_compilation_cache,
           ifrt_loaded_variable_registry, weights, compilation_environment_proto,
-          thread_pool, *optimizer, assigned_devices, serving_core_selector));
+          thread_pool, *optimizer, assigned_devices, serving_core_selector,
+          /*h2d_transfer_executor_factory=*/nullptr,
+          streamed_output_callback.ok() ? *streamed_output_callback : nullptr));
 
   return absl::WrapUnique(new StableHloRunnerOp(std::move(stablehlo_runner),
                                                 std::move(input_sig),
