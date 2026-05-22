@@ -127,6 +127,66 @@ JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS = [
 })
 
 cc_library(
+    name = "ifrt_client_creator_hdr",
+    hdrs = ["ifrt_client_creator.h"],
+    deps = [
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@xla//xla/python/ifrt",
+    ],
+)
+
+cc_library(
+    name = "ifrt_client_creator_cpu",
+    srcs = ["ifrt_client_creator_cpu.cc"],
+    deps = [
+        ":ifrt_client_creator_hdr",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@xla//xla/pjrt/plugin/xla_cpu:cpu_client_options",
+        "@xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/python/pjrt_ifrt",
+        "@xla//xla/tsl/platform:statusor",
+    ],
+    alwayslink = True,
+)
+
+cc_library(
+    name = "ifrt_client_creator_gpu",
+    srcs = ["ifrt_client_creator_gpu.cc"],
+    deps = [
+        ":ifrt_client_creator_hdr",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_client_options",
+        "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/python/pjrt_ifrt",
+        "@xla//xla/tsl/platform:statusor",
+    ],
+    alwayslink = True,
+)
+
+cc_library(
+    name = "ifrt_client_creator_tpu",
+    srcs = ["ifrt_client_creator_tpu.cc"],
+    deps = [
+        ":ifrt_client_creator_hdr",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@xla//xla/pjrt/plugin/xla_tpu:xla_tpu_pjrt_client",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/python/pjrt_ifrt",
+        "@xla//xla/tsl/platform:statusor",
+    ],
+    alwayslink = True,
+)
+
+cc_library(
     name = "jsv_callback_grpc_server_cpu",
     srcs = ["orbax_callback_grpc_server.cc"],
     hdrs = ["orbax_callback_grpc_server.h"],
@@ -135,9 +195,9 @@ cc_library(
         "//conditions:default": [],
     }),
     deps = JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS + [
-        "@xla//xla/pjrt/plugin/xla_cpu:cpu_client_options",
+        ":ifrt_client_creator_cpu",
+        ":ifrt_client_creator_hdr",
         "@xla//xla/pjrt/plugin/xla_cpu:cpu_static_registration",
-        "@xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
     ],
 )
 
@@ -150,10 +210,9 @@ cc_library(
         "//conditions:default": [],
     }),
     deps = JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS + [
-        "@xla//xla/pjrt/plugin/xla_cpu:cpu_client_options",
+        ":ifrt_client_creator_gpu",
+        ":ifrt_client_creator_hdr",
         "@xla//xla/pjrt/plugin/xla_gpu:gpu_static_registration",
-        "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_client_options",
-        "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
     ],
 )
 
@@ -166,8 +225,8 @@ cc_library(
         "//conditions:default": [],
     }),
     deps = JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS + [
-        "@xla//xla/pjrt/plugin/xla_cpu:cpu_client_options",
-        "@xla//xla/pjrt/plugin/xla_tpu:xla_tpu_pjrt_client",
+        ":ifrt_client_creator_hdr",
+        ":ifrt_client_creator_tpu",
     ],
 )
 
