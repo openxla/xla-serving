@@ -23,6 +23,7 @@ NEPTUNE_SERVING_MAIN_COMMON_DEPS = [
     "@neptune//runtime/serving/gcp/auth:utils",
     "@xla//xla/tsl/platform:status",
     "@tsl//tsl/platform:platform_port",
+    "@xla//xla/tsl/profiler/rpc:profiler_server_impl",
 ]
 
 cc_binary(

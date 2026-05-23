@@ -32,6 +32,7 @@
 #include "runtime/serving/gcp/auth/utils.h"  // from @neptune
 #include "runtime/serving/gcp/server/orbax_callback_grpc_server.h"  // from @neptune
 #include "xla/tsl/platform/status.h"  // from @xla
+#include "xla/tsl/profiler/rpc/profiler_server.h"  // from @xla
 #include "tsl/platform/init_main.h"  // from @tsl
 
 ABSL_FLAG(int, port, 8500, "Port for the gRPC server to listen on.");
@@ -60,6 +61,7 @@ ABSL_FLAG(bool, allow_xla_cpu, true, "Allow XLA CPU");
 ABSL_FLAG(bool, hoist_invariant_ops, true, "Hoist invariant ops");
 ABSL_FLAG(bool, sink_in_invariant_ops, true, "Sink in invariant ops");
 ABSL_FLAG(int64_t, cost_threshold, 10000, "Cost threshold");
+ABSL_FLAG(int, xprof_port, 8888, "Port for the XProf server to listen on.");
 
 void RunServer() {
   std::string server_address = absl::StrCat("[::]:", absl::GetFlag(FLAGS_port));
@@ -113,6 +115,8 @@ int main(int argc, char* argv[]) {
             << absl::GetFlag(FLAGS_server_cert_chain_path) << " "
             << absl::GetFlag(FLAGS_client_cert_chain_path) << " "
             << absl::GetFlag(FLAGS_use_insecure_grpc_credentials);
+  tsl::profiler::ProfilerServer server;
+  server.StartProfilerServer(absl::GetFlag(FLAGS_xprof_port));
   RunServer();
   return 0;
 }
