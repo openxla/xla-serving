@@ -39,6 +39,8 @@ bazel_dep(name = "xla")
 archive_override(
     module_name = "xla",
     integrity = "sha256-KbDo2aHsNuKUx28fPhTYU4z18LCTaPDVPfl8K1aWqmY=",
+    patch_strip = 1,
+    patches = ["//third_party/xla:xla_python_3_12.patch"],
     strip_prefix = "xla-d776fe25fde3bb0f28485ccd7947ade00e3d3bf4",
     urls = ["https://github.com/openxla/xla/archive/d776fe25fde3bb0f28485ccd7947ade00e3d3bf4.tar.gz"],
 )
