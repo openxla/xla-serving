@@ -100,8 +100,7 @@ py_wheel(
     name = "neptune_model_runner",
     abi = select({
         "@rules_python//python/config_settings:is_python_3.11": "cp311",
-        "@rules_python//python/config_settings:is_python_3.12": "cp312",
-        "//conditions:default": "cp311",
+        "@rules_python//python/config_settings:is_python_3.12": "abi3",
     }),
     distribution = "neptune_model_runner",
     platform = select({
@@ -111,7 +110,6 @@ py_wheel(
     python_tag = select({
         "@rules_python//python/config_settings:is_python_3.11": "cp311",
         "@rules_python//python/config_settings:is_python_3.12": "cp312",
-        "//conditions:default": "cp311",
     }),
     strip_path_prefixes = ["runtime/python"],
     version = "0.0.1",

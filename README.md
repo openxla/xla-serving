@@ -59,18 +59,15 @@ pip install "${wheel}[tf]"
 ModelRunner allows quickly testing inference on an exported model from Python.
 
 ```bash
-bazel build //runtime/python:neptune_model_runner
-```
+# Python 3.11
+bazel build //runtime/python:neptune_model_runner --@rules_python//python/config_settings:python_version=3.11
 
-By default it builds a version of the wheel for the current Bazel Python
-toolchain version (currently 3.11).
-
-**PYTHON 3.12+ IS NOT SUPPORTED YET.** Once it is, to build for a different
-Python version you'll need to explicitly provide the toolchain:
-
-```bash
+# Python 3.12+
 bazel build //runtime/python:neptune_model_runner --@rules_python//python/config_settings:python_version=3.12
 ```
+
+Nanobind supports limited Python ABI for 3.12+, so you can use
+`neptune_model_runner` built with 3.12 for any Python 3.12+.
 
 Install it with:
 
