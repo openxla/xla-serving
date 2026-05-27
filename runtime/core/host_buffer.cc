@@ -37,6 +37,7 @@
 #include "runtime/core/default_allocator.h"  // from @neptune
 #include "runtime/core/host_buffer_type_utils.h"  // from @neptune
 #include "runtime/core/host_buffer_utils.h"  // from @neptune
+#include "xla/overflow_util.h"  // from @xla
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
@@ -118,7 +119,11 @@ HostBuffer::HostBuffer(const xla::ifrt::DType& dtype,
     allocator = DefaultAllocator::GetInstance();
   }
   if (dtype.kind() == xla::ifrt::DType::Kind::kString) {
-    size_t size = sizeof(tsl::tstring) * shape.num_elements();
+    auto [size, overflow] =
+        xla::OverflowSafeMultiply(sizeof(tsl::tstring), shape.num_elements());
+    // TODO: Refactor HostBuffer to use static factory methods
+    // to return absl::Status on overflow instead of crashing (DoS).
+    CHECK(!overflow) << "Integer overflow in buffer allocation";
     void* aligned_raw_ptr = allocator->Allocate(size, EIGEN_MAX_ALIGN_BYTES);
     // Initialize empty tstring.
     new (aligned_raw_ptr) tsl::tstring[shape.num_elements()];
@@ -141,7 +146,11 @@ HostBuffer::HostBuffer(const xla::ifrt::DType& dtype,
     storage_dtype = xla::ifrt::DType(xla::ifrt::DType::Kind::kU8);
   }
 
-  size_t size = *storage_dtype.byte_size() * shape.num_elements();
+  auto [size, overflow] = xla::OverflowSafeMultiply(*storage_dtype.byte_size(),
+                                                    shape.num_elements());
+  // TODO: Refactor HostBuffer to use static factory methods
+  // to return absl::Status on overflow instead of crashing (DoS).
+  CHECK(!overflow) << "Integer overflow in buffer allocation";
   void* aligned_raw_ptr = allocator->Allocate(size, EIGEN_MAX_ALIGN_BYTES);
   auto owner = std::shared_ptr<void>(aligned_raw_ptr, [allocator](void* ptr) {
     allocator->Free(ptr, EIGEN_MAX_ALIGN_BYTES);

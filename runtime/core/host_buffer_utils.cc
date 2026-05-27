@@ -24,6 +24,7 @@
 #include "absl/strings/escaping.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "xla/overflow_util.h"  // from @xla
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "tsl/platform/bfloat16.h"  // from @tsl
 #include "tsl/platform/tstring.h"  // from @tsl
@@ -132,7 +133,12 @@ std::optional<absl::InlinedVector<int64_t, 4>> CreateDefaultStrides(
   for (size_t i = dims.size(); i > 0;) {
     --i;
     result[i] = stride.value();
-    (*stride) *= dims[i];
+    auto [next_stride, overflow] = xla::OverflowSafeMultiply(*stride, dims[i]);
+    if (overflow) {
+      LOG(WARNING) << "Integer overflow in stride calculation";
+      return std::nullopt;
+    }
+    *stride = next_stride;
   }
   return result;
 }

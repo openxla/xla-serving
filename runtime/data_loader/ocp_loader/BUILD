@@ -107,6 +107,7 @@ cc_library(
         "@tensorstore//tensorstore/util:result",
         "@tsl//tsl/platform:path",
         "@xla//xla:shape_util",
+        "@xla//xla:util",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/pjrt:pjrt_layout",
         "@xla//xla/python/ifrt",

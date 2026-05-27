@@ -276,6 +276,7 @@ cc_library(
         "@eigen_archive//:eigen3",
         "@neptune//runtime/core/proto:host_buffer_cc_proto",
         "@tsl//tsl/platform:tstring",
+        "@xla//xla:util",
         "@xla//xla/python/ifrt",
         "@xla//xla/tsl/framework:allocator",
         "@xla//xla/tsl/platform:env",
@@ -296,6 +297,7 @@ cc_library(
         "@abseil-cpp//absl/types:span",
         "@tsl//tsl/platform:bfloat16",
         "@tsl//tsl/platform:tstring",
+        "@xla//xla:util",
         "@xla//xla/python/ifrt",
     ],
 )

@@ -26,6 +26,7 @@
 #include "absl/cleanup/cleanup.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/match.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/blocking_counter.h"  // from @abseil-cpp
@@ -37,6 +38,7 @@
 #include "runtime/data_loader/ocp_loader/tensorstore_utils.h"  // from @neptune
 #include "google/protobuf/repeated_ptr_field.h"
 #include "xla/layout.h"  // from @xla
+#include "xla/overflow_util.h"  // from @xla
 #include "xla/pjrt/pjrt_layout.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
@@ -69,6 +71,24 @@
 namespace neptune {
 namespace {
 
+bool IsSubdirectory(absl::string_view parent, absl::string_view child) {
+  if (parent.empty()) {
+    return false;
+  }
+  std::string clean_parent = tsl::io::CleanPath(parent);
+  std::string clean_child = tsl::io::CleanPath(child);
+
+  if (clean_parent == clean_child) {
+    return true;
+  }
+  if (absl::StartsWith(clean_child, clean_parent)) {
+    if (clean_parent.back() == '/' || clean_child[clean_parent.size()] == '/') {
+      return true;
+    }
+  }
+  return false;
+}
+
 constexpr int kTensorStoreLoaderThreadPoolSize = 32;
 
 tsl::thread::ThreadPool* GetLoaderThreadPool() {
@@ -96,16 +116,19 @@ absl::StatusOr<std::string> ResolveRelativePathAndApplyDefaults(
   std::string old_path;
   // Join the base_dir with the path in the kvstore if the path in the kvstore
   // is relative. Otherwise, use the path in the kvstore.
-  if (kvstore.contains("base")) {
-    old_path = kvstore["base"].value("path", "");
-    if (!tsl::io::IsAbsolutePath(old_path)) {
-      kvstore["base"]["path"] = tsl::io::JoinPath(base_dir, old_path);
+  ::nlohmann::json& path_container =
+      kvstore.contains("base") ? kvstore["base"] : kvstore;
+  old_path = path_container.value("path", "");
+
+  if (tsl::io::IsAbsolutePath(old_path)) {
+    if (!IsSubdirectory(base_dir, old_path)) {
+      return absl::InvalidArgumentError(
+          "Absolute paths are not allowed in TensorStore specs for security "
+          "reasons: " +
+          old_path);
     }
-  } else {
-    old_path = kvstore.value("path", "");
-    if (!tsl::io::IsAbsolutePath(old_path)) {
-      kvstore["path"] = tsl::io::JoinPath(base_dir, old_path);
-    }
+  } else if (!old_path.empty()) {
+    path_container["path"] = tsl::io::JoinPath(base_dir, old_path);
   }
   if (old_path.empty()) {
     return std::string(ts_spec);
@@ -181,6 +204,19 @@ absl::StatusOr<xla::ifrt::ArrayRef> TensorStoreLoader::LoadSingleArray(
   std::vector<int64_t> global_shape(spec.global_shape.begin(),
                                     spec.global_shape.end());
 
+  // Verify that shape dimensions and transfer sizes do not cause overflows.
+  auto dtype = static_cast<xla::PrimitiveType>(spec.dtype);
+  int64_t total_shard_size = xla::ShapeUtil::ByteSizeOfPrimitiveType(dtype);
+  for (int64_t shard_dim_size : spec.per_shard_shape) {
+    auto [next_shard_size, overflow] =
+        xla::OverflowSafeMultiply(total_shard_size, shard_dim_size);
+    if (overflow) {
+      return absl::InvalidArgumentError(
+          "Integer overflow calculating total_shard_size");
+    }
+    total_shard_size = next_shard_size;
+  }
+
   TF_ASSIGN_OR_RETURN(auto ts_spec, ResolveRelativePathAndApplyDefaults(
                                         spec.json_ts_spec_string, base_dir));
   auto json_ts_spec = ::nlohmann::json::parse(ts_spec,
@@ -192,7 +228,7 @@ absl::StatusOr<xla::ifrt::ArrayRef> TensorStoreLoader::LoadSingleArray(
                         tensorstore::ReadWriteMode::read);
   TF_RETURN_IF_ERROR(tmp.result().status());
 
-  size_t xfer_size = 0;
+  int64_t xfer_size = 0;
   for (const auto& shard : spec.shards) {
     TF_ASSIGN_OR_RETURN(
         auto* dest_device,
@@ -201,17 +237,19 @@ absl::StatusOr<xla::ifrt::ArrayRef> TensorStoreLoader::LoadSingleArray(
       continue;
     }
 
+    std::optional<int64_t> safe_xfer_size =
+        xla::OverflowSafeAdd(xfer_size, total_shard_size);
+    if (!safe_xfer_size.has_value()) {
+      return absl::InvalidArgumentError(
+          "Integer overflow calculating xfer_size");
+    }
+    xfer_size = *safe_xfer_size;
+
     std::vector<tensorstore::Index> per_shard_shape(
         spec.per_shard_shape.begin(), spec.per_shard_shape.end());
     std::vector<tensorstore::Index> index_offset(shard.index_offset.begin(),
                                                  shard.index_offset.end());
-    auto dtype = static_cast<xla::PrimitiveType>(spec.dtype);
     TF_ASSIGN_OR_RETURN(auto ifrt_dtype, xla::ifrt::ToDType(dtype));
-    size_t total_shard_size = xla::ShapeUtil::ByteSizeOfPrimitiveType(dtype);
-    for (size_t shard_dim_size : per_shard_shape) {
-      total_shard_size *= shard_dim_size;
-    }
-    xfer_size += total_shard_size;
     std::unique_ptr<uint8_t[]> data(new uint8_t[total_shard_size]);
 
     auto read_domain = tensorstore::IndexDomain(per_shard_shape) |
@@ -254,7 +292,13 @@ absl::StatusOr<xla::ifrt::ArrayRef> TensorStoreLoader::LoadSingleArray(
   }
 
   if (total_transfer != nullptr) {
-    *total_transfer += xfer_size;
+    std::optional<int64_t> updated_total_transfer =
+        xla::OverflowSafeAdd(*total_transfer, xfer_size);
+    if (!updated_total_transfer.has_value()) {
+      return absl::InvalidArgumentError(
+          "Integer overflow calculating total_transfer");
+    }
+    *total_transfer = *updated_total_transfer;
   }
   if (ifrt_arrays.size() == 1) {
     return std::move(ifrt_arrays[0]);
@@ -304,7 +348,13 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> TensorStoreLoader::Load(
 
   if (total_transfer) {
     for (int64_t v : total_transfers) {
-      *total_transfer += v;
+      std::optional<int64_t> updated_total_transfer =
+          xla::OverflowSafeAdd(*total_transfer, v);
+      if (!updated_total_transfer.has_value()) {
+        return absl::InvalidArgumentError(
+            "Integer overflow aggregating total_transfer");
+      }
+      *total_transfer = *updated_total_transfer;
     }
   }
   return results;
