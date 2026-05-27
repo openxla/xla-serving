@@ -218,6 +218,7 @@ cc_library(
         "@abseil-cpp//absl/log:check",
         "@abseil-cpp//absl/log:vlog_is_on",
         "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/random",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
@@ -226,6 +227,7 @@ cc_library(
         "@abseil-cpp//absl/types:span",
         "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:IR",
+        "@neptune//runtime/interpreter:context",
         "@neptune//runtime/interpreter:manifest_utils",
         "@neptune//runtime/libs/ifrt:executable_build_utils",
         "@neptune//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",
@@ -542,13 +544,23 @@ cc_library(
 
 cc_library(
     name = "streaming",
-    srcs = ["streaming/stream.cc"],
-    hdrs = ["streaming/stream.h"],
-    visibility = ["@neptune//runtime/serving/google/streaming:__subpackages__"],
+    srcs = [
+        "streaming/stablehlo_stream_results_batching.cc",
+        "streaming/stream.cc",
+    ],
+    hdrs = [
+        "streaming/stablehlo_stream_results_batching.h",
+        "streaming/stream.h",
+    ],
+    visibility = [
+        "@neptune//runtime/kernel:__subpackages__",
+        "@neptune//runtime/serving/google/streaming:__subpackages__",
+    ],
     deps = [
         ":host_buffer",
         "@abseil-cpp//absl/base:core_headers",
         "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/container:flat_hash_set",
         "@abseil-cpp//absl/functional:any_invocable",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/log:check",
@@ -559,7 +571,9 @@ cc_library(
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/time",
         "@llvm-project//llvm:Support",
+        "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:Support",
         "@stablehlo//:stablehlo_ops",
         "@tsl//tsl/platform:random",
         "@tsl//tsl/profiler/lib:traceme",
@@ -569,6 +583,7 @@ cc_library(
         "@xla//xla/python/ifrt",
         "@xla//xla/python/pjrt_ifrt:pjrt_dtype",
         "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",
     ],
 )

@@ -25,6 +25,7 @@
 
 #include "absl/base/thread_annotations.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
+#include "absl/container/flat_hash_set.h"  // from @abseil-cpp
 #include "absl/functional/any_invocable.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
@@ -70,7 +71,7 @@ constexpr absl::string_view kOutputNamesAttr = "output_names";
 }  // namespace
 
 absl::StatusOr<std::optional<int64_t>> CreateStreamCallbackId(
-    mlir::ModuleOp module) {
+    mlir::ModuleOp module, std::optional<int64_t> callback_id_override) {
   mlir::Builder builder(module.getContext());
 
   std::vector<mlir::stablehlo::CustomCallOp> ops;
@@ -92,7 +93,9 @@ absl::StatusOr<std::optional<int64_t>> CreateStreamCallbackId(
   auto controller_address = stream_interface.controller_address();
   auto controller_address_attr = builder.getStringAttr(controller_address);
 
-  const int64_t callback_id = static_cast<int64_t>(tsl::random::New64());
+  const int64_t callback_id = callback_id_override.has_value()
+                                  ? *callback_id_override
+                                  : static_cast<int64_t>(tsl::random::New64());
   auto callback_id_attr = builder.getI64IntegerAttr(callback_id);
 
   for (auto op : ops) {
@@ -181,6 +184,12 @@ absl::StatusOr<ScopedStreamCallback> StreamCallbackRegistry::Register(
   it->second = std::make_unique<CallbackState>(this, model_name, callback_id,
                                                step_id, std::move(callback));
   return ScopedStreamCallback(this, callback_id, step_id);
+}
+
+bool StreamCallbackRegistry::IsRegistered(int64_t callback_id,
+                                          int64_t step_id) const {
+  absl::MutexLock l(&mu_);
+  return stream_callbacks_.contains({callback_id, step_id});
 }
 
 absl::Status StreamCallbackRegistry::Invoke(
@@ -317,8 +326,16 @@ absl::Status Stream(xla::RunId run_id, ffi::Dictionary attrs,
         "Expected %d names, got %d", args.size(), names.size()));
   }
 
+  if (names.empty() || names.back() != "__streamed_result_batched_step_id") {
+    return absl::InternalError(
+        "Expected step ID argument '__streamed_result_batched_step_id' missing "
+        "in stream FFI call. Please ensure the model is compiled with the "
+        "PropagateStreamingStepId pass.");
+  }
+  size_t num_user_args = args.size() - 1;
+
   absl::flat_hash_map<std::string, neptune::HostBuffer> host_buffers;
-  for (size_t i = 0; i < args.size(); ++i) {
+  for (size_t i = 0; i < num_user_args; ++i) {
     auto arg = args.get<ffi::AnyBuffer>(i);
     if (!arg.ok()) return arg.status();
 
@@ -332,27 +349,59 @@ absl::Status Stream(xla::RunId run_id, ffi::Dictionary attrs,
                         xla::ifrt::ToDType(arg->element_type()));
 
     neptune::HostBuffer host_buffer(buffer->data(), dtype, shape, buffer);
-
     host_buffers[names[i]] = std::move(host_buffer);
   }
 
-  int64_t step_id = run_id.ToInt();
+  std::vector<std::pair<int64_t, std::vector<neptune::HostBuffer>>> responses;
+  std::vector<std::string> user_names(names.begin(),
+                                      names.begin() + num_user_args);
 
-  std::vector<neptune::HostBuffer> buffers;
-  buffers.reserve(names.size());
-  for (const auto& name : names) {
-    auto it = host_buffers.find(name);
-    if (it == host_buffers.end()) {
-      return absl::InternalError(
-          absl::StrCat("Host buffer not found for name: ", name));
-    }
-    buffers.push_back(std::move(it->second));
+  auto step_id_arg = args.get<ffi::AnyBuffer>(args.size() - 1);
+  if (!step_id_arg.ok()) return step_id_arg.status();
+
+  if (step_id_arg->dimensions().size() != 1) {
+    return absl::InternalError(absl::StrFormat(
+        "Expected step ID argument to be a 1D tensor, but got rank %d",
+        step_id_arg->dimensions().size()));
   }
 
-  std::vector<std::pair<int64_t, std::vector<neptune::HostBuffer>>> responses;
-  responses.push_back({step_id, std::move(buffers)});
+  int64_t batch_size = step_id_arg->dimensions()[0];
+  const int32_t* step_id_data =
+      reinterpret_cast<const int32_t*>(step_id_arg->untyped_data());
 
-  return state->stream->InvokeStreamCallback(cb_id, names, responses);
+  absl::flat_hash_set<int64_t> processed_request_ids;
+
+  int64_t start_idx = 0;
+  while (start_idx < batch_size) {
+    int64_t current_request_id = step_id_data[start_idx];
+
+    int64_t end_idx = start_idx + 1;
+    while (end_idx < batch_size &&
+           step_id_data[end_idx] == current_request_id) {
+      end_idx++;
+    }
+
+    if (processed_request_ids.contains(current_request_id)) {
+      start_idx = end_idx;
+      continue;
+    }
+    processed_request_ids.insert(current_request_id);
+
+    std::vector<neptune::HostBuffer> sliced_user_buffers;
+    sliced_user_buffers.reserve(num_user_args);
+    for (size_t i = 0; i < num_user_args; ++i) {
+      const auto& combined_buffer = host_buffers[names[i]];
+      TF_ASSIGN_OR_RETURN(
+          auto sliced_buffer,
+          combined_buffer.SliceAlongFirstDimension(start_idx, end_idx));
+      sliced_user_buffers.push_back(std::move(sliced_buffer));
+    }
+
+    responses.push_back({current_request_id, std::move(sliced_user_buffers)});
+    start_idx = end_idx;
+  }
+
+  return state->stream->InvokeStreamCallback(cb_id, user_names, responses);
 }
 
 XLA_FFI_DEFINE_HANDLER(kStream, Stream,

@@ -146,6 +146,8 @@ class StreamCallbackRegistry {
           void(absl::flat_hash_map<std::string, neptune::HostBuffer>)>
           callback);
 
+  bool IsRegistered(int64_t callback_id, int64_t step_id) const;
+
   absl::Status Invoke(tsl::thread::ThreadPool* thread_pool, int64_t callback_id,
                       int64_t step_id, StreamedResult result);
 
@@ -207,7 +209,8 @@ class StreamCallbackRegistry {
 absl::StatusOr<StreamCallbackRegistry*> GetGlobalStreamCallbackRegistry();
 
 absl::StatusOr<std::optional<int64_t>> CreateStreamCallbackId(
-    mlir::ModuleOp module);
+    mlir::ModuleOp module,
+    std::optional<int64_t> callback_id_override = std::nullopt);
 
 class ScopedStreamCallback {
  public:
