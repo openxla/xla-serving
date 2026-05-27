@@ -1,4 +1,4 @@
-common --enable_bzlmod
+common --enable_bzlmod --enable_workspace
 
 common --incompatible_enable_cc_toolchain_resolution
 common --repo_env USE_HERMETIC_CC_TOOLCHAIN=1
@@ -7,6 +7,26 @@ common --repo_env USE_HERMETIC_CC_TOOLCHAIN=1
 common:clang_local --noincompatible_enable_cc_toolchain_resolution
 common:clang_local --@rules_ml_toolchain//common:enable_hermetic_cc=False
 common:clang_local --repo_env USE_HERMETIC_CC_TOOLCHAIN=0
+
+
+# CUDA: This config refers to building CUDA op kernels with nvcc.
+# This flag is needed to include CUDA libraries.
+common:cuda --repo_env TF_NEED_CUDA=1
+common:cuda --repo_env TF_NCCL_USE_STUB=1
+common:cuda --@local_config_cuda//:enable_cuda
+common:cuda --@local_config_cuda//cuda:include_cuda_libs=true
+common:cuda --define=no_nccl_support=true
+build:cuda --copt=-Wno-unused-command-line-argument
+
+# CUDA 12
+common:cuda_v12 --config=cuda
+common:cuda_v12 --repo_env=HERMETIC_CUDA_VERSION="12.9.1"
+common:cuda_v12 --repo_env=HERMETIC_CUDNN_VERSION="9.8.0"
+common:cuda_v12 --repo_env=HERMETIC_NVSHMEM_VERSION="3.3.9"
+common:cuda_v12 --repo_env=HERMETIC_NCCL_VERSION="2.29.7"
+common:cuda_v12 --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_70,sm_75,sm_80,sm_89,sm_90"
+# common CUDA and other C++ targets with Clang
+common:cuda_v12 --@local_config_cuda//:cuda_compiler=clang
 
 common --experimental_repo_remote_exec
 

@@ -77,6 +77,27 @@ oci_push(
     repository = "gcr.io/neptune-serving-engine/cpu-jax-only",
 )
 
+# Package the GPU binary in tar layer.
+tar(
+    name = "neptune_serving_gpu",
+    srcs = [":neptune_serving_main_gpu"],
+)
+
+# Define the GPU Image
+oci_image(
+    name = "neptune_serving_image_gpu",
+    base = "@cuda_base",
+    entrypoint = ["/runtime/serving/gcp/server/neptune_serving_main_gpu"],
+    tars = [":neptune_serving_gpu"],
+)
+
+# Define the GPU Push destination
+oci_push(
+    name = "neptune_serving_pusher_gpu",
+    image = ":neptune_serving_image_gpu",
+    repository = "gcr.io/neptune-serving-engine/gpu-jax",
+)
+
 cc_library(
     name = "grpc_status_utils",
     srcs = ["grpc_status_utils.cc"],
@@ -214,6 +235,9 @@ cc_library(
         ":ifrt_client_creator_gpu",
         ":ifrt_client_creator_hdr",
         "@xla//xla/pjrt/plugin/xla_gpu:gpu_static_registration",
+        "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_client_options",
+        "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
+        "@xla//xla/stream_executor/cuda:all_runtime",
     ],
 )
 

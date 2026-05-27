@@ -30,19 +30,22 @@ bazel_dep(name = "rules_python", version = "1.8.4")
 bazel_dep(name = "rules_ml_toolchain")
 archive_override(
     module_name = "rules_ml_toolchain",
-    integrity = "sha256-+Ux1GT9lCXHfUhiP8OAxQGfHsVN4pur9hD0GMrPXqyA=",
-    strip_prefix = "rules_ml_toolchain-c03c8cf626cfd2647042dbe635f233d0f0693e00",
-    urls = ["https://github.com/google-ml-infra/rules_ml_toolchain/archive/c03c8cf626cfd2647042dbe635f233d0f0693e00.tar.gz"],
+    integrity = "sha256-koXZBgF1eDjQZKEvUfFDdNQAZN3C+hmJeZCLa9D4k0g=",
+    strip_prefix = "rules_ml_toolchain-7f40603f574b95746152332ef3ad5fce63f1768d",
+    urls = ["https://github.com/google-ml-infra/rules_ml_toolchain/archive/7f40603f574b95746152332ef3ad5fce63f1768d.tar.gz"],
 )
 
 bazel_dep(name = "xla")
 archive_override(
     module_name = "xla",
-    integrity = "sha256-KbDo2aHsNuKUx28fPhTYU4z18LCTaPDVPfl8K1aWqmY=",
+    integrity = "sha256-bX4lJ6rIWNvofqlLzr1pToQFuVf6txImf2f5rrGAbFY=",
     patch_strip = 1,
-    patches = ["//third_party/xla:xla_python_3_12.patch"],
-    strip_prefix = "xla-d776fe25fde3bb0f28485ccd7947ade00e3d3bf4",
-    urls = ["https://github.com/openxla/xla/archive/d776fe25fde3bb0f28485ccd7947ade00e3d3bf4.tar.gz"],
+    patches = [
+        "//third_party/xla:xla_bzlmod_llvm.patch",
+        "//third_party/xla:xla_python_3_12.patch",
+    ],
+    strip_prefix = "xla-9ab1e95548ebf46a765ef97e3344295d89102549",
+    urls = ["https://github.com/openxla/xla/archive/9ab1e95548ebf46a765ef97e3344295d89102549.tar.gz"],
 )
 
 xla_third_party = use_extension("@xla//third_party/extensions:third_party.bzl", "third_party_ext")
@@ -53,15 +56,16 @@ override_repo(
 )
 
 ## Tensorflow dependencies for common runtime, Tensor etc.
-
+# To calculate integrity:
+# wget -O temp_module_archive.zip
+# HASH=$(openssl dgst -sha256 -binary temp_module_archive.zip | openssl base64 -A)
+# echo "sha256-${HASH}"
 bazel_dep(name = "tensorflow", repo_name = "org_tensorflow")
 archive_override(
     module_name = "tensorflow",
-    integrity = "sha256-njpeCBGJhixHCuxWpy56wzFqtKHcBp/qGL3t+NZCWuw=",
-    patch_strip = 1,
-    patches = ["//third_party/tensorflow:saved_model.patch"],
-    strip_prefix = "tensorflow-8eddcee72d37971d3620570d31c9e9ec69a35aac",
-    urls = ["https://github.com/tensorflow/tensorflow/archive/8eddcee72d37971d3620570d31c9e9ec69a35aac.zip"],
+    integrity = "sha256-17qxh0+UqHWGoQ+DX0GoEMi2C3rnx3K6r2wcJmvMLwo=",
+    strip_prefix = "tensorflow-f57c5520be50c8185286b98507074af236251ca0",
+    urls = ["https://github.com/tensorflow/tensorflow/archive/f57c5520be50c8185286b98507074af236251ca0.zip"],
 )
 
 tf_third_party = use_extension("@org_tensorflow//third_party/extensions:third_party.bzl", "third_party_ext")
@@ -73,6 +77,20 @@ single_version_override(
     patch_strip = 1,
     patches = ["//third_party/grpc:grpc.patch"],
     version = "1.78.0",
+)
+
+single_version_override(
+    module_name = "protobuf",
+    patch_strip = 1,
+    patches = [
+        # These patches are in XLA repo as well, we need to still
+        # apply them here for build to succeed.
+        "//third_party/protobuf:protobuf_arena.patch",
+        "//third_party/protobuf:fix_message_lite_incomplete_type.patch",
+        # The following patch is needed to fix package loading for `bazel query "deps(//xla/...)"`.
+        "//third_party/protobuf:fix_python_dist_package.patch",
+    ],
+    version = "32.1",
 )
 
 ##############################################################
@@ -113,26 +131,81 @@ oci.pull(
 )
 use_repo(oci, "distroless_cc")
 
+oci.pull(
+    name = "cuda_base",
+    digest = "sha256:067e36448f34b1d5ef6986508e9745ae41a8d261c84050044409731cb0f1cf20",
+    image = "docker.io/nvidia/cuda",
+    platforms = [
+        "linux/amd64",
+        "linux/arm64",
+    ],
+)
+use_repo(oci, "cuda_base")
+
 ##############################################################
 # Dependencies defined in rules_ml_toolchain
 ##############################################################
-
-cuda_configure = use_extension("@rules_ml_toolchain//extensions:cuda_configure.bzl", "cuda_configure_ext")
-use_repo(cuda_configure, "local_config_cuda")
-
-nccl_configure = use_extension("@rules_ml_toolchain//extensions:nccl_configure.bzl", "nccl_configure_ext")
-use_repo(nccl_configure, "local_config_nccl")
+# nccl_configure = use_extension("@rules_ml_toolchain//extensions:nccl_configure.bzl", "nccl_configure_ext")
+# use_repo(nccl_configure, "local_config_nccl")
 
 sycl_configure = use_extension("@rules_ml_toolchain//extensions:sycl_configure.bzl", "sycl_configure_ext")
 use_repo(sycl_configure, "local_config_sycl")
 
+# nccl_redist = use_extension("@rules_ml_toolchain//extensions:nccl_redist.bzl", "nccl_redist_ext")
+# use_repo(nccl_redist, "cuda_nccl")
+
+### CUDA dependencies
+cuda_configure = use_extension("@rules_ml_toolchain//extensions:cuda_configure.bzl", "cuda_configure_ext")
+use_repo(cuda_configure, "local_config_cuda")
+
+cuda_json_ext = use_extension("@rules_ml_toolchain//extensions:cuda_json.bzl", "cuda_json_ext")
+use_repo(cuda_json_ext, "cuda_redist_json")
+
+nccl_configure = use_extension("@rules_ml_toolchain//extensions:nccl_configure.bzl", "nccl_configure_ext")
+use_repo(nccl_configure, "local_config_nccl")
+
 cuda_redist_init_ext = use_extension("@rules_ml_toolchain//extensions:cuda_redist_init.bzl", "cuda_redist_init_ext")
-use_repo(cuda_redist_init_ext, "cuda_cudart")
+use_repo(
+    cuda_redist_init_ext,
+    "cuda_crt",
+    "cuda_cublas",
+    "cuda_cudart",
+    "cuda_cudnn",
+    "cuda_cufft",
+    "cuda_cupti",
+    "cuda_curand",
+    "cuda_cusolver",
+    "cuda_cusparse",
+    "cuda_driver",
+    "cuda_nvcc",
+    "cuda_nvdisasm",
+    "cuda_nvjitlink",
+    "cuda_nvml",
+    "cuda_nvrtc",
+    "cuda_nvtx",
+    "cuda_nvvm",
+)
+
+nvshmem_redist = use_extension("@rules_ml_toolchain//extensions:nvshmem_redist.bzl", "nvshmem_redist_ext")
+use_repo(nvshmem_redist, "nvidia_nvshmem")
+
+# Use the newer version of cuda_cccl from XLA
+cccl_extension = use_extension("@xla//third_party/cccl:cccl_extension.bzl", "cccl_extension")
+use_repo(cccl_extension, "cuda_cccl")
+
+override_repo(
+    cuda_redist_init_ext,
+    cuda_cccl = "cuda_cccl",
+)
 
 ### Toolchains
 register_toolchains("@rules_ml_toolchain//cc:linux_x86_64_linux_x86_64")
 
 register_toolchains("@rules_ml_toolchain//cc:linux_x86_64_linux_x86_64_cuda")
+
+register_toolchains("@rules_ml_toolchain//cc:linux_aarch64_linux_aarch64")
+
+register_toolchains("@rules_ml_toolchain//cc:linux_aarch64_linux_aarch64_cuda")
 
 single_version_override(
     module_name = "rules_python",

@@ -1,0 +1,12 @@
+--- a/MODULE.bazel
++++ b/MODULE.bazel
+@@ -301,2 +301,9 @@
+ pjrt_rc_number = use_extension("//build_tools/pjrt_wheels:release_candidate.bzl", "rc_number_repo_bzlmod")
+ use_repo(pjrt_rc_number, "rc_number")
++
++toolchain_ext = use_extension("@rules_ml_toolchain//extensions:toolchain.bzl", "toolchain_ext")
++use_repo(
++    toolchain_ext,
++    "llvm_linux_x86_64",
++    "llvm_linux_aarch64",
++)
