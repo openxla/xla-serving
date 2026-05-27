@@ -753,19 +753,14 @@ absl::Status Interpreter::Load() {
 absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadStableHloRunnerOp(
     absl::string_view model_function_name, absl::string_view weights_name,
     const neptune_model_orchestration::NamedTensorTypeList* named_inputs,
-    const neptune_model_orchestration::NamedTensorTypeList* named_outputs) {
+    const neptune_model_orchestration::NamedTensorTypeList* named_outputs,
+    const std::string& platform_name) {
   TF_ASSIGN_OR_RETURN(
       std::vector<const neptune_model_manifest::Function*> stablehlo_funcs,
       GetStableHloFunctionsByObjectName(manifest_objects_,
                                         model_function_name));
 
   TF_RETURN_IF_ERROR(ValidateStableHlo(stablehlo_funcs));
-
-  bool running_on_host =
-      ShouldShloRunOnHost(stablehlo_funcs, create_options_->platform_name);
-
-  std::string platform_name =
-      running_on_host ? "cpu" : create_options_->platform_name;
 
   TF_ASSIGN_OR_RETURN(std::optional<xla::CompileOptionsProto> compile_options,
                       GetCompileOptions(stablehlo_funcs, platform_name));
@@ -823,10 +818,10 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadStableHloRunnerOp(
   }
   LOG(INFO) << "Adding StableHlo function: " << model_function_name;
   std::shared_ptr<xla::ifrt::Client> ifrt_client =
-      running_on_host ? (create_options_->host_ifrt_client != nullptr
-                             ? create_options_->host_ifrt_client
-                             : create_options_->ifrt_client)
-                      : create_options_->ifrt_client;
+      platform_name == "cpu" ? (create_options_->host_ifrt_client != nullptr
+                                    ? create_options_->host_ifrt_client
+                                    : create_options_->ifrt_client)
+                             : create_options_->ifrt_client;
   return CreateStableHloRunnerOp(
       stablehlo_funcs, manifest_, loaded_weight_names, named_inputs,
       named_outputs,
@@ -872,11 +867,12 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
         return absl::InvalidArgumentError(
             "A pipeline can only support one JAX function.");
       }
-      TF_ASSIGN_OR_RETURN(stablehlo_runner_op,
-                          LoadStableHloRunnerOp(component.function_name(),
-                                                component.weights_name(),
-                                                named_signature.inputs,
-                                                named_signature.outputs));
+      TF_ASSIGN_OR_RETURN(
+          stablehlo_runner_op,
+          LoadStableHloRunnerOp(component.function_name(),
+                                component.weights_name(),
+                                named_signature.inputs, named_signature.outputs,
+                                create_options_->platform_name));
     }
   }
   // Load data processors.
@@ -897,11 +893,15 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
                                 : NamedSignature{};
     std::vector<std::unique_ptr<Kernel>> sub_graph;
     if (func->body().has_stable_hlo_body()) {
-      TF_ASSIGN_OR_RETURN(std::unique_ptr<Kernel> shlo_kernel,
-                          LoadStableHloRunnerOp(component.function_name(),
-                                                component.weights_name(),
-                                                named_signature.inputs,
-                                                named_signature.outputs));
+      bool running_on_host =
+          ShouldShloRunOnHost({func}, create_options_->platform_name);
+      std::string platform_name =
+          running_on_host ? "cpu" : create_options_->platform_name;
+      TF_ASSIGN_OR_RETURN(
+          std::unique_ptr<Kernel> shlo_kernel,
+          LoadStableHloRunnerOp(
+              component.function_name(), component.weights_name(),
+              named_signature.inputs, named_signature.outputs, platform_name));
       sub_graph.push_back(std::move(shlo_kernel));
     } else {
       TF_ASSIGN_OR_RETURN(std::string key, GetKeyFromProcessorMimeType(*func));

@@ -212,13 +212,23 @@ class Interpreter {
           neptune_model_orchestration::Component>* absl_nullable
           auxiliary_components = nullptr);
 
-  // Loads StableHloRunnerOp based on model function name and weights name.
+  // Loads a StableHloRunnerOp kernel based on the model function name and
+  // weights name.
+  // TODO: Remove the `platform_name` parameter once JSV supports
+  // running processors on TPU. Currently, when models are exported using older
+  // binaries without specifying a platform name, existing models still assume
+  // lowering to CPU. However, JSV can execute this StableHLO on TPU even when
+  // targeting the CPU platform. If a customer intends to run on TPU,
+  // `StableHloRunnerOp` is called directly with an IFRT client that supports
+  // TPU. Without the `platform_name` parameter, the new `host_ifrt_client`
+  // would incorrectly route execution to CPU, which fails for TPU workloads.
   absl::StatusOr<std::unique_ptr<Kernel>> LoadStableHloRunnerOp(
       absl::string_view model_function_name, absl::string_view weights_name,
       const neptune_model_orchestration::NamedTensorTypeList* named_inputs =
           nullptr,
       const neptune_model_orchestration::NamedTensorTypeList* named_outputs =
-          nullptr);
+          nullptr,
+      const std::string& platform_name = "");
 
   // Loads the weights from the model.
   // Args:
