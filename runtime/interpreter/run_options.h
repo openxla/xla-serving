@@ -15,7 +15,13 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_RUN_OPTIONS_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_RUN_OPTIONS_H_
 
+#include <cstdint>
+#include <functional>
+#include <string>
+
+#include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
+#include "runtime/core/host_buffer.h"  // from @neptune
 
 namespace neptune {
 
@@ -25,6 +31,16 @@ namespace neptune {
 struct RunOptions {
   // The deadline for this request.
   absl::Time deadline = absl::InfiniteFuture();
+
+  // The dynamic streaming output callback for this specific request. The key in
+  // the map is the name of the output tensor, and the value is the output
+  // buffer.
+  std::function<void(absl::flat_hash_map<std::string, HostBuffer>)>
+      streamed_output_callback = nullptr;
+
+  // The unique identifier for this execution request. Internal-only field,
+  // populated automatically by the Interpreter if not set.
+  int32_t request_id = -1;
 };
 
 }  // namespace neptune

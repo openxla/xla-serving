@@ -228,7 +228,9 @@ cc_library(
         "@neptune//runtime/kernel:__subpackages__",
     ],
     deps = [
+        "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/time",
+        "@neptune//runtime/core:host_buffer",
     ],
 )
 
@@ -239,6 +241,7 @@ cc_library(
     visibility = [
         ":internal",
         "//learning/infra/mira/experimental/orbax_model/tensorflow/kernel:__subpackages__",
+        "@neptune//runtime/core:__subpackages__",
         "@neptune//runtime/kernel:__subpackages__",
         "@neptune//runtime/tensorflow:__subpackages__",
         "@neptune//runtime/tensorflow/kernel:__pkg__",
@@ -246,7 +249,9 @@ cc_library(
     deps = [
         ":clock",
         ":run_options",
+        "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/time",
+        "@neptune//runtime/core:host_buffer",
     ],
 )
 

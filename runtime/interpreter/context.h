@@ -15,9 +15,15 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_CONTEXT_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_CONTEXT_H_
 
+#include <cstdint>
+#include <functional>
+#include <string>
+
+#include "absl/container/flat_hash_map.h"  // from @abseil-cpp
+#include "absl/time/time.h"  // from @abseil-cpp
+#include "runtime/core/host_buffer.h"  // from @neptune
 #include "runtime/interpreter/clock.h"  // from @neptune
 #include "runtime/interpreter/run_options.h"  // from @neptune
-#include "absl/time/time.h"  // from @abseil-cpp
 
 namespace neptune {
 
@@ -31,10 +37,15 @@ struct CancellationContext {
 
 struct RunContext {
   CancellationContext cancellation_context;
+  std::function<void(absl::flat_hash_map<std::string, HostBuffer>)>
+      streamed_output_callback = nullptr;
+  int32_t request_id = -1;
 
   static RunContext Create(const RunOptions& run_options) {
     return RunContext{
-        .cancellation_context = {.deadline = run_options.deadline}};
+        .cancellation_context = {.deadline = run_options.deadline},
+        .streamed_output_callback = run_options.streamed_output_callback,
+        .request_id = run_options.request_id};
   };
 };
 
