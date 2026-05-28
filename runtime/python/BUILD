@@ -19,6 +19,7 @@ package(default_visibility = [
 
 pybind_extension(
     name = "model_runner",
+    testonly = True,
     srcs = ["model_runner.cc"],
     visibility = [
         ":friends",
@@ -37,6 +38,7 @@ pybind_extension(
         "@nanobind_bazel//:nanobind",
         "@neptune//runtime/core:host_buffer",
         "@neptune//runtime/core:value",
+        "@neptune//runtime/google/jax_data:interpreter_composite_processor_support",  # buildcleaner: keep
         "@neptune//runtime/interpreter",
         "@neptune//runtime/kernel:kernel_io_data_type",
         "@neptune//runtime/tensorflow:interpreter_tensorflow_support",  # buildcleaner: keep

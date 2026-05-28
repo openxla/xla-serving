@@ -21,12 +21,16 @@ from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
 
+from neptune_model._src import assets2npt
 from neptune_model._src.core import persistence_lib
 from neptune_model._src.core import test_utils
+from neptune_model._src.core import value
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import main_lib
 from neptune_model._src.export import serving_config
 from neptune_model._src.processors import processor
+from neptune_model.protos import asset_map_pb2
+from neptune_model.protos import manifest_pb2
 from neptune_model.protos import orchestration_pb2
 
 
@@ -404,6 +408,114 @@ class SaveModelTest(test_utils.NptTestCase):
               'size'
           )
       )
+
+  def test_save_model_with_assets(self):
+    """Tests that on_persist_result returning either a supplemental or a value works."""
+    src_asset_dir = self.create_tempdir('src_assets').full_path
+    src_asset = pathlib.Path(src_asset_dir) / 'asset1.txt'
+    src_asset.write_text('asset_content')
+
+    def save_test_values(export_path: str):
+      result = {
+          'my_value': value.ExternalValue(
+              data=manifest_pb2.UnstructuredData(
+                  mime_type='test/value',
+                  inlined_string='value_content',
+              )
+          ),
+      }
+      result.update(
+          assets2npt.save_assets('my_supp', [str(src_asset)], export_path)
+      )
+      return result
+
+    class PreparedTestProcessor:
+
+      def __init__(self, input_signature, output_signature):
+        self._input_signature = input_signature
+        self._output_signature = output_signature
+
+      @property
+      def name(self) -> str:
+        return 'test_processor'
+
+      @property
+      def input_signature(self):
+        return self._input_signature
+
+      @property
+      def output_signature(self):
+        return self._output_signature
+
+      @property
+      def weights_name(self) -> str | None:
+        return None
+
+      def to_npt_saveable(self):
+        return value.ExternalValue(
+            data=manifest_pb2.UnstructuredData(mime_type='mock')
+        )
+
+      def on_persist(self):
+        return save_test_values
+
+    class TestProcessor:
+
+      def prepare(self, input_signature, **kwargs):
+        del kwargs
+        return PreparedTestProcessor(input_signature, input_signature)
+
+    model = jax_model.JaxModel(
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=lambda params, inputs: {'out': inputs['x'] * params['w']},
+            jax_export_kwargs={'platforms': ['cpu']},
+        ),
+        params={'w': jnp.array([2.0], dtype=jnp.float32)},
+    )
+    cfg = serving_config.ServingConfig(
+        serving_signature='serving_default',
+        input_signature={
+            'x': jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.float32)
+        },
+        processing=processor.SequentialProcessing(
+            preprocessors=[TestProcessor()],
+            postprocessors=[],
+        ),
+    )
+    export_path = self.create_tempdir().full_path
+    main_lib.save(
+        model=model,
+        export_path=export_path,
+        serving_configs=[cfg],
+    )
+
+    manifest_proto = persistence_lib.load(export_path)
+
+    with self.subTest(name='validate_assets'):
+      self.assertIn('my_supp', manifest_proto.supplemental_info)
+      supp = manifest_proto.supplemental_info['my_supp']
+      self.assertEqual(
+          supp.mime_type,
+          'application/protobuf; type=neptune_assets.AssetMap',
+      )
+      self.assertEqual(
+          supp.file_system_location.string_path, 'my_supp_asset_map.pb'
+      )
+      asset_map_path = pathlib.Path(export_path) / 'my_supp_asset_map.pb'
+      asset_map = asset_map_pb2.AssetMap.FromString(asset_map_path.read_bytes())
+      self.assertLen(asset_map.assets, 1)
+      self.assertIn(str(src_asset), asset_map.assets)
+      dest_relative_path = asset_map.assets[str(src_asset)]
+      self.assertEqual(dest_relative_path, 'my_supp/assets/asset1.txt')
+      dest_asset_path = pathlib.Path(export_path) / dest_relative_path
+      self.assertTrue(dest_asset_path.exists())
+      self.assertEqual(dest_asset_path.read_text(), 'asset_content')
+
+    with self.subTest(name='validate_value'):
+      self.assertIn('my_value', manifest_proto.objects)
+      val = manifest_proto.objects['my_value'].value.external.data
+      self.assertEqual(val.mime_type, 'test/value')
+      self.assertEqual(val.inlined_string, 'value_content')
 
 
 class ValidateSaveParamsTest(absltest.TestCase):
