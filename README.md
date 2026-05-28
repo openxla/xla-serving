@@ -104,3 +104,96 @@ inputs = {
 
 outputs = runner.signature('serving_default').run_with_dict_return(**inputs)
 ```
+
+## Docker images for GRPC Server
+
+### CPU
+
+You can use prebuilt images from Artifact Registry here:
+
+```
+gcr.io/neptune-serving-engine/cpu-jax-only:latest
+gcr.io/neptune-serving-engine/cpu-jax-with-tf:latest
+```
+In order to build the image at head, please run:
+
+```
+bazel run -c opt \
+//runtime/serving/gcp/server:neptune_serving_pusher_cpu \
+-- --repository=<Path to Artifact registry> \
+--tag=latest
+```
+
+To build with Tensorflow dependencies
+
+```
+bazel run -c opt --define ENABLE_TF=1 \
+//runtime/serving/gcp/server:neptune_serving_pusher_cpu \
+-- --repository=<Path to Artifact registry> --tag=latest
+```
+
+### GPU
+
+We currently support building GPU image with CUDA 12.
+
+The prerequisite is to have CUDA toolkit and drivers 
+already installed on the Cloud VM.
+
+To build docker image for GPU:
+
+```
+bazel run -c opt --config=cuda_v12 \
+//runtime/serving/gcp/server:neptune_serving_pusher_gpu \
+-- --repository="<Path to Artifact registry>" \
+--tag="latest"
+```
+
+### TPU
+
+To Be Added.
+
+## Starting GRPC Servers
+
+### Using Docker images
+
+#### CPU
+```
+docker run   --net=host   --ulimit memlock=-1  \
+--mount type=bind,src=<exported model>,dst=/tmp/model \
+ -e XLA_PYTHON_CLIENT_MEM_FRACTION=0.85 \
+ gcr.io/neptune-serving-engine/cpu-jax-only:latest  \
+ --model_path /tmp/model  \
+ --model_name nnx \
+ --orbax_grpc_server_platform cpu \
+ --port=8501 
+ --use_insecure_grpc_credentials=true
+```
+
+#### GPU
+```
+docker run --gpus all --net=host -p 8500:8500 \
+--ulimit memlock=-1 \
+--mount type=bind,src=<Exported model>,dst=/tmp/model \
+--mount type=bind,src=/tmp/profile-data,dst=/tmp/ \
+profile-data \
+-e PJRT_DEVICE=cuda \
+-e NVIDIA_VISIBLE_DEVICES=all \
+-e NVIDIA_DRIVER_CAPABILITIES=all,compute,utility \
+-e LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/cuda/lib64 \
+-e XLA_PYTHON_CLIENT_MEM_FRACTION=0.85 \
+gcr.io/neptune-serving-engine/gpu-jax-cuda12:latest \
+--model_path /tmp/model \
+--model_name nnx \
+--orbax_grpc_server_platform cuda \
+--use_insecure_grpc_credentials=true
+```
+
+### Running locally built server
+
+```
+bazel run //runtime/serving/gcp/server:neptune_serving_main_<cpu|gpu|tpu> \
+--model_path <Exported model path> \
+--model_name <model_name> \
+--orbax_grpc_server_platform <cpu|cuda|tpu>  \
+--port 8500 --use_insecure_grpc_credentials=<true|false>
+```
