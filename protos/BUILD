@@ -73,3 +73,18 @@ py_proto_library(
     name = "tf_concrete_function_handle_py_pb2",
     deps = [":tf_concrete_function_handle_proto"],
 )
+
+proto_library(
+    name = "asset_map_proto",
+    srcs = ["asset_map.proto"],
+)
+
+cc_proto_library(
+    name = "asset_map_cc_proto",
+    deps = [":asset_map_proto"],
+)
+
+py_proto_library(
+    name = "asset_map_py_pb2",
+    deps = [":asset_map_proto"],
+)
