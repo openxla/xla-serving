@@ -28,6 +28,6 @@ class Value(abc.ABC):
 
 
 @dataclasses.dataclass
-class ExternalValue:
+class ExternalValue(Value):
   data: manifest_pb2.UnstructuredData
   type: jaxtyping.PyTree[shlo_type.ShloTensorSpec] | None = None

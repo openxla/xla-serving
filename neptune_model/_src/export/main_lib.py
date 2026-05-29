@@ -71,7 +71,12 @@ class NeptuneModelSaveBundle:
       default_factory=dict
   )
   on_persist_fns: MutableSequence[
-      Callable[[str], Mapping[str, value.ExternalValue]]
+      Callable[
+          [str],
+          Mapping[
+              str, value.ExternalValue | persistence_lib.GlobalSupplemental
+          ],
+      ]
   ] = dataclasses.field(default_factory=list)
 
 
@@ -359,7 +364,17 @@ def save(
   save_module = save_bundle.manifest_objects.copy()
 
   for on_persist_fn in save_bundle.on_persist_fns:
-    save_module.update(on_persist_fn(export_path))
+    on_persist_result = on_persist_fn(export_path)
+    for k, v in on_persist_result.items():
+      match v:
+        case persistence_lib.GlobalSupplemental():
+          if k in supplementals:
+            raise ValueError(f'Duplicate global supplemental {k!r} detected')
+          supplementals[k] = v
+        case value.ExternalValue():
+          if k in save_module:
+            raise ValueError(f'Duplicate saveable object {k!r} detected')
+          save_module[k] = v
 
   save_options = persistence_lib.SaveOptions(
       version=2,
