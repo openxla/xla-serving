@@ -238,7 +238,8 @@ class Interpreter {
   absl::StatusOr<DataLoader::LoadResult> LoadWeights(
       absl::string_view weight_set_name,
       absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs,
-      const AssignedDevices& assigned_devices);
+      const AssignedDevices& assigned_devices,
+      std::shared_ptr<xla::ifrt::Client> ifrt_client);
 
   // Converts the inputs to a vector of `Value`s by merging the positional and
   // keyword inputs.

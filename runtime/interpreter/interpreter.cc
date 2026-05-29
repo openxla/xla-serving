@@ -786,6 +786,11 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadStableHloRunnerOp(
           compile_options.has_value() ? &compile_options.value() : nullptr,
           create_options_->ignore_device_assignment_in_manifest));
 
+  std::shared_ptr<xla::ifrt::Client> ifrt_client =
+      platform_name == "cpu" ? (create_options_->host_ifrt_client != nullptr
+                                    ? create_options_->host_ifrt_client
+                                    : create_options_->ifrt_client)
+                             : create_options_->ifrt_client;
   std::vector<std::string> loaded_weight_names;
   // TODO: Support partial loading of per-function data.
   if (!weights_name.empty()) {
@@ -793,21 +798,13 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadStableHloRunnerOp(
     // It is possible that multiple pipelines share the set of weights. So it is
     // okay if `inserted` is true.
     auto [iter, inserted] = weight_sets_.try_emplace(weights_name);
-    // A set of weights is uniquely identified by the `weights_name`. A given
-    // set of weights can be shared by multiple pipelines. At the moment, we
-    // only allow one set of weights. It is not clear if we will have a case
-    // where we need multiple sets of weights.
-    if (weight_sets_.size() > 1) {
-      return absl::UnimplementedError(
-          "Model has more than one weights name. Only a single shared "
-          "weights_name is supported at the moment.");
-    }
+
     // We should always try to load the weights, since only used weights by
     // the provided `stablehlo_funcs` will be loaded, and `stablehlo_funcs`
     // across pipelines may need different weights in the same set.
-    TF_ASSIGN_OR_RETURN(
-        DataLoader::LoadResult load_result,
-        LoadWeights(weights_name, stablehlo_funcs, assigned_devices));
+    TF_ASSIGN_OR_RETURN(DataLoader::LoadResult load_result,
+                        LoadWeights(weights_name, stablehlo_funcs,
+                                    assigned_devices, ifrt_client));
     loaded_weight_names = load_result.data_names;
     if (inserted) {
       LOG(INFO) << "Adding weight set \"" << iter->first << "\" with "
@@ -817,11 +814,6 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadStableHloRunnerOp(
     }
   }
   LOG(INFO) << "Adding StableHlo function: " << model_function_name;
-  std::shared_ptr<xla::ifrt::Client> ifrt_client =
-      platform_name == "cpu" ? (create_options_->host_ifrt_client != nullptr
-                                    ? create_options_->host_ifrt_client
-                                    : create_options_->ifrt_client)
-                             : create_options_->ifrt_client;
   return CreateStableHloRunnerOp(
       stablehlo_funcs, manifest_, loaded_weight_names, named_inputs,
       named_outputs,
@@ -1037,7 +1029,8 @@ Interpreter::GetGraphBundle(absl::string_view pipeline_name) const {
 absl::StatusOr<DataLoader::LoadResult> Interpreter::LoadWeights(
     absl::string_view weight_set_name,
     absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs,
-    const AssignedDevices& assigned_devices) {
+    const AssignedDevices& assigned_devices,
+    std::shared_ptr<xla::ifrt::Client> ifrt_client) {
   const auto it = manifest_objects_.find(weight_set_name);
   if (it == manifest_objects_.end()) {
     return absl::InvalidArgumentError(
@@ -1056,7 +1049,7 @@ absl::StatusOr<DataLoader::LoadResult> Interpreter::LoadWeights(
           external.loader_type(),
           DataLoader::CreateOptions{
               .ifrt_loaded_variable_registry = &ifrt_loaded_variable_registry_,
-              .ifrt_client = create_options_->ifrt_client,
+              .ifrt_client = ifrt_client,
               .checkpoint_loader_thread_pool =
                   create_options_ != nullptr
                       ? create_options_->checkpoint_loader_thread_pool
