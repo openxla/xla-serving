@@ -145,6 +145,7 @@ JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS = [
     "@neptune//runtime/core:value",
     "@neptune//protos/grpc:host_buffer_cc_proto",
     "@neptune//runtime/interpreter",
+    "@neptune//runtime/google/jax_data:interpreter_composite_processor_support",
     "@neptune//runtime/interpreter:run_options",
     "@neptune//runtime/kernel:kernel_io_data_type",
     "@neptune//protos/grpc:get_model_metadata_cc_proto",
