@@ -98,6 +98,27 @@ oci_push(
     repository = "gcr.io/neptune-serving-engine/gpu-jax",
 )
 
+# Package the TPU binary in tar layer.
+tar(
+    name = "neptune_serving_tpu",
+    srcs = [":neptune_serving_main_tpu"],
+)
+
+# Define the TPU Image
+oci_image(
+    name = "neptune_serving_image_tpu",
+    base = "@distroless_cc",
+    entrypoint = ["/runtime/serving/gcp/server/neptune_serving_main_tpu"],
+    tars = [":neptune_serving_tpu"],
+)
+
+# Define the TPU Push destination
+oci_push(
+    name = "neptune_serving_pusher_tpu",
+    image = ":neptune_serving_image_tpu",
+    repository = "gcr.io/neptune-serving-engine/tpu-jax",
+)
+
 cc_library(
     name = "grpc_status_utils",
     srcs = ["grpc_status_utils.cc"],
