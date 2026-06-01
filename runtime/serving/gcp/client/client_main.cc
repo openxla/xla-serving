@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// A simple client for the JSV gRPC server which reads a provided TFRecord file.
+// A simple client for the JSV gRPC server which reads a provided warmup
+// requests file.
+#include <fstream>
 #include <memory>
 #include <string>
 
@@ -35,18 +37,14 @@
 #include "protos/grpc/prediction_service.grpc.pb.h"  // from @neptune
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "runtime/serving/gcp/auth/utils.h"  // from @neptune
-#include "runtime/tensorflow/utils/tf_to_jsv_proto.h"  // from @neptune
 #include "xla/python/ifrt/dtype.pb.h"  // from @xla
 #include "xla/python/ifrt/shape.pb.h"  // from @xla
-#include "xla/tsl/platform/statusor.h"  // from @xla
-#include "tensorflow/core/lib/io/record_reader.h"  // from @org_tensorflow
-#include "tensorflow/core/platform/env.h"  // from @org_tensorflow
-#include "tensorflow/core/platform/tstring.h"  // from @org_tensorflow
 
 ABSL_FLAG(std::string, server_address, "", "Server IP address and port.");
 ABSL_FLAG(std::string, model_name, "", "Name of the model to query.");
-ABSL_FLAG(std::string, warmup_requests_path, "",
-          "Path to a TFRecord file containing a single PredictRequest proto.");
+ABSL_FLAG(
+    std::string, warmup_requests_path, "",
+    "Path to a warmup requests file containing a single PredictRequest proto.");
 ABSL_FLAG(std::string, server_cert_chain_path, "",
           "Path to the server's certificate chain file for SSL/TLS. For a "
           "client, this is the server's certificate chain for verification. If "
@@ -87,44 +85,46 @@ absl::StatusOr<neptune::serving::PredictResponse> RunPredict(
     const std::string& server_address, absl::string_view model_name,
     const std::string& warmup_requests_path, std::string server_cert_chain_path,
     bool use_insecure_grpc_credentials) {
-  // Read PredictRequest from TFRecord
-  std::unique_ptr<tensorflow::RandomAccessFile> warmup_requests_file;
-  absl::Status status = tensorflow::Env::Default()->NewRandomAccessFile(
-      warmup_requests_path, &warmup_requests_file);
-  if (!status.ok()) {
+  // Read PredictRequest from size-prefixed binary record
+  std::ifstream ifs(warmup_requests_path, std::ios::binary);
+  if (!ifs.is_open()) {
     return absl::InvalidArgumentError(
-        absl::StrCat("Failed to open TFRecord file: ", warmup_requests_path));
+        absl::StrCat("Failed to open warmup file: ", warmup_requests_path));
   }
 
-  tensorflow::io::SequentialRecordReader reader(warmup_requests_file.get());
-  tensorflow::tstring record;
-  status = reader.ReadRecord(&record);
-  if (!status.ok()) {
+  // Read the 4-byte size prefix (little-endian).
+  uint32_t size = 0;
+  ifs.read(reinterpret_cast<char*>(&size), sizeof(size));
+  if (!ifs) {
     return absl::InvalidArgumentError(absl::StrCat(
-        "Failed to read record from TFRecord file: ", warmup_requests_path));
+        "Failed to read size prefix from warmup file: ", warmup_requests_path));
   }
+
+  std::string record;
+  record.resize(size);
+  ifs.read(&record[0], size);
+  if (!ifs) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Failed to read record payload of size ", size,
+                     " from warmup file: ", warmup_requests_path));
+  }
+
   neptune::serving::PredictionLog prediction_log;
   if (!prediction_log.ParseFromString(record)) {
     return absl::InvalidArgumentError(
-        "Failed to parse PredictionLog from TFRecord record.");
+        "Failed to parse PredictionLog from warmup record.");
   }
   neptune::serving::PredictRequest request =
       prediction_log.predict_log().request();
-  // LOG(INFO) << "Successfully loaded PredictRequest from "
-  //           << warmup_requests_path;
-  // absl::StatusOr<neptune::serving::PredictRequest> request =
-  //     neptune::FromTfPredictRequest(tf_request);
-  // if (!request.ok()) {
-  //   return absl::InvalidArgumentError(
-  //       absl::StrCat("Failed to convert PredictRequest to JSV proto: ",
-  //                    request.status().message()));
-  // }
   request.mutable_model_spec()->set_name(model_name);
   LOG(INFO) << "Successfully converted PredictRequest to JSV proto.";
-  TF_ASSIGN_OR_RETURN(
-      std::shared_ptr<grpc::ChannelCredentials> creds,
-      neptune::serving::CreateChannelCredentials(server_cert_chain_path,
-                                             use_insecure_grpc_credentials));
+
+  auto creds_or = neptune::serving::CreateChannelCredentials(
+      server_cert_chain_path, use_insecure_grpc_credentials);
+  if (!creds_or.ok()) {
+    return creds_or.status();
+  }
+  std::shared_ptr<grpc::ChannelCredentials> creds = std::move(*creds_or);
   std::shared_ptr<grpc::Channel> channel =
       grpc::CreateChannel(server_address, creds);
 
@@ -162,7 +162,7 @@ int main(int argc, char* argv[]) {
     return 1;
   }
   if (warmup_requests_path.empty()) {
-    LOG(ERROR) << "A path to a TFRecord file containing a single "
+    LOG(ERROR) << "A path to a warmup file containing a single "
                << "PredictRequest proto must be provided.";
     return 1;
   }

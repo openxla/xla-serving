@@ -517,6 +517,39 @@ class SaveModelTest(test_utils.NptTestCase):
       self.assertEqual(val.mime_type, 'test/value')
       self.assertEqual(val.inlined_string, 'value_content')
 
+  def test_save_model_with_warmup(self):
+    """Tests that save() works with warmup examples."""
+    model = jax_model.JaxModel(
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=lambda params, inputs: {'out': inputs['x'] * params['w']},
+            jax_export_kwargs={'platforms': ['cpu']},
+        ),
+        params={'w': jnp.array([2.0], dtype=jnp.float32)},
+    )
+    cfg = serving_config.ServingConfig(
+        serving_signature='serving_default',
+        input_signature={
+            'x': jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.float32)
+        },
+    )
+    export_path = self.create_tempdir().full_path
+    warmup_examples = {
+        'serving_default': [{'x': jnp.ones((4,), dtype=jnp.float32)}],
+    }
+    main_lib.save(
+        model=model,
+        export_path=export_path,
+        serving_configs=[cfg],
+        warmup_examples=warmup_examples,
+        is_grpc_warmup=True,
+    )
+    warmup_file = (
+        pathlib.Path(export_path)
+        / 'assets.extra'
+        / 'tf_serving_warmup_requests'
+    )
+    self.assertTrue(warmup_file.exists())
+
 
 class ValidateSaveParamsTest(absltest.TestCase):
 
