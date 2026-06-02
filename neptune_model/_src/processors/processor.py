@@ -20,6 +20,7 @@ from typing import Any, Callable, Protocol
 
 import jaxtyping
 
+from neptune_model._src.core import persistence_lib
 from neptune_model._src.core import saveable
 from neptune_model._src.core import value
 
@@ -48,7 +49,15 @@ class PreparedProcessor(Protocol):
 
   def on_persist(
       self,
-  ) -> Callable[[str], Mapping[str, value.ExternalValue]] | None:
+  ) -> (
+      Callable[
+          [str],
+          Mapping[
+              str, value.ExternalValue | persistence_lib.GlobalSupplemental
+          ],
+      ]
+      | None
+  ):
     """A callback that runs prior to saving the processor during the export.
 
     Returns:
@@ -59,6 +68,27 @@ class PreparedProcessor(Protocol):
       saved.
     """
     ...
+
+
+class ProcessorDefaults:
+  """Mixin providing defaults for PreparedProcessor methods."""
+
+  @property
+  def weights_name(self) -> str | None:
+    return None
+
+  def on_persist(
+      self,
+  ) -> (
+      Callable[
+          [str],
+          Mapping[
+              str, value.ExternalValue | persistence_lib.GlobalSupplemental
+          ],
+      ]
+      | None
+  ):
+    return None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
