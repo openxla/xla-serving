@@ -25,10 +25,10 @@
 #include "include/grpcpp/server_context.h"  // from @com_github_grpc_grpc
 #include "include/grpcpp/support/server_callback.h"  // from @com_github_grpc_grpc
 #include "include/grpcpp/support/status.h"  // from @com_github_grpc_grpc
+#include "protos/grpc/get_model_metadata.pb.h"  // from @neptune
+#include "protos/grpc/predict.pb.h"  // from @neptune
+#include "protos/grpc/prediction_service.grpc.pb.h"  // from @neptune
 #include "runtime/interpreter/interpreter.h"  // from @neptune
-#include "runtime/serving/gcp/proto/get_model_metadata.pb.h"  // from @neptune
-#include "runtime/serving/gcp/proto/predict.pb.h"  // from @neptune
-#include "runtime/serving/gcp/proto/prediction_service.grpc.pb.h"  // from @neptune
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 

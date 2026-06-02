@@ -20,9 +20,9 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
-#include "runtime/core/proto/host_buffer.pb.h"  // from @neptune
-#include "runtime/serving/gcp/proto/model.pb.h"  // from @neptune
-#include "runtime/serving/gcp/proto/predict.pb.h"  // from @neptune
+#include "protos/grpc/host_buffer.pb.h"  // from @neptune
+#include "protos/grpc/model.pb.h"  // from @neptune
+#include "protos/grpc/predict.pb.h"  // from @neptune
 #include "runtime/tensorflow/utils/ifrt_tensor_utils.h"  // from @neptune
 #include "xla/python/ifrt/dtype.pb.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla

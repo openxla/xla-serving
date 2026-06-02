@@ -275,7 +275,7 @@ cc_library(
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
         "@eigen_archive//:eigen3",
-        "@neptune//runtime/core/proto:host_buffer_cc_proto",
+        "@neptune//protos/grpc:host_buffer_cc_proto",
         "@tsl//tsl/platform:tstring",
         "@xla//xla:util",
         "@xla//xla/python/ifrt",

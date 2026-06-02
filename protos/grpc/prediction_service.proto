@@ -16,8 +16,8 @@ edition = "2024";
 
 package neptune.serving;
 
-import "runtime/serving/gcp/proto/get_model_metadata.proto";
-import "runtime/serving/gcp/proto/predict.proto";
+import "protos/grpc/get_model_metadata.proto";
+import "protos/grpc/predict.proto";
 
 // PredictionService provides access to machine-learned models loaded by
 // model_servers.

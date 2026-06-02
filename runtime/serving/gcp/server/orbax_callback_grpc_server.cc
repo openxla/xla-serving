@@ -30,14 +30,14 @@
 #include "include/grpcpp/server_context.h"  // from @com_github_grpc_grpc
 #include "include/grpcpp/support/server_callback.h"  // from @com_github_grpc_grpc
 #include "include/grpcpp/support/status.h"  // from @com_github_grpc_grpc
+#include "protos/grpc/host_buffer.pb.h"  // from @neptune
+#include "protos/grpc/model.pb.h"  // from @neptune
+#include "protos/grpc/prediction_service.pb.h"  // from @neptune
 #include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/proto/host_buffer.pb.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
 #include "runtime/interpreter/interpreter.h"  // from @neptune
 #include "runtime/interpreter/run_options.h"  // from @neptune
 #include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
-#include "runtime/serving/gcp/proto/model.pb.h"  // from @neptune
-#include "runtime/serving/gcp/proto/prediction_service.pb.h"  // from @neptune
 #if ENABLE_TF == 1
   #include "runtime/tensorflow/tf_compatible_interpreter_create_options.h"  // from @neptune
 #else

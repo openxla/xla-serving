@@ -16,8 +16,8 @@ edition = "2024";
 
 package neptune.serving;
 
-import "runtime/core/proto/host_buffer.proto";
-import "runtime/serving/gcp/proto/model.proto";
+import "protos/grpc/host_buffer.proto";
+import "protos/grpc/model.proto";
 
 // PredictRequest specifies which model to run, as well as
 // how inputs are mapped to tensors and how outputs are filtered before

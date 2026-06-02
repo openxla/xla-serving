@@ -16,8 +16,8 @@
 #define THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_UTILS_TF_TO_JSV_PROTO_H_
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
-#include "runtime/core/proto/host_buffer.pb.h"  // from @neptune
-#include "runtime/serving/gcp/proto/predict.pb.h"  // from @neptune
+#include "protos/grpc/host_buffer.pb.h"  // from @neptune
+#include "protos/grpc/predict.pb.h"  // from @neptune
 #include "tensorflow/core/framework/tensor.pb.h"  // from @org_tensorflow
 
 namespace neptune {

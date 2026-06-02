@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package neptune.serving;
 
-import "runtime/serving/gcp/proto/model.proto";
-import "runtime/serving/gcp/proto/predict.proto";
+import "protos/grpc/model.proto";
+import "protos/grpc/predict.proto";
 
 option cc_enable_arenas = true;
 
