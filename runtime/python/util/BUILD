@@ -4,7 +4,6 @@ py_library(
     name = "model_exporter",
     srcs = ["model_exporter.py"],
     visibility = [
-        "//learning/infra/mira/experimental/orbax_model/interpreter/testdata:__subpackages__",
         "@neptune//:__subpackages__",
     ],
     deps = [

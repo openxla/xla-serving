@@ -101,7 +101,6 @@ cc_library(
     name = "warmup",
     srcs = ["warmup.cc"],
     hdrs = ["warmup.h"],
-    visibility = ["//learning/serving/servables/tfrt:__pkg__"],
     deps = [
         "@abseil-cpp//absl/base:core_headers",
         "@abseil-cpp//absl/container:flat_hash_map",

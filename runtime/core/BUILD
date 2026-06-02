@@ -4,10 +4,6 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 package_group(
     name = "core_users",
     packages = [
-        "//learning/brain/experimental/jax_data/...",
-        "//learning/infra/mira/experimental/orbax_model/core/...",
-        "//learning/infra/mira/experimental/orbax_model/interpreter/...",
-        "//learning/infra/mira/experimental/orbax_model/python/...",
         "//runtime/core/google/...",
         "//runtime/core/stablehlo_transforms/...",
         "//runtime/data_loader/...",
@@ -16,7 +12,6 @@ package_group(
         "//runtime/python/...",
         "//runtime/serving/...",
         "//runtime/tensorflow/...",
-        "//smartass/brain/server/...",
     ],
 )
 
@@ -33,7 +28,6 @@ cc_library(
     hdrs = ["constants.h"],
     visibility = [
         ":core_users",
-        "//learning/serving/controller/validation:__subpackages__",
     ],
 )
 
@@ -41,13 +35,6 @@ cc_library(
     name = "common_util",
     srcs = ["common_util.cc"],
     hdrs = ["common_util.h"],
-    visibility = [
-        "//learning/infra/mira/experimental/orbax_model/core:__pkg__",
-        "//learning/serving/servolab:__subpackages__",
-        "//learning/tfx/pipeline/infra_validation:__pkg__",
-        "//quality/qrewrite/testing/guitar:__pkg__",
-        "//smartass/brain/util:__pkg__",
-    ],
     deps = [
         ":constants",
         "@abseil-cpp//absl/status",
@@ -332,7 +319,6 @@ cc_library(
     srcs = ["flat_signature.cc"],
     hdrs = ["flat_signature.h"],
     visibility = [
-        "//learning/infra/mira/experimental/orbax_model/core:__subpackages__",
         "@neptune//runtime/interpreter:__subpackages__",
         "@neptune//runtime/interpreter:interpreter_users",
         "@neptune//runtime/kernel:__subpackages__",
@@ -495,8 +481,6 @@ cc_library(
     hdrs = ["allocator.h"],
     visibility = [
         ":core_users",
-        "//learning/brain/tfrt/orbax_model:__subpackages__",
-        "//learning/serving/servables/tfrt:__subpackages__",
         "@neptune//runtime/core/batching:__subpackages__",
         "@neptune//runtime/core/google:__subpackages__",
     ],
@@ -507,7 +491,6 @@ cc_library(
     hdrs = ["default_allocator.h"],
     visibility = [
         ":core_users",
-        "//learning/brain/tfrt/orbax_model:__subpackages__",
         "@neptune//runtime/core/batching:__subpackages__",
     ],
     deps = [

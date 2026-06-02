@@ -3,7 +3,6 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 package_group(
     name = "kernel_users",
     packages = [
-        "//learning/infra/mira/experimental/orbax_model/tensorflow/...",
         "//runtime/interpreter/...",
         "//runtime/tensorflow/...",
     ],
@@ -12,7 +11,6 @@ package_group(
 package_group(
     name = "kernel_internal",
     packages = [
-        "//learning/infra/mira/experimental/orbax_model/tensorflow/kernel/...",
         "//runtime/kernel/...",
     ],
 )

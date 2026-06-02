@@ -1,7 +1,6 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(default_visibility = [
-    "//learning/infra/mira/experimental/orbax_model:__subpackages__",
     "@neptune//runtime:__subpackages__",
 ])
 

@@ -4,8 +4,6 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 package_group(
     name = "tf_function_internal_users",
     packages = [
-        "//learning/infra/mira/experimental/orbax_model/interpreter/...",
-        "//learning/infra/mira/experimental/orbax_model/tensorflow/...",
         "//runtime/python/...",
         "//runtime/serving/...",
     ],
@@ -18,7 +16,7 @@ package_group(
     ],
 )
 
-# Include this library in the `deps` of the `cc_binary` together with `//learning/infra/mira/experimental/orbax_model/interpreter` to enable TF-based preprocessing and postprocessing.
+# Include this library in the `deps` of the `cc_binary` runtime/interpreter/BUILDto enable TF-based preprocessing and postprocessing.
 cc_library(
     name = "tf_compatible_optional_function_handler",
     srcs = ["tf_compatible_optional_function_handler.cc"],
@@ -95,8 +93,6 @@ cc_library(
     hdrs = ["tf_compatible_interpreter_create_options.h"],
     visibility = [
         ":tf_function_internal_users",
-        "//learning/infra/mira/experimental/orbax_model/tensorflow:__subpackages__",
-        "//learning/serving/servables/tfrt:__subpackages__",
         "@neptune//runtime/interpreter:interpreter_users",
     ],
     deps = [
@@ -105,7 +101,7 @@ cc_library(
     ],
 )
 
-# Include this library in the `deps` of the `cc_binary` together with `//learning/infra/mira/experimental/orbax_model/interpreter` to enable TF-based preprocessing and postprocessing.
+# Include this library in the `deps` of the `cc_binary` to enable TF-based preprocessing and postprocessing.
 cc_library(
     name = "interpreter_tensorflow_support",
     visibility = [

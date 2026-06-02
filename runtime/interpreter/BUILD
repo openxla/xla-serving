@@ -3,7 +3,6 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 package_group(
     name = "internal",
     packages = [
-        "//learning/infra/mira/experimental/orbax_model/interpreter/...",
         "//runtime/interpreter/...",
         "//runtime/serving/google/streaming/...",
     ],
@@ -12,13 +11,7 @@ package_group(
 package_group(
     name = "interpreter_users",
     packages = [
-        "//learning/infra/mira/experimental/orbax_model/interpreter/...",
-        "//learning/infra/mira/experimental/orbax_model/serving/...",
         "//runtime/...",
-        "//smartass/brain/lemming/...",
-        "//smartass/brain/server/...",
-        "//tasks/predictions/pctr/serving/models/...",
-        "//video/youtube/discovery/ml_infra/...",
     ],
 )
 
@@ -30,7 +23,6 @@ cc_library(
     name = "optional_function_handler",
     hdrs = ["optional_function_handler.h"],
     visibility = [
-        "//learning/infra/mira/experimental/orbax_model/tensorflow:__subpackages__",
         "@neptune//runtime/tensorflow:__subpackages__",
     ],
     deps = [
@@ -49,7 +41,6 @@ cc_library(
     srcs = ["optional_function_handler_factory.cc"],
     hdrs = ["optional_function_handler_factory.h"],
     visibility = [
-        "//learning/infra/mira/experimental/orbax_model/tensorflow:__subpackages__",
         "@neptune//runtime/tensorflow:__subpackages__",
     ],
     deps = [
@@ -85,10 +76,6 @@ cc_library(
     srcs = ["manifest_utils.cc"],
     hdrs = ["manifest_utils.h"],
     visibility = [
-        "//learning/infra/mira/experimental/orbax_model/interpreter:__subpackages__",
-        "//learning/infra/mira/experimental/orbax_model/tensorflow:__subpackages__",
-        "//learning/tfx/pipeline/infra_validation:__subpackages__",
-        "//smartass/brain/server/graph_processing:__subpackages__",
         "@neptune//runtime/core:__subpackages__",
         "@neptune//runtime/data_loader:__subpackages__",
         "@neptune//runtime/kernel:__subpackages__",
@@ -155,7 +142,7 @@ cc_library(
 
 # This is the interpreter that can run JAX-only models. This target is TF-free.
 # To run models with TensorFlow preprocessing and postprocessing, link the
-# "//learning/infra/mira/experimental/orbax_model/tensorflow:interpreter_tensorflow_support" target.
+# "tensorflow:interpreter_tensorflow_support" target.
 cc_library(
     name = "interpreter",
     srcs = ["interpreter.cc"],
@@ -240,7 +227,6 @@ cc_library(
     # This is intended for internal implementation only and should not be exposed to users.
     visibility = [
         ":internal",
-        "//learning/infra/mira/experimental/orbax_model/tensorflow/kernel:__subpackages__",
         "@neptune//runtime/core:__subpackages__",
         "@neptune//runtime/kernel:__subpackages__",
         "@neptune//runtime/tensorflow:__subpackages__",
@@ -260,7 +246,6 @@ cc_library(
     hdrs = ["clock.h"],
     visibility = [
         ":internal",
-        "//learning/infra/mira/experimental/orbax_model/tensorflow/kernel:__subpackages__",
         "@neptune//runtime/kernel:__subpackages__",
         "@neptune//runtime/tensorflow:__subpackages__",
         "@neptune//runtime/tensorflow/kernel:__pkg__",
@@ -284,43 +269,11 @@ cc_library(
 )
 
 cc_library(
-    name = "interpreter_with_jax_processing_test_lib",
-    testonly = 1,
-    srcs = ["interpreter_with_jax_processing_test.cc"],
-    data = [
-        "//learning/infra/mira/experimental/orbax_model/interpreter/testdata:simple_model_with_jax_processing",
-    ],
-    visibility = [
-        "@neptune//runtime/interpreter/google:__subpackages__",
-    ],
-    deps = [
-        ":interpreter",
-        ":interpreter_create_options",
-        ":interpreter_test_base",
-        "//devtools/build/runtime:get_runfiles_dir",
-        "//testing/base/public:gunit_for_library_testonly",
-        "//testing/base/public:gunit_main",
-        "@abseil-cpp//absl/strings:string_view",
-        "@abseil-cpp//absl/types:span",
-        "@neptune//runtime/core:host_buffer",
-        "@neptune//runtime/core:host_buffer_matcher",
-        "@neptune//runtime/core:host_buffer_test_utils",
-        "@neptune//runtime/core:value",
-        "@neptune//runtime/core:value_matcher",
-        "@xla//xla/python/ifrt",
-        "@xla//xla/tsl/platform:statusor",
-    ],
-    alwayslink = 1,
-)
-
-cc_library(
     name = "interpreter_create_options",
     hdrs = ["interpreter_create_options.h"],
     visibility = [
         ":internal",
         ":interpreter_users",
-        # For TF-compatible interpreter to add more TF-specific options.
-        "//learning/infra/mira/experimental/orbax_model/tensorflow:__subpackages__",
     ],
     deps = [
         "@abseil-cpp//absl/base:nullability",
