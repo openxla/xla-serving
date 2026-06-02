@@ -9,6 +9,7 @@ package_group(
         "//learning/infra/mira/experimental/orbax_model/interpreter/...",
         "//learning/infra/mira/experimental/orbax_model/python/...",
         "//runtime/core/google/...",
+        "//runtime/core/stablehlo_transforms/...",
         "//runtime/data_loader/...",
         "//runtime/interpreter/...",
         "//runtime/kernel/...",
