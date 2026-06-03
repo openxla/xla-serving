@@ -26,11 +26,15 @@
 namespace neptune {
 
 absl::Status IsOrbaxModelDirectory(absl::string_view path) {
+  tsl::Env* env = tsl::Env::Default();
+  const std::string neptune_model_manifest_version_path =
+      tsl::io::JoinPath(path, kNeptuneModelManifestVersionTxt);
+  if (env->FileExists(neptune_model_manifest_version_path).ok()) {
+    return absl::OkStatus();
+  }
   const std::string orbax_model_manifest_version_path =
       tsl::io::JoinPath(path, kOrbaxModelManifestVersionTxt);
-  tsl::Env* env = tsl::Env::Default();
-  TF_RETURN_IF_ERROR(env->FileExists(orbax_model_manifest_version_path));
-  return absl::OkStatus();
+  return env->FileExists(orbax_model_manifest_version_path);
 }
 
 }  // namespace neptune
