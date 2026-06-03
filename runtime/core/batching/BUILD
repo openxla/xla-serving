@@ -24,6 +24,9 @@ cc_library(
 
 cc_library(
     name = "shared_batch_scheduler",
+    srcs = [
+        "queue_base.h",
+    ],
     hdrs = ["shared_batch_scheduler.h"],
     deps = [
         ":batch_scheduler",
