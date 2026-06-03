@@ -124,9 +124,10 @@ ConvertArgsKwargsToInputs(nb::args args, nb::kwargs kwargs,
 class ModelRunner : public std::enable_shared_from_this<ModelRunner> {
  public:
   static std::shared_ptr<ModelRunner> Create(absl::string_view model_name,
-                                             absl::string_view model_path) {
+                                             absl::string_view model_path,
+                                             absl::string_view platform = "") {
     return std::shared_ptr<ModelRunner>(
-        new ModelRunner(model_name, model_path));
+        new ModelRunner(model_name, model_path, platform));
   }
 
   // Signature is a wrapper of `neptune::Interpreter` exposed to Python for
@@ -174,15 +175,17 @@ class ModelRunner : public std::enable_shared_from_this<ModelRunner> {
   Signature GetSignature(absl::string_view signature_name);
 
  private:
-  ModelRunner(absl::string_view model_name, absl::string_view model_path) {
+  ModelRunner(absl::string_view model_name, absl::string_view model_path,
+              absl::string_view platform) {
     LOG(INFO) << "Using ModelRunner to load model '" << model_name
               << "' from: " << model_path;
-    ThrowIfError(Initialize(model_name, model_path),
+    ThrowIfError(Initialize(model_name, model_path, platform),
                  "Failed to initialize ModelRunner");
   }
 
   absl::Status Initialize(absl::string_view model_name,
-                          absl::string_view model_path);
+                          absl::string_view model_path,
+                          absl::string_view platform);
   static constexpr int kThreadPoolNumThreads = 16;
   std::unique_ptr<tsl::thread::ThreadPool> execute_worker_thread_pool_;
   std::shared_ptr<xla::ifrt::Client> client_;
@@ -194,17 +197,21 @@ class ModelRunner : public std::enable_shared_from_this<ModelRunner> {
 };
 
 absl::Status ModelRunner::Initialize(absl::string_view model_name,
-                                     absl::string_view model_path) {
-  std::string platform = "cpu";
-  TF_ASSIGN_OR_RETURN(client_, neptune::CreateIfrtClient(platform));
-  if (platform == "cpu") {
+                                     absl::string_view model_path,
+                                     absl::string_view platform) {
+  std::string platform_str(platform);
+  if (platform_str.empty()) {
+    platform_str = "cpu";
+  }
+  TF_ASSIGN_OR_RETURN(client_, neptune::CreateIfrtClient(platform_str));
+  if (platform_str == "cpu") {
     host_ifrt_client_ = client_;
   } else {
     TF_ASSIGN_OR_RETURN(auto pjrt_client,
                         xla::GetXlaPjrtCpuClient(xla::CpuClientOptions()));
     host_ifrt_client_ = xla::ifrt::PjRtClient::Create(std::move(pjrt_client));
   }
-  LOG(INFO) << "Platform: " << platform
+  LOG(INFO) << "Platform: " << platform_str
             << ". Device count: " << client_->device_count();
 
   execute_worker_thread_pool_ = std::make_unique<tsl::thread::ThreadPool>(
@@ -228,7 +235,7 @@ absl::Status ModelRunner::Initialize(absl::string_view model_name,
       execute_worker_thread_pool_.get();
   create_options->ifrt_client = client_;
   create_options->host_ifrt_client = host_ifrt_client_;
-  create_options->platform_name = platform;
+  create_options->platform_name = platform_str;
   create_options->computation_thread_pool = computation_thread_pool_.get();
   TF_ASSIGN_OR_RETURN(interpreter_,
                       neptune::Interpreter::Create(std::move(create_options)));
@@ -304,7 +311,8 @@ NB_MODULE(model_runner, m) {
 
   nb::class_<ModelRunner>(m, "ModelRunner")
       .def(nb::new_(&ModelRunner::Create),
-           nb::arg("model_name") = "called_from_python", nb::arg("model_path"))
+           nb::arg("model_name") = "called_from_python", nb::arg("model_path"),
+           nb::arg("platform") = "")
       .def("ifrt_platform_name", &ModelRunner::IfrtPlatformName,
            "Gets the platform name (e.g. 'cpu', 'tpu') of the IFRT client.")
       .def("ifrt_device_count", &ModelRunner::IfrtDeviceCount,
