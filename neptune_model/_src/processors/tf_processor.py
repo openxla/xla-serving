@@ -22,7 +22,7 @@ import jaxtyping
 
 from neptune_model._src.core import persistence_lib
 from neptune_model._src.core import saveable
-from neptune_model._src.core import value
+from neptune_model._src.processors import processor
 
 
 def _require_tf2npt():
@@ -50,7 +50,7 @@ def save_tf_functions(
 
 
 @dataclasses.dataclass(frozen=True)
-class PreparedTfProcessor:
+class PreparedTfProcessor(processor.ProcessorDefaults):
   """TensorFlow processor that is prepared for export."""
 
   name: str
@@ -64,17 +64,8 @@ class PreparedTfProcessor:
   def output_signature(self) -> jaxtyping.PyTree:
     return self.prepared_function.serializable_fn.output_signature
 
-  @property
-  def weights_name(self) -> str | None:
-    return None
-
   def to_npt_saveable(self) -> saveable.Saveable:
     return self.prepared_function.serializable_fn
-
-  def on_persist(
-      self,
-  ) -> Callable[[str], Mapping[str, value.ExternalValue]] | None:
-    return None
 
 
 @dataclasses.dataclass(frozen=True)

@@ -31,6 +31,7 @@ from neptune_model._src.core import value
 from neptune_model._src.export import constants
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import utils
+from neptune_model._src.processors import processor
 
 
 def _infer_polymorphic_signature(
@@ -118,7 +119,7 @@ def _calculate_jax_model_input_sig(
 
 
 @dataclasses.dataclass(frozen=True)
-class PreparedJaxProcessor:
+class PreparedJaxProcessor(processor.ProcessorDefaults):
   """JAX processor that is prepared for export."""
 
   name: str

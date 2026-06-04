@@ -14,12 +14,13 @@
 
 """Neptune model processing pipelines describe how to orchestrate processors around a model."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 import dataclasses
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 
 import jaxtyping
 
+from neptune_model._src.core import persistence_lib
 from neptune_model._src.core import saveable
 from neptune_model._src.core import value
 
@@ -48,7 +49,15 @@ class PreparedProcessor(Protocol):
 
   def on_persist(
       self,
-  ) -> Callable[[str], Mapping[str, value.ExternalValue]] | None:
+  ) -> (
+      Callable[
+          [str],
+          Mapping[
+              str, value.ExternalValue | persistence_lib.GlobalSupplemental
+          ],
+      ]
+      | None
+  ):
     """A callback that runs prior to saving the processor during the export.
 
     Returns:
@@ -59,6 +68,42 @@ class PreparedProcessor(Protocol):
       saved.
     """
     ...
+
+
+class ProcessorDefaults:
+  """Defaults for PreparedProcessor methods."""
+
+  @property
+  def weights_name(self) -> str | None:
+    """Returns the name of the weights associated with this processor.
+
+    Returns:
+      A string representing the name of the weights, or None if no weights
+      are associated.
+    """
+    return None
+
+  def on_persist(
+      self,
+  ) -> (
+      Callable[
+          [str],
+          Mapping[
+              str, value.ExternalValue | persistence_lib.GlobalSupplemental
+          ],
+      ]
+      | None
+  ):
+    """A callback that runs prior to saving the processor during the export.
+
+    Returns:
+      The function that can be used to save extra objects
+      for the processor. The function takes the export path as an argument
+      and returns a mapping of object names to ExternalValues that should be
+      saved for this processor. Returns None if no extra objects should be
+      saved.
+    """
+    return None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
