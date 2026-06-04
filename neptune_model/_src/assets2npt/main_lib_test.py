@@ -12,83 +12,64 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import hashlib
 import os
 
 from absl.testing import absltest
 from absl.testing import parameterized
 
 from neptune_model._src.assets2npt import main_lib
-from neptune_model._src.core import persistence_lib
-from neptune_model.protos import asset_map_pb2
 
 
 class Assets2NptMainLibTest(parameterized.TestCase):
 
-  @parameterized.named_parameters(
-      ('no_suffix', 'foo.txt', 'foo.txt'),
-      ('single_suffix', 'foo_1.txt', 'foo.txt'),
-      ('large_suffix', 'foo_123.txt', 'foo.txt'),
-      ('multiple_suffixes', 'foo_1_2.txt', 'foo.txt'),
-      ('non_numeric', 'foo_bar.txt', 'foo_bar.txt'),
-      ('trailing_underscore_no_num', 'foo_.txt', 'foo_.txt'),
-      ('no_extension', 'foo_1', 'foo'),
-  )
-  def test_normalize_file_name(self, input_name, expected_name):
-    self.assertEqual(main_lib._normalize_file_name(input_name), expected_name)
+  def test_get_file_hexdigest(self):
+    temp_file = self.create_tempdir().create_file('test.txt', 'hello world')
+    expected_hash = hashlib.sha256(b'hello world').hexdigest()
+    self.assertEqual(main_lib._get_file_hexdigest(temp_file.full_path),
+                     expected_hash)
 
-  def test_asset_map_builder_add_asset_idempotent(self):
-    builder = main_lib._AssetMapBuilder()
-    builder.add_asset('/path/to/foo.txt', 'my_supp')
-    builder.add_asset('/path/to/foo.txt', 'my_supp')  # Should be skipped
-    self.assertLen(builder.asset_map.assets, 1)
-    self.assertEqual(
-        builder.asset_map.assets['/path/to/foo.txt'], 'my_supp/assets/foo.txt'
-    )
+  def test_asset_map(self):
+    dir_path = self.create_tempdir()
+    file_a = dir_path.create_file('a.txt', 'content a').full_path
+    file_b = dir_path.create_file('b.txt', 'content b').full_path
 
-  def test_asset_map_builder_name_collision(self):
-    builder = main_lib._AssetMapBuilder()
-    builder.add_asset('/path1/foo.txt', 'my_supp')
-    builder.add_asset('/path2/foo.txt', 'my_supp')
-    builder.add_asset('/path3/foo_1.txt', 'my_supp')
+    hash_a = hashlib.sha256(b'content a').hexdigest()
+    hash_b = hashlib.sha256(b'content b').hexdigest()
 
-    self.assertLen(builder.asset_map.assets, 3)
-    self.assertEqual(
-        builder.asset_map.assets['/path1/foo.txt'], 'my_supp/assets/foo.txt'
-    )
-    self.assertEqual(
-        builder.asset_map.assets['/path2/foo.txt'], 'my_supp/assets/foo_1.txt'
-    )
-    self.assertEqual(
-        builder.asset_map.assets['/path3/foo_1.txt'], 'my_supp/assets/foo_2.txt'
-    )
-
-  def test_build_asset_map(self):
-    asset_sources = ['/path/b/foo.txt', '/path/a/foo.txt']
-    asset_map = main_lib.build_asset_map('my_supp', asset_sources)
+    asset_map = main_lib.AssetMap()
+    dest_a = asset_map.add_asset(file_a)
+    dest_b = asset_map.add_asset(file_b)
 
     self.assertLen(asset_map.assets, 2)
-    self.assertEqual(
-        asset_map.assets['/path/a/foo.txt'], 'my_supp/assets/foo.txt'
-    )
-    self.assertEqual(
-        asset_map.assets['/path/b/foo.txt'], 'my_supp/assets/foo_1.txt'
-    )
+    self.assertEqual(dest_a, os.path.join('assets', hash_a))
+    self.assertEqual(dest_b, os.path.join('assets', hash_b))
+    self.assertEqual(asset_map.assets[file_a], dest_a)
+    self.assertEqual(asset_map.assets[file_b], dest_b)
 
-  def test_save_assets_invalid_supplemental_name(self):
-    with self.assertRaisesRegex(
-        ValueError, 'Supplemental name must contain only alphanumeric'
-    ):
-      main_lib.save_assets('invalid name!', ['a', 'b'], '/tmp/export')
+  def test_asset_map_deduplication(self):
+    dir_path = self.create_tempdir()
+    file_a = dir_path.create_file('a.txt', 'shared content').full_path
+    file_b = dir_path.create_file('b.txt', 'shared content').full_path
 
-  def test_save_assets_empty_assets(self):
-    result = main_lib.save_assets('my_supp', [], '/tmp/export')
-    self.assertEqual(result, {})
+    expected_hash = hashlib.sha256(b'shared content').hexdigest()
+    expected_dest = os.path.join('assets', expected_hash)
 
-  @parameterized.named_parameters(
-      ('list_argument', False),
-      ('map_argument', True),
-  )
-  def test_save_assets_success(self, use_map_argument):
+    asset_map = main_lib.AssetMap()
+    dest_a = asset_map.add_asset(file_a)
+    dest_b = asset_map.add_asset(file_b)
+
+    self.assertLen(asset_map.assets, 2)
+    self.assertEqual(dest_a, expected_dest)
+    self.assertEqual(dest_b, expected_dest)
+
+  def test_save_assets_empty(self):
+    asset_map = main_lib.AssetMap()
+    export_dir = self.create_tempdir('export_path').full_path
+    result = main_lib.save_assets(asset_map, export_dir)
+    self.assertIsNone(result)
+
+  def test_save_assets_success(self):
     src_dir = self.create_tempdir('src_path').full_path
     export_dir = self.create_tempdir('export_path').full_path
 
@@ -100,32 +81,18 @@ class Assets2NptMainLibTest(parameterized.TestCase):
     with open(src_file2, 'w') as f:
       f.write('content2')
 
-    assets = [src_file1, src_file2]
-    if use_map_argument:
-      assets = main_lib.build_asset_map('my_supp', assets)
+    hash1 = hashlib.sha256(b'content1').hexdigest()
+    hash2 = hashlib.sha256(b'content2').hexdigest()
 
-    result = main_lib.save_assets('my_supp', assets, export_dir)
+    asset_map = main_lib.AssetMap()
+    asset_map.add_asset(src_file1)
+    asset_map.add_asset(src_file2)
 
-    self.assertIsNotNone(result)
-    self.assertIn('my_supp', result)
-    supp = result['my_supp']
-    self.assertIsInstance(supp, persistence_lib.GlobalSupplemental)
-    self.assertEqual(supp.save_as, 'my_supp_asset_map.pb')
-    self.assertEqual(
-        supp.data.mime_type,
-        'application/protobuf; type=neptune_assets.AssetMap',
-    )
-    self.assertEqual(supp.data.version, '0.0.1')
+    result = main_lib.save_assets(asset_map, export_dir)
+    self.assertIsNone(result)
 
-    asset_map = asset_map_pb2.AssetMap()
-    asset_map.ParseFromString(supp.data.inlined_bytes)
-
-    self.assertLen(asset_map.assets, 2)
-    self.assertIn(src_file1, asset_map.assets)
-    self.assertIn(src_file2, asset_map.assets)
-
-    dest_file1 = os.path.join(export_dir, asset_map.assets[src_file1])
-    dest_file2 = os.path.join(export_dir, asset_map.assets[src_file2])
+    dest_file1 = os.path.join(export_dir, 'assets', hash1)
+    dest_file2 = os.path.join(export_dir, 'assets', hash2)
 
     self.assertTrue(os.path.exists(dest_file1))
     self.assertTrue(os.path.exists(dest_file2))
@@ -139,14 +106,13 @@ class Assets2NptMainLibTest(parameterized.TestCase):
     export_dir = self.create_tempdir('export').full_path
     src_file = self.create_tempdir('src').create_file('asset.txt').full_path
 
-    asset_map = asset_map_pb2.AssetMap()
-    # Simulate a destination path that traverses outside export_path.
-    asset_map.assets[src_file] = '../../outside.txt'
+    asset_map = main_lib.AssetMap()
+    # Manually insert a malicious path into the internal dictionary
+    # to test validation.
+    asset_map._assets[src_file] = '../../outside.txt'
 
-    with self.assertRaisesRegex(
-        ValueError, 'outside of the model export path'
-    ):
-      main_lib.save_assets('my_supp', asset_map, export_dir)
+    with self.assertRaisesRegex(ValueError, 'outside of the model export path'):
+      main_lib.save_assets(asset_map, export_dir)
 
 
 if __name__ == '__main__':

@@ -14,6 +14,7 @@
 
 """Tests for neptune.model._src.export.main_lib."""
 
+import hashlib
 import pathlib
 
 from absl.testing import absltest
@@ -29,7 +30,6 @@ from neptune_model._src.export import jax_model
 from neptune_model._src.export import main_lib
 from neptune_model._src.export import serving_config
 from neptune_model._src.processors import processor
-from neptune_model.protos import asset_map_pb2
 from neptune_model.protos import manifest_pb2
 from neptune_model.protos import orchestration_pb2
 
@@ -424,9 +424,9 @@ class SaveModelTest(test_utils.NptTestCase):
               )
           ),
       }
-      result.update(
-          assets2npt.save_assets('my_supp', [str(src_asset)], export_path)
-      )
+      asset_map = assets2npt.AssetMap()
+      asset_map.add_asset(str(src_asset))
+      assets2npt.save_assets(asset_map, export_path)
       return result
 
     class PreparedTestProcessor:
@@ -492,22 +492,9 @@ class SaveModelTest(test_utils.NptTestCase):
     manifest_proto = persistence_lib.load(export_path)
 
     with self.subTest(name='validate_assets'):
-      self.assertIn('my_supp', manifest_proto.supplemental_info)
-      supp = manifest_proto.supplemental_info['my_supp']
-      self.assertEqual(
-          supp.mime_type,
-          'application/protobuf; type=neptune_assets.AssetMap',
-      )
-      self.assertEqual(
-          supp.file_system_location.string_path, 'my_supp_asset_map.pb'
-      )
-      asset_map_path = pathlib.Path(export_path) / 'my_supp_asset_map.pb'
-      asset_map = asset_map_pb2.AssetMap.FromString(asset_map_path.read_bytes())
-      self.assertLen(asset_map.assets, 1)
-      self.assertIn(str(src_asset), asset_map.assets)
-      dest_relative_path = asset_map.assets[str(src_asset)]
-      self.assertEqual(dest_relative_path, 'my_supp/assets/asset1.txt')
-      dest_asset_path = pathlib.Path(export_path) / dest_relative_path
+      self.assertNotIn('my_supp', manifest_proto.supplemental_info)
+      expected_hash = hashlib.sha256(b'asset_content').hexdigest()
+      dest_asset_path = pathlib.Path(export_path) / 'assets' / expected_hash
       self.assertTrue(dest_asset_path.exists())
       self.assertEqual(dest_asset_path.read_text(), 'asset_content')
 

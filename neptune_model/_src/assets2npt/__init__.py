@@ -14,5 +14,5 @@
 
 """Required __init__ file for package."""
 
-from neptune_model._src.assets2npt.main_lib import build_asset_map
+from neptune_model._src.assets2npt.main_lib import AssetMap
 from neptune_model._src.assets2npt.main_lib import save_assets
