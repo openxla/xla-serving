@@ -8,6 +8,7 @@ package_group(
     name = "checkpoint_users",
     packages = [
         "//runtime/interpreter/...",
+        "//smartass/brain/lemming/...",
     ],
 )
 
