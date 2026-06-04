@@ -15,22 +15,21 @@
 """Library for saving assets to Neptune model."""
 
 from collections.abc import Mapping
-import hashlib
 import os
 import pathlib
+
+import blake3
 
 from neptune_model._src.core import file_utils
 
 ASSETS_SUBDIR = 'assets'
 
-_HASH_CHUNK_SIZE = 2 * 1024 * 1024  # 2 MiB
 
-
-def _get_file_hexdigest(path: str) -> str:
-  """Returns the hexdigest of the file at the given path."""
-  hasher = hashlib.sha256()
+def file_hexdigest(path: str) -> str:
+  """Returns the BLAKE3 hexdigest of the file at the given path."""
+  hasher = blake3.blake3()
   with open(path, 'rb') as f:
-    while chunk := f.read(_HASH_CHUNK_SIZE):
+    while chunk := f.read(2 * 1024 * 1024):  # 2 MiB
       hasher.update(chunk)
   return hasher.hexdigest()
 
@@ -64,7 +63,7 @@ class AssetMap:
     if dest_path := self._assets.get(source_path):
       return dest_path
 
-    hexdigest = _get_file_hexdigest(source_path)
+    hexdigest = file_hexdigest(source_path)
     dest_relative_path = os.path.join(ASSETS_SUBDIR, hexdigest)
     self._assets[source_path] = dest_relative_path
     return dest_relative_path

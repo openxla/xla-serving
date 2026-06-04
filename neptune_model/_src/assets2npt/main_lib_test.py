@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import hashlib
 import os
 
 from absl.testing import absltest
@@ -23,19 +22,22 @@ from neptune_model._src.assets2npt import main_lib
 
 class Assets2NptMainLibTest(parameterized.TestCase):
 
-  def test_get_file_hexdigest(self):
+  def test_file_hexdigest(self):
     temp_file = self.create_tempdir().create_file('test.txt', 'hello world')
-    expected_hash = hashlib.sha256(b'hello world').hexdigest()
-    self.assertEqual(main_lib._get_file_hexdigest(temp_file.full_path),
-                     expected_hash)
+    file_hash = main_lib.file_hexdigest(temp_file.full_path)
+    self.assertEqual(
+        file_hash,
+        # blake3.blake3(b'hello world').hexdigest()
+        'd74981efa70a0c880b8d8c1985d075dbcbf679b99a5f9914e5aaf96b831a9e24',
+    )
 
   def test_asset_map(self):
     dir_path = self.create_tempdir()
     file_a = dir_path.create_file('a.txt', 'content a').full_path
     file_b = dir_path.create_file('b.txt', 'content b').full_path
 
-    hash_a = hashlib.sha256(b'content a').hexdigest()
-    hash_b = hashlib.sha256(b'content b').hexdigest()
+    hash_a = main_lib.file_hexdigest(file_a)
+    hash_b = main_lib.file_hexdigest(file_b)
 
     asset_map = main_lib.AssetMap()
     dest_a = asset_map.add_asset(file_a)
@@ -52,7 +54,7 @@ class Assets2NptMainLibTest(parameterized.TestCase):
     file_a = dir_path.create_file('a.txt', 'shared content').full_path
     file_b = dir_path.create_file('b.txt', 'shared content').full_path
 
-    expected_hash = hashlib.sha256(b'shared content').hexdigest()
+    expected_hash = main_lib.file_hexdigest(file_a)
     expected_dest = os.path.join('assets', expected_hash)
 
     asset_map = main_lib.AssetMap()
@@ -81,8 +83,8 @@ class Assets2NptMainLibTest(parameterized.TestCase):
     with open(src_file2, 'w') as f:
       f.write('content2')
 
-    hash1 = hashlib.sha256(b'content1').hexdigest()
-    hash2 = hashlib.sha256(b'content2').hexdigest()
+    hash1 = main_lib.file_hexdigest(src_file1)
+    hash2 = main_lib.file_hexdigest(src_file2)
 
     asset_map = main_lib.AssetMap()
     asset_map.add_asset(src_file1)

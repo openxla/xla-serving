@@ -493,7 +493,7 @@ class SaveModelTest(test_utils.NptTestCase):
 
     with self.subTest(name='validate_assets'):
       self.assertNotIn('my_supp', manifest_proto.supplemental_info)
-      expected_hash = hashlib.sha256(b'asset_content').hexdigest()
+      expected_hash = assets2npt.main_lib.file_hexdigest(str(src_asset))
       dest_asset_path = pathlib.Path(export_path) / 'assets' / expected_hash
       self.assertTrue(dest_asset_path.exists())
       self.assertEqual(dest_asset_path.read_text(), 'asset_content')
