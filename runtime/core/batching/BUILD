@@ -24,10 +24,11 @@ cc_library(
 
 cc_library(
     name = "shared_batch_scheduler",
-    srcs = [
+    hdrs = [
+        "fifo_queue.h",
         "queue_base.h",
+        "shared_batch_scheduler.h",
     ],
-    hdrs = ["shared_batch_scheduler.h"],
     deps = [
         ":batch_scheduler",
         ":batch_scheduler_utils",
