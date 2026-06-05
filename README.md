@@ -119,7 +119,7 @@ In order to build the image at head, please run:
 
 ```
 bazel run -c opt \
-//runtime/serving/gcp/server:neptune_serving_pusher_cpu \
+//runtime/serving/gcp/server:neptune_serving_pusher \
 -- --repository=<Path to Artifact registry> \
 --tag=latest
 ```
@@ -128,7 +128,7 @@ To build with Tensorflow dependencies
 
 ```
 bazel run -c opt --define ENABLE_TF=1 \
-//runtime/serving/gcp/server:neptune_serving_pusher_cpu \
+//runtime/serving/gcp/server:neptune_serving_pusher \
 -- --repository=<Path to Artifact registry> --tag=latest
 ```
 
