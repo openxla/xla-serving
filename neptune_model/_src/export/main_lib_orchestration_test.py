@@ -15,11 +15,11 @@
 import pathlib
 
 from absl.testing import absltest
+from google.protobuf import text_format
 import jax
 import jax.numpy as jnp
 import tensorflow as tf
 
-from google.protobuf import text_format
 from neptune_model._src.core import persistence_lib
 from neptune_model._src.core import test_utils
 from neptune_model._src.export import jax_model

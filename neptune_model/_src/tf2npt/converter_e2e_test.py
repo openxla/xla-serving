@@ -15,9 +15,9 @@
 import os
 
 from absl.testing import absltest
+from google.protobuf import text_format
 import tensorflow as tf
 
-from google.protobuf import text_format
 from neptune_model._src.core import persistence_lib
 from neptune_model._src.core import test_utils
 from neptune_model._src.tf2npt import converter

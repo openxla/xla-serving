@@ -17,6 +17,7 @@ import pathlib
 
 from absl.testing import absltest
 from absl.testing import parameterized
+from google.protobuf import text_format
 import jax
 from jax import export as jax_export
 from jax import sharding as jax_sharding
@@ -24,7 +25,6 @@ from jax.experimental import mesh_utils
 import jax.numpy as jnp
 import orbax.checkpoint as ocp
 
-from google.protobuf import text_format
 from neptune_model._src.core import persistence_lib as npt_core
 from neptune_model._src.core import test_utils
 from neptune_model._src.jax2npt import main_lib
