@@ -341,4 +341,49 @@ message BatchOptions {
 
   // The mixed priority batching policy for the batch scheduler.
   MixedPriorityBatchingPolicy mixed_priority_batching_policy = 10;
+
+  // Controls whether the pipeline gets its own threads or shares a global pool.
+  enum SchedulerScope {
+    // If unspecified, LOCAL_TO_PIPELINE will be used.
+    SCHEDULER_SCOPE_UNSPECIFIED = 0;
+    // Use a dedicated thread pool for the pipeline.
+    LOCAL_TO_PIPELINE = 1;
+    // Use a shared global pool for all pipelines.
+    SHARED_GLOBAL = 2;
+  }
+
+  // Controls how batch threads pick the next queue to process
+  enum QueueSelectionPolicy {
+    // If unspecified, ROUND_ROBIN will be used.
+    QUEUE_SELECTION_POLICY_UNSPECIFIED = 0;
+    // Scheduler threads picks the next queue in a round-robin manner.
+    ROUND_ROBIN = 1;
+    // Scheduler threads pick the next queue based on priority.
+    PRIORITY_RANKED = 2;
+  }
+
+  // Contains the configuration for the batch scheduler.
+  message SchedulerConfig {
+    SchedulerScope scheduler_scope = 1;
+    QueueSelectionPolicy queue_selection_policy = 2;
+  }
+
+  // Contains the configuration for the scheduler.
+  SchedulerConfig scheduler_config = 11;
+
+  // Controls the internal queue batching strategy
+  enum PriorityBatchingPolicy {
+    // If unspecified, STRICT_FIFO will be used.
+    PRIORITY_BATCHING_POLICY_UNSPECIFIED = 0;
+    // Process requests strictly in FIFO order.
+    STRICT_FIFO = 1;
+    // Process requests based on a 4-level priority system (Critical+, Critical,
+    // Sheddable+, and Sheddable) defined by `tsl::criticality::Criticality`.
+    // Tasks are sorted by criticality, then by arrival time. Supports task
+    // eviction to prevent priority inversion.
+    PRIORITY_AWARE = 2;
+  }
+
+  // Controls the internal queue batching strategy.
+  PriorityBatchingPolicy priority_batching_policy = 12;
 }
