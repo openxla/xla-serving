@@ -556,11 +556,14 @@ absl::Status BatchResourceBase::ConcatInputBuffers(
       }
     }
 
-    RecordExecutedBatchSize(context->metadata.model_name,
-                            context->metadata.model_version, padded_batch_size);
+    if (!just_for_warmup) {
+      RecordExecutedBatchSize(context->metadata.model_name,
+                              context->metadata.model_version,
+                              padded_batch_size);
 
-    RecordPaddingSize(padding_amount, context->metadata.model_name,
-                      context->metadata.model_version, padded_batch_size);
+      RecordPaddingSize(padding_amount, context->metadata.model_name,
+                        context->metadata.model_version, padded_batch_size);
+    }
 
     TF_ASSIGN_OR_RETURN(
         HostBuffer concatenated_buffer,
