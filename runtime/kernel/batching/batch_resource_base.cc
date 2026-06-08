@@ -555,18 +555,18 @@ absl::Status BatchResourceBase::ConcatInputBuffers(
         to_concatenate.push_back(padding);
       }
     }
-
-    RecordExecutedBatchSize(context->metadata.model_name,
-                            context->metadata.model_version, padded_batch_size);
-
-    RecordPaddingSize(padding_amount, context->metadata.model_name,
-                      context->metadata.model_version, padded_batch_size);
-
     TF_ASSIGN_OR_RETURN(
         HostBuffer concatenated_buffer,
         Concat(thread_pool_, to_concatenate, batcher_queue_options_.allocator));
     concatenated_buffers->push_back(concatenated_buffer);
   }
+
+  RecordExecutedBatchSize(context->metadata.model_name,
+                          context->metadata.model_version, padded_batch_size);
+
+  RecordPaddingSize(padding_amount, context->metadata.model_name,
+                    context->metadata.model_version, padded_batch_size);
+
   return absl::OkStatus();
 }
 
