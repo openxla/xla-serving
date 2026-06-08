@@ -162,6 +162,7 @@ cc_library(
         ":run_options",
         "@com_google_protobuf//:protobuf_lite",
         "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/base:no_destructor",
         "@abseil-cpp//absl/base:nullability",
         "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/flags:flag",
@@ -192,9 +193,9 @@ cc_library(
         "@neptune//runtime/kernel/batching:batch_options_utils",
         "@neptune//runtime/kernel/batching:batch_runner_op",
         "@neptune//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",  # buildcleaner: keep
+        "@tsl//tsl/platform:blocking_counter",
         "@tsl//tsl/platform:context",
         "@tsl//tsl/platform:path",
-        "@tsl//tsl/profiler/lib:traceme",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/python/ifrt",
         "@xla//xla/tsl/concurrency:future",

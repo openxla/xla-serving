@@ -157,6 +157,9 @@ class Interpreter {
   // lazy loading is enabled.
   absl::Status Load();
 
+  // Loads the graphs of all registered pipelines.
+  absl::Status LoadGraphs();
+
   struct GraphBundle {
     // TODO: Remove this constructor once we upgrate oss neptune to
     // C++ 20.

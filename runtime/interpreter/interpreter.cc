@@ -25,6 +25,7 @@
 #include <variant>
 #include <vector>
 
+#include "absl/base/no_destructor.h"  // from @abseil-cpp
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/flags/flag.h"  // from @abseil-cpp
@@ -73,9 +74,9 @@
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
+#include "tsl/platform/blocking_counter.h"  // from @tsl
 #include "tsl/platform/context.h"  // from @tsl
 #include "tsl/platform/path.h"  // from @tsl
-#include "tsl/profiler/lib/traceme.h"  // from @tsl
 
 ABSL_FLAG(bool, jsv_enable_parallel_loading_pipelines, true,
           "When set to true, load the pipelines in parallel.");
@@ -180,27 +181,6 @@ CreateAuxiliaryComponents(
     component->set_role(neptune_model_orchestration::ROLE_POSTPROCESSOR);
   }
   return components;
-}
-
-// Creates batched kernels.
-absl::StatusOr<std::vector<std::unique_ptr<Kernel>>> CreateBatchedKernels(
-    std::vector<KernelSubGraph> pre_processor_sub_graphs,
-    std::unique_ptr<Kernel> stablehlo_runner_op,
-    std::vector<KernelSubGraph> post_processor_sub_graphs) {
-  std::vector<std::unique_ptr<Kernel>> batched_kernels;
-  for (auto& sub_graph : pre_processor_sub_graphs) {
-    batched_kernels.insert(batched_kernels.end(),
-                           std::make_move_iterator(sub_graph.begin()),
-                           std::make_move_iterator(sub_graph.end()));
-  }
-
-  batched_kernels.push_back(std::move(stablehlo_runner_op));
-  for (auto& sub_graph : post_processor_sub_graphs) {
-    batched_kernels.insert(batched_kernels.end(),
-                           std::make_move_iterator(sub_graph.begin()),
-                           std::make_move_iterator(sub_graph.end()));
-  }
-  return batched_kernels;
 }
 
 // Build a BatchKernel from a list of kernels to be batched.
@@ -712,26 +692,36 @@ absl::Status Interpreter::Load() {
   if (create_options_->lazy_loading_pipelines) {
     return absl::OkStatus();
   }
+  return LoadGraphs();
+}
+
+absl::Status Interpreter::LoadGraphs() {
   bool parallel_loading =
       absl::GetFlag(FLAGS_jsv_enable_parallel_loading_pipelines);
   LOG(INFO) << "Loading graphs from pipelines";
   if (parallel_loading) {
-    // If lazy loading is not enabled, load the graph eagerly.
-    std::vector<std::unique_ptr<tsl::Thread>> graph_loading_threads;
+    static absl::NoDestructor<tsl::thread::ThreadPool> shared_loading_pool(
+        tsl::Env::Default(), "JsvGraphLoaderPool", 8);
+    tsl::BlockingCounter counter(graph_bundles_.size());
     for (auto& [pipeline_name, graph_bundle] : graph_bundles_) {
-      LOG(INFO) << "Loading graph from pipeline: " << pipeline_name;
+      LOG(INFO) << "Scheduling graph load from pipeline: " << pipeline_name;
+
       tsl::Context context(tsl::ContextKind::kThread);
+      GraphBundle* bundle = graph_bundle.get();
       // Load all graphs eagerly and concurrently.
-      graph_loading_threads.emplace_back(tsl::Env::Default()->StartThread(
-          tsl::ThreadOptions(),
-          absl::StrCat("graph_loading_thread_", pipeline_name),
-          [this, &graph_bundle, context = std::move(context)]() {
-            absl::MutexLock l(graph_bundle->graph_mutex);
-            tsl::WithContext wc(context);
-            graph_bundle->graph.emplace(LoadGraph(graph_bundle->pipeline));
-          }));
+      shared_loading_pool->Schedule(
+          [this, bundle,
+           ctx = std::make_shared<tsl::Context>(std::move(context)),
+           &counter]() mutable {
+            {
+              absl::MutexLock l(bundle->graph_mutex);
+              tsl::WithContext wc(*ctx);
+              bundle->graph.emplace(LoadGraph(bundle->pipeline));
+            }
+            counter.DecrementCount();
+          });
     }
-    graph_loading_threads.clear();  // The threads will be joined here.
+    counter.Wait();
     // Check the status of all graphs and return error if any graph fails to
     // load.
     for (auto& [pipeline_name, graph_bundle] : graph_bundles_) {
