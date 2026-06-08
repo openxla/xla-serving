@@ -29,6 +29,7 @@ from neptune_model._src.core import value
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import main_lib
 from neptune_model._src.export import serving_config
+from neptune_model._src.export import warmup
 from neptune_model._src.processors import processor
 from neptune_model.protos import manifest_pb2
 from neptune_model.protos import orchestration_pb2
@@ -503,6 +504,38 @@ class SaveModelTest(test_utils.NptTestCase):
       val = manifest_proto.objects['my_value'].value.external.data
       self.assertEqual(val.mime_type, 'test/value')
       self.assertEqual(val.inlined_string, 'value_content')
+
+  def test_save_model_with_warmup(self):
+    """Tests that save() works with warmup examples."""
+    model = jax_model.JaxModel(
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=lambda params, inputs: {'out': inputs['x'] * params['w']},
+            jax_export_kwargs={'platforms': ['cpu']},
+        ),
+        params={'w': jnp.array([2.0], dtype=jnp.float32)},
+    )
+    cfg = serving_config.ServingConfig(
+        serving_signature='serving_default',
+        input_signature={
+            'x': jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.float32)
+        },
+    )
+    export_path = self.create_tempdir().full_path
+    warmup_examples = {
+        'serving_default': [{'x': jnp.ones((4,), dtype=jnp.float32)}],
+    }
+    main_lib.save(
+        model=model,
+        export_path=export_path,
+        serving_configs=[cfg],
+        warmup_examples=warmup_examples,
+    )
+    warmup_file = (
+        pathlib.Path(export_path)
+        / warmup.ASSETS_EXTRA_DIR
+        / warmup.WARMUP_REQUESTS_FILENAME
+    )
+    self.assertTrue(warmup_file.exists())
 
 
 class ValidateSaveParamsTest(absltest.TestCase):

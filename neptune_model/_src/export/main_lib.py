@@ -38,6 +38,7 @@ from neptune_model._src.export import constants
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import serving_config
 from neptune_model._src.export import utils
+from neptune_model._src.export import warmup
 from neptune_model._src.processors import jax_processor
 from neptune_model._src.processors import processor
 from neptune_model._src.processors import tf_processor
@@ -313,6 +314,8 @@ def save(
     model: jax_model.JaxModel,
     export_path: str,
     serving_configs: Sequence[serving_config.ServingConfig],
+    *,
+    warmup_examples: Mapping[str, Sequence[Any]] | None = None,
 ) -> None:
   """Saves a JAX model to neptune model format.
 
@@ -320,6 +323,9 @@ def save(
     model: The JAX model to save.
     export_path: The directory to which to save the model.
     serving_configs: The serving configurations.
+    warmup_examples: Optional mapping of serving signatures to a sequence of
+      warmup examples. Each example is a dictionary mapping input names to
+      tensors, NumPy arrays, or any object convertible to a NumPy array.
   """
   logging.info(
       'Saving model=%s to export_path=%s with serving_configs=%s',
@@ -386,3 +392,13 @@ def save(
       target_dir=export_path,
       options=save_options,
   )
+
+  if warmup_examples is not None:
+    serving_signatures = {cfg.serving_signature for cfg in serving_configs}
+    for sig in warmup_examples:
+      if sig not in serving_signatures:
+        raise ValueError(
+            f'Warmup example signature {sig!r} does not match any serving'
+            f' config signature: {list(serving_signatures)}'
+        )
+    warmup.write_warmup_file(warmup_examples, export_path)
