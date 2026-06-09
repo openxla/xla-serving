@@ -50,6 +50,7 @@
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/OperationSupport.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/OwningOpRef.h"  // from @llvm-project
+#include "runtime/core/device_buffer.h"  // from @neptune
 #include "runtime/core/h2d_transfer_executor.h"  // from @neptune
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "runtime/core/ifrt_device_utils.h"  // from @neptune
@@ -61,6 +62,7 @@
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
 #include "runtime/core/streaming/stream.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
+#include "runtime/core/value_utils.h"  // from @neptune
 #include "runtime/interpreter/manifest_utils.h"  // from @neptune
 #include "runtime/libs/ifrt/executable_build_utils.h"  // from @neptune
 #include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
@@ -71,6 +73,7 @@
 #include "xla/layout.h"  // from @xla
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
+#include "xla/python/ifrt/array_spec.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
@@ -471,7 +474,7 @@ StableHloRunner::CreateExecutableSynchronously(
 
   if (VLOG_IS_ON(1)) {
     DumpMlirOpToFile("stablehlo_module_after_optimization",
-                          module_bundle->module.get());
+                     module_bundle->module.get());
   }
 
   TF_ASSIGN_OR_RETURN(
@@ -516,8 +519,8 @@ StableHloRunner::CreateExecutableSynchronously(
 
   executable_bundle->ifrt_executable = std::move(ifrt_executable);
   executable_bundle->program_fingerprint_with_timestamp =
-      GetProgramFingerprintWithTimestamp(
-          executable_bundle->ifrt_executable, absl::Now());
+      GetProgramFingerprintWithTimestamp(executable_bundle->ifrt_executable,
+                                         absl::Now());
 
   executable_bundle->callback_id = callback_id;
 
@@ -572,7 +575,7 @@ StableHloRunner::LookUpOrCreateExecutable(
   LOG(INFO) << "Cache missed. Building executable";
   if (VLOG_IS_ON(1)) {
     DumpMlirOpToFile("stablehlo_module_before_compilation",
-                          module_bundle->module.get());
+                     module_bundle->module.get());
   }
 
   StablehloOptimizer::Args args;
@@ -659,7 +662,7 @@ StableHloRunner::LookupWeights(std::optional<size_t> device_id) {
       continue;
     }
 
-    const ArgSpec& weight_spec = weights_specs[i].value();
+    const ArgSpec& weight_spec = *weights_specs[i];
     const auto& weight_name = weights_[i];
     std::optional<xla::Layout> layout = std::nullopt;
     if (weight_spec.layout.has_value()) {
@@ -703,8 +706,8 @@ StableHloRunner::LookupWeights(std::optional<size_t> device_id) {
   return arrays;
 }
 
-absl::StatusOr<std::vector<HostBuffer>> StableHloRunner::Execute(
-    absl::Span<const HostBuffer> inputs) {
+absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
+    absl::Span<const neptune::Value> inputs, ExecuteOptions options) {
   tsl::profiler::TraceMe trace_me([&]() {
     return tsl::profiler::TraceMeEncode("StableHloRunner::Execute", {});
   });
@@ -731,13 +734,34 @@ absl::StatusOr<std::vector<HostBuffer>> StableHloRunner::Execute(
     }
   });
 
+  std::vector<HostBuffer> host_buffers;
+  std::vector<neptune::DeviceBuffer> device_buffers;
+  if (options.require_h2d) {
+    TF_ASSIGN_OR_RETURN(host_buffers,
+                        neptune::internal::UnpackFromValues<HostBuffer>(inputs));
+  } else {
+    TF_ASSIGN_OR_RETURN(
+        device_buffers,
+        neptune::internal::UnpackFromValues<neptune::DeviceBuffer>(inputs));
+  }
+
   // Lookup the executable bundle in the cache.
   std::vector<xla::ifrt::Shape> input_shapes;
   std::vector<xla::ifrt::DType> input_dtypes;
-  input_shapes.reserve(inputs.size());
-  for (const auto& input : inputs) {
-    input_shapes.push_back(input.shape());
-    input_dtypes.push_back(input.dtype());
+  if (options.require_h2d) {
+    input_shapes.reserve(host_buffers.size());
+    input_dtypes.reserve(host_buffers.size());
+    for (const auto& input : host_buffers) {
+      input_shapes.push_back(input.shape());
+      input_dtypes.push_back(input.dtype());
+    }
+  } else {
+    input_shapes.reserve(device_buffers.size());
+    input_dtypes.reserve(device_buffers.size());
+    for (const auto& input : device_buffers) {
+      input_shapes.push_back(input.ifrt_array->shape());
+      input_dtypes.push_back(input.ifrt_array->dtype());
+    }
   }
   TF_ASSIGN_OR_RETURN(
       SharedCachedExecutableBundle executable_bundle,
@@ -805,40 +829,69 @@ absl::StatusOr<std::vector<HostBuffer>> StableHloRunner::Execute(
   }
 
   std::vector<HostBuffer> reshaped_inputs;
-  reshaped_inputs.reserve(inputs.size());
-  // `input_idx` is used to track the index of used inputs in stablehlo spec.
-  for (int i = 0; i < used_input_indices.size(); ++i) {
-    int idx_in_stablehlo_spec = i + executable_bundle->input_offset;
-    int original_input_idx = used_input_indices[i];
-    // If the optimizer is not set, the input shape won't be changed. If the
-    // input is already rank 1 or is a scalar, we can copy the input without
-    // doing any reshaping.
-    if (optimizer_ == nullptr ||
-        inputs[original_input_idx].shape().dims().size() <= 1) {
-      reshaped_inputs.push_back(std::move(inputs[original_input_idx]));
-      continue;
+  std::vector<xla::ifrt::ArrayRef> converted_device_inputs;
+  if (options.require_h2d) {
+    reshaped_inputs.reserve(used_input_indices.size());
+    for (int i = 0; i < used_input_indices.size(); ++i) {
+      int idx_in_stablehlo_spec = i + executable_bundle->input_offset;
+      int original_input_idx = used_input_indices[i];
+      auto& original_input = host_buffers[original_input_idx];
+
+      // If the optimizer is not set, the input shape won't be changed. If the
+      // input is already rank 1 or is a scalar, we can copy the input without
+      // doing any reshaping.
+      if (optimizer_ == nullptr || original_input.shape().dims().size() <= 1) {
+        reshaped_inputs.push_back(std::move(original_input));
+        continue;
+      }
+
+      // R1 optimization is applied, the shape expected by StableHlo is changed
+      // to rank 1, so here we need to reshape the input to rank 1.
+      xla::ifrt::Shape shape = ToIfrtShape(
+          executable_bundle->io_spec.inputs[idx_in_stablehlo_spec].shape);
+
+      // The original HostBuffer in `inputs` will be alive during the execution,
+      // so there is no need to give the `reshaped_buffer` an owner.
+      HostBuffer reshaped_buffer(original_input.base(), original_input.dtype(),
+                                 shape);
+      reshaped_inputs.push_back(std::move(reshaped_buffer));
     }
-    // R1 optimization is applied, the shape expected by StableHlo is changed
-    // to rank 1, so here we need to reshape the input to rank 1.
-    xla::ifrt::Shape shape = ToIfrtShape(
-        executable_bundle->io_spec.inputs[idx_in_stablehlo_spec].shape);
-    // The original HostBuffer in `inputs` will be alive during the execution,
-    // so there is no need to give the `reshaped_buffer` an owner.
-    HostBuffer reshaped_buffer(inputs[original_input_idx].base(),
-                               inputs[original_input_idx].dtype(), shape);
-    reshaped_inputs.push_back(std::move(reshaped_buffer));
+  } else {
+    converted_device_inputs.reserve(used_input_indices.size());
+    for (int i = 0; i < used_input_indices.size(); ++i) {
+      int idx_in_stablehlo_spec = i + executable_bundle->input_offset;
+      int original_input_idx = used_input_indices[i];
+      xla::ifrt::ArrayRef original_input =
+          device_buffers[original_input_idx].ifrt_array;
+
+      xla::ifrt::Shape target_shape = ToIfrtShape(
+          executable_bundle->io_spec.inputs[idx_in_stablehlo_spec].shape);
+
+      if (original_input->shape() != target_shape) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Zero-copy D2D execution (require_h2d=false) requires the input "
+            "shape to exactly match the optimized model's target shape. "
+            "Expected ",
+            target_shape, ", but got ", original_input->shape(), ". "));
+      }
+      converted_device_inputs.push_back(std::move(original_input));
+    }
+  }
+
+  // TODO: Consider validating that the inputs and outputs match
+  // the model IO spec before converting.
+  std::vector<xla::ifrt::ArrayRef> converted_inputs;
+  if (options.require_h2d) {
+    TF_ASSIGN_OR_RETURN(
+        converted_inputs,
+        data_converter->ConvertInput(reshaped_inputs, *executable_bundle,
+                                     executable_bundle->input_offset));
+  } else {
+    converted_inputs = std::move(converted_device_inputs);
   }
 
   std::vector<xla::ifrt::ArrayRef> inputs_with_weights;
   inputs_with_weights.reserve(executable_bundle->module_kept_var_idx.size());
-
-  // TODO: Consider validating that the inputs and outputs match
-  // the model IO spec before converting.
-  TF_ASSIGN_OR_RETURN(
-      std::vector<xla::ifrt::ArrayRef> converted_inputs,
-      data_converter->ConvertInput(reshaped_inputs, *executable_bundle,
-                                   executable_bundle->input_offset));
-
   for (int idx : executable_bundle->module_kept_var_idx) {
     if (idx < weights_array.size()) {
       const auto& weight_array = weights_array[idx];
@@ -849,7 +902,7 @@ absl::StatusOr<std::vector<HostBuffer>> StableHloRunner::Execute(
             "usually indicates the weight was incorrectly treated as unused, "
             "thus not being loaded."));
       }
-      inputs_with_weights.push_back(weight_array.value());
+      inputs_with_weights.push_back(*weight_array);
     }
   }
   // `converted_inputs` only contains used inputs, so we just insert them
@@ -858,7 +911,7 @@ absl::StatusOr<std::vector<HostBuffer>> StableHloRunner::Execute(
                              std::make_move_iterator(converted_inputs.begin()),
                              std::make_move_iterator(converted_inputs.end()));
   TF_ASSIGN_OR_RETURN(
-      auto execution_result,
+      xla::ifrt::LoadedExecutable::ExecuteResult execution_result,
       executable_bundle->ifrt_executable->Execute(
           absl::MakeSpan(inputs_with_weights),
           /*options=*/
@@ -871,8 +924,30 @@ absl::StatusOr<std::vector<HostBuffer>> StableHloRunner::Execute(
               ? std::make_optional(data_converter->device_list())
               : std::nullopt));
   TF_RETURN_IF_ERROR(execution_result.status.Await());
-  return data_converter->ConvertOutput(absl::MakeSpan(execution_result.outputs),
-                                       executable_bundle->io_spec);
+
+  if (options.require_d2h) {
+    TF_ASSIGN_OR_RETURN(
+        std::vector<HostBuffer> host_outputs,
+        data_converter->ConvertOutput(absl::MakeSpan(execution_result.outputs),
+                                      executable_bundle->io_spec));
+    return neptune::internal::PackAsValues(std::move(host_outputs));
+  } else {
+    std::vector<neptune::DeviceBuffer> device_outputs;
+    device_outputs.reserve(execution_result.outputs.size());
+    for (int i = 0; i < execution_result.outputs.size(); ++i) {
+      // TODO: Precompute and cache the `xla::ifrt::HloSharding`
+      // (or `xla::ifrt::ShardingRef`) directly in the `CachedExecutableBundle`.
+      // Currently, copying `xla::HloSharding` by value per-request and
+      // dynamically recreating the `ifrt_sharding` during D2H transfers brings
+      // unnecessary CPU overhead.
+      device_outputs.push_back(neptune::DeviceBuffer{
+          .ifrt_client = ifrt_client_,
+          .ifrt_array = std::move(execution_result.outputs[i]),
+          .sharding = executable_bundle->io_spec.outputs[i].sharding,
+          .device_list = data_converter->device_list()});
+    }
+    return neptune::internal::PackAsValues(std::move(device_outputs));
+  }
 }
 
 absl::Status StableHloRunner::MarkFullyInitialized() {

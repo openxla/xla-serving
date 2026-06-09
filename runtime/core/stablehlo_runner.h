@@ -19,6 +19,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -44,6 +45,7 @@
 #include "runtime/core/stablehlo.h"  // from @neptune
 #include "runtime/core/stablehlo_optimizer.h"  // from @neptune
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
+#include "runtime/core/value.h"  // from @neptune
 #include "runtime/interpreter/manifest_utils.h"  // from @neptune
 #include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
 #include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @neptune
@@ -100,14 +102,29 @@ class StableHloRunner {
     return loaded_stablehlo_->num_outputs();
   }
 
+  struct ExecuteOptions {
+    bool require_h2d = true;
+    bool require_d2h = true;
+  };
+
   // Executes the computation.
   // Only user provided input arguments are passed to this function. The weights
   // (as passed to `Create`) will be looked in `IfrtLoadedVariableRegistry` from
   // the variable name. These will be passed as the first arguments to the
-  // computation. The underlying data under Value of inputs should be
-  // `HostBuffer`. Otherwise, it will return errors.
-  absl::StatusOr<std::vector<HostBuffer>> Execute(
-      absl::Span<const HostBuffer> inputs);
+  // computation. The inputs and outputs are wrapped in `neptune::Value` containers.
+  // If options.require_h2d is true, the underlying type of each input value
+  // must be `HostBuffer`. If options.require_d2h is true, each returned value
+  // will wrap a `HostBuffer`. If these options are false, Stage 1 will return
+  // absl::UnimplementedError since PJRT array handles are not yet
+  // supported directly.
+  absl::StatusOr<std::vector<neptune::Value>> Execute(
+      absl::Span<const neptune::Value> inputs, ExecuteOptions options);
+
+  // Executes the computation using the default ExecuteOptions.
+  absl::StatusOr<std::vector<neptune::Value>> Execute(
+      absl::Span<const neptune::Value> inputs) {
+    return Execute(inputs, ExecuteOptions{});
+  }
 
   // Returns the number of executables in the cache.
   int num_executables() const {
@@ -366,8 +383,7 @@ class StableHloRunner {
   // The persistent compilation cache is a global cache and is not owned by
   // this StableHloRunner. When it is nullptr, the persistent compilation cache
   // is disabled at ifrt serving level.
-  IfrtPersistentCompilationCache* absl_nullable
-      persistent_compilation_cache_;
+  IfrtPersistentCompilationCache* absl_nullable persistent_compilation_cache_;
 
   IfrtLoadedVariableRegistry& ifrt_loaded_variable_registry_;  // NOT OWNED.
 

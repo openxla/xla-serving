@@ -130,7 +130,6 @@ cc_library(
         "@neptune//runtime/core:stablehlo_optimizer",
         "@neptune//runtime/core:stablehlo_runner",
         "@neptune//runtime/core:value",
-        "@neptune//runtime/core:value_utils",
         "@neptune//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",
         "@neptune//runtime/libs/ifrt/serving_core_selector",
         "@tsl//tsl/profiler/lib:traceme",

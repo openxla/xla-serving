@@ -179,11 +179,22 @@ cc_library(
 )
 
 cc_library(
+    name = "device_buffer",
+    hdrs = ["device_buffer.h"],
+    visibility = [":core_users"],
+    deps = [
+        "@xla//xla/hlo/ir:hlo_sharding",
+        "@xla//xla/python/ifrt",
+    ],
+)
+
+cc_library(
     name = "stablehlo_runner",
     srcs = ["stablehlo_runner.cc"],
     hdrs = ["stablehlo_runner.h"],
     visibility = [":core_users"],
     deps = [
+        ":device_buffer",
         ":h2d_transfer_executor",
         ":host_buffer",
         ":ifrt_device_utils",
@@ -194,6 +205,7 @@ cc_library(
         ":stablehlo_optimizer",
         ":stablehlo_utils",
         ":value",
+        ":value_utils",
         "@com_google_protobuf//:protobuf",
         "@abseil-cpp//absl/base",
         "@abseil-cpp//absl/base:core_headers",

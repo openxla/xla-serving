@@ -36,7 +36,6 @@
 #include "runtime/core/stablehlo_optimizer.h"  // from @neptune
 #include "runtime/core/stablehlo_runner.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
-#include "runtime/core/value_utils.h"  // from @neptune
 #include "runtime/kernel/kernel.h"  // from @neptune
 #include "runtime/kernel/kernel_builder_constants.h"  // from @neptune
 #include "runtime/kernel/kernel_builder_context.h"  // from @neptune
@@ -158,27 +157,23 @@ absl::Status StableHloRunnerOp::RunInternal(ExecuteContext& context) {
   tsl::profiler::TraceMe trace_me([&]() {
     return tsl::profiler::TraceMeEncode(
         "StableHloRunnerOp::Run",
-        {{"model_id",
-          absl::StrCat(context.metadata.model_name, ":",
-                       context.metadata.model_version)}});
+        {{"model_id", absl::StrCat(context.metadata.model_name, ":",
+                                   context.metadata.model_version)}});
   });
-  std::vector<HostBuffer> inputs;
+  std::vector<Value> flat_inputs_values;
+  absl::Span<const Value> inputs_span;
   if (input_signature_) {
-    std::vector<Value> flat_inputs_values;
     // Use strict_match=false because named_values may contain values not used
     // by this kernel.
     TF_RETURN_IF_ERROR(
         input_signature_->FillArgs(flat_inputs_values, context.named_values));
-    TF_ASSIGN_OR_RETURN(inputs, internal::UnpackFromValues<HostBuffer>(
-                                    std::move(flat_inputs_values)));
+    inputs_span = flat_inputs_values;
   } else {
-    TF_ASSIGN_OR_RETURN(inputs, internal::UnpackFromValues<HostBuffer>(
-                                    std::move(context.inputs)));
+    inputs_span = context.inputs;
   }
 
-  TF_ASSIGN_OR_RETURN(std::vector<HostBuffer> outputs,
-                      stablehlo_runner_->Execute(inputs));
-  std::vector<Value> output_values = internal::PackAsValues(std::move(outputs));
+  TF_ASSIGN_OR_RETURN(std::vector<Value> output_values,
+                      stablehlo_runner_->Execute(inputs_span));
   if (output_signature_) {
     TF_ASSIGN_OR_RETURN(
         auto map, output_signature_->UnflattenToMap(std::move(output_values)));
@@ -189,7 +184,7 @@ absl::Status StableHloRunnerOp::RunInternal(ExecuteContext& context) {
       }
     }
   } else {
-    context.outputs = output_values;
+    context.outputs = std::move(output_values);
   }
   return absl::OkStatus();
 }
