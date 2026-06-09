@@ -31,6 +31,10 @@ bazel_dep(name = "rules_ml_toolchain")
 archive_override(
     module_name = "rules_ml_toolchain",
     integrity = "sha256-koXZBgF1eDjQZKEvUfFDdNQAZN3C+hmJeZCLa9D4k0g=",
+    patch_strip = 1,
+    patches = [
+        "//third_party/rules_ml_toolchain:patch_nvcc_wrapper.patch",
+    ],
     strip_prefix = "rules_ml_toolchain-7f40603f574b95746152332ef3ad5fce63f1768d",
     urls = ["https://github.com/google-ml-infra/rules_ml_toolchain/archive/7f40603f574b95746152332ef3ad5fce63f1768d.tar.gz"],
 )
@@ -145,14 +149,14 @@ use_repo(oci, "cuda_base")
 ##############################################################
 # Dependencies defined in rules_ml_toolchain
 ##############################################################
-# nccl_configure = use_extension("@rules_ml_toolchain//extensions:nccl_configure.bzl", "nccl_configure_ext")
-# use_repo(nccl_configure, "local_config_nccl")
+nccl_configure = use_extension("@rules_ml_toolchain//extensions:nccl_configure.bzl", "nccl_configure_ext")
+use_repo(nccl_configure, "local_config_nccl")
 
 sycl_configure = use_extension("@rules_ml_toolchain//extensions:sycl_configure.bzl", "sycl_configure_ext")
 use_repo(sycl_configure, "local_config_sycl")
 
-# nccl_redist = use_extension("@rules_ml_toolchain//extensions:nccl_redist.bzl", "nccl_redist_ext")
-# use_repo(nccl_redist, "cuda_nccl")
+nccl_redist = use_extension("@rules_ml_toolchain//extensions:nccl_redist.bzl", "nccl_redist_ext")
+use_repo(nccl_redist, "cuda_nccl")
 
 ### CUDA dependencies
 cuda_configure = use_extension("@rules_ml_toolchain//extensions:cuda_configure.bzl", "cuda_configure_ext")
@@ -160,9 +164,6 @@ use_repo(cuda_configure, "local_config_cuda")
 
 cuda_json_ext = use_extension("@rules_ml_toolchain//extensions:cuda_json.bzl", "cuda_json_ext")
 use_repo(cuda_json_ext, "cuda_redist_json")
-
-nccl_configure = use_extension("@rules_ml_toolchain//extensions:nccl_configure.bzl", "nccl_configure_ext")
-use_repo(nccl_configure, "local_config_nccl")
 
 cuda_redist_init_ext = use_extension("@rules_ml_toolchain//extensions:cuda_redist_init.bzl", "cuda_redist_init_ext")
 use_repo(
@@ -199,6 +200,9 @@ override_repo(
 )
 
 ### Toolchains
+toolchain_ext = use_extension("@rules_ml_toolchain//extensions:toolchain.bzl", "toolchain_ext")
+use_repo(toolchain_ext, "llvm18_linux_x86_64", "llvm_linux_x86_64")
+
 register_toolchains("@rules_ml_toolchain//cc:linux_x86_64_linux_x86_64")
 
 register_toolchains("@rules_ml_toolchain//cc:linux_x86_64_linux_x86_64_cuda")
@@ -206,6 +210,15 @@ register_toolchains("@rules_ml_toolchain//cc:linux_x86_64_linux_x86_64_cuda")
 register_toolchains("@rules_ml_toolchain//cc:linux_aarch64_linux_aarch64")
 
 register_toolchains("@rules_ml_toolchain//cc:linux_aarch64_linux_aarch64_cuda")
+
+register_toolchains("@rules_ml_toolchain//cc:linux_x86_64_linux_x86_64_sycl")
+
+### Other local config repos
+local_clang_configure = use_extension("@rules_ml_toolchain//extensions:local_clang_configure.bzl", "local_clang_configure_ext")
+use_repo(local_clang_configure, "local_config_clang")
+
+hipcc_configure = use_extension("@rules_ml_toolchain//extensions:hipcc_configure.bzl", "hipcc_configure_ext")
+use_repo(hipcc_configure, "config_rocm_hipcc")
 
 single_version_override(
     module_name = "rules_python",
@@ -238,5 +251,13 @@ single_version_override(
     patch_strip = 1,
     patches = [
         "//third_party/com_google_highway:build.patch",
+    ],
+)
+
+single_version_override(
+    module_name = "abseil-cpp",
+    patch_strip = 1,
+    patches = [
+        "//third_party/absl:btree.patch",
     ],
 )

@@ -3,6 +3,11 @@ common --enable_bzlmod --enable_workspace
 common --incompatible_enable_cc_toolchain_resolution
 common --repo_env USE_HERMETIC_CC_TOOLCHAIN=1
 
+common --define=PREFIX=/usr
+common --define=LIBDIR=$(PREFIX)/lib
+common --define=INCLUDEDIR=$(PREFIX)/include
+common --define=PROTOBUF_INCLUDE_PATH=$(PREFIX)/include
+
 # TODO: Migrate for https://github.com/bazelbuild/bazel/issues/7260
 common:clang_local --noincompatible_enable_cc_toolchain_resolution
 common:clang_local --@rules_ml_toolchain//common:enable_hermetic_cc=False
@@ -12,21 +17,34 @@ common:clang_local --repo_env USE_HERMETIC_CC_TOOLCHAIN=0
 # CUDA: This config refers to building CUDA op kernels with nvcc.
 # This flag is needed to include CUDA libraries.
 common:cuda --repo_env TF_NEED_CUDA=1
-common:cuda --repo_env TF_NCCL_USE_STUB=1
+common:cuda --define=no_nccl_support=true
 common:cuda --@local_config_cuda//:enable_cuda
 common:cuda --@local_config_cuda//cuda:include_cuda_libs=true
-common:cuda --define=no_nccl_support=true
 build:cuda --copt=-Wno-unused-command-line-argument
+build:cuda --copt=-Wno-gnu-offsetof-extensions
 
-# CUDA 12
+# CUDA 12 with clang
+common:cuda_v12_clang --config=cuda
+common:cuda_v12_clang --repo_env=HERMETIC_CUDA_VERSION="12.9.1"
+common:cuda_v12_clang --repo_env=HERMETIC_CUDNN_VERSION="9.8.0"
+common:cuda_v12_clang --repo_env=HERMETIC_NVSHMEM_VERSION="3.3.9"
+common:cuda_v12_clang --repo_env=HERMETIC_NCCL_VERSION="2.29.7"
+common:cuda_v12_clang --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_50,sm_60,sm_70,sm_80,sm_90"
+# common CUDA and other C++ targets with Clang
+common:cuda_v12 --@local_config_cuda//:cuda_compiler=clang
+
+
+# CUDA 12 with nvcc: It can support more cuda compute capabilities for newer
+# GPUs. This is the default for JAX and XLA as well.
 common:cuda_v12 --config=cuda
 common:cuda_v12 --repo_env=HERMETIC_CUDA_VERSION="12.9.1"
 common:cuda_v12 --repo_env=HERMETIC_CUDNN_VERSION="9.8.0"
 common:cuda_v12 --repo_env=HERMETIC_NVSHMEM_VERSION="3.3.9"
 common:cuda_v12 --repo_env=HERMETIC_NCCL_VERSION="2.29.7"
-common:cuda_v12 --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_70,sm_75,sm_80,sm_89,sm_90"
-# common CUDA and other C++ targets with Clang
-common:cuda_v12 --@local_config_cuda//:cuda_compiler=clang
+common:cuda_v12 --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_50,sm_60,sm_70,sm_80,sm_90,sm_100,compute_120"
+# common CUDA and other C++ targets with nvcc
+common:cuda_v12 --action_env=TF_NVCC_CLANG="1"
+common:cuda_v12 --@local_config_cuda//:cuda_compiler=nvcc
 
 common --experimental_repo_remote_exec
 
@@ -37,8 +55,10 @@ common --define=tsl_link_protobuf=true
 
 common --repository_cache=~/.bazel_repository_cache
 
-# Required by Abseil and Tensorstore to prevent compilation errors 
+# Required by Abseil and Tensorstore to prevent compilation errors
 # (e.g. InstantiateRawHashMap not found) and ensure correct ABI compatibility.
 # TODO: update to c++20
 build --cxxopt=-std=c++17
 build --cxxopt=-fsized-deallocation
+
+
