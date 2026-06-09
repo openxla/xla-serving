@@ -18,10 +18,10 @@ import contextlib
 import os
 import shutil
 
-
 _file_opener = open
 _mkdir_p = lambda path: os.makedirs(path, exist_ok=True)
 _copy = shutil.copyfile
+_exists = os.path.exists
 
 
 @contextlib.contextmanager
@@ -41,3 +41,7 @@ def mkdir_p(path: str) -> None:
 
 def copy(source: str, dest: str) -> None:
   _copy(source, dest)
+
+
+def exists(path: str) -> bool:
+  return _exists(path)

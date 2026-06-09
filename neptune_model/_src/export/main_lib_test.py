@@ -14,7 +14,6 @@
 
 """Tests for neptune.model._src.export.main_lib."""
 
-import hashlib
 import pathlib
 
 from absl.testing import absltest
@@ -412,9 +411,10 @@ class SaveModelTest(test_utils.NptTestCase):
 
   def test_save_model_with_assets(self):
     """Tests that on_persist_result returning either a supplemental or a value works."""
-    src_asset_dir = self.create_tempdir('src_assets').full_path
-    src_asset = pathlib.Path(src_asset_dir) / 'asset1.txt'
-    src_asset.write_text('asset_content')
+    src_asset_dir = self.create_tempdir('src_assets')
+    src_asset = src_asset_dir.create_file(
+        'asset1.txt', 'asset_content'
+    ).full_path
 
     def save_test_values(export_path: str):
       result = {
@@ -425,7 +425,7 @@ class SaveModelTest(test_utils.NptTestCase):
               )
           ),
       }
-      asset_map = assets2npt.AssetMap()
+      asset_map = assets2npt.AssetMap('test_processor')
       asset_map.add_asset(str(src_asset))
       assets2npt.save_assets(asset_map, export_path)
       return result
@@ -494,8 +494,9 @@ class SaveModelTest(test_utils.NptTestCase):
 
     with self.subTest(name='validate_assets'):
       self.assertNotIn('my_supp', manifest_proto.supplemental_info)
-      expected_hash = hashlib.sha256(b'asset_content').hexdigest()
-      dest_asset_path = pathlib.Path(export_path) / 'assets' / expected_hash
+      dest_asset_path = (
+          pathlib.Path(export_path) / 'test_processor' / 'assets' / 'asset1.txt'
+      )
       self.assertTrue(dest_asset_path.exists())
       self.assertEqual(dest_asset_path.read_text(), 'asset_content')
 
