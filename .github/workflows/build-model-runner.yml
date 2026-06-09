@@ -1,0 +1,44 @@
+name: Build Neptune Model Runner
+
+on:
+  workflow_dispatch: # Allows you to trigger the run manually from the GitHub UI
+
+jobs:
+  build-wheel:
+    name: "Build Neptune Model Runner Wheel (Python ${{ matrix.python-version }})"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # The 3.12 version can be used for any Python 3.12+.
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+
+      - name: Install Bazelisk
+        uses: bazel-contrib/setup-bazel@0.19.0
+
+      - name: Cache Bazel Build
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel
+          key: ${{ runner.os }}-bazel-model-runner-${{ matrix.python-version }}-${{ hashFiles('MODULE.bazel', 'WORKSPACE') }}
+          restore-keys: |
+            ${{ runner.os }}-bazel-model-runner-${{ matrix.python-version }}-
+
+      - name: Build Neptune Model Runner Wheel
+        env:  # This is needed to ensure that the Bazel build uses the correct Python version.
+          HERMETIC_PYTHON_VERSION: ${{ matrix.python-version }}
+        run: |
+          echo "Building Neptune Model Runner wheel for Python ${{ matrix.python-version }}..."
+          bazel build //runtime/python:neptune_model_runner --@rules_python//python/config_settings:python_version=${{ matrix.python-version }}
+
+      - name: Upload Wheel Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: neptune-model-runner-wheel-${{ matrix.python-version }}
+          path: bazel-bin/runtime/python/*.whl
