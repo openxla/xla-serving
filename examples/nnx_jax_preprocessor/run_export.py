@@ -20,10 +20,9 @@ from examples.nnx_jax_preprocessor import export
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
-    'export_path',
-    '/tmp/neptune_nnx_jax_preprocessor_export',
-    'Path to export model.',
+    'export_path', None, 'Path to export model.'
 )
+flags.mark_flag_as_required('export_path')
 
 
 def main(argv):

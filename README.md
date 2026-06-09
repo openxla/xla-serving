@@ -48,7 +48,7 @@ Run example model exports with `python -m`:
 
 ```bash
 python -m examples.nnx.export_test
-python -m examples.nnx.run_export
+python -m examples.nnx.run_export --export_path=/path/to/export_dir
 ```
 
 Build and install a wheel with `python -m build`:

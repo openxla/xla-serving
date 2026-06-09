@@ -17,7 +17,6 @@
 import os
 import tempfile
 
-from absl import app
 from absl import flags
 from flax import nnx
 import orbax.checkpoint as ocp
@@ -31,9 +30,6 @@ from neptune_model._src.processors import processor
 from neptune_model._src.processors import tf_processor
 
 FLAGS = flags.FLAGS
-flags.DEFINE_string(
-    'export_path', '/tmp/neptune_tf_embeddings', 'Path to export model.'
-)
 flags.DEFINE_integer(
     'num_request_features', 2, 'Number of request features.'
 )
@@ -105,8 +101,7 @@ def export_model(export_path: str):
                   preprocessors=[
                       tf_processor.TfProcessor(
                           name='embedding_layer',
-                          fn=embedding_layer
-                          ,
+                          fn=embedding_layer,
                       )
                   ],
                   options=processor.ProcessingOptions(
@@ -116,13 +111,3 @@ def export_model(export_path: str):
           )
       ],
   )
-
-
-def main(argv):
-  if len(argv) > 1:
-    raise app.UsageError('Too many command-line arguments.')
-  export_model(FLAGS.export_path)
-
-
-if __name__ == '__main__':
-  app.run(main)
