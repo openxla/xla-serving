@@ -394,15 +394,33 @@ def _show_pipelines(
       ]
       table.add_row('Output names', '\n'.join(output_names))
 
-    table.add_row('Pre-processors', '\n'.join(pipeline.pre_processor_names))
+    if pipeline.components:
+      pre_processor_names = [
+          c.function_name
+          for c in pipeline.components
+          if c.role == orchestration_pb2.ROLE_PREPROCESSOR
+      ]
+      model_fns = [
+          f'name: {c.function_name}\nweights: {c.weights_name}'
+          for c in pipeline.components
+          if c.role == orchestration_pb2.ROLE_MODEL
+      ]
+      post_processor_names = [
+          c.function_name
+          for c in pipeline.components
+          if c.role == orchestration_pb2.ROLE_POSTPROCESSOR
+      ]
+    else:
+      pre_processor_names = pipeline.pre_processor_names
+      model_fns = [
+          f'name: {fn.model_function_name}\nweights: {fn.weights_name}'
+          for fn in pipeline.model_functions
+      ]
+      post_processor_names = pipeline.post_processor_names
 
-    model_fns = [
-        f'name: {fn.model_function_name}\nweights: {fn.weights_name}'
-        for fn in pipeline.model_functions
-    ]
+    table.add_row('Pre-processors', '\n'.join(pre_processor_names))
     table.add_row('Model functions', '\n\n'.join(model_fns))
-
-    table.add_row('Post-processors', '\n'.join(pipeline.post_processor_names))
+    table.add_row('Post-processors', '\n'.join(post_processor_names))
 
     table.add_row(
         'Batch options',
