@@ -1,0 +1,32 @@
+diff --git a/tensorflow/cc/saved_model/BUILD b/tensorflow/cc/saved_model/BUILD
+index 0658a512ad2..48735d36a86 100644
+--- a/tensorflow/cc/saved_model/BUILD
++++ b/tensorflow/cc/saved_model/BUILD
+@@ -99,6 +99,15 @@ tf_cc_test(
+     ],
+ )
+ 
++cc_library(
++    name = "loader_default_deps",
++    visibility = ["//visibility:private"],
++    deps = if_static([
++        "//third_party/tensorflow/core:all_kernels",
++        "//third_party/tensorflow/core:direct_session",
++    ]) + if_google(if_static(["//third_party/tensorflow/core/platform/google/build_config:tensorflow_platform_specific"])),
++)
++
+ cc_library(
+     name = "loader",
+     hdrs = ["loader.h"],
+@@ -110,10 +119,7 @@ cc_library(
+         "//tensorflow:tflite_converter": ["//tensorflow/core:direct_session"] + if_google([
+             "//tensorflow/core/platform/default/build_config:tensorflow_platform_specific",
+         ]),
+-        "//conditions:default": if_static([
+-            "//tensorflow/core:all_kernels",
+-            "//tensorflow/core:direct_session",
+-        ]) + if_google(if_static(["//tensorflow/core/platform/default/build_config:tensorflow_platform_specific"])),
++       "//conditions:default": [":loader_default_deps"],
+     }) + if_not_mobile([
+         "//tensorflow/core:core_cpu",
+         "//tensorflow/core:lib",

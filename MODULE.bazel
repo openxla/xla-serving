@@ -68,6 +68,8 @@ bazel_dep(name = "tensorflow", repo_name = "org_tensorflow")
 archive_override(
     module_name = "tensorflow",
     integrity = "sha256-17qxh0+UqHWGoQ+DX0GoEMi2C3rnx3K6r2wcJmvMLwo=",
+    patch_strip = 1,
+    patches = ["//third_party/tensorflow:saved_model.patch"],
     strip_prefix = "tensorflow-f57c5520be50c8185286b98507074af236251ca0",
     urls = ["https://github.com/tensorflow/tensorflow/archive/f57c5520be50c8185286b98507074af236251ca0.zip"],
 )
