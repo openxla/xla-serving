@@ -506,7 +506,7 @@ absl::Status BatchResourceBase::ConcatInputBuffers(
       [padded_batch_size, padding_amount,
        disable_padding = batcher_queue_options_.disable_padding]() {
         return tsl::profiler::TraceMeEncode(
-            "ConcatInputBuffers",
+            "OrbaxServing::ConcatInputBuffers",
             {{"batch_size_after_padding", padded_batch_size},
              {"padding_amount", padding_amount},
              {"disable_padding", disable_padding}});

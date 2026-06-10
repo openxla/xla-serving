@@ -60,7 +60,7 @@ void JsvBatchResource::ProcessFuncBatchImpl(
   tsl::profiler::TraceMeConsumer trace_me(
       [&]() {
         return tsl::profiler::TraceMeEncode(
-            "ProcessFuncBatchImpl",
+            "OrbaxServing::ProcessFuncBatchImpl",
             {{"model_id", absl::StrCat(context.metadata.model_name, ":",
                                        context.metadata.model_version)}});
       },
@@ -111,7 +111,7 @@ tsl::Future<> BatchRunnerOp::RunAsyncInternal(ExecuteContext& context) {
   tsl::profiler::TraceMeProducer trace_me(
       [&]() {
         return tsl::profiler::TraceMeEncode(
-            "BatchRunnerOp",
+            "OrbaxServing::BatchRunnerOp",
             {{"model_id", absl::StrCat(context.metadata.model_name, ":",
                                        context.metadata.model_version)}});
       },
