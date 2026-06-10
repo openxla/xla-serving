@@ -97,6 +97,9 @@
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
 namespace neptune {
+
+std::atomic<uint32_t> StableHloRunner::launch_id_(1);
+
 namespace {
 
 // Returns the device assignment from the given IFRT devices list.

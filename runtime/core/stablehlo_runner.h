@@ -402,7 +402,7 @@ class StableHloRunner {
   bool fully_initialized_ ABSL_GUARDED_BY(mutex_) = false;
 
   // Monotonically increasing launch ID that we pass to the executable.
-  std::atomic<uint32_t> launch_id_{1};
+  static std::atomic<uint32_t> launch_id_;
 
   // If nullptr, no optimization will be enabled.
   StablehloOptimizer* absl_nullable optimizer_;
