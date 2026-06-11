@@ -22,6 +22,7 @@ from google.protobuf import message
 from google.protobuf import text_format
 import jax.extend as jex
 from jax.interpreters import mlir
+
 import rich
 import typer
 from typing_extensions import Annotated
@@ -64,7 +65,10 @@ def _show_xla_compile_options(
 
   found_data = False
   for name, data in sorted(body.supplemental_info.items()):
-    if data.mime_type == constants.MIME_TYPE_XLA_COMPILE_OPTIONS:
+    if data.mime_type in (
+        constants.MIME_TYPE_XLA_COMPILE_OPTIONS,
+        constants.MIME_TYPE_ORBAX_XLA_COMPILE_OPTIONS,
+    ):
       found_data = True
       opts = manifest_pb2.CompileOptionsProtoMap()
       _read_proto_from_data(model_base_dir, data, opts)
@@ -273,7 +277,7 @@ def _show_function_details(
         table.add_row(
             'Data names',
             f'{len(fn.data_names)} total: \n'
-            + printer.pad("\n".join(fn.data_names), " - "),
+            + printer.pad('\n'.join(fn.data_names), ' - '),
         )
       else:
         table.add_row(
@@ -288,7 +292,10 @@ def _show_function_details(
         table.add_row(name, printer.unstructured_data(supp))
   elif fn.body.HasField('other'):
     match fn.body.other.mime_type:
-      case constants.MIME_TYPE_TF_CONCRETE_FUNCTION:
+      case (
+          constants.MIME_TYPE_TF_CONCRETE_FUNCTION
+          | constants.MIME_TYPE_ORBAX_TF_CONCRETE_FUNCTION
+      ):
         table.add_row('Type', 'TF ConcreteFunction handle')
         handle = tf_concrete_function_handle_pb2.TfConcreteFunctionHandle()
         _read_proto_from_data(model_base_dir, fn.body.other, handle)
@@ -333,7 +340,7 @@ def _show_supplemental_details(
     verbose: bool,
 ) -> None:
   match data.mime_type:
-    case constants.MIME_TYPE_PIPELINES:
+    case constants.MIME_TYPE_PIPELINES | constants.MIME_TYPE_ORBAX_PIPELINES:
       _show_pipelines(model_base_dir, data, verbose)
     case _:
       table = rich.table.Table('Suppemental', 'Type', padding=(0, 1, 1, 1))
