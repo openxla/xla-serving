@@ -139,6 +139,11 @@ We currently support building GPU image with CUDA 12.
 The prerequisite is to have CUDA toolkit and drivers 
 already installed on the Cloud VM.
 
+Prebuilt GPU image
+```
+gcr.io/neptune-serving-engine/gpu-jax-cuda12
+```
+
 To build docker image for GPU:
 
 ```
@@ -150,7 +155,21 @@ bazel run -c opt --config=cuda_v12 \
 
 ### TPU
 
-To Be Added.
+Prebuilt image for TPU
+
+```
+gcr.io/neptune-serving-engine/tpu-jax-only
+```
+
+
+To build docker image for GPU:
+
+```
+bazel run -c opt --config=cuda_v12 \
+//runtime/serving/gcp/server:neptune_serving_pusher_tpu \
+-- --repository="<Path to Artifact registry>" \
+--tag="latest"
+```
 
 ## Starting GRPC Servers
 
@@ -165,7 +184,7 @@ docker run   --net=host   --ulimit memlock=-1  \
  --model_path /tmp/model  \
  --model_name nnx \
  --orbax_grpc_server_platform cpu \
- --port=8501 
+ --port=8501
  --use_insecure_grpc_credentials=true
 ```
 
@@ -188,10 +207,28 @@ gcr.io/neptune-serving-engine/gpu-jax-cuda12:latest \
 --use_insecure_grpc_credentials=true
 ```
 
+You can also use partial GPUs with Multi Instance Group(MIG). In order to start
+docker with one of the MIG GPUs, pass the following parameters in the above
+command:
+```
+--gpu '"device=<mig_id>" # instead of `--gpu all`
+-e NVIDIA_VISIBLE_DEVICES=<mig_id>  # instead of NVIDIA_VISIBLE_DEVICES=all
+```
+
 ### Running locally built server
 
+#### CPU
 ```
-bazel run //runtime/serving/gcp/server:neptune_serving_main_<cpu|gpu|tpu> \
+bazel run //runtime/serving/gcp/server:neptune_serving_main \
+--model_path <Exported model path> \
+--model_name <model_name> \
+--orbax_grpc_server_platform <cpu|cuda|tpu>  \
+--port 8500 --use_insecure_grpc_credentials=<true|false>
+```
+
+#### GPU and TPU
+```
+bazel run //runtime/serving/gcp/server:neptune_serving_main_<gpu|tpu> \
 --model_path <Exported model path> \
 --model_name <model_name> \
 --orbax_grpc_server_platform <cpu|cuda|tpu>  \
