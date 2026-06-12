@@ -46,6 +46,17 @@ common:cuda_v12 --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_50,sm_60,sm_70
 common:cuda_v12 --action_env=TF_NVCC_CLANG="1"
 common:cuda_v12 --@local_config_cuda//:cuda_compiler=nvcc
 
+
+common:cuda_v13 --config=cuda
+common:cuda_v13 --repo_env=HERMETIC_CUDA_VERSION="13.0.0"
+common:cuda_v13 --repo_env=HERMETIC_CUDNN_VERSION="9.12.0"
+common:cuda_v13 --repo_env=HERMETIC_NCCL_VERSION="2.29.7"
+common:cuda_v13 --repo_env=HERMETIC_NVSHMEM_VERSION="3.3.20"
+common:cuda_v13 --repo_env=HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_75,sm_80,sm_90,sm_100,compute_120"
+# common CUDA and other C++ targets with nvcc
+common:cuda_v13 --action_env=TF_NVCC_CLANG="1"
+common:cuda_v13 --@local_config_cuda//:cuda_compiler=nvcc
+
 common --experimental_repo_remote_exec
 
 # Do not use C-Ares when building gRPC.
