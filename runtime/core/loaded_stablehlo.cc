@@ -32,6 +32,9 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "mlir/include/mlir/IR/BuiltinAttributes.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
+#include "mlir/include/mlir/IR/Operation.h"  // from @llvm-project
 #include "runtime/core/stablehlo.h"  // from @neptune
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
 #include "runtime/libs/ifrt/stablehlo_loader.h"  // from @neptune
@@ -141,6 +144,21 @@ bool HasPolymorphicShape(absl::Span<const ArgSpec> inputs) {
     }
   }
   return false;
+}
+
+bool HasStreaming(mlir::ModuleOp module) {
+  bool found = false;
+  module.walk([&](mlir::Operation* op) {
+    if (op->getName().getStringRef() == "stablehlo.custom_call") {
+      if (auto target_attr =
+              op->getAttrOfType<mlir::StringAttr>("call_target_name")) {
+        if (target_attr.getValue() == "neptune_stream") {
+          found = true;
+        }
+      }
+    }
+  });
+  return found;
 }
 
 }  // namespace
@@ -307,9 +325,22 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
     }
   }
 
+  bool has_streaming = false;
+  if (symbolic_module_bundle.has_value()) {
+    has_streaming =
+        HasStreaming((*symbolic_module_bundle)->bundle.module.get());
+  } else if (concrete_module_bundles.has_value() &&
+             !concrete_module_bundles->empty()) {
+    // All concrete modules should have the same stablehlo ops. They have
+    // different input and output shapes only. So we can check any one of them
+    // for streaming.
+    has_streaming = HasStreaming(
+        concrete_module_bundles->begin()->second->bundle.module.get());
+  }
+
   return absl::WrapUnique(new LoadedStableHlo(
       std::move(concrete_module_bundles), std::move(symbolic_module_bundle),
-      std::move(weight_specs), num_user_inputs, num_outputs));
+      std::move(weight_specs), num_user_inputs, num_outputs, has_streaming));
 };
 
 absl::StatusOr<std::unique_ptr<LoadedStableHlo::ModuleBundle>>
@@ -317,8 +348,15 @@ LoadedStableHlo::CloneModuleBundle(
     absl::Span<const xla::ifrt::Shape> input_shapes) const {
   absl::MutexLock lock(mutex_);
   if (concrete_module_bundles_.has_value()) {
+    // For streaming models, an extra request ID input is appended to the end of
+    // `input_shapes`. We truncate it here because `concrete_module_bundles_`
+    // is keyed only by user input shapes.
+    absl::Span<const xla::ifrt::Shape> user_input_shapes = input_shapes;
+    if (input_shapes.size() > num_user_inputs_) {
+      user_input_shapes = input_shapes.subspan(0, num_user_inputs_);
+    }
     auto it = concrete_module_bundles_->find(std::vector<xla::ifrt::Shape>(
-        input_shapes.begin(), input_shapes.end()));
+        user_input_shapes.begin(), user_input_shapes.end()));
     if (it == concrete_module_bundles_->end()) {
       std::string allowed_input_shapes_str;
       for (const auto& [key, value] : *concrete_module_bundles_) {

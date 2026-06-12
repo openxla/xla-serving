@@ -39,7 +39,7 @@ struct RunOptions {
       streamed_output_callback = nullptr;
 
   // The unique identifier for this execution request. Internal-only field,
-  // populated automatically by the Interpreter if not set.
+  // populated automatically by the Interpreter. User should not set this field.
   int32_t request_id = -1;
 };
 

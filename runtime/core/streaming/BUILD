@@ -4,6 +4,8 @@ package_group(
     name = "streaming_users",
     packages = [
         "//runtime/core/...",
+        "//runtime/interpreter/...",
+        "//runtime/kernel/...",
         "//runtime/serving/google/streaming/...",
     ],
 )
@@ -14,8 +16,10 @@ cc_library(
     hdrs = ["stream.h"],
     visibility = [":streaming_users"],
     deps = [
+        ":utils",
         "@abseil-cpp//absl/base:core_headers",
         "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/container:flat_hash_set",
         "@abseil-cpp//absl/functional:any_invocable",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/log:check",
@@ -25,6 +29,7 @@ cc_library(
         "@abseil-cpp//absl/strings:str_format",
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/time",
+        "@abseil-cpp//absl/types:span",
         "@llvm-project//llvm:Support",
         "@llvm-project//mlir:IR",
         "@neptune//runtime/core:host_buffer",
@@ -57,7 +62,9 @@ cc_library(
         "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:Support",
+        "@neptune//runtime/core:host_buffer",
         "@stablehlo//:stablehlo_ops",
+        "@xla//xla/python/ifrt",
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",
     ],

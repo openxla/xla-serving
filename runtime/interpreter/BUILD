@@ -169,6 +169,7 @@ cc_library(
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/log:check",
         "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/random",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
@@ -185,6 +186,7 @@ cc_library(
         "@neptune//runtime/core:stablehlo_utils",
         "@neptune//runtime/core:value",
         "@neptune//runtime/core/batching:batch_scheduler",
+        "@neptune//runtime/core/streaming",
         "@neptune//runtime/data_loader",
         "@neptune//runtime/data_loader:default_data_loader_registration",  # buildcleaner: keep
         "@neptune//runtime/kernel",

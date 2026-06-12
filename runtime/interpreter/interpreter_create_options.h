@@ -91,8 +91,6 @@ struct InterpreterCreateOptions {
   // nullptr, LB-policy-based core selection is disabled.
   ServingCoreSelector* absl_nullable serving_core_selector = nullptr;
 
-  std::function<void(absl::flat_hash_map<std::string, HostBuffer>)>
-      streamed_output_callback = nullptr;
 };
 // LINT.ThenChange(//depot//third_party/neptune/runtime/interpreter/interpreter.cc:InterpreterCreateOptionsValidation)
 }  // namespace neptune

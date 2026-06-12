@@ -30,6 +30,7 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/batching/shared_batch_scheduler.h"  // from @neptune
 #include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/streaming/utils.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
 #include "runtime/core/value_utils.h"  // from @neptune
 #include "runtime/interpreter/linear_graph_execute.h"  // from @neptune
@@ -39,6 +40,7 @@
 #include "runtime/kernel/kernel_builder_context.h"  // from @neptune
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "tsl/platform/random.h"  // from @tsl
 #include "tsl/platform/refcount.h"  // from @tsl
@@ -95,6 +97,46 @@ void JsvBatchResource::ProcessFuncBatchImpl(
   for (const auto& output : *outputs) {
     combined_outputs->push_back(output.Get<HostBuffer>());
   }
+}
+
+absl::StatusOr<absl::Span<const Value>> JsvBatchResource::GetInputsToBatch(
+    Kernel::ExecuteContext* context) const {
+  absl::Span<const Value> positional_inputs = context->inputs;
+  if (positional_inputs.empty()) {
+    return absl::InvalidArgumentError("Batching inputs cannot be empty.");
+  }
+
+  bool has_streaming = false;
+  for (const auto& kernel : batched_graph_) {
+    if (kernel->has_streaming()) {
+      has_streaming = true;
+      break;
+    }
+  }
+
+  if (!has_streaming) {
+    return positional_inputs;
+  }
+
+  int32_t request_id = context->run_context.request_id;
+
+  absl::Span<const int64_t> dims =
+      positional_inputs[0].Get<HostBuffer>().shape().dims();
+  if (dims.empty()) {
+    return absl::InvalidArgumentError(
+        "Batching input buffers must have at least one dimension.");
+  }
+
+  // Add additional input for request_ids with the same batch size.
+  int64_t batch_size = dims[0];
+  TF_ASSIGN_OR_RETURN(auto request_ids_buffer,
+                      neptune::CreateRequestIdsBuffer(batch_size, request_id));
+
+  context->extended_inputs.assign(positional_inputs.begin(),
+                                  positional_inputs.end());
+  context->extended_inputs.push_back(Value(std::move(request_ids_buffer)));
+
+  return absl::MakeSpan(context->extended_inputs);
 }
 
 std::string BatchRunnerOp::Name() const { return "BatchRunnerOp"; }

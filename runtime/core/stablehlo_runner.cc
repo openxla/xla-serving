@@ -61,8 +61,10 @@
 #include "runtime/core/stablehlo_optimizer.h"  // from @neptune
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
 #include "runtime/core/streaming/stream.h"  // from @neptune
+#include "runtime/core/streaming/utils.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
 #include "runtime/core/value_utils.h"  // from @neptune
+#include "runtime/interpreter/context.h"  // from @neptune
 #include "runtime/interpreter/manifest_utils.h"  // from @neptune
 #include "runtime/libs/ifrt/executable_build_utils.h"  // from @neptune
 #include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
@@ -322,8 +324,7 @@ StableHloRunner::StableHloRunner(
     absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
     ServingCoreSelector* absl_nullable serving_core_selector,
     std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory,
-    std::function<void(absl::flat_hash_map<std::string, neptune::HostBuffer>)>
-        streamed_output_callback)
+    std::optional<int64_t> callback_id)
     : loaded_stablehlo_(std::move(loaded_stablehlo)),
       compile_options_(std::move(compile_options)),
       assigned_device_list_(std::move(assigned_device_list)),
@@ -335,8 +336,12 @@ StableHloRunner::StableHloRunner(
       optimizer_(optimizer),
       assigned_devices_(std::move(assigned_devices)),
       serving_core_selector_(serving_core_selector),
-      h2d_transfer_executor_factory_(std::move(h2d_transfer_executor_factory)),
-      streamed_output_callback_(std::move(streamed_output_callback)) {}
+      h2d_transfer_executor_factory_(std::move(h2d_transfer_executor_factory)) {
+  if (loaded_stablehlo_->has_streaming()) {
+    DCHECK(callback_id.has_value());
+    streaming_host_callback_id_ = callback_id;
+  }
+}
 
 absl::StatusOr<std::unique_ptr<StableHloRunner>> StableHloRunner::Create(
     absl_nonnull std::shared_ptr<StableHlo> stablehlo,
@@ -351,8 +356,7 @@ absl::StatusOr<std::unique_ptr<StableHloRunner>> StableHloRunner::Create(
     absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
     ServingCoreSelector* absl_nullable serving_core_selector,
     std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory,
-    std::function<void(absl::flat_hash_map<std::string, neptune::HostBuffer>)>
-        streamed_output_callback) {
+    std::optional<int64_t> callback_id) {
   if (!stablehlo) {
     return absl::InvalidArgumentError(
         "`StableHlo` should be non-null when creating `StableHloRunner`");
@@ -382,6 +386,12 @@ absl::StatusOr<std::unique_ptr<StableHloRunner>> StableHloRunner::Create(
       LoadedStableHlo::Create(std::move(stablehlo), weights.size(),
                               client->platform_name(), compile_options));
 
+  if (loaded_stablehlo->has_streaming() && !callback_id.has_value()) {
+    return absl::InvalidArgumentError(
+        "Callback ID must be provided when creating StableHloRunner for a "
+        "streaming model.");
+  }
+
   TF_ASSIGN_OR_RETURN(
       std::vector<xla::ifrt::Device*> assigned_ifrt_devices,
       GetAssignedIfrtDevices(*client, assigned_devices->num_replicas,
@@ -396,7 +406,7 @@ absl::StatusOr<std::unique_ptr<StableHloRunner>> StableHloRunner::Create(
       assigned_device_list, compilation_environment_proto,
       persistent_compilation_cache, optimizer, assigned_devices,
       serving_core_selector, std::move(h2d_transfer_executor_factory),
-      std::move(streamed_output_callback)));
+      callback_id));
   TF_RETURN_IF_ERROR(runner->Init(thread_pool));
   return runner;
 }
@@ -446,12 +456,6 @@ StableHloRunner::CreateExecutableSynchronously(
       "Failed to refine shapes.");
   TF_RETURN_IF_ERROR(xla::ValidateStaticShapes(module_bundle->module.get()));
 
-  TF_ASSIGN_OR_RETURN(
-      StableHloIOSpec io_spec,
-      GetStableHloIOSpec(*module_bundle->module, compile_options_.has_value()
-                                                     ? &compile_options_.value()
-                                                     : nullptr));
-
   // Annotate parameters tied to constant weights with an attribute.
   // All parameters before input_offset are considered constant weights.
   AnnotateConstantWeights(*module_bundle->module, module_bundle->input_offset);
@@ -461,14 +465,24 @@ StableHloRunner::CreateExecutableSynchronously(
                      module_bundle->module.get());
   }
 
-  TF_ASSIGN_OR_RETURN(
-      std::optional<int64_t> callback_id,
-      neptune::CreateStreamCallbackId(module_bundle->module.get()));
+  TF_RETURN_IF_ERROR(
+      neptune::PropagateStreamingStepId(module_bundle->module.get()));
 
   if (VLOG_IS_ON(1)) {
-    neptune::DumpMlirOpToFile(
-        "stablehlo_module_after_populate_stream_host_callback",
-        module_bundle->module.get());
+    DumpMlirOpToFile("stablehlo_module_after_streaming_step_id_propagation",
+                     module_bundle->module.get());
+  }
+
+  // If we have a streaming_host_callback_id_, try to set it in the module.
+  // SetStreamCallbackId will return std::nullopt if the module doesn't actual
+  // contain any streaming custom calls (even if the runner thought it might).
+  // We use this returned callback_id to decide whether to treat this specific
+  // compiled executable as streaming (e.g. adding extra request_id input).
+  std::optional<int64_t> callback_id;
+  if (streaming_host_callback_id_.has_value()) {
+    TF_ASSIGN_OR_RETURN(callback_id, neptune::SetStreamCallbackId(
+                                         module_bundle->module.get(),
+                                         *streaming_host_callback_id_));
   }
 
   if (optimizer_ != nullptr) {
@@ -481,7 +495,7 @@ StableHloRunner::CreateExecutableSynchronously(
   }
 
   TF_ASSIGN_OR_RETURN(
-      io_spec,
+      StableHloIOSpec io_spec,
       GetStableHloIOSpec(*module_bundle->module, compile_options_.has_value()
                                                      ? &compile_options_.value()
                                                      : nullptr));
@@ -526,6 +540,11 @@ StableHloRunner::CreateExecutableSynchronously(
                                          absl::Now());
 
   executable_bundle->callback_id = callback_id;
+
+  // With streaming, there will be an addtional input for the request id.
+  if (callback_id.has_value()) {
+    executable_bundle->module_kept_var_idx.push_back(io_spec.inputs.size() - 1);
+  }
 
   return executable_bundle;
 }
@@ -710,17 +729,22 @@ StableHloRunner::LookupWeights(std::optional<size_t> device_id) {
 }
 
 absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
-    absl::Span<const neptune::Value> inputs, ExecuteOptions options) {
+    absl::Span<const neptune::Value> inputs, ExecuteOptions options,
+    const RunContext& run_context) {
   tsl::profiler::TraceMe trace_me([&]() {
     return tsl::profiler::TraceMeEncode("StableHloRunner::Execute", {});
   });
 
   VLOG(2) << "Start StableHloRunner execution";
 
-  if (inputs.size() != loaded_stablehlo_->num_user_inputs()) {
+  bool has_streaming = loaded_stablehlo_->has_streaming();
+  int64_t expected_num_inputs = loaded_stablehlo_->num_user_inputs();
+  int32_t xla_launch_id = static_cast<int32_t>(launch_id_.fetch_add(1));
+  if (inputs.size() != expected_num_inputs &&
+      (!has_streaming || inputs.size() != expected_num_inputs + 1)) {
     return absl::InvalidArgumentError(
-        absl::StrCat("Expected ", loaded_stablehlo_->num_user_inputs(),
-                     " user inputs, but got ", inputs.size()));
+        absl::StrCat("Expected ", expected_num_inputs, " user inputs, but got ",
+                     inputs.size()));
   }
 
   // TODO: Consider moving this to `Init()`. Maybe also remove the
@@ -748,54 +772,52 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
         neptune::internal::UnpackFromValues<neptune::DeviceBuffer>(inputs));
   }
 
+  int64_t batch_size = 1;
+  if (options.require_h2d) {
+    for (const auto& buffer : host_buffers) {
+      if (!buffer.shape().dims().empty()) {
+        batch_size = buffer.shape().dims()[0];
+        break;
+      }
+    }
+  } else {
+    for (const auto& buffer : device_buffers) {
+      if (!buffer.ifrt_array->shape().dims().empty()) {
+        batch_size = buffer.ifrt_array->shape().dims()[0];
+        break;
+      }
+    }
+  }
+
   // Lookup the executable bundle in the cache.
   std::vector<xla::ifrt::Shape> input_shapes;
   std::vector<xla::ifrt::DType> input_dtypes;
   if (options.require_h2d) {
-    input_shapes.reserve(host_buffers.size());
-    input_dtypes.reserve(host_buffers.size());
+    input_shapes.reserve(host_buffers.size() + 1);
+    input_dtypes.reserve(host_buffers.size() + 1);
     for (const auto& input : host_buffers) {
       input_shapes.push_back(input.shape());
       input_dtypes.push_back(input.dtype());
     }
   } else {
-    input_shapes.reserve(device_buffers.size());
-    input_dtypes.reserve(device_buffers.size());
+    input_shapes.reserve(device_buffers.size() + 1);
+    input_dtypes.reserve(device_buffers.size() + 1);
     for (const auto& input : device_buffers) {
       input_shapes.push_back(input.ifrt_array->shape());
       input_dtypes.push_back(input.ifrt_array->dtype());
     }
   }
+  // If the model is streaming and the caller did not provide the request ID
+  // input, we need to append the shape and dtype of the request ID input
+  // for the cache lookup.
+  if (has_streaming && inputs.size() == expected_num_inputs) {
+    input_shapes.push_back(xla::ifrt::Shape({batch_size}));
+    input_dtypes.push_back(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32));
+  }
+
   TF_ASSIGN_OR_RETURN(
       SharedCachedExecutableBundle executable_bundle,
       LookUpOrCreateExecutable(input_shapes, input_dtypes).Await());
-
-  int64_t current_request_id = launch_id_.fetch_add(1);
-
-  // The runtime assumes the streaming implementation will be a sync call so
-  // that once the Execute() returns, the streaming is done.
-  std::optional<neptune::ScopedStreamCallback> scoped_stream_callback;
-  if (executable_bundle->callback_id.has_value() &&
-      streamed_output_callback_ != nullptr) {
-    // The lifetime of `StableHloRunner` will outlive all the outstanding
-    // streaming requests, so it is safe to capture `this` to access the
-    // `streamed_output_callback_`.
-    auto wrapped_callback =
-        [this](absl::flat_hash_map<std::string, neptune::HostBuffer> host_buffers) {
-          if (this->streamed_output_callback_) {
-            this->streamed_output_callback_(std::move(host_buffers));
-          }
-        };
-
-    // TODO: Propagate the model name to the stream callback
-    // registry for recording latency metrics.
-    TF_ASSIGN_OR_RETURN(auto* stream_callback_registry,
-                        neptune::GetGlobalStreamCallbackRegistry());
-    TF_ASSIGN_OR_RETURN(scoped_stream_callback,
-                        stream_callback_registry->Register(
-                            /*model_name=*/"", *executable_bundle->callback_id,
-                            current_request_id, std::move(wrapped_callback)));
-  }
 
   // Find the resources per the device(s) to use. If the executable is portable,
   // use the core selector to reserve a device first.
@@ -820,6 +842,42 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
   TF_ASSIGN_OR_RETURN(const auto& weights_array,
                       resources_it->second->weight_arrays);
   DataConverter* data_converter = resources_it->second->data_converter.get();
+
+  // If the model is streaming and the caller did not provide the request ID
+  // input, we dynamically construct and append the request ID buffer here.
+  if (has_streaming && inputs.size() == expected_num_inputs) {
+    int32_t request_id =
+        run_context.request_id != -1 ? run_context.request_id : xla_launch_id;
+    TF_ASSIGN_OR_RETURN(
+        neptune::HostBuffer request_ids_buffer,
+        neptune::CreateRequestIdsBuffer(batch_size, request_id));
+    if (options.require_h2d) {
+      host_buffers.push_back(std::move(request_ids_buffer));
+    } else {
+      TF_ASSIGN_OR_RETURN(
+          xla::ifrt::ShardingRef sharding,
+          ToIfrtSharding(*ifrt_client_,
+                         executable_bundle->io_spec.inputs.back().sharding,
+                         device_list));
+      auto shared_buffer =
+          std::make_shared<neptune::HostBuffer>(std::move(request_ids_buffer));
+      TF_ASSIGN_OR_RETURN(
+          tsl::RCReference<xla::ifrt::Array> ifrt_array,
+          ifrt_client_->MakeArrayFromHostBuffer(
+              shared_buffer->base(), shared_buffer->dtype(),
+              shared_buffer->shape(), /*byte_strides=*/std::nullopt,
+              std::move(sharding), /*layout=*/nullptr,
+              xla::ifrt::Client::HostBufferSemantics::
+                  kImmutableUntilTransferCompletes,
+              [shared_buffer]() {}));
+      device_buffers.push_back(neptune::DeviceBuffer{
+          .ifrt_client = ifrt_client_,
+          .ifrt_array = std::move(ifrt_array),
+          .sharding = executable_bundle->io_spec.inputs.back().sharding,
+          .device_list = device_list,
+      });
+    }
+  }
 
   // `used_input_indices` is used to track the index of used inputs in
   // stablehlo spec because some inputs may be presented in the model signature
@@ -919,7 +977,7 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
           absl::MakeSpan(inputs_with_weights),
           /*options=*/
           {
-              .launch_id = static_cast<int32_t>(current_request_id),
+              .launch_id = xla_launch_id,
               .fill_status = true,
           },
           /*devices=*/

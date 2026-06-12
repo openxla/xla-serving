@@ -120,6 +120,8 @@ class LoadedStableHlo {
   // Returns the number of outputs.
   int num_outputs() const { return num_outputs_; }
 
+  bool has_streaming() const { return has_streaming_; }
+
  private:
   // A bundle of MLIR module and its loader so they have the same lifetime and
   // make sure the MLIR context in the loader is alive when the module is
@@ -137,12 +139,13 @@ class LoadedStableHlo {
       std::optional<std::unique_ptr<ModuleBundleWithLoader>>
           symbolic_module_bundle,
       std::vector<std::optional<ArgSpec>> weight_specs, int num_user_inputs,
-      int num_outputs)
+      int num_outputs, bool has_streaming)
       : concrete_module_bundles_(std::move(concrete_module_bundles)),
         symbolic_module_bundle_(std::move(symbolic_module_bundle)),
         weight_specs_(std::move(weight_specs)),
         num_user_inputs_(num_user_inputs),
-        num_outputs_(num_outputs) {}
+        num_outputs_(num_outputs),
+        has_streaming_(has_streaming) {}
 
   mutable absl::Mutex mutex_;
 
@@ -162,14 +165,17 @@ class LoadedStableHlo {
   // StableHLO(s), the corresponding `ArgSpec` will be `std::nullopt`.
   const std::vector<std::optional<ArgSpec>> weight_specs_;
 
-  // Number of user-provided inputs to the model (excluding weights). This
-  // should be the same for all StableHLO modules.
+  // Number of user-provided inputs to the model (excluding weights and any
+  // system-added inputs like streaming request IDs). This should be the same
+  // for all StableHLO modules.
   const int num_user_inputs_;
 
   // Number of outputs of the model. Should be the same for all StableHLO
   // modules when there are multiple concretized StableHLOs representing one
   // polymorphic StableHLO.
   const int num_outputs_;
+
+  const bool has_streaming_;
 };
 
 }  // namespace neptune

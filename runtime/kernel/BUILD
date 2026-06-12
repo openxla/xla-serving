@@ -109,7 +109,7 @@ cc_library(
     name = "stablehlo_runner_op",
     srcs = ["stablehlo_runner_op.cc"],
     hdrs = ["stablehlo_runner_op.h"],
-    visibility = ["//visibility:private"],
+    visibility = [":kernel_internal"],
     deps = [
         ":kernel",
         ":kernel_builder_context",

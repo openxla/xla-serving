@@ -15,6 +15,8 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_INTERPRETER_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_INTERPRETER_H_
 
+#include <atomic>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -150,8 +152,8 @@ class Interpreter {
   // TODO: Remove this peer class once JSV fully supports
   // graph-based orchestration and tests can use the public API.
   friend class InterpreterPeer;
-  explicit Interpreter(std::unique_ptr<InterpreterCreateOptions> create_options)
-      : create_options_(std::move(create_options)) {}
+  explicit Interpreter(
+      std::unique_ptr<InterpreterCreateOptions> create_options);
 
   // Loads the model. This will load all the pipelines in the manifest unless
   // lazy loading is enabled.
@@ -282,6 +284,10 @@ class Interpreter {
   // The key is the pipeline name in the manifest. The value type needs to be
   // pointer because `GraphBundle` is not copyable nor movable.
   absl::flat_hash_map<std::string, std::unique_ptr<GraphBundle>> graph_bundles_;
+  int32_t GenerateNextRequestId();
+
+  std::atomic<int32_t> request_id_counter_{1};
+  std::optional<int64_t> callback_id_;
 };
 
 }  // namespace neptune

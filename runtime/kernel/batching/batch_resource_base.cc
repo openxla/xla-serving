@@ -221,7 +221,7 @@ BatchResourceBase::BatchTask::CreateSplitTask(
   return task;
 }
 
-absl::Span<const Value> BatchResourceBase::GetInputsToBatch(
+absl::StatusOr<absl::Span<const Value>> BatchResourceBase::GetInputsToBatch(
     Kernel::ExecuteContext* context) const {
   return context->inputs;
 }
@@ -281,7 +281,8 @@ absl::Status BatchResourceBase::RegisterInput(
   batch_components->propagated_context =
       tsl::Context(tsl::ContextKind::kThread);
 
-  absl::Span<const Value> inputs_for_batch = context->inputs;
+  TF_ASSIGN_OR_RETURN(absl::Span<const Value> inputs_for_batch,
+                      GetInputsToBatch(context));
   batch_components->inputs.reserve(inputs_for_batch.size());
   for (int i = 0; i < inputs_for_batch.size(); ++i) {
     const Value& value = inputs_for_batch[i];

@@ -38,7 +38,10 @@
 #include "mlir/include/mlir/IR/Types.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/Value.h"  // from @llvm-project
 #include "mlir/include/mlir/Support/LLVM.h"  // from @llvm-project
+#include "runtime/core/host_buffer.h"  // from @neptune
 #include "stablehlo/dialect/StablehloOps.h"  // from @stablehlo
+#include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
@@ -48,8 +51,6 @@ namespace {
 constexpr absl::string_view kNeptuneStreamOpName = "neptune_stream";
 constexpr absl::string_view kBackendConfigAttr = "mhlo.backend_config";
 constexpr absl::string_view kOutputNamesAttr = "output_names";
-constexpr absl::string_view kStreamedResultBatchedStepIdName =
-    "__streamed_result_batched_step_id";
 
 bool ContainsNeptuneStream(mlir::Operation* op,
                            absl::flat_hash_set<mlir::Operation*>& visited) {
@@ -378,7 +379,7 @@ absl::Status PropagateStreamingStepId(mlir::ModuleOp module) {
 
   // Check if neptune_stream exists at all before mutating the entry function.
   if (!ContainsNeptuneStream(main_func)) {
-    LOG(ERROR) << "[PropagateStreamingStepId] Does not contain neptune_stream!";
+    LOG(INFO) << "[PropagateStreamingStepId] Does not contain neptune_stream!";
     return absl::OkStatus();
   }
 
@@ -419,6 +420,21 @@ absl::Status PropagateStreamingStepId(mlir::ModuleOp module) {
 
   return PropagateBlock(builder, entry_block, main_step_id, value_in_block,
                         mutated_funcs);
+}
+
+absl::StatusOr<neptune::HostBuffer> CreateRequestIdsBuffer(int64_t batch_size,
+                                                       int32_t request_id) {
+  xla::ifrt::Shape shape({batch_size});
+  xla::ifrt::DType dtype{xla::ifrt::DType::Kind::kS32};
+
+  neptune::HostBuffer host_buffer(dtype, shape);
+  int32_t* data = reinterpret_cast<int32_t*>(host_buffer.base());
+
+  for (int64_t i = 0; i < batch_size; ++i) {
+    data[i] = request_id;
+  }
+
+  return host_buffer;
 }
 
 }  // namespace neptune

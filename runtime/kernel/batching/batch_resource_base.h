@@ -255,7 +255,7 @@ class BatchResourceBase : public ResourceBase {
   friend class TestJsvBatchResource;
   friend class TestBatchResourceBase;
 
-  virtual absl::Span<const Value> GetInputsToBatch(
+  virtual absl::StatusOr<absl::Span<const Value>> GetInputsToBatch(
       Kernel::ExecuteContext* context) const;
 
   // Validates that it's legal to combine the tasks in 'batch' into a batch.

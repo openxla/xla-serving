@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -32,6 +33,7 @@
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/memory/memory.h"  // from @abseil-cpp
+#include "absl/random/random.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
@@ -48,6 +50,7 @@
 #include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune
 #include "runtime/core/stablehlo.h"  // from @neptune
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
+#include "runtime/core/streaming/stream.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
 #include "runtime/data_loader/data_loader.h"  // from @neptune
 #include "runtime/interpreter/context.h"  // from @neptune
@@ -135,7 +138,8 @@ bool ShouldShloRunOnHost(
     return true;
   }
   for (auto* func : funcs) {
-    const auto& platforms = func->body().stable_hlo_body().lowering_platforms();
+    const google::protobuf::RepeatedPtrField<std::string>& platforms =
+        func->body().stable_hlo_body().lowering_platforms();
     if (platforms.empty()) {
       return false;
     }
@@ -163,12 +167,12 @@ CreateAuxiliaryComponents(
     const neptune_model_orchestration::Pipeline& pipeline) {
   google::protobuf::RepeatedPtrField<neptune_model_orchestration::Component> components;
   for (const auto& pre_processor_name : pipeline.pre_processor_names()) {
-    auto* component = components.Add();
+    neptune_model_orchestration::Component* component = components.Add();
     component->set_function_name(pre_processor_name);
     component->set_role(neptune_model_orchestration::ROLE_PREPROCESSOR);
   }
   for (const auto& model_function : pipeline.model_functions()) {
-    auto* component = components.Add();
+    neptune_model_orchestration::Component* component = components.Add();
     component->set_function_name(model_function.model_function_name());
     component->set_role(neptune_model_orchestration::ROLE_MODEL);
     if (model_function.has_weights_name()) {
@@ -176,7 +180,7 @@ CreateAuxiliaryComponents(
     }
   }
   for (const auto& post_processor_name : pipeline.post_processor_names()) {
-    auto* component = components.Add();
+    neptune_model_orchestration::Component* component = components.Add();
     component->set_function_name(post_processor_name);
     component->set_role(neptune_model_orchestration::ROLE_POSTPROCESSOR);
   }
@@ -220,7 +224,7 @@ absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
       .allocator = create_options->allocator,
   };
   if (batch_options.has_low_priority_batch_options()) {
-    auto low_priority_batch_options =
+    const BatchOptions::LowPriorityBatchOptions& low_priority_batch_options =
         batch_options.low_priority_batch_options();
     batch_runner_op_options.low_priority_max_batch_size =
         low_priority_batch_options.max_batch_size();
@@ -285,7 +289,7 @@ BatchingConfig GetBatchingConfig(
   BatchOptions::BatchComponent batch_component =
       BatchOptions::BATCH_COMPONENT_UNSPECIFIED;
   if (create_options.enable_batching && pipeline.has_batch_options()) {
-    const auto& batch_options = pipeline.batch_options();
+    const BatchOptions& batch_options = pipeline.batch_options();
     LOG(INFO) << "Batch options: " << batch_options;
     batch_component = batch_options.batch_component();
   }
@@ -333,7 +337,7 @@ void InsertKernels(std::vector<KernelSubGraph> pre_processor_sub_graphs,
 absl::Status ValidateGraphConnections(
     absl::Span<const std::unique_ptr<Kernel>> graph) {
   for (int i = 1; i < graph.size(); ++i) {
-    const auto& kernel = graph[i];
+    const std::unique_ptr<Kernel>& kernel = graph[i];
     const std::unique_ptr<Kernel>& prev_kernel = graph[i - 1];
     if (kernel->GetNumInputs() != prev_kernel->GetNumOutputs()) {
       return absl::InvalidArgumentError(absl::StrCat(
@@ -508,7 +512,8 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateStableHloRunnerOp(
     std::shared_ptr<xla::ifrt::Client> ifrt_client,
     const InterpreterCreateOptions& create_options,
     tsl::thread::ThreadPool* computation_thread_pool,
-    IfrtLoadedVariableRegistry* ifrt_loaded_variable_registry) {
+    IfrtLoadedVariableRegistry* ifrt_loaded_variable_registry,
+    std::optional<int64_t> callback_id) {
   KernelBuilderContext builder;
   TF_ASSIGN_OR_RETURN(
       std::unique_ptr<StableHlo> stablehlo,
@@ -558,11 +563,10 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateStableHloRunnerOp(
   TF_RETURN_IF_ERROR(builder.SetConfig(
       kAssignedDevices,
       std::make_shared<const AssignedDevices>(std::move(assigned_devices))));
-
-  if (create_options.streamed_output_callback != nullptr) {
-    TF_RETURN_IF_ERROR(builder.SetConfig(
-        kStreamedOutputCallback, create_options.streamed_output_callback));
+  if (callback_id.has_value()) {
+    TF_RETURN_IF_ERROR(builder.SetConfig(kStableCallbackId, *callback_id));
   }
+
   return GetGlobalKernelRegistry().Create("StableHloRunnerOp", builder);
 }
 
@@ -609,7 +613,7 @@ absl::StatusOr<std::unique_ptr<Interpreter>> Interpreter::Create(
     return absl::InvalidArgumentError("create_options must not be null.");
   }
   TF_RETURN_IF_ERROR(ValidateInterpreterCreateOptions(*create_options));
-  auto interpreter =
+  std::unique_ptr<Interpreter> interpreter =
       absl::WrapUnique(new Interpreter(std::move(create_options)));
   // TODO: make the load method static so it can be called before
   // the constructor and simplify the constructor.
@@ -627,6 +631,13 @@ absl::StatusOr<std::unique_ptr<Interpreter>> Interpreter::Create(
       ->Increment();
 
   return interpreter;
+}
+
+Interpreter::Interpreter(
+    std::unique_ptr<InterpreterCreateOptions> create_options)
+    : create_options_(std::move(create_options)) {
+  absl::BitGen gen;
+  callback_id_ = absl::Uniform(gen, 0LL, std::numeric_limits<int64_t>::max());
 }
 
 std::vector<std::string> Interpreter::GetPipelineNames() const {
@@ -809,7 +820,7 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadStableHloRunnerOp(
       named_outputs,
       compile_options.has_value() ? &compile_options.value() : nullptr,
       ifrt_client, *create_options_, create_options_->computation_thread_pool,
-      &ifrt_loaded_variable_registry_);
+      &ifrt_loaded_variable_registry_, callback_id_);
 }
 
 absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
@@ -1027,14 +1038,14 @@ absl::StatusOr<DataLoader::LoadResult> Interpreter::LoadWeights(
         absl::StrCat("Object key for weight names ", weight_set_name,
                      " not found in manifest."));
   }
-  const auto& value = it->second->value();
+  const neptune_model_manifest::Value& value = it->second->value();
   if (!value.has_external()) {
     return absl::InvalidArgumentError(absl::StrCat(
         "Weights name ", weight_set_name, " is not an external value."));
   }
-  const auto& external = value.external();
+  const neptune_model_manifest::ExternalValue& external = value.external();
   TF_ASSIGN_OR_RETURN(
-      auto data_loader,
+      std::unique_ptr<DataLoader> data_loader,
       DataLoaderFactoryRegistry::GetGlobalRegistry().CreateDataLoader(
           external.loader_type(),
           DataLoader::CreateOptions{
@@ -1069,11 +1080,26 @@ absl::StatusOr<const KernelGraph* absl_nonnull> Interpreter::GetOrCreateGraph(
 absl::StatusOr<std::vector<Value>> Interpreter::Run(
     absl::string_view pipeline_name, absl::Span<const Value> positional_inputs,
     const absl::flat_hash_map<std::string, Value>& keyword_inputs,
-    const RunOptions run_options) {
+    RunOptions run_options) {
+  run_options.request_id = GenerateNextRequestId();
   VLOG(2) << "Interpreter::Run: pipeline_name=" << pipeline_name
           << ", model_name=" << create_options_->model_name;
+
+  std::optional<neptune::ScopedStreamCallback> scoped_stream_callback;
+  if (run_options.streamed_output_callback != nullptr &&
+      callback_id_.has_value()) {
+    TF_ASSIGN_OR_RETURN(
+        neptune::StreamCallbackRegistry * stream_callback_registry,
+        neptune::GetGlobalStreamCallbackRegistry());
+    TF_ASSIGN_OR_RETURN(
+        scoped_stream_callback,
+        stream_callback_registry->Register(
+            create_options_->model_name, *callback_id_, run_options.request_id,
+            run_options.streamed_output_callback));
+  }
+
   auto result = [this, pipeline_name, &positional_inputs, &keyword_inputs,
-                 &run_options]() -> absl::StatusOr<std::vector<Value>> {
+                 run_options]() -> absl::StatusOr<std::vector<Value>> {
     TF_ASSIGN_OR_RETURN(GraphBundle * graph_bundle,
                         GetGraphBundle(pipeline_name));
     TF_ASSIGN_OR_RETURN(const KernelGraph* graph,
@@ -1083,8 +1109,9 @@ absl::StatusOr<std::vector<Value>> Interpreter::Run(
       TF_ASSIGN_OR_RETURN(
           keyword_outputs,
           ExecuteLinearGraphWithKeywordArgs(
-              RunContext::Create(run_options), keyword_inputs, *graph,
-              create_options_->model_name, create_options_->model_version));
+              RunContext::Create(run_options, callback_id_), keyword_inputs,
+              *graph, create_options_->model_name,
+              create_options_->model_version));
       TF_ASSIGN_OR_RETURN(
           std::vector<absl::string_view> pipeline_output_names,
           graph_bundle->signature.output_signature.GetAllNames());
@@ -1102,14 +1129,14 @@ absl::StatusOr<std::vector<Value>> Interpreter::Run(
     }
     if (keyword_inputs.empty()) {
       return ExecuteLinearGraph(
-          RunContext::Create(run_options), positional_inputs, *graph,
-          create_options_->model_name, create_options_->model_version);
+          RunContext::Create(run_options, callback_id_), positional_inputs,
+          *graph, create_options_->model_name, create_options_->model_version);
     }
     TF_ASSIGN_OR_RETURN(std::vector<Value> inputs,
                         ConvertToVectorInputs(*graph_bundle, positional_inputs,
                                               keyword_inputs));
-    return ExecuteLinearGraph(RunContext::Create(run_options), inputs, *graph,
-                              create_options_->model_name,
+    return ExecuteLinearGraph(RunContext::Create(run_options, callback_id_),
+                              inputs, *graph, create_options_->model_name,
                               create_options_->model_version);
   }();
 
@@ -1125,7 +1152,7 @@ absl::StatusOr<absl::flat_hash_map<std::string, Value>>
 Interpreter::RunWithMapReturn(
     absl::string_view pipeline_name, absl::Span<const Value> positional_inputs,
     const absl::flat_hash_map<std::string, Value>& keyword_inputs,
-    const RunOptions run_options) {
+    RunOptions run_options) {
   TF_ASSIGN_OR_RETURN(GraphBundle * graph_bundle,
                       GetGraphBundle(pipeline_name));
   TF_RETURN_IF_ERROR(
@@ -1140,11 +1167,33 @@ Interpreter::RunWithMapReturn(
 tsl::Future<std::vector<Value>> Interpreter::RunAsync(
     absl::string_view pipeline_name, absl::Span<const Value> positional_inputs,
     const absl::flat_hash_map<std::string, Value>& keyword_inputs,
-    const RunOptions run_options) {
+    RunOptions run_options) {
+  run_options.request_id = GenerateNextRequestId();
   VLOG(2) << "Interpreter::RunAsync: pipeline_name=" << pipeline_name
           << ", model_name=" << create_options_->model_name;
+
+  std::shared_ptr<neptune::ScopedStreamCallback> scoped_stream_callback;
+  if (run_options.streamed_output_callback != nullptr &&
+      callback_id_.has_value()) {
+    absl::StatusOr<neptune::StreamCallbackRegistry*> stream_callback_registry =
+        neptune::GetGlobalStreamCallbackRegistry();
+    if (!stream_callback_registry.ok()) {
+      return tsl::Future<std::vector<Value>>(stream_callback_registry.status());
+    }
+    absl::StatusOr<neptune::ScopedStreamCallback> registered_callback =
+        (*stream_callback_registry)
+            ->Register(create_options_->model_name, *callback_id_,
+                       run_options.request_id,
+                       run_options.streamed_output_callback);
+    if (!registered_callback.ok()) {
+      return tsl::Future<std::vector<Value>>(registered_callback.status());
+    }
+    scoped_stream_callback = std::make_shared<neptune::ScopedStreamCallback>(
+        std::move(*registered_callback));
+  }
+
   auto future = [this, pipeline_name, &positional_inputs, &keyword_inputs,
-                 &run_options]() {
+                 run_options]() {
     // TODO: type check inputs and outputs.
     absl::StatusOr<GraphBundle*> graph_bundle = GetGraphBundle(pipeline_name);
     if (!graph_bundle.ok()) {
@@ -1158,23 +1207,24 @@ tsl::Future<std::vector<Value>> Interpreter::RunAsync(
 
     if (keyword_inputs.empty()) {
       return AsyncExecuteLinearGraph(
-          RunContext::Create(run_options), positional_inputs, **graph,
-          create_options_->execute_worker_thread_pool,
+          RunContext::Create(run_options, callback_id_), positional_inputs,
+          **graph, create_options_->execute_worker_thread_pool,
           create_options_->model_name, create_options_->model_version);
     }
-    auto inputs = ConvertToVectorInputs(**graph_bundle, positional_inputs,
-                                        keyword_inputs);
+    absl::StatusOr<std::vector<Value>> inputs = ConvertToVectorInputs(
+        **graph_bundle, positional_inputs, keyword_inputs);
     if (!inputs.ok()) {
       return tsl::Future<std::vector<Value>>(inputs.status());
     }
     return AsyncExecuteLinearGraph(
-        RunContext::Create(run_options), *inputs, **graph,
+        RunContext::Create(run_options, callback_id_), *inputs, **graph,
         create_options_->execute_worker_thread_pool,
         create_options_->model_name, create_options_->model_version);
   }();
 
   future.OnReady([model_name = create_options_->model_name,
-                  model_version = create_options_->model_version](
+                  model_version = create_options_->model_version,
+                  scoped_stream_callback](
                      const absl::StatusOr<std::vector<Value>>& result) {
     request_count
         ->GetCell(model_name, absl::StrCat(model_version), "async",
@@ -1189,7 +1239,7 @@ tsl::Future<absl::flat_hash_map<std::string, Value>>
 Interpreter::RunAsyncWithMapReturn(
     absl::string_view pipeline_name, absl::Span<const Value> positional_inputs,
     const absl::flat_hash_map<std::string, Value>& keyword_inputs,
-    const RunOptions run_options) {
+    RunOptions run_options) {
   absl::StatusOr<GraphBundle*> graph_bundle = GetGraphBundle(pipeline_name);
   if (!graph_bundle.ok()) {
     return tsl::Future<absl::flat_hash_map<std::string, Value>>(
@@ -1227,7 +1277,8 @@ absl::StatusOr<KernelIODataType> Interpreter::GetModelInputDataType(
   // When lazy loading is enabled, the graph may not be loaded yet. For this
   // simple query, instead of loading the graph and getting the data type from
   // the first kernel, we just infer the data type.
-  auto& pipeline = graph_bundle->pipeline;
+  const neptune_model_orchestration::Pipeline& pipeline =
+      graph_bundle->pipeline;
 
   absl::string_view pre_processor_name;
   for (const auto& component : pipeline.components()) {
@@ -1273,7 +1324,8 @@ absl::StatusOr<KernelIODataType> Interpreter::GetModelOutputDataType(
   // When lazy loading is enabled, the graph may not be loaded yet. For this
   // simple query, instead of loading the graph and getting the data type from
   // the last kernel, we just infer the data type.
-  auto& pipeline = graph_bundle->pipeline;
+  const neptune_model_orchestration::Pipeline& pipeline =
+      graph_bundle->pipeline;
   if (pipeline.post_processor_names().empty()) {
     return KernelIODataType::kHostBuffer;
   }
@@ -1320,6 +1372,16 @@ absl::Status Interpreter::MarkFullyInitialized() {
     }
   }
   return absl::OkStatus();
+}
+
+int32_t Interpreter::GenerateNextRequestId() {
+  int32_t next_id = request_id_counter_.fetch_add(1);
+  // -1 is the sentinel value for unassigned request ID. Skip it if the
+  // counter wraps around.
+  if (next_id == -1) {
+    next_id = request_id_counter_.fetch_add(1);
+  }
+  return next_id;
 }
 
 }  // namespace neptune

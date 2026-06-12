@@ -41,9 +41,7 @@ inline constexpr absl::string_view kFunctionFlatOutputSignature =
     "function_flat_output_signature";
 inline constexpr absl::string_view kServingCoreSelector =
     "serving_core_selector";
-inline constexpr absl::string_view kStreamedOutputCallback =
-    "streamed_output_callback";
-
+inline constexpr absl::string_view kStableCallbackId = "stable_callback_id";
 }  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_BUILDER_CONSTANTS_H_

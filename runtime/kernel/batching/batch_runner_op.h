@@ -79,6 +79,9 @@ class JsvBatchResource : public BatchResourceBase {
   }
 
  protected:
+  absl::StatusOr<absl::Span<const Value>> GetInputsToBatch(
+      Kernel::ExecuteContext* context) const override;
+
   void ProcessFuncBatchImpl(
       const BatchResourceBase::BatchTask& propagated_task,
       absl::Span<const HostBuffer> inputs,

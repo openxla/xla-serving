@@ -64,6 +64,7 @@ class Kernel {
     // TODO: Implement an eviction mechanism for entries in this
     // map that are no longer needed.
     absl::flat_hash_map<std::string, Value> named_values;
+    std::vector<Value> extended_inputs;
   };
 
   virtual ~Kernel() = default;
@@ -91,6 +92,9 @@ class Kernel {
   // Marks the kernel to fully initialized. After this is called, time-consuming
   // tasks not suitable for the production environment will be disallowed.
   virtual absl::Status MarkFullyInitialized() { return absl::OkStatus(); }
+
+  // Returns true if the kernel has streaming enabled.
+  virtual bool has_streaming() const { return false; }
 };
 
 class CancellableKernel : public Kernel {

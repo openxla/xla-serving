@@ -8,6 +8,7 @@ cc_library(
         "@neptune//runtime/kernel:__subpackages__",
     ],
     deps = [
+        ":batch_options_utils",
         ":warmup",
         "@abseil-cpp//absl/base:no_destructor",
         "@abseil-cpp//absl/cleanup",
@@ -36,7 +37,6 @@ cc_library(
         "@neptune//runtime/core/batching:shared_batch_scheduler",
         "@neptune//runtime/core/batching:threadsafe_status",
         "@neptune//runtime/kernel",
-        "@neptune//runtime/kernel/batching:batch_options_utils",
         "@org_tensorflow//tensorflow/core/common_runtime:cost_constants",
         "@org_tensorflow//tensorflow/core/common_runtime:cost_measurement",
         "@org_tensorflow//tensorflow/core/common_runtime:cost_util",
@@ -81,6 +81,7 @@ cc_library(
         "@neptune//runtime/core:value_utils",
         "@neptune//runtime/core/batching:batch_scheduler",
         "@neptune//runtime/core/batching:shared_batch_scheduler",
+        "@neptune//runtime/core/streaming:utils",
         "@neptune//runtime/interpreter:linear_graph_execute",
         "@neptune//runtime/kernel",
         "@neptune//runtime/kernel:kernel_builder_context",
@@ -94,6 +95,7 @@ cc_library(
         "@xla//xla/tsl/concurrency:future",
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:errors",
+        "@xla//xla/tsl/platform:statusor",
     ],
 )
 

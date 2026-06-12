@@ -63,6 +63,14 @@ class StableHloRunnerOp : public CancellableKernel {
     return stablehlo_runner_->MarkFullyInitialized();
   }
 
+  bool has_streaming() const override {
+    return stablehlo_runner_->has_streaming();
+  }
+
+  std::optional<int64_t> streaming_host_callback_id() const {
+    return stablehlo_runner_->streaming_host_callback_id();
+  }
+
  private:
   explicit StableHloRunnerOp(std::unique_ptr<StableHloRunner> stablehlo_runner,
                              std::unique_ptr<FlatSignature> input_signature,

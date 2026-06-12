@@ -14,6 +14,7 @@
 
 #include "runtime/kernel/stablehlo_runner_op.h"  // from @neptune
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -123,14 +124,10 @@ absl::StatusOr<std::unique_ptr<Kernel>> StableHloRunnerOp::Create(
     return serving_core_selector_status.status();
   }
 
-  absl::StatusOr<
-      std::function<void(absl::flat_hash_map<std::string, HostBuffer>)>>
-      streamed_output_callback = context.GetConfig<
-          std::function<void(absl::flat_hash_map<std::string, HostBuffer>)>>(
-          kStreamedOutputCallback);
-  if (!streamed_output_callback.ok() &&
-      !absl::IsNotFound(streamed_output_callback.status())) {
-    return streamed_output_callback.status();
+  absl::StatusOr<int64_t> callback_id =
+      context.GetConfig<int64_t>(kStableCallbackId);
+  if (!callback_id.ok() && !absl::IsNotFound(callback_id.status())) {
+    return callback_id.status();
   }
 
   TF_ASSIGN_OR_RETURN(
@@ -143,7 +140,7 @@ absl::StatusOr<std::unique_ptr<Kernel>> StableHloRunnerOp::Create(
           ifrt_loaded_variable_registry, weights, compilation_environment_proto,
           thread_pool, *optimizer, assigned_devices, serving_core_selector,
           /*h2d_transfer_executor_factory=*/nullptr,
-          streamed_output_callback.ok() ? *streamed_output_callback : nullptr));
+          callback_id.ok() ? std::make_optional(*callback_id) : std::nullopt));
 
   return absl::WrapUnique(new StableHloRunnerOp(std::move(stablehlo_runner),
                                                 std::move(input_sig),
@@ -172,8 +169,9 @@ absl::Status StableHloRunnerOp::RunInternal(ExecuteContext& context) {
     inputs_span = context.inputs;
   }
 
-  TF_ASSIGN_OR_RETURN(std::vector<Value> output_values,
-                      stablehlo_runner_->Execute(inputs_span));
+  TF_ASSIGN_OR_RETURN(
+      std::vector<Value> output_values,
+      stablehlo_runner_->Execute(inputs_span, context.run_context));
   if (output_signature_) {
     TF_ASSIGN_OR_RETURN(
         auto map, output_signature_->UnflattenToMap(std::move(output_values)));

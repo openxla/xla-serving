@@ -46,6 +46,7 @@
 #include "runtime/core/stablehlo_optimizer.h"  // from @neptune
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
+#include "runtime/interpreter/context.h"  // from @neptune
 #include "runtime/interpreter/manifest_utils.h"  // from @neptune
 #include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
 #include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @neptune
@@ -83,8 +84,7 @@ class StableHloRunner {
       ServingCoreSelector* absl_nullable serving_core_selector,
       std::unique_ptr<H2DTransferExecutorFactory>
           h2d_transfer_executor_factory = nullptr,
-      std::function<void(absl::flat_hash_map<std::string, HostBuffer>)>
-          streamed_output_callback = nullptr);
+      std::optional<int64_t> callback_id = std::nullopt);
 
   // Movable but not copyable.
   StableHloRunner(StableHloRunner&& other) = default;
@@ -107,6 +107,12 @@ class StableHloRunner {
     bool require_d2h = true;
   };
 
+  bool has_streaming() const { return loaded_stablehlo_->has_streaming(); }
+
+  std::optional<int64_t> streaming_host_callback_id() const {
+    return streaming_host_callback_id_;
+  }
+
   // Executes the computation.
   // Only user provided input arguments are passed to this function. The weights
   // (as passed to `Create`) will be looked in `IfrtLoadedVariableRegistry` from
@@ -118,12 +124,13 @@ class StableHloRunner {
   // absl::UnimplementedError since PJRT array handles are not yet
   // supported directly.
   absl::StatusOr<std::vector<neptune::Value>> Execute(
-      absl::Span<const neptune::Value> inputs, ExecuteOptions options);
+      absl::Span<const neptune::Value> inputs, ExecuteOptions options,
+      const RunContext& run_context);
 
   // Executes the computation using the default ExecuteOptions.
   absl::StatusOr<std::vector<neptune::Value>> Execute(
-      absl::Span<const neptune::Value> inputs) {
-    return Execute(inputs, ExecuteOptions{});
+      absl::Span<const neptune::Value> inputs, const RunContext& run_context) {
+    return Execute(inputs, ExecuteOptions{}, run_context);
   }
 
   // Returns the number of executables in the cache.
@@ -331,8 +338,7 @@ class StableHloRunner {
       absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
       ServingCoreSelector* absl_nullable serving_core_selector,
       std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory,
-      std::function<void(absl::flat_hash_map<std::string, HostBuffer>)>
-          streamed_output_callback = nullptr);
+      std::optional<int64_t> callback_id);
 
   using SharedCachedExecutableBundle = std::shared_ptr<CachedExecutableBundle>;
 
@@ -402,6 +408,8 @@ class StableHloRunner {
   bool fully_initialized_ ABSL_GUARDED_BY(mutex_) = false;
 
   // Monotonically increasing launch ID that we pass to the executable.
+  // TODO: Remove this launch_id once request_id is always
+  // propagated through Interpreter::Run.
   static std::atomic<uint32_t> launch_id_;
 
   // If nullptr, no optimization will be enabled.
@@ -412,8 +420,7 @@ class StableHloRunner {
   ServingCoreSelector* absl_nullable serving_core_selector_;
 
   std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory_;
-  std::function<void(absl::flat_hash_map<std::string, HostBuffer>)>
-      streamed_output_callback_;
+  std::optional<int64_t> streaming_host_callback_id_;
 
   absl::flat_hash_map<xla::ifrt::DeviceListRef,
                       std::unique_ptr<ResourcesPerDeviceList>>

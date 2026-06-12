@@ -206,8 +206,12 @@ class StreamCallbackRegistry {
 
 absl::StatusOr<StreamCallbackRegistry*> GetGlobalStreamCallbackRegistry();
 
-absl::StatusOr<std::optional<int64_t>> CreateStreamCallbackId(
-    mlir::ModuleOp module);
+// Sets the callback ID in the MLIR module's streaming custom calls.
+// Returns the callback_id if the module contains streaming custom calls,
+// or std::nullopt if the module has no streaming custom calls (in which case
+// the module is not mutated and streaming is disabled for this module).
+absl::StatusOr<std::optional<int64_t>> SetStreamCallbackId(
+    mlir::ModuleOp module, int64_t callback_id);
 
 class ScopedStreamCallback {
  public:

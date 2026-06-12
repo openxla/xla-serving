@@ -17,6 +17,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
@@ -39,13 +40,17 @@ struct RunContext {
   CancellationContext cancellation_context;
   std::function<void(absl::flat_hash_map<std::string, HostBuffer>)>
       streamed_output_callback = nullptr;
+  // TODO: Change this to uint64_t.
   int32_t request_id = -1;
+  std::optional<int64_t> callback_id;
 
-  static RunContext Create(const RunOptions& run_options) {
+  static RunContext Create(const RunOptions& run_options,
+                           std::optional<int64_t> callback_id = std::nullopt) {
     return RunContext{
         .cancellation_context = {.deadline = run_options.deadline},
         .streamed_output_callback = run_options.streamed_output_callback,
-        .request_id = run_options.request_id};
+        .request_id = run_options.request_id,
+        .callback_id = callback_id};
   };
 };
 
