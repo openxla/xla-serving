@@ -15,7 +15,9 @@
 """Converts TF functions to Neptune functions (allowing TF resources)."""
 
 from collections.abc import Callable, Mapping, MutableMapping, Sequence
+import copy
 import dataclasses
+import functools
 import inspect
 import os
 from typing import Any, NamedTuple, cast
@@ -32,7 +34,9 @@ from neptune_model._src.core import unstructured_data
 from neptune_model._src.tf2npt import type_conversion
 from neptune_model.protos import manifest_pb2
 from neptune_model.protos import tf_concrete_function_handle_pb2
-from tensorflow.core.protobuf import saved_model_pb2  # pylint: disable=g-direct-tensorflow-import
+# pylint: disable=g-direct-tensorflow-import
+from tensorflow.core.protobuf import saved_model_pb2
+# pylint: enable=g-direct-tensorflow-import
 
 TF_CONCRETE_FUNCTION_HANDLE_MIME_TYPE = (
     'application/protobuf;'
@@ -109,29 +113,42 @@ def _get_defaults(
   return defaults
 
 
+def _is_x64(dtype: tf.DType) -> bool:
+  return dtype in (tf.float64, tf.complex128, tf.int64, tf.uint64)
+
+
 def _has_x64_outputs(fn: tf.types.experimental.ConcreteFunction) -> bool:
   """Checks if the function has 64-bit outputs."""
-  leaves = jax.tree.leaves(fn.structured_outputs)
-  return any(leaf.dtype in (tf.int64, tf.uint64, tf.float64) for leaf in leaves)
+  return any(
+      isinstance(x, (tf.Tensor, tf.TensorSpec)) and _is_x64(x.dtype)
+      for x in tf.nest.flatten(fn.structured_outputs)
+  )
+
+
+_X64_TO_X32 = {
+    tf.float64: tf.float32,
+    tf.complex128: tf.complex64,
+    tf.int64: tf.int32,
+    tf.uint64: tf.uint32,
+}
+
+
+def _suppress_x64(x: Any) -> Any:
+  if not isinstance(x, tf.Tensor):
+    return x
+  new_dtype = _X64_TO_X32.get(x.dtype, None)
+  if new_dtype is None:
+    return x
+  return tf.cast(x, new_dtype)
 
 
 def _suppress_x64_outputs(fn: Callable[..., Any]) -> Callable[..., Any]:
   """Wraps the function to suppress 64-bit outputs."""
 
-  def _to_x32(t: Any) -> Any:
-    if not isinstance(t, tf.Tensor):
-      return t
-    if t.dtype == tf.int64:
-      return tf.cast(t, tf.int32)
-    if t.dtype == tf.uint64:
-      return tf.cast(t, tf.uint32)
-    if t.dtype == tf.float64:
-      return tf.cast(t, tf.float32)
-    return t
-
+  @functools.wraps(fn)
   def wrapped(*args, **kwargs):
     outputs = fn(*args, **kwargs)
-    return jax.tree.map(_to_x32, outputs)
+    return tf.nest.map_structure(_suppress_x64, outputs)
 
   return wrapped
 
@@ -516,8 +533,7 @@ def save_tf_functions(
       (directly or indirectly) must be present in this structure. Otherwise, an
       "untracked resource" error will be raised. If tf.Module is passed, it will
       be used to create the saved model.
-    tf_saved_model_sub_dir: The sub-directory name for the TF SavedModel,
-      relative to `model_dir`.
+    tf_saved_model_sub_dir: Saved model dir name relative to `model_dir`.
 
   Returns:
     The single-entry dictionary with the resulting TF supplemental.

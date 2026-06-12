@@ -19,7 +19,7 @@ import dataclasses
 
 import jaxtyping
 
-from neptune_model._src.core.shlo_type import ShloTensorSpec
+from neptune_model._src.core import shlo_type
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -33,14 +33,15 @@ class Function:
     signature: the pair `(input_signature, output_signature)`.
   """
 
-  input_signature: jaxtyping.PyTree[ShloTensorSpec]
-  output_signature: jaxtyping.PyTree[ShloTensorSpec]
+  input_signature: jaxtyping.PyTree[shlo_type.ShloTensorSpec]
+  output_signature: jaxtyping.PyTree[shlo_type.ShloTensorSpec]
   data_names: Sequence[str] | None = None
 
   @property
   def signature(
       self,
   ) -> tuple[
-      jaxtyping.PyTree[ShloTensorSpec], jaxtyping.PyTree[ShloTensorSpec]
+      jaxtyping.PyTree[shlo_type.ShloTensorSpec],
+      jaxtyping.PyTree[shlo_type.ShloTensorSpec],
   ]:
     return self.input_signature, self.output_signature

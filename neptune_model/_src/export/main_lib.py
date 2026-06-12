@@ -254,7 +254,7 @@ def _update_save_bundle(
 
   pipeline_proto = save_bundle.pipelines.name_to_pipeline[cfg.serving_signature]
   pipeline_proto.signature.CopyFrom(
-      type_proto_utils.to_function_signature_proto(
+      type_proto_utils.npt_function_signature_from_shlo_signatures(
           pipeline_input_signature,
           pipeline_output_signature,
       )

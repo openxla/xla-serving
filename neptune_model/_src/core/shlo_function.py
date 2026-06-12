@@ -16,7 +16,7 @@
 
 import abc
 from collections.abc import Mapping
-from dataclasses import dataclass  # pylint: disable=g-importing-member
+import dataclasses
 
 from neptune_model._src.core import function
 from neptune_model._src.core import shlo_type
@@ -34,7 +34,7 @@ class ShloFunctionSupplementalInfo(abc.ABC):
     pass
 
 
-@dataclass
+@dataclasses.dataclass
 class ShloFunction(function.Function):
   """A StableHLO function.
 

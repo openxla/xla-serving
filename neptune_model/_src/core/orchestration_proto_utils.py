@@ -112,7 +112,9 @@ def to_named_signature_proto(
     named_signature_proto.inputs.named_tensor_types.extend([
         orchestration_pb2.NamedTensorType(
             name=name,
-            tensor_type=type_proto_utils.to_tensor_type_proto(spec),
+            tensor_type=type_proto_utils.npt_tensor_type_from_shlo_tensor_spec(
+                spec
+            ),
         )
         for name, spec in named_input_signature
     ])
@@ -121,7 +123,9 @@ def to_named_signature_proto(
     named_signature_proto.outputs.named_tensor_types.extend([
         orchestration_pb2.NamedTensorType(
             name=name,
-            tensor_type=type_proto_utils.to_tensor_type_proto(spec),
+            tensor_type=type_proto_utils.npt_tensor_type_from_shlo_tensor_spec(
+                spec
+            ),
         )
         for name, spec in named_output_signature
     ])

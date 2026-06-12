@@ -43,7 +43,7 @@ def _build_function(
     fn_proto.data_names.extend(fn.data_names)
 
   fn_proto.signature.CopyFrom(
-      type_proto_utils.to_function_signature_proto(
+      type_proto_utils.npt_function_signature_from_shlo_signatures(
           fn.input_signature, fn.output_signature
       )
   )
