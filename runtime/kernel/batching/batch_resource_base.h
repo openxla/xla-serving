@@ -30,6 +30,7 @@
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
+#include "absl/time/time.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/allocator.h"  // from @neptune
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
@@ -240,6 +241,15 @@ class BatchResourceBase : public ResourceBase {
       absl::Span<const std::unique_ptr<tensorflow::CostMeasurement>>
           batch_cost_measurements,
       int64_t processed_size, BatchT& batch);
+
+  // Records the batch delay between the batch schedule time and the task start
+  // time.
+  static void RecordBatchDelayMetrics(const BatchResourceBase::BatchT& batch,
+                                      absl::string_view model_name,
+                                      int64_t model_version,
+                                      int64_t processed_batch_size,
+                                      absl::Time batch_schedule_time,
+                                      absl::Duration batch_timeout);
 
   std::string DebugString() const override { return "BatchResourceBase"; }
 

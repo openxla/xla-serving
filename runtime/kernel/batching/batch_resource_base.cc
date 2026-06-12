@@ -110,6 +110,14 @@ static auto* request_counter = tsl::monitoring::Counter<8>::New(
     "mixed_priority_batching_policy", "enable_priority_queue",
     "batch_padding_policy", "criticality");
 
+static auto* batch_delay_us_sampler = tsl::monitoring::Sampler<3>::New(
+    {"/orbax/serving/batching/batch_delay_us",
+     "Tracks the delay from the time the oldest task in a batch is scheduled "
+     "to the time the batch starts execution by model_name, model_version and "
+     "execution batch size.",
+     "model_name", "model_version", "execution_batch_size"},
+    tsl::monitoring::Buckets::Exponential(1, 2, 27));
+
 void RecordExecutedBatchSize(absl::string_view model_name,
                              int64_t model_version, int32_t batch_size) {
   VLOG(2) << "RecordExecutedBatchSize: model_name: " << model_name
@@ -185,6 +193,18 @@ void RecordInputBatchConfig(
       ->IncrementBy(1);
 }
 
+void RecordBatchDelayUs(absl::string_view model_name, int64_t model_version,
+                        int32_t execution_batch_size, int64_t delay_us) {
+  VLOG(2) << "RecordBatchDelay: model_name: " << model_name
+          << ", model_version: " << model_version
+          << ", execution_batch_size: " << execution_batch_size
+          << ", delay_us: " << delay_us;
+  batch_delay_us_sampler
+      ->GetCell(model_name, absl::StrCat(model_version),
+                absl::StrCat(execution_batch_size))
+      ->Add(static_cast<double>(delay_us));
+}
+
 // Returns the sum of the task sizes. The caller must guarantee that the
 // unique_ptrs in the argument vectors are not null.
 int GetTotalTaskSize(
@@ -195,7 +215,6 @@ int GetTotalTaskSize(
   }
   return tasks_size;
 }
-
 }  // namespace
 
 std::unique_ptr<BatchResourceBase::BatchTask>
@@ -276,7 +295,7 @@ absl::Status BatchResourceBase::RegisterInput(
     int forced_warmup_batch_size) {
   TF_ASSIGN_OR_RETURN(std::unique_ptr<BatchTask> batch_components,
                       create_batch_task_fn());
-  batch_components->start_time = tsl::EnvTime::NowNanos();
+  batch_components->start_time = tsl::EnvTime::NowMicros();
   batch_components->guid = guid;
   batch_components->propagated_context =
       tsl::Context(tsl::ContextKind::kThread);
@@ -772,6 +791,13 @@ void BatchResourceBase::ProcessFuncBatch(
   std::vector<HostBuffer> args(concatenated_buffers.begin(),
                                concatenated_buffers.end());
 
+  // Record batch delay.
+  RecordBatchDelayMetrics(
+      *batch, propagated_context->metadata.model_name,
+      propagated_context->metadata.model_version, processed_size,
+      /*batch_schedule_time=*/absl::FromUnixMicros(tsl::EnvTime::NowMicros()),
+      absl::Microseconds(batcher_queue_options_.batch_timeout_micros));
+
   // Releases the cleanup method here, because the callback of the function
   // library runtime will handle it now.
   std::move(finally).Cancel();
@@ -1021,6 +1047,27 @@ void BatchResourceBase::SplitBatchCostsAndRecordMetrics(
     request_cost->RecordBatchMetrics(tensorflow::RequestCost::BatchMetrics{
         processed_size, static_cast<int64_t>(batch.task(i).size()),
         padding_size, batch_costs});
+  }
+}
+
+void BatchResourceBase::RecordBatchDelayMetrics(
+    const BatchResourceBase::BatchT& batch, absl::string_view model_name,
+    int64_t model_version, int64_t processed_batch_size,
+    absl::Time batch_schedule_time, absl::Duration batch_timeout) {
+  absl::Time earliest_task_start_time = absl::InfiniteFuture();
+  for (int i = 0; i < batch.num_tasks(); ++i) {
+    earliest_task_start_time =
+        std::min(earliest_task_start_time,
+                 absl::FromUnixMicros(batch.task(i).start_time));
+  }
+  for (int i = 0; i < batch.num_tasks(); ++i) {
+    const BatchResourceBase::BatchTask& task = batch.task(i);
+
+    const absl::Time start_time = absl::FromUnixMicros(task.start_time);
+    const absl::Duration total_scheduler_delay =
+        batch_schedule_time - start_time;
+    RecordBatchDelayUs(model_name, model_version, processed_batch_size,
+                       absl::ToInt64Microseconds(total_scheduler_delay));
   }
 }
 
