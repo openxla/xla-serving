@@ -22,12 +22,14 @@ import tensorflow as tf
 from neptune_model._src.core import shlo_type
 
 
-def to_tf_dtype(shlo_dtype: shlo_type.ShloDType) -> Any:
-  if shlo_dtype == shlo_type.ShloDType.bf16:
+def to_tf_dtype(dtype: shlo_type.ShloDType | tf.DType) -> Any:
+  if dtype == shlo_type.ShloDType.bf16:
     return tf.bfloat16
-  if shlo_dtype == shlo_type.ShloDType.str:
+  if dtype == shlo_type.ShloDType.str:
     return tf.string
-  return shlo_type.shlo_dtype_to_np_dtype(shlo_dtype)
+  if isinstance(dtype, shlo_type.ShloDType):
+    return shlo_type.shlo_dtype_to_np_dtype(dtype)
+  return dtype
 
 
 def to_tf_spec(
@@ -35,10 +37,14 @@ def to_tf_spec(
 ) -> tf.TensorSpec:
   if isinstance(input_spec, tf.TensorSpec):
     return input_spec
+  if hasattr(input_spec, "name"):
+    name = input_spec.name
+  else:
+    name = None
   return tf.TensorSpec(
       shape=input_spec.shape,
       dtype=to_tf_dtype(input_spec.dtype),
-      name=input_spec.name,
+      name=name,
   )
 
 
@@ -57,8 +63,14 @@ def to_npt_spec(
 ) -> shlo_type.ShloTensorSpec:
   if isinstance(input_spec, shlo_type.ShloTensorSpec):
     return input_spec
+
+  if input_spec.shape.rank is None:
+    shape = None
+  else:
+    shape = tuple(input_spec.shape.as_list())
+
   return shlo_type.ShloTensorSpec(
-      shape=tuple(input_spec.shape.as_list()),
+      shape=shape,
       dtype=to_npt_dtype(input_spec.dtype),
       name=input_spec.name,
   )

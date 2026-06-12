@@ -361,6 +361,14 @@ class Tf2NptConverterTest(
         tf.int32 if suppress_x64_outputs else tf.int64,
     )
 
+  def test_has_x64_outputs_handles_none(self):
+    @tf.function
+    def return_none():
+      pass
+
+    concrete_fn = return_none.get_concrete_function()
+    self.assertFalse(converter._has_x64_outputs(concrete_fn))
+
 
 if __name__ == '__main__':
   absltest.main()
