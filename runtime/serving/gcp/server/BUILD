@@ -259,8 +259,6 @@ cc_library(
     deps = JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS + [
         ":ifrt_client_creator_gpu",
         ":ifrt_client_creator_hdr",
-        "@abseil-cpp//absl/types:span",
-        "@com_google_protobuf//:delimited_message_util",
         "@xla//xla/pjrt/plugin/xla_gpu:gpu_static_registration",
         "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_client_options",
         "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
