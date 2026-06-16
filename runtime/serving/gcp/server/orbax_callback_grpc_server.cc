@@ -19,7 +19,6 @@
 #include <utility>
 
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
-#include "absl/flags/declare.h"  // from @abseil-cpp
 #include "absl/flags/flag.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
@@ -153,7 +152,8 @@ OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
                         neptune::Interpreter::Create(std::move(create_options)));
     return std::make_unique<OrbaxCallbackGrpcServer>(
         model_name, std::move(interpreter), client,
-      std::move(execute_worker_thread_pool), std::move(computation_thread_pool),
+        std::move(execute_worker_thread_pool),
+        std::move(computation_thread_pool),
         std::move(checkpoint_loader_thread_pool));
 }
 
@@ -176,43 +176,11 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
           : absl::string_view(request->model_spec().signature_name());
   VLOG(1) << "Using pipeline name: '" << pipeline_name << "'";
 
-  auto input_data_type_or = interpreter_->GetModelInputDataType(pipeline_name);
-  if (!input_data_type_or.ok()) {
-    reactor->Finish(ToGrpcStatus(input_data_type_or.status()));
-    return reactor;
-  }
-  neptune::KernelIODataType input_data_type = input_data_type_or.value();
-  bool input_expects_tensor =
-      (input_data_type == neptune::KernelIODataType::kTensor);
-
-  absl::flat_hash_map<std::string, neptune::Value> input_with_names;
-  for (const auto& [name, host_buffer_proto] : request->inputs()) {
-    auto host_buffer_or = neptune::HostBuffer::FromProto(host_buffer_proto);
-    if (!host_buffer_or.ok()) {
-      reactor->Finish(ToGrpcStatus(host_buffer_or.status()));
-      return reactor;
-    }
-    neptune::HostBuffer host_buffer = std::move(host_buffer_or).value();
-    if (input_expects_tensor) {
-      auto tensor_or = ToTFTensor(host_buffer);
-      if (!tensor_or.ok()) {
-        reactor->Finish(ToGrpcStatus(tensor_or.status()));
-        return reactor;
-      }
-      input_with_names[name] = neptune::Value(std::move(tensor_or).value());
-    } else {
-      input_with_names[name] = neptune::Value(std::move(host_buffer));
-    }
-  }
-
   neptune::RunOptions run_options;
   run_options.deadline = absl::FromChrono(context->deadline());
 
-  absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>>
-      output_with_names = interpreter_->RunWithMapReturn(
-          pipeline_name, /*positional_inputs=*/{}, input_with_names,
-          run_options);
-
+  absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>> output_with_names =
+      RunPredictInternal(*request, pipeline_name, run_options);
   if (!output_with_names.ok()) {
     reactor->Finish(ToGrpcStatus(output_with_names.status()));
     return reactor;
@@ -248,6 +216,32 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
   response->mutable_model_spec()->set_signature_name(pipeline_name);
   reactor->Finish(grpc::Status::OK);
   return reactor;
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>>
+OrbaxCallbackGrpcServer::RunPredictInternal(
+    const neptune::serving::PredictRequest& request,
+    absl::string_view pipeline_name, const neptune::RunOptions& run_options) {
+  TF_ASSIGN_OR_RETURN(neptune::KernelIODataType input_data_type,
+                      interpreter_->GetModelInputDataType(pipeline_name));
+  bool input_expects_tensor =
+      (input_data_type == neptune::KernelIODataType::kTensor);
+
+  absl::flat_hash_map<std::string, neptune::Value> input_with_names;
+  input_with_names.reserve(request.inputs().size());
+  for (const auto& [name, host_buffer_proto] : request.inputs()) {
+    TF_ASSIGN_OR_RETURN(neptune::HostBuffer host_buffer,
+                        neptune::HostBuffer::FromProto(host_buffer_proto));
+    if (input_expects_tensor) {
+      TF_ASSIGN_OR_RETURN(tensorflow::Tensor tensor, ToTFTensor(host_buffer));
+      input_with_names[name] = neptune::Value(std::move(tensor));
+    } else {
+      input_with_names[name] = neptune::Value(std::move(host_buffer));
+    }
+  }
+
+  return interpreter_->RunWithMapReturn(pipeline_name, /*positional_inputs=*/{},
+                                        input_with_names, run_options);
 }
 
 grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::GetModelMetadata(

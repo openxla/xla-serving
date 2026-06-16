@@ -20,15 +20,17 @@
 #include <string>
 #include <utility>
 
+#include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "include/grpcpp/server_context.h"  // from @com_github_grpc_grpc
 #include "include/grpcpp/support/server_callback.h"  // from @com_github_grpc_grpc
-#include "include/grpcpp/support/status.h"  // from @com_github_grpc_grpc
 #include "protos/grpc/get_model_metadata.pb.h"  // from @neptune
 #include "protos/grpc/predict.pb.h"  // from @neptune
 #include "protos/grpc/prediction_service.grpc.pb.h"  // from @neptune
+#include "runtime/core/value.h"  // from @neptune
 #include "runtime/interpreter/interpreter.h"  // from @neptune
+#include "runtime/interpreter/run_options.h"  // from @neptune
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
@@ -96,6 +98,11 @@ class OrbaxCallbackGrpcServer final
   std::unique_ptr<tsl::thread::ThreadPool> computation_thread_pool_;
   std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool_;
   std::unique_ptr<neptune::Interpreter> interpreter_;
+
+  absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>>
+  RunPredictInternal(const neptune::serving::PredictRequest& request,
+                     absl::string_view pipeline_name,
+                     const neptune::RunOptions& run_options);
 };
 
 }  // namespace serving
