@@ -215,7 +215,6 @@ cc_library(
     visibility = [
         ":internal",
         ":interpreter_users",
-        "@neptune//runtime/kernel:__subpackages__",
     ],
     deps = [
         "@abseil-cpp//absl/container:flat_hash_map",
@@ -249,34 +248,6 @@ cc_library(
     hdrs = ["clock.h"],
     visibility = [
         ":internal",
-        "@neptune//runtime/kernel:__subpackages__",
-        "@neptune//runtime/tensorflow:__subpackages__",
-        "@neptune//runtime/tensorflow/kernel:__pkg__",
-    ],
-    deps = [
-        "@abseil-cpp//absl/base:no_destructor",
-        "@abseil-cpp//absl/time",
-    ],
-)
-
-cc_library(
-    name = "init_lib",
-    srcs = ["init_lib.cc"],
-    visibility = [":interpreter_users"],
-    deps = [
-        "@abseil-cpp//absl/log:check",
-        "@neptune//runtime/kernel",
-        "@neptune//runtime/kernel:builtin_kernel",
-    ],
-    alwayslink = 1,
-)
-
-cc_library(
-    name = "interpreter_create_options",
-    hdrs = ["interpreter_create_options.h"],
-    visibility = [
-        ":internal",
-        ":interpreter_users",
     ],
     deps = [
         "@abseil-cpp//absl/base:nullability",
