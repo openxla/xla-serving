@@ -1,6 +1,7 @@
 load("@com_google_protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
 load("@com_google_protobuf//bazel:py_proto_library.bzl", "py_proto_library")
 load("@rules_proto//proto:defs.bzl", "proto_library")
+load("//devtools/clif/python:clif_build_rule.bzl", "pyclif_proto_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -39,6 +40,11 @@ cc_proto_library(
 py_proto_library(
     name = "manifest_py_pb2",
     deps = [":manifest_proto"],
+)
+
+pyclif_proto_library(
+    name = "manifest_pyclif",
+    proto_lib = ":manifest_proto",
 )
 
 proto_library(
