@@ -42,25 +42,21 @@ int32_t GetPrevAllowedBatchSize(int batch_size,
                                 const std::vector<int32_t>& allowed_batch_sizes,
                                 bool disable_padding);
 
-// Trims the batch to the next allowed batch size when possible and when
-// configured by batch_padding_policy.
-//
-// When trimming, this function puts the trimmed tasks go into the
-// out_trimmed_tasks vector in the same order as they were in the batch.
+// Applies the batch padding policy to the candidate size and returns the target
+// size depending on the policy.
 template <typename TaskType>
-void MaybeBatchDown(Batch<TaskType>& batch,
-                    const std::vector<int32_t>& allowed_batch_sizes,
-                    bool disable_padding,
-                    absl::string_view batch_padding_policy,
-                    ModelBatchStats* model_batch_stats,
-                    std::vector<std::unique_ptr<TaskType>>& out_trimmed_tasks) {
-  if (batch.empty()) {
-    return;
+int32_t ApplyBatchPaddingPolicy(
+    int candidate_size, const std::vector<int32_t>& allowed_batch_sizes,
+    bool disable_padding, absl::string_view batch_padding_policy,
+    ModelBatchStats* model_batch_stats,
+    std::vector<std::unique_ptr<TaskType>>& out_trimmed_tasks) {
+  if (candidate_size == 0) {
+    return candidate_size;
   }
   if (batch_padding_policy == kPadUpPolicy) {
     // This is the default behavior of batch resource when it is given a batch
     // size that doesn't match any of the allowed batch sizes.
-    return;
+    return candidate_size;
   }
   bool minimize_tpu_cost_per_request;
   if (batch_padding_policy == kBatchDownPolicy) {
@@ -73,28 +69,27 @@ void MaybeBatchDown(Batch<TaskType>& batch,
              "but no ModelBatchStats passed to the batch scheduler; will "
              "fall back on the "
           << kPadUpPolicy << " policy.";
-      return;
+      return candidate_size;
     }
     minimize_tpu_cost_per_request = true;
   } else {
     LOG_FIRST_N(ERROR, 1) << "Unsupported batch_padding_policy: "
                           << batch_padding_policy << ", falling back on the "
                           << kPadUpPolicy << " policy.";
-    return;
+    return candidate_size;
   }
 
-  int32_t batch_size = batch.size();
-
-  int32_t pad_up_size =
-      GetNextAllowedBatchSize(batch_size, allowed_batch_sizes, disable_padding);
-  if (pad_up_size == batch_size) {
-    return;  // Good, no padding is necessary.
+  int32_t pad_up_size = GetNextAllowedBatchSize(
+      candidate_size, allowed_batch_sizes, disable_padding);
+  if (pad_up_size == candidate_size) {
+    return candidate_size;  // Good, no padding is necessary.
   }
 
-  int32_t batch_down_size =
-      GetPrevAllowedBatchSize(batch_size, allowed_batch_sizes, disable_padding);
-  if (batch_down_size == batch_size) {
-    return;  // Can't batch down (e.g. no smaller batch size available).
+  int32_t batch_down_size = GetPrevAllowedBatchSize(
+      candidate_size, allowed_batch_sizes, disable_padding);
+  if (batch_down_size == candidate_size) {
+    return candidate_size;  // Can't batch down (e.g. no smaller batch size
+                            // available).
   }
 
   if (minimize_tpu_cost_per_request) {
@@ -118,20 +113,42 @@ void MaybeBatchDown(Batch<TaskType>& batch,
         model_batch_stats->batch_size(pad_up_size).tpu_cost().mean();
     if (!down_batch_cost.has_value() || !up_batch_cost.has_value()) {
       // We have no data about batch costs, let's just do nothing.
-      return;
+      return candidate_size;
     }
 
     auto batch_down_cost_per_request = *down_batch_cost / batch_down_size;
-    auto pad_up_cost_per_request = *up_batch_cost / batch_size;
+    auto pad_up_cost_per_request = *up_batch_cost / candidate_size;
 
     if (pad_up_cost_per_request < batch_down_cost_per_request) {
       // Abort batching down because it's cheaper to pad up.
-      return;
+      return candidate_size;
     }
   }
 
-  // Batch down.
-  batch.TryTrimToNewSize(batch_down_size, out_trimmed_tasks);
+  return batch_down_size;
+}
+
+// Trims the batch to the next allowed batch size when possible and when
+// configured by batch_padding_policy.
+//
+// When trimming, this function puts the trimmed tasks go into the
+// out_trimmed_tasks vector in the same order as they were in the batch.
+template <typename TaskType>
+void MaybeBatchDown(Batch<TaskType>& batch,
+               const std::vector<int32_t>& allowed_batch_sizes,
+               bool disable_padding, absl::string_view batch_padding_policy,
+               ModelBatchStats* model_batch_stats,
+               std::vector<std::unique_ptr<TaskType>>& out_trimmed_tasks) {
+  if (batch.empty()) {
+    return;
+  }
+  int32_t batch_size = batch.size();
+  int32_t target_batch_size = ApplyBatchPaddingPolicy(
+      batch_size, allowed_batch_sizes, disable_padding, batch_padding_policy,
+      model_batch_stats, out_trimmed_tasks);
+  if (target_batch_size < batch_size) {
+    batch.TryTrimToNewSize(target_batch_size, out_trimmed_tasks);
+  }
 }
 
 }  // namespace neptune
