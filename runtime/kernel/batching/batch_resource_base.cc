@@ -929,8 +929,13 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
   for (int i = 0; i < num_batches; i++) {
     auto callback = barrier.Inc();
     output_tasks->push_back(input_task.CreateSplitTask(
-        i, [output_addr = input_task.output, callback = std::move(callback)](
-               absl::Status status) mutable { callback(); }));
+        i, [output_addr = input_task.output, callback = std::move(callback),
+            shared_status](absl::Status status) mutable {
+          if (!status.ok()) {
+            shared_status->Update(status);
+          }
+          callback();
+        }));
   }
 
   const int num_input_buffers = input_task.inputs.size();
