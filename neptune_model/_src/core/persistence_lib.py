@@ -122,22 +122,48 @@ def save(
   )
 
 
+def _load_model_version(
+    saved_state_dir: str,
+) -> metadata.ModelVersion:
+  """Loads the model version from the saved state directory."""
+
+  current_path = (
+      pathlib.Path(saved_state_dir) / constants.MODEL_VERSION_FILENAME
+  )
+  if file_utils.exists(str(current_path)):
+    return metadata.ModelVersion.load(str(current_path))
+
+  legacy_path = (
+      pathlib.Path(saved_state_dir) / constants.MODEL_VERSION_LEGACY_FILENAME
+  )
+  if file_utils.exists(str(legacy_path)):
+    return metadata.ModelVersion.load(str(legacy_path))
+
+  raise FileNotFoundError(
+      f'No model version file found in {saved_state_dir}. Expected either'
+      f' {constants.MODEL_VERSION_FILENAME} or'
+      f' {constants.MODEL_VERSION_LEGACY_FILENAME}.'
+  )
+
+
 def load(saved_state_dir: str) -> manifest_pb2.Manifest:
   """Discovers and loads the manifest in the saved state directory."""
-  model_version = metadata.ModelVersion.load(
-      str(pathlib.Path(saved_state_dir) / constants.MODEL_VERSION_FILENAME)
-  )
+  model_version = _load_model_version(saved_state_dir)
 
   # TODO: Once there is more than one version of the model
   # we will need to check the list of supported versions and customize the
   # loading process accordingly.
   if model_version.version != constants.MANIFEST_VERSION:
     raise ValueError(f'Unsupported manifest version "{model_version.version}"')
-  if model_version.mime_type != constants.MANIFEST_MIME_TYPE:
+  if (
+      model_version.mime_type != constants.MANIFEST_MIME_TYPE
+      and model_version.mime_type != constants.MANIFEST_LEGACY_MIME_TYPE
+  ):
     raise ValueError(f'Unsupported manifest type "{model_version.mime_type}"')
   if pathlib.Path(model_version.manifest_file_path).is_absolute():
     raise ValueError(
-        f'Manifest file path must be relative, got "{model_version.manifest_file_path}"'
+        'Manifest file path must be relative, got'
+        f' "{model_version.manifest_file_path}"'
     )
 
   manifest_path = (
