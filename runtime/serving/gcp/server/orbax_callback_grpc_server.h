@@ -21,6 +21,7 @@
 #include <utility>
 
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "include/grpcpp/server_context.h"  // from @com_github_grpc_grpc
@@ -45,6 +46,7 @@ struct OrbaxCallbackGrpcServerOptions {
   bool hoist_invariant_ops = true;
   bool sink_in_invariant_ops = true;
   int64_t cost_threshold = 10000;
+  bool warmup_server = false;
 };
 
 class OrbaxCallbackGrpcServer final
@@ -98,6 +100,8 @@ class OrbaxCallbackGrpcServer final
   std::unique_ptr<tsl::thread::ThreadPool> computation_thread_pool_;
   std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool_;
   std::unique_ptr<neptune::Interpreter> interpreter_;
+
+  absl::Status Warmup(absl::string_view model_path);
 
   absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>>
   RunPredictInternal(const neptune::serving::PredictRequest& request,

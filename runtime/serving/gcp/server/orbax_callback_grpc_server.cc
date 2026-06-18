@@ -14,6 +14,7 @@
 
 #include "runtime/serving/gcp/server/orbax_callback_grpc_server.h"  // from @neptune
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -26,17 +27,22 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "include/grpcpp/server_context.h"  // from @com_github_grpc_grpc
 #include "include/grpcpp/support/server_callback.h"  // from @com_github_grpc_grpc
 #include "include/grpcpp/support/status.h"  // from @com_github_grpc_grpc
 #include "protos/grpc/host_buffer.pb.h"  // from @neptune
 #include "protos/grpc/model.pb.h"  // from @neptune
+#include "protos/grpc/prediction_log.pb.h"  // from @neptune
 #include "protos/grpc/prediction_service.pb.h"  // from @neptune
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
 #include "runtime/interpreter/interpreter.h"  // from @neptune
 #include "runtime/interpreter/run_options.h"  // from @neptune
 #include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
+#include "google/protobuf/io/zero_copy_stream_impl_lite.h"
+#include "google/protobuf/util/delimited_message_util.h"
+#include "xla/tsl/platform/file_system.h"  // from @xla
 #if ENABLE_TF == 1
   #include "runtime/tensorflow/tf_compatible_interpreter_create_options.h"  // from @neptune
 #else
@@ -62,6 +68,8 @@ namespace serving {
 namespace {
 
 static constexpr char kDefaultServingSignatureDefKey[] = "serving_default";
+static constexpr char kWarmupRequestsRelativePath[] =
+    "assets.extra/neptune_serving_warmup_requests";
 
 #if ENABLE_TF == 1
 tensorflow::tfrt_stub::SavedModel::Options GetSavedModelOptions(
@@ -89,6 +97,8 @@ tensorflow::tfrt_stub::SavedModel::Options GetSavedModelOptions(
 }
 
 #endif
+
+
 
 }  // namespace
 
@@ -150,11 +160,15 @@ OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
     std::unique_ptr<neptune::Interpreter> interpreter;
     TF_ASSIGN_OR_RETURN(interpreter,
                         neptune::Interpreter::Create(std::move(create_options)));
-    return std::make_unique<OrbaxCallbackGrpcServer>(
+    auto server = std::make_unique<OrbaxCallbackGrpcServer>(
         model_name, std::move(interpreter), client,
         std::move(execute_worker_thread_pool),
         std::move(computation_thread_pool),
         std::move(checkpoint_loader_thread_pool));
+    if (options.warmup_server) {
+      TF_RETURN_IF_ERROR(server->Warmup(model_path));
+    }
+    return server;
 }
 
 grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
@@ -240,8 +254,69 @@ OrbaxCallbackGrpcServer::RunPredictInternal(
     }
   }
 
-  return interpreter_->RunWithMapReturn(pipeline_name, /*positional_inputs=*/{},
-                                        input_with_names, run_options);
+  return interpreter_->RunWithMapReturn(
+      pipeline_name, /*positional_inputs=*/{}, input_with_names,
+      run_options);
+}
+
+absl::Status OrbaxCallbackGrpcServer::Warmup(absl::string_view model_path) {
+  std::string warmup_path =
+      absl::StrCat(model_path, "/", kWarmupRequestsRelativePath);
+  tsl::Env* env = tsl::Env::Default();
+  TF_RETURN_IF_ERROR(env->FileExists(warmup_path));
+
+  LOG(INFO) << "Running warmup from " << warmup_path;
+
+  std::unique_ptr<tsl::RandomAccessFile> file;
+  TF_RETURN_IF_ERROR(env->NewRandomAccessFile(warmup_path, &file));
+  uint64_t file_size;
+  TF_RETURN_IF_ERROR(env->GetFileSize(warmup_path, &file_size));
+  std::string file_content;
+  file_content.resize(file_size);
+
+  absl::string_view result;
+  TF_RETURN_IF_ERROR(
+      file->Read(0, result, absl::MakeSpan(&file_content[0], file_size)));
+  if (result.size() < file_size) {
+    return absl::DataLossError("Truncated read of warmup file");
+  }
+
+  google::protobuf::io::ArrayInputStream array_input(result.data(), result.size());
+
+  neptune::RunOptions run_options;  // Default options, no deadline.
+  bool clean_eof = false;
+  neptune::serving::PredictionLog prediction_log;
+  // TODO: Evaluate if parallelizing the warmup can speed up
+  // server startup.
+  while (google::protobuf::util::ParseDelimitedFromZeroCopyStream(
+      &prediction_log, &array_input, &clean_eof)) {
+    if (!prediction_log.has_predict_log()) {
+      LOG(WARNING) << "PredictionLog does not have predict_log, skipping.";
+      continue;
+    }
+    const neptune::serving::PredictRequest& request =
+        prediction_log.predict_log().request();
+    absl::string_view pipeline_name =
+        request.model_spec().signature_name().empty()
+            ? absl::string_view(kDefaultServingSignatureDefKey)
+            : absl::string_view(request.model_spec().signature_name());
+    absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>> warmup_status =
+        RunPredictInternal(request, pipeline_name, run_options);
+    if (!warmup_status.ok()) {
+      LOG(ERROR) << "Warmup failed for pipeline '" << pipeline_name
+                 << "': " << warmup_status.status();
+      return warmup_status.status();
+    }
+    prediction_log.Clear();
+  }
+
+  if (!clean_eof) {
+    return absl::DataLossError(
+        "Failed to parse warmup file (truncated or corrupt)");
+  }
+
+  LOG(INFO) << "Warmup completed successfully.";
+  return absl::OkStatus();
 }
 
 grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::GetModelMetadata(

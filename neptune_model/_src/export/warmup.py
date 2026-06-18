@@ -12,11 +12,12 @@
 """Warmup utilities for Neptune model export."""
 
 from collections.abc import Mapping, Sequence
+import io
 import os
-import struct
 from typing import Any
 
 from absl import logging
+from google.protobuf import proto
 import numpy as np
 
 from neptune_model._src.core import file_utils
@@ -28,24 +29,6 @@ from neptune_model.protos.xla.python.ifrt import dtype_pb2
 
 ASSETS_EXTRA_DIR = "assets.extra"
 WARMUP_REQUESTS_FILENAME = "neptune_serving_warmup_requests"
-
-
-def _write_size_prefixed_record(file_handle, value: bytes) -> None:
-  """Writes a size-prefixed protobuf binary record.
-
-  Size-prefixing is required because serialized protobuf messages are not
-  self-delimiting. Prepending the size (as a 4-byte little-endian unsigned
-  integer) allows the reader to distinguish individual records when multiple
-  messages are concatenated in a single file.
-
-  Args:
-    file_handle: The open file object to write the binary record into.
-    value: The serialized protobuf binary payload to write.
-  """
-  # Write the size of the payload as a 4-byte unsigned integer (little-endian).
-  encoded_length = struct.pack(b"<I", len(value))
-  file_handle.write(encoded_length)
-  file_handle.write(value)
 
 
 def _to_host_buffer_proto(val: Any) -> host_buffer_pb2.HostBufferProto:
@@ -144,16 +127,19 @@ def write_warmup_file(
   """
   warmup_path = _get_warmup_request_path(model_dir)
 
+  bytes_io = io.BytesIO()
+  for signature, examples in examples_map.items():
+    if not examples:
+      logging.warning(
+          "Warm-up examples for signature '%s' are missing.", signature
+      )
+      continue
+    for inputs in examples:
+      request = _to_predict_request(signature, inputs)
+      log = neptune_prediction_log_pb2.PredictionLog(
+          predict_log=neptune_prediction_log_pb2.PredictLog(request=request)
+      )
+      proto.serialize_length_prefixed(log, bytes_io)
+
   with file_utils.open_file(warmup_path, "wb") as f:
-    for signature, examples in examples_map.items():
-      if not examples:
-        logging.warning(
-            "Warm-up examples for signature '%s' are missing.", signature
-        )
-        continue
-      for inputs in examples:
-        request = _to_predict_request(signature, inputs)
-        log = neptune_prediction_log_pb2.PredictionLog(
-            predict_log=neptune_prediction_log_pb2.PredictLog(request=request)
-        )
-        _write_size_prefixed_record(f, log.SerializeToString())
+    f.write(bytes_io.getvalue())

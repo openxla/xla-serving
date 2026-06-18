@@ -62,6 +62,15 @@ ABSL_FLAG(bool, hoist_invariant_ops, true, "Hoist invariant ops");
 ABSL_FLAG(bool, sink_in_invariant_ops, true, "Sink in invariant ops");
 ABSL_FLAG(int64_t, cost_threshold, 10000, "Cost threshold");
 ABSL_FLAG(int, xprof_port, 8888, "Port for the XProf server to listen on.");
+ABSL_FLAG(bool, warmup_server, false,
+          "Warmup server on startup. This requires the warmup requests file "
+          "('assets.extra/neptune_serving_warmup_requests') to be present in "
+          "the model directory. The file must contain size-prefixed records "
+          "(varint32 length prefix followed by serialized proto bytes) of "
+          "neptune::serving::PredictionLog containing PredictRequests. This file "
+          "can be generated automatically during model export by passing "
+          "`warmup_examples` to `neptune_model.save()`. See "
+          "https://github.com/AI-Hypercomputer/neptune/blob/main/README.md#server-warmup-on-startup for details.");
 
 void RunServer() {
   std::string server_address = absl::StrCat("[::]:", absl::GetFlag(FLAGS_port));
@@ -75,6 +84,7 @@ void RunServer() {
   options.hoist_invariant_ops = absl::GetFlag(FLAGS_hoist_invariant_ops);
   options.sink_in_invariant_ops = absl::GetFlag(FLAGS_sink_in_invariant_ops);
   options.cost_threshold = absl::GetFlag(FLAGS_cost_threshold);
+  options.warmup_server = absl::GetFlag(FLAGS_warmup_server);
 
   LOG(INFO) << "Server address: " << server_address;
   auto service_or = neptune::serving::OrbaxCallbackGrpcServer::Create(
