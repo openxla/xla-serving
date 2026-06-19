@@ -136,7 +136,6 @@ JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS = [
     "@abseil-cpp//absl/flags:flag",
     "@abseil-cpp//absl/log",
     "@abseil-cpp//absl/log:check",
-    "@com_google_protobuf//io",
     "@abseil-cpp//absl/status",
     "@abseil-cpp//absl/status:statusor",
     "@abseil-cpp//absl/strings",
@@ -243,8 +242,8 @@ cc_library(
     deps = JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS + [
         ":ifrt_client_creator_cpu",
         ":ifrt_client_creator_hdr",
-        "@com_google_protobuf//util:delimited_message_util",
         "@abseil-cpp//absl/types:span",
+        "@com_google_protobuf//:delimited_message_util",
         "@xla//xla/pjrt/plugin/xla_cpu:cpu_static_registration",
     ],
 )
@@ -260,8 +259,8 @@ cc_library(
     deps = JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS + [
         ":ifrt_client_creator_gpu",
         ":ifrt_client_creator_hdr",
-        "@com_google_protobuf//util:delimited_message_util",
         "@abseil-cpp//absl/types:span",
+        "@com_google_protobuf//:delimited_message_util",
         "@xla//xla/pjrt/plugin/xla_gpu:gpu_static_registration",
         "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_client_options",
         "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
@@ -280,8 +279,8 @@ cc_library(
     deps = JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS + [
         ":ifrt_client_creator_hdr",
         ":ifrt_client_creator_tpu",
-        "@com_google_protobuf//util:delimited_message_util",
         "@abseil-cpp//absl/types:span",
+        "@com_google_protobuf//:delimited_message_util",
     ],
 )
 

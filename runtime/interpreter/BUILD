@@ -250,6 +250,31 @@ cc_library(
         ":internal",
     ],
     deps = [
+        "@abseil-cpp//absl/base:no_destructor",
+        "@abseil-cpp//absl/time",
+    ],
+)
+
+cc_library(
+    name = "init_lib",
+    srcs = ["init_lib.cc"],
+    visibility = [":interpreter_users"],
+    deps = [
+        "@abseil-cpp//absl/log:check",
+        "@neptune//runtime/kernel",
+        "@neptune//runtime/kernel:builtin_kernel",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "interpreter_create_options",
+    hdrs = ["interpreter_create_options.h"],
+    visibility = [
+        ":internal",
+        ":interpreter_users",
+    ],
+    deps = [
         "@abseil-cpp//absl/base:nullability",
         "@abseil-cpp//absl/container:flat_hash_map",
         "@neptune//protos:manifest_cc_proto",
