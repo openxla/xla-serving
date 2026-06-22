@@ -34,9 +34,6 @@ from neptune_model._src.processors import tf_processor
 
 FLAGS = flags.FLAGS
 
-_GLOBAL_BATCH_SIZE = flags.DEFINE_integer(
-    'global_batch_size', 64, 'Global batch size of the model.'
-)
 _NUM_DENSE_FEATURES = flags.DEFINE_integer(
     'num_dense_features', 13, 'Number of dense features.'
 )
@@ -90,17 +87,28 @@ def export_model(export_path: str):
   """Exports the DLRM recommender model using Neptune."""
 
   embedding_layer, model = model_lib.build_model()
-  synthetic_batch = get_synthetic_batch(
-      _GLOBAL_BATCH_SIZE.value,
-      model_lib.VALENCY,
-      model_lib.VOCAB_SIZES,
+  synthetic_batch_1 = get_synthetic_batch(
+      batch_size=1,
+      valency=model_lib.VALENCY,
+      vocab_sizes=model_lib.VOCAB_SIZES,
   )
-  logging.info('synthetic_batch: %s', synthetic_batch)
+  synthetic_batch_64 = get_synthetic_batch(
+      batch_size=64,
+      valency=model_lib.VALENCY,
+      vocab_sizes=model_lib.VOCAB_SIZES,
+  )
+  logging.info('synthetic_batch: %s', synthetic_batch_1)
+  warmup_examples = {
+      'serving_default': [
+          synthetic_batch_1,
+          synthetic_batch_64,
+      ]
+  }
 
   sparse_features = {}
   for i in range(len(model_lib.VALENCY)):
     sparse_features[str(i)] = tf.convert_to_tensor(
-        synthetic_batch['sparse_features'][str(i)]
+        synthetic_batch_1['sparse_features'][str(i)]
     )
   # TODO: Enable after Sparse/Ragged support is added.
   # Convert sparse features from dense to sparse tensors so that combiner.
@@ -120,7 +128,7 @@ def export_model(export_path: str):
 
   model_params = model.init(
       jax.random.PRNGKey(0),
-      jnp.array(synthetic_batch['dense_features']),
+      jnp.array(synthetic_batch_1['dense_features']),
       jax_sparse_embeddings,
   )
 
@@ -176,6 +184,9 @@ def export_model(export_path: str):
               apply_fn=apply_fn,
               input_polymorphic_shapes=input_polyshape,
               jax_export_kwargs={'platforms': ['cpu', 'cuda']},
+              input_polymorphic_shape_symbol_values={
+                  'b': [1, 64],
+              },
           ),
           params=model_params,
       ),
@@ -196,4 +207,5 @@ def export_model(export_path: str):
               ),
           )
       ],
+      warmup_examples=warmup_examples,
   )
