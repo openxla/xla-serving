@@ -218,19 +218,88 @@ command:
 ### Running locally built server
 
 #### CPU
-```
-bazel run //runtime/serving/gcp/server:neptune_serving_main \
---model_path <Exported model path> \
---model_name <model_name> \
---orbax_grpc_server_platform <cpu|cuda|tpu>  \
---port 8500 --use_insecure_grpc_credentials=<true|false>
+```bash
+bazel run //runtime/serving/gcp/server:neptune_serving_main -- \
+  --model_path <Exported model path> \
+  --model_name <model_name> \
+  --orbax_grpc_server_platform <cpu|cuda|tpu>  \
+  --port 8500 --use_insecure_grpc_credentials=<true|false>
 ```
 
 #### GPU and TPU
+```bash
+bazel run //runtime/serving/gcp/server:neptune_serving_main_<gpu|tpu> -- \
+  --model_path <Exported model path> \
+  --model_name <model_name> \
+  --orbax_grpc_server_platform <cpu|cuda|tpu>  \
+  --port 8500 --use_insecure_grpc_credentials=<true|false>
 ```
-bazel run //runtime/serving/gcp/server:neptune_serving_main_<gpu|tpu> \
---model_path <Exported model path> \
---model_name <model_name> \
---orbax_grpc_server_platform <cpu|cuda|tpu>  \
---port 8500 --use_insecure_grpc_credentials=<true|false>
+
+### Server Warmup on Startup
+
+The server can optionally run warmup requests on startup to trigger XLA compilation before serving live traffic. This is disabled by default.
+
+Running warmup requests avoids "cold start" latency spikes for the first few client requests by pre-compiling the XLA graphs, ensuring the server is ready to serve with predictable latency immediately after it starts reporting healthy.
+
+#### Prerequisites
+The model directory must contain a pre-generated warmup file at `assets.extra/neptune_serving_warmup_requests`.
+
+This file can be generated during model export by passing warmup examples to `neptune_model.save(..., warmup_examples=...)`.
+
+Note that the warmup examples must follow the input specification (input names, shapes, and data types) of the corresponding serving signature.
+
+Here is an example of exporting a model with warmup requests:
+
+```python
+import numpy as np
+import neptune_model
+
+# Assume you have a JaxModel instance `model` and your ServingConfig `serving_config`
+model = ...
+serving_config = neptune_model.ServingConfig(
+    serving_signature="serving_default",
+    # ... other config options ...
+)
+
+# Prepare warmup examples.
+# The keys must match the serving signatures defined in your serving configs.
+# Each example in the sequence is a dictionary mapping input names to numpy arrays.
+# The inputs (names, shapes, and dtypes) must exactly match the input signature of the serving pipeline.
+warmup_examples = {
+    "serving_default": [
+        # Example request 1 (e.g. batch size 1)
+        {
+            "x": np.zeros((1, 224, 224, 3), dtype=np.float32),
+        },
+    ],
+}
+
+neptune_model.save(
+    model=model,
+    export_path="/path/to/export_dir",
+    serving_configs=[serving_config],
+    warmup_examples=warmup_examples,
+)
+```
+
+#### Running with Warmup
+To enable warmup, set `--warmup_server=true`. Note that if the warmup file is missing, the server startup will fail.
+
+```bash
+bazel run //runtime/serving/gcp/server:neptune_serving_main -- \
+  --model_path <Exported model path> \
+  --model_name <model_name> \
+  --orbax_grpc_server_platform <cpu|cuda|tpu> \
+  --warmup_server=true
+```
+
+#### Disabling Warmup (Default)
+By default, warmup is disabled. You can also explicitly disable it with `--warmup_server=false`:
+
+```bash
+bazel run //runtime/serving/gcp/server:neptune_serving_main -- \
+  --model_path <Exported model path> \
+  --model_name <model_name> \
+  --orbax_grpc_server_platform <cpu|cuda|tpu> \
+  --warmup_server=false
 ```
