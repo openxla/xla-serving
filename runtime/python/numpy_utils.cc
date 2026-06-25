@@ -262,9 +262,13 @@ tensorflow::Tensor ToTFTensor(xla::nb_numpy_ndarray numpy_array) {
                  "Failed to fill tensor from string numpy array");
   } else {
     // Copy the data from the xla::nb_numpy_ndarray to the TensorFlow tensor.
-    // TODO: Avoid copying.
-    std::memcpy(tensor.data(), numpy_array.data(),
-                numpy_array.size() * numpy_array.itemsize());
+    // nb_numpy_ndarray may not be in a row-major contiguous layout, so we
+    // create a contiguous array first to ensure that it is suitable for
+    // copying with memcpy.
+    xla::nb_numpy_ndarray contiguous_array =
+        xla::nb_numpy_ndarray::from_any(numpy_array, NPY_ARRAY_C_CONTIGUOUS);
+    std::memcpy(tensor.data(), contiguous_array.data(),
+                contiguous_array.size() * contiguous_array.itemsize());
   }
 
   return tensor;
@@ -272,7 +276,6 @@ tensorflow::Tensor ToTFTensor(xla::nb_numpy_ndarray numpy_array) {
 
 xla::nb_numpy_ndarray ToNbArray(const tensorflow::Tensor& tensor) {
   // Copy the data from the tensor to xla::nb_numpy_ndarray.
-  // TODO: Avoid copying.
   absl::StatusOr<xla::nb_dtype> dtype = ToNbDtype(tensor.dtype());
   ThrowIfError(dtype.status(),
                "Failed to convert `tensorflow::DataType` to `xla::nb_dtype`");
@@ -284,6 +287,8 @@ xla::nb_numpy_ndarray ToNbArray(const tensorflow::Tensor& tensor) {
     ThrowIfError(FillStringNumpyArrayFromTensor(tensor, numpy_array),
                  "Failed to fill string numpy array from tensor");
   } else {
+    // Using memcpy is safe here because the tensorflow::Tensor is
+    // guaranteed to be row-major and contiguous.
     std::memcpy(numpy_array.mutable_data(), tensor.data(), tensor.TotalBytes());
   }
 
@@ -319,9 +324,13 @@ neptune::HostBuffer ToHostBuffer(xla::nb_numpy_ndarray numpy_array,
                  "Failed to fill host buffer from string numpy array");
   } else {
     // Copy the data from the xla::nb_numpy_ndarray to the HostBuffer.
-    // TODO: Avoid copying.
-    std::memcpy(host_buffer.base(), numpy_array.data(),
-                numpy_array.size() * numpy_array.itemsize());
+    // nb_numpy_ndarray may not be in a row-major contiguous layout, so we
+    // create a contiguous array first to ensure that it is suitable for
+    // copying with memcpy.
+    xla::nb_numpy_ndarray contiguous_array =
+        xla::nb_numpy_ndarray::from_any(numpy_array, NPY_ARRAY_C_CONTIGUOUS);
+    std::memcpy(host_buffer.base(), contiguous_array.data(),
+                contiguous_array.size() * contiguous_array.itemsize());
   }
 
   return host_buffer;
@@ -329,23 +338,25 @@ neptune::HostBuffer ToHostBuffer(xla::nb_numpy_ndarray numpy_array,
 
 xla::nb_numpy_ndarray ToNbArray(const neptune::HostBuffer& host_buffer) {
   // Copy the data from the HostBuffer to xla::nb_numpy_ndarray.
-  // TODO: Avoid copying.
   absl::StatusOr<xla::nb_dtype> dtype =
       xla::IfrtDtypeToNbDtype(host_buffer.dtype());
   ThrowIfError(dtype.status(),
                "Failed to convert `xla::ifrt::DType` to `xla::nb_dtype`");
-  xla::nb_numpy_ndarray numpy_array(*dtype, host_buffer.shape().dims(),
-                                    std::nullopt);
   if (host_buffer.dtype().kind() == xla::ifrt::DType::kString) {
+    xla::nb_numpy_ndarray numpy_array(*dtype, host_buffer.shape().dims(),
+                                      std::nullopt);
     ThrowIfError(FillStringNumpyArrayFromHostBuffer(host_buffer, numpy_array),
                  "Failed to fill string numpy array from HostBuffer");
+    return numpy_array;
   } else {
-    std::memcpy(numpy_array.mutable_data(),
-                host_buffer.base(),
-                host_buffer.total_storage_bytes());
+    std::optional<absl::Span<int64_t const>> strides = std::nullopt;
+    if (host_buffer.byte_strides().has_value()) {
+      strides = host_buffer.byte_strides().value();
+    }
+    xla::nb_numpy_ndarray view(*dtype, host_buffer.shape().dims(), strides,
+                                host_buffer.base());
+    return xla::nb_numpy_ndarray::from_any(view, NPY_ARRAY_C_CONTIGUOUS);
   }
-
-  return numpy_array;
 }
 
 }  // namespace neptune

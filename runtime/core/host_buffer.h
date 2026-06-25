@@ -192,7 +192,14 @@ class HostBuffer {
     CHECK(buffer_data_.has_value());
     return buffer_data_->shape();
   }
+
   xla::ifrt::DType dtype() const { return dtype_; }
+
+  const std::optional<absl::InlinedVector<int64_t, 4>>& byte_strides() const {
+    CHECK(buffer_data_.has_value());
+    return buffer_data_->byte_strides();
+  }
+
   xla::ifrt::DType storage_dtype() const {
     CHECK(buffer_data_.has_value());
     return buffer_data_->dtype();
