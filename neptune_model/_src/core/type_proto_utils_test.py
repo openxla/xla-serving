@@ -115,5 +115,210 @@ class ShloTensorSpecPyTreeToTypeProtoTest(
       type_proto_utils.to_type_proto(value)  # pytype: disable=wrong-arg-types
 
 
+class RoundtripBetweenShloShapeAndManifestShapeTest(parameterized.TestCase):
+
+  @parameterized.named_parameters(
+      (f"_{idx}", shlo_shape, manifest_shape_proto_text)
+      for idx, (shlo_shape, manifest_shape_proto_text) in enumerate([
+          (
+              [1, 2, 3],
+              """
+              shape_with_known_rank {
+                dimension_sizes {
+                  size: 1
+                }
+                dimension_sizes {
+                  size: 2
+                }
+                dimension_sizes {
+                  size: 3
+                }
+              }
+              """,
+          ),
+          (
+              [],
+              """
+              shape_with_known_rank {}
+              """,
+          ),
+          (
+              (),
+              """
+              shape_with_known_rank {}
+              """,
+          ),
+          (
+              None,
+              "",
+          ),
+      ])
+  )
+  def test_roundtrip(self, shlo_shape, shape_proto_text):
+    # Converts to proto
+    shape_proto = type_proto_utils.to_shape_proto(shlo_shape)
+    expected_shape_proto = text_format.Parse(shape_proto_text, type_pb2.Shape())
+    self.assertEqual(shape_proto, expected_shape_proto)
+
+    # Converts back to shlo shape.
+    parsed_shlo_shape = type_proto_utils._from_shape_proto(expected_shape_proto)
+    if shlo_shape is None:
+      self.assertIsNone(parsed_shlo_shape)
+    else:
+      self.assertEqual(parsed_shlo_shape, tuple(shlo_shape))
+
+
+class ManifestTypeToShloTensorSpecPyTreeTest(test_utils.NptTestCase):
+
+  def test_manifest_type_to_shlo_tensor_spec_tree(self):
+    type_proto_str = textwrap.dedent("""
+      tuple {
+        elements {
+          tuple {
+            elements {
+              dict {
+                string_to_type {
+                  key: "a"
+                  value {
+                    leaf {
+                      tensor_type {
+                        shape {
+                          shape_with_known_rank {
+                            dimension_sizes {
+                              size: 4
+                            }
+                            dimension_sizes {
+                              size: 4
+                            }
+                          }
+                        }
+                        dtype: si4
+                        sharding {
+                          type: OTHER
+                          tile_assignment_dimensions: 4
+                          tile_assignment_dimensions: 1
+                          tile_assignment_dimensions: 2
+                          replicate_on_last_tile_dim: true
+                          iota_reshape_dims: 8
+                          iota_transpose_perm: 0
+                        }
+                      }
+                    }
+                  }
+                }
+                string_to_type {
+                  key: "b"
+                  value {
+                    leaf {
+                      tensor_type {
+                        shape {
+                          shape_with_known_rank {
+                            dimension_sizes {
+                              size: 4
+                            }
+                            dimension_sizes {
+                              size: 16
+                            }
+                          }
+                        }
+                        dtype: f32
+                        sharding {
+                          type: OTHER
+                          tile_assignment_dimensions: 4
+                          tile_assignment_dimensions: 2
+                          iota_reshape_dims: 8
+                          iota_transpose_perm: 0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            elements {
+              leaf {
+                tensor_type {
+                  shape {
+                    shape_with_known_rank {
+                      dimension_sizes {
+                        size: 8
+                      }
+                      dimension_sizes {
+                        size: 4
+                      }
+                    }
+                  }
+                  dtype: f32
+                  sharding {
+                    type: OTHER
+                    tile_assignment_dimensions: 4
+                    tile_assignment_dimensions: 1
+                    tile_assignment_dimensions: 2
+                    replicate_on_last_tile_dim: true
+                    iota_reshape_dims: 8
+                    iota_transpose_perm: 0
+                  }
+                }
+              }
+            }
+          }
+        }
+        elements {
+          dict {
+          }
+        }
+      }
+    """)
+
+    type_proto = text_format.Parse(type_proto_str, type_pb2.Type())
+
+    shlo_tensor_spec_tree = type_proto_utils.from_type_proto(type_proto)
+
+    a_sharding = shlo_type.Sharding()
+    a_sharding.type = shlo_type.Sharding.OTHER
+    a_sharding.tile_assignment_dimensions.extend([4, 1, 2])
+    a_sharding.replicate_on_last_tile_dim = True
+    a_sharding.iota_reshape_dims.append(8)
+    a_sharding.iota_transpose_perm.append(0)
+
+    b_sharding = shlo_type.Sharding()
+    b_sharding.type = shlo_type.Sharding.OTHER
+    b_sharding.tile_assignment_dimensions.extend([4, 2])
+    b_sharding.iota_reshape_dims.append(8)
+    b_sharding.iota_transpose_perm.append(0)
+
+    yet_another_sharding = shlo_type.Sharding()
+    yet_another_sharding.type = shlo_type.Sharding.OTHER
+    yet_another_sharding.tile_assignment_dimensions.extend([4, 1, 2])
+    yet_another_sharding.replicate_on_last_tile_dim = True
+    yet_another_sharding.iota_reshape_dims.append(8)
+    yet_another_sharding.iota_transpose_perm.append(0)
+
+    expected_shlo_tensor_spec_tree = (
+        (
+            {
+                "a": shlo_type.ShloTensorSpec(
+                    shape=(4, 4),
+                    dtype=shlo_type.ShloDType.i4,
+                    sharding=a_sharding,
+                ),
+                "b": shlo_type.ShloTensorSpec(
+                    shape=(4, 16),
+                    dtype=shlo_type.ShloDType.f32,
+                    sharding=b_sharding,
+                ),
+            },
+            shlo_type.ShloTensorSpec(
+                shape=(8, 4),
+                dtype=shlo_type.ShloDType.f32,
+                sharding=yet_another_sharding,
+            ),
+        ),
+        {},
+    )
+
+    self.assertTreesEqual(shlo_tensor_spec_tree, expected_shlo_tensor_spec_tree)
+
+
 if __name__ == "__main__":
   absltest.main()

@@ -135,3 +135,63 @@ def to_function_signature_proto(
   signature.input.CopyFrom(to_type_proto(input_signature))
   signature.output.CopyFrom(to_type_proto(output_signature))
   return signature
+
+
+def _from_shape_proto(
+    shape: type_pb2.Shape,
+) -> shlo_type.ShloShape:
+  """Converts manifest `Shape` to `ShloShape`."""
+  if shape.HasField("shape_with_known_rank"):
+    return tuple(
+        dim.size if dim.HasField("size") else None
+        for dim in shape.shape_with_known_rank.dimension_sizes
+    )
+  return None
+
+
+def _from_tensor_type_proto(
+    manifest_tensor_type: type_pb2.TensorType,
+) -> shlo_type.ShloTensorSpec:
+  """Converts manifest `TensorType` to `ShloTensorSpec`."""
+  sharding = (
+      manifest_tensor_type.sharding
+      if manifest_tensor_type.HasField("sharding")
+      else None
+  )
+  layout = (
+      manifest_tensor_type.layout
+      if manifest_tensor_type.HasField("layout")
+      else None
+  )
+  return shlo_type.ShloTensorSpec(
+      shape=_from_shape_proto(manifest_tensor_type.shape),
+      dtype=to_shlo_dtype(manifest_tensor_type.dtype),
+      sharding=sharding,
+      layout=layout,
+  )
+
+
+def from_type_proto(
+    manifest_type: type_pb2.Type,
+) -> jaxtyping.PyTree[shlo_type.ShloTensorSpec]:
+  """Recursively translates manifest `Type` to a PyTree of `ShloTensorSpec`s."""
+  if manifest_type.HasField("leaf"):
+    if manifest_type.leaf.HasField("tensor_type"):
+      return _from_tensor_type_proto(manifest_type.leaf.tensor_type)
+    elif manifest_type.leaf.HasField("token_type"):
+      raise NotImplementedError("TokenType is not supported yet")
+  elif manifest_type.HasField("none"):
+    return None
+  elif manifest_type.HasField("list"):
+    return [from_type_proto(element) for element in manifest_type.list.elements]
+  elif manifest_type.HasField("tuple"):
+    return tuple(
+        from_type_proto(element) for element in manifest_type.tuple.elements
+    )
+  elif manifest_type.HasField("dict"):
+    return {
+        key: from_type_proto(value)
+        for key, value in manifest_type.dict.string_to_type.items()
+    }
+  else:
+    raise ValueError(f"Unsupported manifest type: {manifest_type}")

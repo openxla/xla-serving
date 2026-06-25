@@ -85,6 +85,11 @@ class PersistenceLibTest(test_utils.NptTestCase):
     )
     self.assertTrue(os.path.exists(model_version_path))
 
+    legacy_model_version_path = os.path.join(
+        target_dir, constants.MODEL_VERSION_LEGACY_FILENAME
+    )
+    self.assertTrue(os.path.exists(legacy_model_version_path))
+
     actual_manifest = persistence_lib.load(target_dir)
     expected_manifest = manifest_pb2.Manifest(
         objects={

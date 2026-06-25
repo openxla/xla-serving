@@ -19,7 +19,9 @@ import dataclasses
 
 import jaxtyping
 
-from neptune_model._src.core.shlo_type import ShloTensorSpec
+from neptune_model._src.core import shlo_type
+
+ShloTensorSpec = shlo_type.ShloTensorSpec
 
 
 @dataclasses.dataclass(kw_only=True)
