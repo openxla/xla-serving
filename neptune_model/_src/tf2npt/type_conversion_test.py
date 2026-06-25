@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for type_conversion."""
-
 from absl.testing import absltest
 import tensorflow as tf
 
@@ -23,39 +21,122 @@ from neptune_model._src.tf2npt import type_conversion
 
 class TypeConversionTest(tf.test.TestCase):
 
-  def test_to_tf_dtype(self):
+  def test_tf_dtype_from_tf_dtype(self):
+    self.assertEqual(type_conversion.tf_dtype_from(tf.int32), tf.int32)
+    self.assertEqual(type_conversion.tf_dtype_from(tf.float32), tf.float32)
+
+  def test_tf_dtype_from_shlo_dtype(self):
     self.assertEqual(
-        type_conversion.to_tf_dtype(shlo_type.ShloDType.f32), tf.float32
+        type_conversion.tf_dtype_from(shlo_type.ShloDType.f32), tf.float32
     )
     self.assertEqual(
-        type_conversion.to_tf_dtype(shlo_type.ShloDType.bf16), tf.bfloat16
+        type_conversion.tf_dtype_from(shlo_type.ShloDType.bf16), tf.bfloat16
     )
     self.assertEqual(
-        type_conversion.to_tf_dtype(shlo_type.ShloDType.str), tf.string
+        type_conversion.tf_dtype_from(shlo_type.ShloDType.str), tf.string
+    )
+    self.assertEqual(
+        type_conversion.tf_dtype_from(shlo_type.ShloDType.i32), tf.int32
     )
 
-  def test_to_tf_spec(self):
-    spec = shlo_type.ShloTensorSpec(shape=(2, 3), dtype=shlo_type.ShloDType.f32)
-    tf_spec = type_conversion.to_tf_spec(spec)
-    self.assertEqual(tf_spec.shape, (2, 3))
-    self.assertEqual(tf_spec.dtype, tf.float32)
-
-  def test_to_npt_dtype(self):
+  def test_shlo_dtype_from_shlo_dtype(self):
     self.assertEqual(
-        type_conversion.to_npt_dtype(tf.float32), shlo_type.ShloDType.f32
-    )
-    self.assertEqual(
-        type_conversion.to_npt_dtype(tf.bfloat16), shlo_type.ShloDType.bf16
-    )
-    self.assertEqual(
-        type_conversion.to_npt_dtype(tf.string), shlo_type.ShloDType.str
+        type_conversion.shlo_dtype_from(shlo_type.ShloDType.f32),
+        shlo_type.ShloDType.f32,
     )
 
-  def test_to_npt_spec(self):
-    tf_spec = tf.TensorSpec(shape=(2, 3), dtype=tf.float32)
-    npt_spec = type_conversion.to_npt_spec(tf_spec)
-    self.assertEqual(npt_spec.shape, (2, 3))
-    self.assertEqual(npt_spec.dtype, shlo_type.ShloDType.f32)
+  def test_shlo_dtype_from_tf_dtype(self):
+    self.assertEqual(
+        type_conversion.shlo_dtype_from(tf.float32), shlo_type.ShloDType.f32
+    )
+    self.assertEqual(
+        type_conversion.shlo_dtype_from(tf.bfloat16), shlo_type.ShloDType.bf16
+    )
+    self.assertEqual(
+        type_conversion.shlo_dtype_from(tf.string), shlo_type.ShloDType.str
+    )
+    self.assertEqual(
+        type_conversion.shlo_dtype_from(tf.int64), shlo_type.ShloDType.i64
+    )
+
+  def test_tf_type_spec_from_tf_type_spec(self):
+    self.assertEqual(
+        type_conversion.tf_type_spec_from(
+            tf.TensorSpec(shape=(2, 3), dtype=tf.float32)
+        ),
+        tf.TensorSpec(shape=(2, 3), dtype=tf.float32),
+    )
+
+    self.assertEqual(
+        type_conversion.tf_type_spec_from(
+            tf.RaggedTensorSpec(shape=(None, None), dtype=tf.int32)
+        ),
+        tf.RaggedTensorSpec(shape=(None, None), dtype=tf.int32),
+    )
+
+  def test_tf_type_spec_from_shlo_tensor_spec(self):
+    self.assertEqual(
+        type_conversion.tf_type_spec_from(
+            shlo_type.ShloTensorSpec(
+                shape=(2, 3), dtype=shlo_type.ShloDType.f32
+            )
+        ),
+        tf.TensorSpec(shape=(2, 3), dtype=tf.float32),
+    )
+
+  def test_tf_type_spec_from_shlo_tensor_spec_with_name(self):
+    self.assertEqual(
+        type_conversion.tf_type_spec_from(
+            shlo_type.ShloTensorSpec(
+                shape=(1,), dtype=shlo_type.ShloDType.i32, name="foo"
+            )
+        ),
+        tf.TensorSpec(shape=(1,), dtype=tf.int32, name="foo"),
+    )
+
+  def test_shlo_tensor_spec_from_shlo_tensor_spec(self):
+    self.assertEqual(
+        type_conversion.shlo_tensor_spec_from(
+            shlo_type.ShloTensorSpec(
+                shape=(2,), dtype=shlo_type.ShloDType.f32, name="t"
+            )
+        ),
+        shlo_type.ShloTensorSpec(
+            shape=(2,), dtype=shlo_type.ShloDType.f32, name="t"
+        ),
+    )
+
+  def test_shlo_tensor_spec_from_tf_tensor_spec(self):
+    tf_spec = tf.TensorSpec(shape=(2, 3), dtype=tf.float32, name="t")
+    self.assertEqual(
+        type_conversion.shlo_tensor_spec_from(tf_spec),
+        shlo_type.ShloTensorSpec(
+            shape=(2, 3), dtype=shlo_type.ShloDType.f32, name="t"
+        ),
+    )
+
+  def test_shlo_tensor_spec_from_tf_tensor_spec_unknown_rank(self):
+    self.assertEqual(
+        type_conversion.shlo_tensor_spec_from(
+            tf.TensorSpec(shape=None, dtype=tf.int32)
+        ),
+        shlo_type.ShloTensorSpec(shape=None, dtype=shlo_type.ShloDType.i32),
+    )
+
+  def test_shlo_tensor_spec_from_tf_ragged_tensor_spec(self):
+    self.assertEqual(
+        type_conversion.shlo_tensor_spec_from(
+            tf.RaggedTensorSpec(shape=(None, None), dtype=tf.int32),
+        ),
+        (
+            shlo_type.ShloTensorSpec(
+                shape=(None,), dtype=shlo_type.ShloDType.i32
+            ),
+            shlo_type.ShloTensorSpec(
+                shape=(None,), dtype=shlo_type.ShloDType.i64
+            ),
+        ),
+    )
 
 
 if __name__ == "__main__":

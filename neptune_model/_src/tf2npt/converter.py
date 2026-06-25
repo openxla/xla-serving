@@ -20,7 +20,7 @@ import dataclasses
 import functools
 import inspect
 import os
-from typing import Any, NamedTuple, cast
+from typing import Any, cast
 
 import jax
 import jaxtyping
@@ -34,8 +34,10 @@ from neptune_model._src.core import unstructured_data
 from neptune_model._src.tf2npt import type_conversion
 from neptune_model.protos import manifest_pb2
 from neptune_model.protos import tf_concrete_function_handle_pb2
+
 # pylint: disable=g-direct-tensorflow-import
 from tensorflow.core.protobuf import saved_model_pb2
+
 # pylint: enable=g-direct-tensorflow-import
 
 TF_CONCRETE_FUNCTION_HANDLE_MIME_TYPE = (
@@ -92,10 +94,46 @@ def _to_args_kwargs(
   return (tf_signature,), {}
 
 
-def _to_npt_signature(
-    tf_signature: jaxtyping.PyTree[tf.TensorSpec] | None,
-) -> jaxtyping.PyTree[shlo_type.ShloTensorSpec] | None:
-  return jax.tree.map(type_conversion.to_npt_spec, tf_signature)
+def _npt_name(spec: tf.TypeSpec, path: tuple[Any, ...]) -> str | None:
+  """Returns the name of the TF spec to be used in the Neptune signature."""
+  if hasattr(spec, 'name') and spec.name is not None:
+    return spec.name
+
+  if not path:
+    return None
+
+  path_key = path[-1]
+
+  if hasattr(path_key, 'key'):
+    return str(path_key.key)
+
+  if hasattr(path_key, 'name'):
+    return str(path_key.name)
+
+  return None
+
+
+def _npt_signature_from_tf_signature(
+    tf_signature: jaxtyping.PyTree[tf.TypeSpec],
+) -> jaxtyping.PyTree[shlo_type.ShloTensorSpec]:
+  """Converts a TF signature to a Neptune signature."""
+
+  def _convert_leaf(path, leaf):
+    npt_name = _npt_name(leaf, path)
+
+    shlo_spec = type_conversion.shlo_tensor_spec_from(leaf)
+    if isinstance(shlo_spec, tuple):
+      # The value has been expanded from a composite type; we keep TF-like
+      # naming convention for the flattened arguments, e.g. for a composite
+      # input named 'x' we will have names 'x', 'x_1', etc. for the leaves.
+      for i, spec in enumerate(shlo_spec):
+        spec.name = npt_name if i == 0 else f'{npt_name}_{i}'
+    else:
+      shlo_spec.name = npt_name
+
+    return shlo_spec
+
+  return jax.tree.map_with_path(_convert_leaf, tf_signature)
 
 
 def _get_defaults(
@@ -173,7 +211,9 @@ def _get_concrete_function(
     raise ValueError('Input signature is missing')
 
   defaults = _get_defaults(tf_callable)
-  tf_input_signature = jax.tree.map(type_conversion.to_tf_spec, input_signature)
+  tf_input_signature = jax.tree.map(
+      type_conversion.tf_type_spec_from, input_signature
+  )
   args, kwargs = _to_args_kwargs(tf_input_signature)
 
   if (
@@ -212,7 +252,21 @@ def prepare_function(
     The Neptune function referring to the original TF function in the TF
     SavedModel.
   """
-  initial_concrete_fn, defaults = _get_concrete_function(fn, input_signature)
+
+  def _set_npt_name(path, x):
+    if isinstance(x, tf.TensorSpec):
+      return tf.TensorSpec(
+          shape=x.shape, dtype=x.dtype, name=_npt_name(x, path)
+      )
+    return x
+
+  input_signature_with_names = jax.tree.map_with_path(
+      _set_npt_name, input_signature
+  )
+
+  initial_concrete_fn, defaults = _get_concrete_function(
+      fn, input_signature_with_names
+  )
 
   if suppress_x64_outputs and _has_x64_outputs(initial_concrete_fn):
     concrete_fn, _ = _get_concrete_function(
@@ -222,7 +276,7 @@ def prepare_function(
   else:
     concrete_fn = initial_concrete_fn
 
-  input_names, _, _ = _flat_input_signature(concrete_fn)
+  input_names, _ = _flat_input_signature(concrete_fn)
   output_names = _output_names(concrete_fn)
 
   final_input_signature = concrete_fn.structured_input_signature
@@ -244,8 +298,12 @@ def prepare_function(
               proto=fn_handle,
               ext_name=_PB_EXT_NAME,
           ),
-          input_signature=_to_npt_signature(final_input_signature),
-          output_signature=_to_npt_signature(final_output_signature),
+          input_signature=_npt_signature_from_tf_signature(
+              final_input_signature
+          ),
+          output_signature=_npt_signature_from_tf_signature(
+              final_output_signature
+          ),
       ),
       concrete_fn=concrete_fn,
       defaults=defaults,
@@ -273,93 +331,53 @@ def tf_saved_model_as_npt_supplemental(
 
 
 def _make_dict_only_signature(
-    names: Sequence[str], leaves: Sequence[tf.TensorSpec]
-) -> Mapping[str, tf.TensorSpec]:
+    names: Sequence[str], leaves: Sequence[tf.TypeSpec]
+) -> Mapping[str, tf.TypeSpec]:
   """Creates a dict-only signature from names and leaves.
 
   Args:
     names: A sequence of names for the leaves.
-    leaves: A sequence of tensor specs.
+    leaves: A sequence of TensorFlow value types (e.g. TensorSpec,
+      RaggedTensorSpec).
 
   Returns:
-    A dict-only signature where keys are names and values are tensor specs.
+    A dict-only signature where keys are names and values are tensor value
+    types.
   """
-  return {
-      k: tf.TensorSpec(
-          shape=v.shape,
-          dtype=v.dtype,
-          name=None,
-      )
-      for k, v in zip(names, leaves)
-  }
+
+  def _clear_name(v):
+    if not isinstance(v, tf.TensorSpec):
+      return v
+    return tf.TensorSpec(shape=v.shape, dtype=v.dtype, name=None)
+
+  return {k: _clear_name(v) for k, v in zip(names, leaves)}
 
 
 def _tree_to_dict(
-    tree: jaxtyping.PyTree[tf.TensorSpec] | None,
-    names: Sequence[str] | None,
-) -> Mapping[str, tf.TensorSpec] | None:
-  """Converts a TF signature tree to a dictionary if names are provided.
-
-  If `names` is None or `tree` is None, returns None. If `names` is provided,
-  `tree` is flattened and a dictionary is created by mapping names to leaves.
-
-  Args:
-    tree: The TF signature tree.
-    names: An optional sequence of names for leaves.
-
-  Returns:
-    A dictionary mapping names to leaves, or None.
-  """
-  if not names or tree is None:
-    return None
-  flat = jax.tree.leaves(tree)
-  return dict(zip(names, flat))
+    tree: jaxtyping.PyTree[tf.TypeSpec],
+    names: Sequence[str],
+) -> Mapping[str, tf.TensorSpec]:
+  """Converts a tree of TF value types to a dictionary of TensorSpecs."""
+  return dict(zip(names, tf.nest.flatten(tree, expand_composites=True)))
 
 
 def _dict_to_tree(
-    d: Mapping[str, tf.TensorSpec] | None,
-    names: Sequence[str] | None,
-    tree_def: jax.tree_util.PyTreeDef,
-) -> jaxtyping.PyTree[tf.TensorSpec] | None:
-  """Converts a dictionary to a TF signature tree if names are provided.
-
-  If `names` is None, `d` is returned unchanged. If `names` is provided,
-  leaves are extracted from `d` in the order of `names` and unflattened into a
-  tree using `tree_def`.
-
-  Args:
-    d: A dictionary mapping names to leaves.
-    names: An optional sequence of names for leaves.
-    tree_def: The PyTreeDef for unflattening.
-
-  Returns:
-    A TF signature tree.
-  """
-  if not names or not d:
-    return None
+    d: Mapping[str, tf.TensorSpec],
+    names: Sequence[str],
+    tree_structure: Any,
+) -> jaxtyping.PyTree[tf.TypeSpec]:
+  """Converts a dictionary of TensorSpecs to a tree of TF value types."""
   flat = tuple(d[name] for name in names)
-  return jax.tree.unflatten(tree_def, flat)
-
-
-class SignatureFlat(NamedTuple):
-  """The flattened form of a signature.
-
-  Attributes:
-    names: A sequence of names for the leaves.
-    leaves: A sequence of tensor specs.
-    tree_def: The PyTreeDef for unflattening.
-  """
-
-  names: Sequence[str]
-  leaves: Sequence[tf.TensorSpec]
-  tree_def: jax.tree_util.PyTreeDef
+  return tf.nest.pack_sequence_as(tree_structure, flat, expand_composites=True)
 
 
 def _flat_input_signature(
     fn: tf.types.experimental.ConcreteFunction,
-) -> SignatureFlat:
+) -> tuple[Sequence[str], Sequence[tf.TensorSpec]]:
   """Returns the flattened input signature of the given function."""
-  leaves, tree_def = jax.tree.flatten(fn.structured_input_signature)
+  leaves = tf.nest.flatten(
+      fn.structured_input_signature, expand_composites=True
+  )
   input_names = [arg.name for arg in fn.function_def.signature.input_arg]
   if len(input_names) < len(leaves):
     raise ValueError(
@@ -367,7 +385,7 @@ def _flat_input_signature(
         ' smaller than the number of leaves in the flattened input signature'
         f' ({len(leaves)})'
     )
-  return SignatureFlat(input_names[: len(leaves)], leaves, tree_def)
+  return (input_names[: len(leaves)], leaves)
 
 
 def _unwrap_tf_trackables(
@@ -409,8 +427,16 @@ def _output_names(
   leaves_with_path = jax.tree.leaves_with_path(unwrapped_outputs)
   if not leaves_with_path:
     return []
-  paths, _ = zip(*leaves_with_path)
-  return [_output_name(path) for path in paths]
+
+  def _yield_names():
+    for path, leaf in leaves_with_path:
+      base_name = _output_name(path)
+      flat = tf.nest.flatten(leaf, expand_composites=True)
+      yield base_name
+      for i in range(len(flat) - 1):
+        yield f'{base_name}_{i}'
+
+  return list(_yield_names())
 
 
 def get_output_signature(
@@ -426,12 +452,16 @@ def get_output_signature(
   """
   output_names_iter = iter(list(_output_names(fn)))
 
-  return jax.tree.map(
-      lambda t: tf.TensorSpec(
-          shape=t.shape, dtype=t.dtype, name=next(output_names_iter)
-      ),
-      fn.structured_outputs,
-  )
+  def _map_leaf(t):
+    flat_specs = tuple(
+        tf.TensorSpec(
+            shape=s.shape, dtype=s.dtype, name=next(output_names_iter)
+        )
+        for s in tf.nest.flatten(t, expand_composites=True)
+    )
+    return flat_specs[0] if len(flat_specs) == 1 else flat_specs
+
+  return jax.tree.map(_map_leaf, fn.structured_outputs)
 
 
 def _to_keyword_only_fn(
@@ -445,11 +475,8 @@ def _to_keyword_only_fn(
   Returns:
     The wrapped function (also a TF concrete function).
   """
-  input_names, input_leaves, input_def = _flat_input_signature(f)
+  input_names, input_leaves = _flat_input_signature(f)
   output_names = _output_names(f)
-
-  if input_names is None and output_names is None:
-    return f
 
   new_input_signature = _make_dict_only_signature(input_names, input_leaves)
 
@@ -461,7 +488,7 @@ def _to_keyword_only_fn(
         _dict_to_tree(
             input_dict,
             input_names,
-            input_def,
+            f.structured_input_signature,
         )
     )
     output = f(*args, **kwargs)
@@ -499,7 +526,7 @@ def _add_defaults_to_signatures(
     if not fn.defaults:
       continue
     flattened_defaults = jax.tree.leaves(fn.defaults)
-    input_names, _, _ = _flat_input_signature(fn.concrete_fn)
+    input_names, _ = _flat_input_signature(fn.concrete_fn)
     tf_default_names = input_names[-len(flattened_defaults) :]
     sig_def = model_proto.meta_graphs[0].signature_def[name]
 

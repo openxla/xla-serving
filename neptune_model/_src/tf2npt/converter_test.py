@@ -369,6 +369,134 @@ class Tf2NptConverterTest(
     concrete_fn = return_none.get_concrete_function()
     self.assertFalse(converter._has_x64_outputs(concrete_fn))
 
+  def test_composite_tensor_inputs(self):
+    @tf.function
+    def tf_fn(ragged: tf.RaggedTensor, sparse: tf.SparseTensor):
+      return tf.reduce_sum(ragged) + tf.reduce_sum(sparse.values)
+
+    save_dir_path = self.create_tempdir().full_path
+    ragged_spec = tf.RaggedTensorSpec(shape=(None, None), dtype=tf.int32)
+    sparse_spec = tf.SparseTensorSpec(shape=(None,), dtype=tf.int32)
+
+    prepared_fn = converter.prepare_function(
+        'tf_fn',
+        tf_fn,
+        input_signature=[ragged_spec, sparse_spec],
+    )
+
+    converter.save_tf_functions(
+        save_dir_path,
+        {'tf_fn': prepared_fn},
+    )
+
+    loaded_tf_module = tf.saved_model.load(
+        os.path.join(save_dir_path, converter.NPT_TF_SAVED_MODEL_SUB_DIR)
+    )
+    loaded_tf_fn = loaded_tf_module.signatures['tf_fn']
+
+    ragged = tf.ragged.constant([[1, 2], [3]], dtype=tf.int32)
+    sparse = tf.sparse.from_dense([4, 0, 5])
+
+    # A loaded TF function cannot be called with composite tensors,
+    # we need to pass their flattened components.
+    outputs = loaded_tf_fn(
+        ragged=ragged.values,
+        ragged_1=ragged.row_splits,
+        sparse=sparse.indices,
+        sparse_1=sparse.values,
+        sparse_2=sparse.dense_shape,
+    )
+    self.assertEqual(outputs['output_0'].numpy(), 15)
+
+  def test_composite_tensor_outputs(self):
+    @tf.function
+    def tf_fn(x, y):
+      ragged = tf.RaggedTensor.from_row_splits(values=x, row_splits=y)
+      sparse = tf.sparse.from_dense([4, 0, 5])
+      return ragged, sparse
+
+    save_dir_path = self.create_tempdir().full_path
+    prepared_fn = converter.prepare_function(
+        'tf_fn',
+        tf_fn,
+        input_signature=[
+            tf.TensorSpec(shape=(None,), dtype=tf.int32),
+            tf.TensorSpec(shape=(None,), dtype=tf.int32),
+        ],
+    )
+
+    converter.save_tf_functions(
+        save_dir_path,
+        {'tf_fn': prepared_fn},
+    )
+
+    loaded_tf_module = tf.saved_model.load(
+        os.path.join(save_dir_path, converter.NPT_TF_SAVED_MODEL_SUB_DIR)
+    )
+    loaded_tf_fn = loaded_tf_module.signatures['tf_fn']
+    outputs = loaded_tf_fn(
+        x=tf.constant([1, 2, 3], tf.int32),
+        y=tf.constant([0, 2, 3], tf.int32),
+    )
+
+    self.assertAllEqual(outputs['output_0'].numpy(), [1, 2, 3])
+    self.assertAllEqual(outputs['output_0_0'].numpy(), [0, 2, 3])
+    self.assertAllEqual(outputs['output_1'].numpy(), [[0], [2]])
+    self.assertAllEqual(outputs['output_1_0'].numpy(), [4, 5])
+    self.assertAllEqual(outputs['output_1_1'].numpy(), [3])
+
+  def test_ragged_tensor_producer_consumer(self):
+    @tf.function
+    def producer(x, y):
+      return tf.RaggedTensor.from_row_splits(values=x, row_splits=y)
+
+    @tf.function
+    def consumer(values, row_splits):
+      # Rebuild the ragged tensor from its components
+      ragged = tf.RaggedTensor.from_row_splits(
+          values=values, row_splits=row_splits
+      )
+      return tf.reduce_sum(ragged)
+
+    save_dir_path = self.create_tempdir().full_path
+    prepared_producer = converter.prepare_function(
+        'producer',
+        producer,
+        input_signature=[
+            tf.TensorSpec(shape=(None,), dtype=tf.int32),
+            tf.TensorSpec(shape=(None,), dtype=tf.int32),
+        ],
+    )
+    prepared_consumer = converter.prepare_function(
+        'consumer',
+        consumer,
+        input_signature=[
+            tf.TensorSpec(shape=(None,), dtype=tf.int32),
+            tf.TensorSpec(shape=(None,), dtype=tf.int32),
+        ],
+    )
+
+    converter.save_tf_functions(
+        save_dir_path,
+        {'producer': prepared_producer, 'consumer': prepared_consumer},
+    )
+
+    loaded_tf_module = tf.saved_model.load(
+        os.path.join(save_dir_path, converter.NPT_TF_SAVED_MODEL_SUB_DIR)
+    )
+
+    prod_out = loaded_tf_module.signatures['producer'](
+        x=tf.constant([1, 2, 3], tf.int32),
+        y=tf.constant([0, 2, 3], tf.int32),
+    )
+
+    cons_out = loaded_tf_module.signatures['consumer'](
+        values=prod_out['output_0'],
+        row_splits=prod_out['output_0_0'],
+    )
+
+    self.assertAllEqual(cons_out['output_0'].numpy(), 6)
+
 
 if __name__ == '__main__':
   absltest.main()

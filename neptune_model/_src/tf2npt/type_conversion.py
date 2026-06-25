@@ -22,55 +22,80 @@ import tensorflow as tf
 from neptune_model._src.core import shlo_type
 
 
-def to_tf_dtype(dtype: shlo_type.ShloDType | tf.DType) -> Any:
-  if dtype == shlo_type.ShloDType.bf16:
-    return tf.bfloat16
-  if dtype == shlo_type.ShloDType.str:
-    return tf.string
-  if isinstance(dtype, shlo_type.ShloDType):
-    return shlo_type.shlo_dtype_to_np_dtype(dtype)
-  return dtype
+def tf_dtype_from(dtype: shlo_type.ShloDType | tf.DType) -> Any:
+  match dtype:
+
+    case shlo_type.ShloDType.bf16:
+      return tf.bfloat16
+
+    case shlo_type.ShloDType.str:
+      return tf.string
+
+    case shlo_type.ShloDType():
+      return shlo_type.shlo_dtype_to_np_dtype(dtype)
+
+    case _:
+      return dtype
 
 
-def to_tf_spec(
-    input_spec: shlo_type.ShloTensorSpec | tf.TensorSpec,
-) -> tf.TensorSpec:
-  if isinstance(input_spec, tf.TensorSpec):
-    return input_spec
-  if hasattr(input_spec, "name"):
-    name = input_spec.name
-  else:
-    name = None
-  return tf.TensorSpec(
-      shape=input_spec.shape,
-      dtype=to_tf_dtype(input_spec.dtype),
-      name=name,
-  )
+def shlo_dtype_from(
+    dtype: tf.DType | shlo_type.ShloDType,
+) -> shlo_type.ShloDType:
+  match dtype:
+
+    case tf.bfloat16:
+      return shlo_type.ShloDType.bf16
+
+    case tf.string:
+      return shlo_type.ShloDType.str
+
+    case tf.resource | tf.variant:
+      raise ValueError(f"Can't convert TF dtype {dtype} to a Neptune dtype")
+
+    case tf.DType():
+      return shlo_type.np_dtype_to_shlo_dtype(np.dtype(dtype.as_numpy_dtype()))
+
+    case _:
+      return dtype
 
 
-def to_npt_dtype(tf_dtype: tf.DType) -> shlo_type.ShloDType:
-  if tf_dtype == tf.bfloat16:
-    return shlo_type.ShloDType.bf16
-  if tf_dtype == tf.string:
-    return shlo_type.ShloDType.str
-  if tf_dtype in (tf.resource, tf.variant):
-    raise ValueError(f"Can't convert TF dtype {tf_dtype} to a Neptune dtype")
-  return shlo_type.np_dtype_to_shlo_dtype(np.dtype(tf_dtype.as_numpy_dtype()))
+def tf_type_spec_from(
+    spec: shlo_type.ShloTensorSpec | tf.TypeSpec,
+) -> tf.TypeSpec:
+  match spec:
+
+    case tf.TypeSpec():
+      return spec
+
+    case _:
+      return tf.TensorSpec(
+          shape=spec.shape,
+          dtype=tf_dtype_from(spec.dtype),
+          name=getattr(spec, "name", None),
+      )
 
 
-def to_npt_spec(
-    input_spec: tf.TensorSpec | shlo_type.ShloTensorSpec,
-) -> shlo_type.ShloTensorSpec:
-  if isinstance(input_spec, shlo_type.ShloTensorSpec):
-    return input_spec
+def shlo_tensor_spec_from(
+    spec: tf.TensorSpec | shlo_type.ShloTensorSpec,
+) -> shlo_type.ShloTensorSpec | tuple[shlo_type.ShloTensorSpec, ...]:
+  """Converts a TF type spec to a ShloTensorSpec."""
 
-  if input_spec.shape.rank is None:
-    shape = None
-  else:
-    shape = tuple(input_spec.shape.as_list())
+  match spec:
 
-  return shlo_type.ShloTensorSpec(
-      shape=shape,
-      dtype=to_npt_dtype(input_spec.dtype),
-      name=input_spec.name,
-  )
+    case tf.TypeSpec():
+      if not isinstance(spec, tf.TensorSpec):
+        # A composite type spec (RaggedTensorSpec, etc.)
+        expanded = tf.nest.flatten(spec, expand_composites=True)
+        return tuple(shlo_tensor_spec_from(s) for s in expanded)
+
+      # A plain (non-composite) TensorSpec.
+      return shlo_type.ShloTensorSpec(
+          shape=tuple(spec.shape.as_list())
+          if spec.shape.rank is not None
+          else None,
+          dtype=shlo_dtype_from(spec.dtype),
+          name=getattr(spec, "name", None),
+      )
+
+    case _:
+      return spec

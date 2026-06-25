@@ -235,9 +235,7 @@ def _update_save_bundle(
 
   pipeline_input_signature: jaxtyping.PyTree | None = None
   pipeline_output_signature: jaxtyping.PyTree | None = None
-  input_signature: jaxtyping.PyTree = utils.to_shlo_tensor_spec(
-      cfg.input_signature
-  )
+  input_signature: jaxtyping.PyTree = cfg.input_signature
 
   for node in pipeline_nodes:
     node_input_signature, node_output_signature = (
@@ -252,17 +250,21 @@ def _update_save_bundle(
     pipeline_output_signature = node_output_signature
     input_signature = node_output_signature
 
+  shlo_input_signature = utils.to_shlo_tensor_spec(pipeline_input_signature)
+  shlo_output_signature = utils.to_shlo_tensor_spec(pipeline_output_signature)
+
   pipeline_proto = save_bundle.pipelines.name_to_pipeline[cfg.serving_signature]
+
   pipeline_proto.signature.CopyFrom(
       type_proto_utils.to_function_signature_proto(
-          pipeline_input_signature,
-          pipeline_output_signature,
+          shlo_input_signature,
+          shlo_output_signature,
       )
   )
   pipeline_proto.named_signature.CopyFrom(
       orchestration_proto_utils.to_named_signature_proto(
-          pipeline_input_signature,
-          pipeline_output_signature,
+          shlo_input_signature,
+          shlo_output_signature,
       ),
   )
   if cfg.batch_options is not None:
