@@ -419,11 +419,24 @@ def _output_name(path: Sequence[Any]) -> str:
   return '.'.join(_output_name_for_key(k) for k in path)
 
 
+def _remove_none(x):
+  if isinstance(x, Mapping):
+    return {k: _remove_none(v) for k, v in x.items() if v is not None}
+  elif isinstance(x, Sequence) and not isinstance(x, (str, bytes)):
+    cleaned = [_remove_none(v) for v in x if v is not None]
+    return type(x)(cleaned)
+  elif dataclasses.is_dataclass(x):
+    d = {field.name: getattr(x, field.name) for field in dataclasses.fields(x)}
+    return {k: _remove_none(v) for k, v in d.items() if v is not None}
+  return x
+
+
 def _output_names(
     fn: tf.types.experimental.ConcreteFunction,
 ) -> Sequence[str]:
   """Returns the flattened output signature of the given function."""
   unwrapped_outputs = _unwrap_tf_trackables(fn.structured_outputs)
+  unwrapped_outputs = _remove_none(unwrapped_outputs)
   leaves_with_path = jax.tree.leaves_with_path(unwrapped_outputs)
   if not leaves_with_path:
     return []
@@ -492,6 +505,7 @@ def _to_keyword_only_fn(
         )
     )
     output = f(*args, **kwargs)
+    output = _remove_none(output)
     new_output = _tree_to_dict(
         output,
         output_names,
