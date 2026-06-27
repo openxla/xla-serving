@@ -497,6 +497,73 @@ class Tf2NptConverterTest(
 
     self.assertAllEqual(cons_out['output_0'].numpy(), 6)
 
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='_simple_with_none',
+          spec_tree=(
+              _T1,
+              None,
+              (_T2, None, [_T3]),
+          ),
+      ),
+      dict(
+          testcase_name='_composite_with_none',
+          spec_tree=(
+              _T1,
+              None,
+              (
+                  tf.RaggedTensorSpec(shape=(None, None), dtype=tf.int32),
+                  None,
+                  [_T3],
+              ),
+          ),
+      ),
+  )
+  def test_tree_dict_helpers(self, spec_tree):
+    def _spec_to_tensor(spec):
+      if isinstance(spec, tf.RaggedTensorSpec):
+        return tf.ragged.constant([[1, 2], [3]], dtype=spec.dtype)
+      return tf.zeros(spec.shape, spec.dtype)
+
+    tensor_tree = jax.tree.map(_spec_to_tensor, spec_tree)
+
+    leaves = jax.tree.leaves(tensor_tree)
+    flat_len = sum(
+        len(tf.nest.flatten(l, expand_composites=True)) for l in leaves
+    )
+    names = [f'n_{i}' for i in range(flat_len)]
+
+    d = converter._tree_to_dict(tensor_tree, names)
+    self.assertLen(d, flat_len)
+
+    reconstructed = converter._dict_to_tree(d, names, spec_tree)
+
+    tf.nest.assert_same_structure(reconstructed, tensor_tree)
+    for r, t in zip(
+        jax.tree.leaves(reconstructed), jax.tree.leaves(tensor_tree)
+    ):
+      self.assertAllEqual(r, t)
+
+  def test_flat_input_signature_handles_none_and_composite(self):
+    @tf.function
+    def f(ragged: tf.RaggedTensor, x, y=None):
+      del y
+      return tf.reduce_sum(ragged) + x
+
+    ragged_spec = tf.RaggedTensorSpec(shape=(None, None), dtype=tf.int32)
+    cf = f.get_concrete_function(
+        ragged_spec, tf.constant(1, dtype=tf.int32), None
+    )
+
+    names, leaves = converter._flat_input_signature(cf)
+
+    # ragged has 2 flat components (values, row_splits).
+    # x has 1 component.
+    # y is None and skipped.
+    # Total = 3.
+    self.assertLen(leaves, 3)
+    self.assertLen(names, 3)
+
 
 if __name__ == '__main__':
   absltest.main()

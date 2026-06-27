@@ -358,7 +358,11 @@ def _tree_to_dict(
     names: Sequence[str],
 ) -> Mapping[str, tf.TensorSpec]:
   """Converts a tree of TF value types to a dictionary of TensorSpecs."""
-  return dict(zip(names, tf.nest.flatten(tree, expand_composites=True)))
+  flat_values = []
+  for leaf in jax.tree.leaves(tree):
+    # If the leaf is a composite TF type, expand it to its flat TensorSpecs.
+    flat_values.extend(tf.nest.flatten(leaf, expand_composites=True))
+  return dict(zip(names, flat_values))
 
 
 def _dict_to_tree(
@@ -367,17 +371,26 @@ def _dict_to_tree(
     tree_structure: Any,
 ) -> jaxtyping.PyTree[tf.TypeSpec]:
   """Converts a dictionary of TensorSpecs to a tree of TF value types."""
-  flat = tuple(d[name] for name in names)
-  return tf.nest.pack_sequence_as(tree_structure, flat, expand_composites=True)
+  names_iter = iter(names)
+
+  def _map_leaf(leaf):
+    flat_leaf = tf.nest.flatten(leaf, expand_composites=True)
+    packed_leaf = [d[next(names_iter)] for _ in flat_leaf]
+    return tf.nest.pack_sequence_as(leaf, packed_leaf, expand_composites=True)
+
+  return jax.tree.map(_map_leaf, tree_structure)
 
 
 def _flat_input_signature(
     fn: tf.types.experimental.ConcreteFunction,
 ) -> tuple[Sequence[str], Sequence[tf.TensorSpec]]:
   """Returns the flattened input signature of the given function."""
-  leaves = tf.nest.flatten(
-      fn.structured_input_signature, expand_composites=True
-  )
+  leaves = []
+  # We use JAX flattening here to suppress handling None values
+  # which tf.nest.flatten would keep. For each leaf, we potentially
+  # expand it to its flat TensorSpecs if it is a composite TF type.
+  for leaf in jax.tree.leaves(fn.structured_input_signature):
+    leaves.extend(tf.nest.flatten(leaf, expand_composites=True))
   input_names = [arg.name for arg in fn.function_def.signature.input_arg]
   if len(input_names) < len(leaves):
     raise ValueError(
