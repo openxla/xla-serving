@@ -29,6 +29,13 @@ from neptune_model._src.processors import processor
 from neptune_model._src.processors import tf_processor
 
 
+@tf.function
+def simple_postprocessor(inputs: dict[str, tf.Tensor]) -> dict[str, tf.Tensor]:
+  """A simple TF postprocessor that adds 10.0 to the predictions."""
+  pred = inputs['pred']
+  return {'pred': pred + 10.0}
+
+
 def export_model(export_path: str):
   """Exports the NNX recommender model using Neptune."""
 
@@ -82,6 +89,12 @@ def export_model(export_path: str):
                       tf_processor.TfProcessor(
                           name='embedding_layer',
                           fn=embedding_layer,
+                      )
+                  ],
+                  postprocessors=[
+                      tf_processor.TfProcessor(
+                          name='simple_postprocessor',
+                          fn=simple_postprocessor,
                       )
                   ],
                   options=processor.ProcessingOptions(

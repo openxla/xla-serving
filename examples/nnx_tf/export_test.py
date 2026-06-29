@@ -57,6 +57,7 @@ class ExportTest(absltest.TestCase):
     outputs = runner.signature('serving_default').run_with_dict_return(**inputs)
     self.assertIn('pred', outputs)
     self.assertEqual(outputs['pred'].shape, (2, 1, 1))
+    self.assertTrue(np.all(outputs['pred'] > 5.0))
 
 
 if __name__ == '__main__':

@@ -1326,8 +1326,20 @@ absl::StatusOr<KernelIODataType> Interpreter::GetModelOutputDataType(
   // the last kernel, we just infer the data type.
   const neptune_model_orchestration::Pipeline& pipeline =
       graph_bundle->pipeline;
-  if (pipeline.post_processor_names().empty()) {
-    return KernelIODataType::kHostBuffer;
+  absl::string_view post_processor_name;
+  for (auto it = pipeline.components().rbegin();
+       it != pipeline.components().rend(); ++it) {
+    if (it->role() == neptune_model_orchestration::ROLE_POSTPROCESSOR) {
+      post_processor_name = it->function_name();
+      break;
+    }
+  }
+  if (post_processor_name.empty()) {
+    if (pipeline.post_processor_names().empty()) {
+      return KernelIODataType::kHostBuffer;
+    }
+    post_processor_name =
+        pipeline.post_processor_names(pipeline.post_processor_names_size() - 1);
   }
 
   bool post_processor_in_batching =
@@ -1337,8 +1349,6 @@ absl::StatusOr<KernelIODataType> Interpreter::GetModelOutputDataType(
        pipeline.batch_options().batch_component() ==
            BatchOptions::MODEL_FUNCTION_AND_POST_PROCESSOR);
 
-  absl::string_view post_processor_name =
-      pipeline.post_processor_names(pipeline.post_processor_names_size() - 1);
   TF_ASSIGN_OR_RETURN(
       const neptune_model_manifest::Function* func,
       GetFunctionByObjectName(manifest_objects_, post_processor_name));
