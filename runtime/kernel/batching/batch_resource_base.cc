@@ -236,6 +236,7 @@ BatchResourceBase::BatchTask::CreateSplitTask(
   task->start_time = this->start_time;
   task->request_cost = this->request_cost;
   task->forced_warmup_batch_size = this->forced_warmup_batch_size;
+  task->criticality_val = this->criticality_val;
 
   return task;
 }
