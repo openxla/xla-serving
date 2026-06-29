@@ -20,6 +20,8 @@ import pathlib
 from neptune_model._src.core import file_utils
 from neptune_model.protos import manifest_pb2
 
+UnstructuredData = manifest_pb2.UnstructuredData
+
 
 @dataclasses.dataclass
 class UnstructuredDataWithExtName:
