@@ -68,6 +68,8 @@ class SaveOptions:
       provided in the mapping, the rest will be public by default.
     device_assignment_by_coords: Optional. A sequence of DeviceAssignment to be
       saved in the manifest.pb.
+    save_shlo_to_file: Optional. If true, save the SHLO in a separate file
+      instead of inlining it in the manifest.pb.
   """
 
   version: int | None = None
@@ -76,6 +78,7 @@ class SaveOptions:
   device_assignment_by_coords: (
       Sequence[device_assignment.DeviceAssignment] | None
   ) = None
+  save_shlo_to_file: bool = False
 
 
 def save(
@@ -102,6 +105,7 @@ def save(
       supplementals=supplemental_info,
       visibilities=options.visibility,
       device_assignments=options.device_assignment_by_coords,
+      save_shlo_to_file=options.save_shlo_to_file,
   )
 
   manifest_path = pathlib.Path(target_dir) / constants.MANIFEST_FILE_PATH
@@ -114,11 +118,21 @@ def save(
       mime_type=constants.MANIFEST_MIME_TYPE,
       manifest_file_path=constants.MANIFEST_FILE_PATH,
   )
-  # Write the main metadata to detect and parse an Orbax Model. The version file
-  # should be THE LAST file to be written. It is used to validate the export and
-  # identify an Orbax Model.
+  # Write the metadata files to detect and parse Neptune/Orbax Model. The
+  # version files should be THE LAST files to be written. They are used to
+  # validate the export and identify a Model. We write both flavors for
+  # backwards compatibility.
   model_version.save(
       str(pathlib.Path(target_dir) / constants.MODEL_VERSION_FILENAME)
+  )
+
+  legacy_model_version = metadata.ModelVersion(
+      version=constants.MANIFEST_VERSION,
+      mime_type=constants.MANIFEST_LEGACY_MIME_TYPE,
+      manifest_file_path=constants.MANIFEST_FILE_PATH,
+  )
+  legacy_model_version.save(
+      str(pathlib.Path(target_dir) / constants.MODEL_VERSION_LEGACY_FILENAME)
   )
 
 
