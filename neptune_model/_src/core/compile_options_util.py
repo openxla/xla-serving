@@ -17,11 +17,8 @@
 from collections.abc import Mapping, Sequence
 import logging
 import re
-from typing import Any
 
-from absl import flags
 from google.protobuf import descriptor
-from google.protobuf import text_format
 import jax
 
 import jaxlib
