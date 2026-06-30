@@ -55,3 +55,4 @@ ORCHESTRATION_MULTI_PIPELINE_VERSION = '0.0.1'
 # The filename of the orchestration proto file relative to the save
 # directory.
 DEFAULT_SUPPLEMENTAL_FILENAME = 'orchestration.pb'
+JAX_SPECIFIC_INFO = 'jax_specific_info'
