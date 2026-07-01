@@ -91,5 +91,6 @@ jobs:
 
       - name: Install Test Dependencies and Run Pytest
         run: |
-          pip install .[test,tf]
+          pip install --pre .[test,tf,torch]
+          pip uninstall -y triton
           pytest neptune_model/
