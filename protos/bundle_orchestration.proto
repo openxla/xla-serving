@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package neptune_bundle_orchestration;
+
+option java_multiple_files = true;
+option java_outer_classname = "BundleOrchestrationProto";
+
+// Root message of bundle_orchestration.pb
+message BundlePipelines {
+  // Maps pipeline name (e.g., "serving_default") to its execution flow.
+  map<string, BundlePipeline> pipelines = 1;
+
+  // Global metadata or configuration for the entire bundle.
+  BundleMetadata metadata = 2;
+}
+
+message BundleMetadata {
+  // Human-readable name of the bundle.
+  string name = 1;
+
+  // Version of the bundle.
+  int64 version = 2;
+}
+
+message BundlePipeline {
+  // A sequential list of models to execute in this pipeline.
+  // The output of the nth model is implicitly fed as the input of the (n+1)th
+  // model.
+  repeated ModelExecutionComponent components = 1;
+}
+
+// Model Execution Component (Runs JAX/OBM model via sub-interpreter)
+message ModelExecutionComponent {
+  // Name of the sub-model subdirectory (e.g. "model_A").
+  string model_name = 1;
+
+  // Name of the pipeline in the sub-model to execute (e.g. "serving_default").
+  string pipeline_name = 2;
+
+  // Number of times this component should be repeated. If not specified, it
+  // will be 1.
+  int64 repeated_times = 3;
+}
