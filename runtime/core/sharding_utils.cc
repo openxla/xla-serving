@@ -397,10 +397,11 @@ absl::StatusOr<tsl::Future<HostBuffer>> MakeHostBufferFromArrayHelper(
             xla::ifrt::ArrayCopySemantics::kDonateInput,
             xla::ifrt::SingleDeviceShardSemantics::kAddressableShards));
 
-    int64_t device_id = hlo_sharding.GetUniqueDevice();
+    int64_t index =
+        disassembled_array.size() == 1 ? 0 : hlo_sharding.GetUniqueDevice();
 
     HostBuffer output_buffer(input_dtype, input_shape);
-    return disassembled_array[device_id]
+    return disassembled_array[index]
         ->CopyToHostBuffer(output_buffer.base(), std::nullopt,
                            xla::ifrt::ArrayCopySemantics::kAlwaysCopy)
         .MapTo(std::move(output_buffer));

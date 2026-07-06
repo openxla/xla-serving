@@ -126,6 +126,37 @@ cc_library(
 )
 
 cc_library(
+    name = "sharding_utils_test_lib",
+    testonly = True,
+    srcs = ["sharding_utils_test.cc"],
+    visibility = ["@neptune//runtime/core/google:__subpackages__"],
+    deps = [
+        ":host_buffer",
+        ":host_buffer_matcher",
+        ":host_buffer_test_utils",
+        ":sharding_utils",
+        "//testing/base/public:gunit_main",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/types:span",
+        "@tsl//tsl/platform:ml_dtypes",
+        "@xla//xla:xla_data_proto_cc",
+        "@xla//xla/hlo/ir:hlo",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/python/ifrt:test_util",
+        "@xla//xla/python/pjrt_ifrt:xla_ifrt",
+        "@xla//xla/tsl/concurrency:ref_count",
+        "@xla//xla/tsl/lib/core:status_test_util",
+        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:status_matchers",
+        "@xla//xla/tsl/platform:statusor",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "h2d_transfer_executor",
     hdrs = ["h2d_transfer_executor.h"],
     visibility = [":core_users"],
@@ -217,7 +248,6 @@ cc_library(
         "@abseil-cpp//absl/log:check",
         "@abseil-cpp//absl/log:vlog_is_on",
         "@abseil-cpp//absl/memory",
-        "@abseil-cpp//absl/random",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
