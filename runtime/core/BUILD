@@ -298,6 +298,7 @@ cc_library(
         ":host_buffer_type_utils",
         ":host_buffer_utils",
         "@abseil-cpp//absl/container:inlined_vector",
+        "@abseil-cpp//absl/flags:flag",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/log:check",
         "@abseil-cpp//absl/status",

@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "absl/container/inlined_vector.h"  // from @abseil-cpp
+#include "absl/flags/flag.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
@@ -47,6 +48,10 @@
 
 // go/lsc-fix-eigen-includes
 // IWYU pragma: no_include "Eigen/src/Core/util/ConfigureVectorization.h"
+
+ABSL_FLAG(int64_t, jsv_host_buffer_max_elements, int64_t{1} << 32,
+          "Maximum number of elements allowed in a HostBuffer to prevent "
+          "OOM/DoS.");
 
 namespace neptune {
 namespace {
@@ -90,6 +95,47 @@ bool DataTypeCanUseMemCpy(xla::ifrt::DType dtype) {
     case xla::ifrt::DType::Kind::kString:
       return false;
   }
+}
+
+absl::Status ValidateHostBufferShape(xla::ifrt::DType dtype,
+                                     const xla::ifrt::Shape& shape) {
+  int64_t num_elements = 1;
+  for (int64_t d : shape.dims()) {
+    auto [next_num_elements, overflow] =
+        xla::OverflowSafeMultiply(num_elements, d);
+    if (overflow) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("HostBuffer shape overflow: ", shape));
+    }
+    num_elements = next_num_elements;
+  }
+
+  // Limit check to prevent OOM/DoS.
+  int64_t max_elements = absl::GetFlag(FLAGS_jsv_host_buffer_max_elements);
+  if (num_elements > max_elements) {
+    return absl::InvalidArgumentError(
+        absl::StrFormat("HostBuffer shape too large: %d elements (max %d)",
+                        num_elements, max_elements));
+  }
+
+  // Also check byte size overflow.
+  int64_t element_size = 0;
+  if (dtype.kind() == xla::ifrt::DType::Kind::kString) {
+    element_size = sizeof(tsl::tstring);
+  } else if (dtype.byte_size().has_value()) {
+    element_size = *dtype.byte_size();
+  } else {
+    element_size = 1;  // Coerced to kU8 in constructor
+  }
+
+  auto [byte_size, overflow] =
+      xla::OverflowSafeMultiply(element_size, num_elements);
+  if (overflow) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "HostBuffer byte size overflow for shape: ", absl::StrCat(shape)));
+  }
+
+  return absl::OkStatus();
 }
 
 }  // namespace
@@ -429,6 +475,7 @@ absl::StatusOr<HostBuffer> HostBuffer::FromProto(const HostBufferProto& proto) {
                       xla::ifrt::DType::FromProto(proto.dtype()));
   TF_ASSIGN_OR_RETURN(xla::ifrt::Shape shape,
                       xla::ifrt::Shape::FromProto(proto.shape()));
+  TF_RETURN_IF_ERROR(ValidateHostBufferShape(dtype, shape));
   HostBuffer host_buffer(dtype, shape);
   switch (proto.data_case()) {
     case HostBufferProto::kRawData: {
