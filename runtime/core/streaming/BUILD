@@ -43,6 +43,7 @@ cc_library(
         "@xla//xla/python/pjrt_ifrt:pjrt_dtype",
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:statusor",
+        "@xla//xla/tsl/platform:threadpool_interface",
     ],
 )
 

@@ -55,6 +55,7 @@
 #include "xla/python/pjrt_ifrt/pjrt_dtype.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
+#include "xla/tsl/platform/threadpool_interface.h"  // from @xla
 #include "tsl/platform/random.h"  // from @tsl
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
@@ -180,22 +181,49 @@ absl::StatusOr<std::optional<int64_t>> SetStreamCallbackId(
 }
 
 absl::Status StreamCallbackRegistry::CallbackState::Invoke(
-    tsl::thread::ThreadPool* thread_pool, StreamedResult result) {
-  {
-    absl::MutexLock lock(mu_);
-    if (closed_) {
-      return absl::InternalError(
-          "Failed to invole the callback that is closed.");
-    }
-    ++num_outstanding_;
+    tsl::thread::ThreadPoolInterface* thread_pool, StreamedResult result) {
+  absl::MutexLock lock(mu_);
+  if (closed_) {
+    return absl::InternalError(
+        "Failed to invoke the callback that is closed.");
   }
-  thread_pool->Schedule([this, result = std::move(result)]() mutable {
+
+  pending_results_.push(std::move(result));
+  ++num_outstanding_;
+
+  if (is_processing_) {
+    return absl::OkStatus();
+  }
+
+  is_processing_ = true;
+
+  thread_pool->Schedule([this]() {
+    ProcessQueue();
+  });
+
+  return absl::OkStatus();
+}
+
+void StreamCallbackRegistry::CallbackState::ProcessQueue() {
+  while (true) {
+    StreamedResult result;
+    {
+      absl::MutexLock lock(mu_);
+      if (pending_results_.empty()) {
+        is_processing_ = false;
+        return;
+      }
+      result = std::move(pending_results_.front());
+      pending_results_.pop();
+    }
+
     InvokeCallback(std::move(result));
 
-    absl::MutexLock lock(mu_);
-    --num_outstanding_;
-  });
-  return absl::OkStatus();
+    {
+      absl::MutexLock lock(mu_);
+      --num_outstanding_;
+    }
+  }
 }
 
 void StreamCallbackRegistry::CallbackState::Close() {
@@ -246,8 +274,8 @@ absl::StatusOr<ScopedStreamCallback> StreamCallbackRegistry::Register(
 }
 
 absl::Status StreamCallbackRegistry::Invoke(
-    tsl::thread::ThreadPool* thread_pool, int64_t callback_id, int64_t step_id,
-    StreamedResult result) {
+    tsl::thread::ThreadPoolInterface* thread_pool, int64_t callback_id,
+    int64_t step_id, StreamedResult result) {
   absl::MutexLock lock(mu_);
   auto iter = stream_callbacks_.find({callback_id, step_id});
   if (iter == stream_callbacks_.end()) {

@@ -21,6 +21,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <queue>
 #include <utility>
 #include <vector>
 
@@ -36,7 +37,7 @@
 #include "absl/time/time.h"  // from @abseil-cpp
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 #include "runtime/core/host_buffer.h"  // from @neptune
-#include "xla/tsl/platform/threadpool.h"  // from @xla
+#include "xla/tsl/platform/threadpool_interface.h"  // from @xla
 
 namespace neptune {
 
@@ -146,8 +147,9 @@ class StreamCallbackRegistry {
           void(absl::flat_hash_map<std::string, neptune::HostBuffer>)>
           callback);
 
-  absl::Status Invoke(tsl::thread::ThreadPool* thread_pool, int64_t callback_id,
-                      int64_t step_id, StreamedResult result);
+  absl::Status Invoke(tsl::thread::ThreadPoolInterface* thread_pool,
+                      int64_t callback_id, int64_t step_id,
+                      StreamedResult result);
 
   StreamControllerInterface& stream_interface() const { return *interface_; }
 
@@ -170,7 +172,7 @@ class StreamCallbackRegistry {
       DCHECK(registry_);
     }
 
-    absl::Status Invoke(tsl::thread::ThreadPool* thread_pool,
+    absl::Status Invoke(tsl::thread::ThreadPoolInterface* thread_pool,
                         StreamedResult result);
 
     void Close();
@@ -180,6 +182,7 @@ class StreamCallbackRegistry {
       return registry_->stream_interface();
     }
     void InvokeCallback(StreamedResult result);
+    void ProcessQueue();
 
     StreamCallbackRegistry* registry_ = nullptr;
     std::string model_name_;
@@ -191,6 +194,8 @@ class StreamCallbackRegistry {
     absl::Mutex mu_;
     bool closed_ ABSL_GUARDED_BY(mu_) = false;
     int num_outstanding_ ABSL_GUARDED_BY(mu_) = 0;
+    bool is_processing_ ABSL_GUARDED_BY(mu_) = false;
+    std::queue<StreamedResult> pending_results_ ABSL_GUARDED_BY(mu_);
   };
 
   std::unique_ptr<CallbackState> Unregister(int64_t callback_id,
