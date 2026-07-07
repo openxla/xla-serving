@@ -57,6 +57,12 @@ tf = [
     'tf_keras',
 ]
 
+torch = [
+    'torch',
+    'torchax',
+]
+
+
 test = [
     'chex',
     'flax',
