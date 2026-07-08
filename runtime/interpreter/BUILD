@@ -210,6 +210,34 @@ cc_library(
 )
 
 cc_library(
+    name = "bundle_interpreter",
+    srcs = ["bundle_interpreter.cc"],
+    hdrs = ["bundle_interpreter.h"],
+    visibility = [
+        ":internal",
+        ":interpreter_users",
+    ],
+    deps = [
+        ":interpreter",
+        ":interpreter_create_options",
+        ":run_options",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/types:span",
+        "@neptune//protos:bundle_orchestration_cc_proto",
+        "@neptune//runtime/core:value",
+        "@tsl//tsl/platform:path",
+        "@xla//xla/tsl/concurrency:future",
+        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:errors",
+        "@xla//xla/tsl/platform:statusor",
+    ],
+)
+
+cc_library(
     name = "run_options",
     hdrs = ["run_options.h"],
     visibility = [
