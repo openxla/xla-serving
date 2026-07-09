@@ -58,7 +58,7 @@ tf = [
 ]
 
 torch = [
-    'torch',
+    'torch < 2.13.0',
     'torchax',
 ]
 
