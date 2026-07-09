@@ -120,6 +120,26 @@ message FunctionBody {
   }
 }
 
+// AOT-compiled execution payload for a specific target hardware topology.
+message CompiledExecutableBody {
+  // An unstructured payload containing the AOT-compiled artifact
+  // (e.g. an offline-compiled IFRT executable or XLA object file).
+  UnstructuredData aot_executable = 1;
+  // A version string/bytes to ensure compatibility with the host runtime
+  // executor.
+  bytes executable_version = 2;
+  // An identifier describing the target physical topology or architecture
+  // constraints (e.g. "v5e:2x2x1", "v4:4x4") that this executor was compiled
+  // for.
+  string target_topology_label = 3;
+  // A mapping of original function arguments that were retained by the compiler
+  // inside this specific executable. The size of this list can differ from the
+  // original function's arguments because dead code elimination (DCE) at
+  // compile time can drop unused inputs. Thus, it only includes the indices of
+  // arguments that survive DCE.
+  repeated int32 aot_kept_var_idx = 4;
+}
+
 message StableHloFunctionBody {
   UnstructuredData stable_hlo = 1;
 
@@ -129,6 +149,11 @@ message StableHloFunctionBody {
   repeated uint32 module_kept_var_idx = 4;
   map<string, UnstructuredData> supplemental_info =
       5;  // e.g. JAX-specific info
+  // These are pre-compiled executables sharing the same shape signatures and
+  // semantics as this StableHlo module, but compiled for different physical
+  // topologies (or platforms). At runtime, the best matching artifact is loaded
+  // based on the active hardware configuration.
+  repeated CompiledExecutableBody compiled_executables = 6;
 }
 
 message UnstructuredData {
