@@ -195,6 +195,18 @@ absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
     const InterpreterCreateOptions* create_options,
     tsl::thread::ThreadPool* thread_pool) {
   LOG(INFO) << "Building the batch kernel.";
+  bool has_streaming = false;
+  for (const auto& kernel : batched_kernels) {
+    if (kernel->has_streaming()) {
+      has_streaming = true;
+      break;
+    }
+  }
+  if (has_streaming) {
+    LOG(INFO) << "Streaming detected in batched kernels. "
+              << "Forcing disable_large_batch_splitting to true.";
+  }
+
   BatchOptions::BatchPaddingPolicy batch_padding_policy =
       batch_options.batch_padding_policy();
   TF_ASSIGN_OR_RETURN(std::string batch_padding_policy_string,
@@ -216,9 +228,9 @@ absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
       .batch_timeout_micros = batch_options.batch_timeout_micros(),
       .allowed_batch_sizes =
           std::vector<int32_t>{batch_options.allowed_batch_sizes().begin(),
-                               batch_options.allowed_batch_sizes().end()},
+                                batch_options.allowed_batch_sizes().end()},
       .enable_large_batch_splitting =
-          !batch_options.disable_large_batch_splitting(),
+          !batch_options.disable_large_batch_splitting() && !has_streaming,
       .batch_padding_policy = std::move(batch_padding_policy_string),
       .mixed_priority_batching_policy = mixed_priority_batching_policy,
       .allocator = create_options->allocator,
