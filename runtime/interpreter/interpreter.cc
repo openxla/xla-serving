@@ -545,6 +545,11 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateStableHloRunnerOp(
                                          std::move(output_flat_signature)));
   }
   TF_RETURN_IF_ERROR(builder.SetConfig(kIfrtClient, ifrt_client));
+  if (create_options.aot_compilation_result_path.has_value()) {
+    TF_RETURN_IF_ERROR(
+        builder.SetConfig(kAotCompilationResultPath,
+                          create_options.aot_compilation_result_path.value()));
+  }
   TF_RETURN_IF_ERROR(
       builder.SetConfig(kPersistentCompilationCache,
                         create_options.persistent_compilation_cache.get()));

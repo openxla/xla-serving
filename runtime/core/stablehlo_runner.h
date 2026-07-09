@@ -86,7 +86,8 @@ class StableHloRunner {
       ServingCoreSelector* absl_nullable serving_core_selector,
       std::unique_ptr<H2DTransferExecutorFactory>
           h2d_transfer_executor_factory = nullptr,
-      std::optional<int64_t> callback_id = std::nullopt);
+      std::optional<int64_t> callback_id = std::nullopt,
+      std::optional<std::string> aot_compilation_result_path = std::nullopt);
 
   // Movable but not copyable.
   StableHloRunner(StableHloRunner&& other) = default;
@@ -382,7 +383,8 @@ class StableHloRunner {
       absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
       ServingCoreSelector* absl_nullable serving_core_selector,
       std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory,
-      std::optional<int64_t> callback_id);
+      std::optional<int64_t> callback_id,
+      std::optional<std::string> aot_compilation_result_path);
 
   using SharedCachedExecutableBundle = std::shared_ptr<CachedExecutableBundle>;
 
@@ -469,6 +471,8 @@ class StableHloRunner {
   absl::flat_hash_map<xla::ifrt::DeviceListRef,
                       std::unique_ptr<ResourcesPerDeviceList>>
       device_list_to_resources_map_;
+
+  std::optional<std::string> aot_compilation_result_path_;
 
   friend class StableHloRunnerTestPeer;
 };

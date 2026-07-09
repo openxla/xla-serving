@@ -24,6 +24,8 @@ inline constexpr absl::string_view kStableHlo = "stablehlo";
 // constant is used to specify the number of inputs.
 inline constexpr absl::string_view kNumKernelInputs = "num_kernel_inputs";
 inline constexpr absl::string_view kIfrtClient = "ifrt_client";
+inline constexpr absl::string_view kAotCompilationResultPath =
+    "aot_compilation_result_path";
 inline constexpr absl::string_view kIfrtWorkerThreadPool = "thread_pool";
 inline constexpr absl::string_view kIfrtLoadedVariableRegistry =
     "ifrt_loaded_variable_registry";

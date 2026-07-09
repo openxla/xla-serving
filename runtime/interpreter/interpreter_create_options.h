@@ -16,16 +16,14 @@
 #define THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_INTERPRETER_CREATE_OPTIONS_H_
 
 #include <cstdint>
-#include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "absl/base/nullability.h"  // from @abseil-cpp
-#include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "protos/manifest.pb.h"  // from @neptune
 #include "runtime/core/allocator.h"  // from @neptune
 #include "runtime/core/default_allocator.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
 #include "runtime/core/stablehlo_optimizer.h"  // from @neptune
 #include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
 #include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @neptune
@@ -49,6 +47,9 @@ struct InterpreterCreateOptions {
   // The path to the model. It should be the parent directory of the model's
   // manifest proto.
   std::string model_path;
+  // Optional: If provided, skips StableHLO compilation and natively loads the
+  // AOT payload.
+  std::optional<std::string> aot_compilation_result_path = std::nullopt;
   // The inter-op thread pool to use for executing the model. It can't be null.
   // Not owned.
   tsl::thread::ThreadPool* execute_worker_thread_pool = nullptr;
@@ -85,12 +86,11 @@ struct InterpreterCreateOptions {
       nullptr;
   // Persistent compilation cache for single-host serving. If nullptr, the
   // compilation cache is disabled.
-  std::unique_ptr<IfrtPersistentCompilationCache>
-      persistent_compilation_cache = nullptr;
+  std::unique_ptr<IfrtPersistentCompilationCache> persistent_compilation_cache =
+      nullptr;
   // Core selector for balancing serving load for IFRT portable executables. If
   // nullptr, LB-policy-based core selection is disabled.
   ServingCoreSelector* absl_nullable serving_core_selector = nullptr;
-
 };
 // LINT.ThenChange(//depot//third_party/neptune/runtime/interpreter/interpreter.cc:InterpreterCreateOptionsValidation)
 }  // namespace neptune

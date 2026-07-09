@@ -130,6 +130,13 @@ absl::StatusOr<std::unique_ptr<Kernel>> StableHloRunnerOp::Create(
     return callback_id.status();
   }
 
+  absl::StatusOr<std::string> aot_compilation_result_path =
+      context.GetConfig<std::string>(kAotCompilationResultPath);
+  if (!aot_compilation_result_path.ok() &&
+      !absl::IsNotFound(aot_compilation_result_path.status())) {
+    return aot_compilation_result_path.status();
+  }
+
   TF_ASSIGN_OR_RETURN(
       std::unique_ptr<StableHloRunner> stablehlo_runner,
       StableHloRunner::Create(
@@ -140,7 +147,10 @@ absl::StatusOr<std::unique_ptr<Kernel>> StableHloRunnerOp::Create(
           ifrt_loaded_variable_registry, weights, compilation_environment_proto,
           thread_pool, *optimizer, assigned_devices, serving_core_selector,
           /*h2d_transfer_executor_factory=*/nullptr,
-          callback_id.ok() ? std::make_optional(*callback_id) : std::nullopt));
+          callback_id.ok() ? std::make_optional(*callback_id) : std::nullopt,
+          aot_compilation_result_path.ok()
+              ? std::make_optional(*aot_compilation_result_path)
+              : std::nullopt));
 
   return absl::WrapUnique(new StableHloRunnerOp(std::move(stablehlo_runner),
                                                 std::move(input_sig),

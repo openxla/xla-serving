@@ -30,7 +30,6 @@
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/base/optimization.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
-#include "absl/container/flat_hash_set.h"  // from @abseil-cpp
 #include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
@@ -43,13 +42,12 @@
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/time/clock.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "mlir/include/mlir/Dialect/Func/IR/FuncOps.h"  // from @llvm-project
+#include "mlir/include/mlir/Dialect/Func/IR/FuncOps.h"  // from @llvm-project  // NOLINT
 #include "mlir/include/mlir/IR/Attributes.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/Builders.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/BuiltinAttributes.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/OperationSupport.h"  // from @llvm-project
-#include "mlir/include/mlir/IR/OwningOpRef.h"  // from @llvm-project
 #include "runtime/core/device_buffer.h"  // from @neptune
 #include "runtime/core/h2d_transfer_executor.h"  // from @neptune
 #include "runtime/core/host_buffer.h"  // from @neptune
@@ -70,7 +68,9 @@
 #include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
 #include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @neptune
 #include "runtime/libs/mlir/dump_mlir_util.h"  // from @neptune
+#include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 #include "google/protobuf/message.h"
+#include "google/protobuf/util/delimited_message_util.h"
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/layout.h"  // from @xla
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
@@ -85,7 +85,9 @@
 #include "xla/python/ifrt/memory.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
-#include "xla/python/pjrt_ifrt/xla_sharding.h"  // from @xla
+#include "xla/python/pjrt_ifrt/executable_metadata.pb.h"  // from @xla
+#include "xla/python/pjrt_ifrt/xla_compiler.h"  // from @xla
+#include "xla/python/pjrt_ifrt/xla_sharding.h"  // from @xla  // NOLINT
 #include "xla/python/refine_polymorphic_shapes.h"  // from @xla
 #include "xla/service/computation_placer.h"  // from @xla
 #include "xla/status_macros.h"  // from @xla
@@ -93,6 +95,7 @@
 #include "xla/tsl/concurrency/ref_count.h"  // from @xla
 #include "xla/tsl/framework/serving_device_selector.h"  // from @xla
 #include "xla/tsl/lib/monitoring/counter.h"  // from @xla
+#include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
@@ -425,7 +428,8 @@ StableHloRunner::StableHloRunner(
     absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
     ServingCoreSelector* absl_nullable serving_core_selector,
     std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory,
-    std::optional<int64_t> callback_id)
+    std::optional<int64_t> callback_id,
+    std::optional<std::string> aot_compilation_result_path)
     : loaded_stablehlo_(std::move(loaded_stablehlo)),
       compile_options_(std::move(compile_options)),
       assigned_device_list_(std::move(assigned_device_list)),
@@ -437,7 +441,8 @@ StableHloRunner::StableHloRunner(
       optimizer_(optimizer),
       assigned_devices_(std::move(assigned_devices)),
       serving_core_selector_(serving_core_selector),
-      h2d_transfer_executor_factory_(std::move(h2d_transfer_executor_factory)) {
+      h2d_transfer_executor_factory_(std::move(h2d_transfer_executor_factory)),
+      aot_compilation_result_path_(std::move(aot_compilation_result_path)) {
   if (loaded_stablehlo_->has_streaming()) {
     DCHECK(callback_id.has_value());
     streaming_host_callback_id_ = callback_id;
@@ -457,7 +462,8 @@ absl::StatusOr<std::unique_ptr<StableHloRunner>> StableHloRunner::Create(
     absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
     ServingCoreSelector* absl_nullable serving_core_selector,
     std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory,
-    std::optional<int64_t> callback_id) {
+    std::optional<int64_t> callback_id,
+    std::optional<std::string> aot_compilation_result_path) {
   if (!stablehlo) {
     return absl::InvalidArgumentError(
         "`StableHlo` should be non-null when creating `StableHloRunner`");
@@ -507,7 +513,7 @@ absl::StatusOr<std::unique_ptr<StableHloRunner>> StableHloRunner::Create(
       assigned_device_list, compilation_environment_proto,
       persistent_compilation_cache, optimizer, assigned_devices,
       serving_core_selector, std::move(h2d_transfer_executor_factory),
-      callback_id));
+      callback_id, std::move(aot_compilation_result_path)));
   TF_RETURN_IF_ERROR(runner->Init(thread_pool));
   return runner;
 }
@@ -610,10 +616,45 @@ StableHloRunner::CreateExecutableSynchronously(
     options.device_assignment = std::move(da);
   }
 
-  TF_ASSIGN_OR_RETURN(
-      xla::ifrt::LoadedExecutableRef ifrt_executable,
-      BuildIfrtExecutable(module_bundle->module.get(), options, ifrt_client_,
-                          persistent_compilation_cache_));
+  xla::ifrt::LoadedExecutableRef ifrt_executable;
+  if (aot_compilation_result_path_.has_value()) {
+    std::string compilation_result_serialized;
+    TF_RETURN_IF_ERROR(tsl::ReadFileToString(tsl::Env::Default(),
+                                             *aot_compilation_result_path_,
+                                             &compilation_result_serialized));
+
+    xla::ifrt::SerializedXlaExecutableMetadata metadata;
+    for (const auto& output : io_spec.outputs) {
+      auto* output_spec = metadata.add_output_specs();
+      output.dtype.ToProto(*output_spec->mutable_dtype());
+      auto* shape_proto = output_spec->mutable_shape();
+      for (const auto& dim : output.shape) {
+        shape_proto->add_dims(dim.value_or(-1));
+      }
+      *output_spec->mutable_op_sharding() = output.sharding.ToProto();
+    }
+    std::string metadata_serialized;
+    {
+      google::protobuf::io::StringOutputStream output_stream(&metadata_serialized);
+      google::protobuf::util::SerializeDelimitedToZeroCopyStream(metadata,
+                                                       &output_stream);
+    }
+    std::string combined_serialized =
+        metadata_serialized + compilation_result_serialized;
+
+    TF_ASSIGN_OR_RETURN(
+        ifrt_executable,
+        ifrt_client_->GetDefaultCompiler()
+            ->DeserializeLoadedExecutable(
+                combined_serialized,
+                std::make_unique<xla::ifrt::XlaDeserializeExecutableOptions>())
+            .Await());
+  } else {
+    TF_ASSIGN_OR_RETURN(
+        ifrt_executable,
+        BuildIfrtExecutable(module_bundle->module.get(), options, ifrt_client_,
+                            persistent_compilation_cache_));
+  }
 
   SharedCachedExecutableBundle executable_bundle =
       std::make_shared<CachedExecutableBundle>();
@@ -629,7 +670,7 @@ StableHloRunner::CreateExecutableSynchronously(
 
   executable_bundle->callback_id = callback_id;
 
-  // With streaming, there will be an addtional input for the request id.
+  // With streaming, there will be an additional input for the request id.
   if (callback_id.has_value()) {
     executable_bundle->module_kept_var_indices.push_back(io_spec.inputs.size() -
                                                          1);
@@ -851,7 +892,7 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
   }
 
   // TODO: Consider moving this to `Init()`. Maybe also remove the
-  // `call_once` then.
+  // NOLINT `call_once` then.
   absl::call_once(weights_lookup_once_, [&]() {
     if (IsPortableExecutable()) {
       for (auto& [device_list, resources] : device_list_to_resources_map_) {
