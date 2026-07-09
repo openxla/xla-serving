@@ -52,7 +52,6 @@
 #include "xla/mlir/utils/error_util.h"  // from @xla
 #include "xla/mlir/utils/type_util.h"  // from @xla
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
-#include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_dtype.h"  // from @xla
@@ -327,8 +326,7 @@ absl::Status SetPlatformIndex(mlir::ModuleOp module,
 }
 
 absl::Status RefineShapesIfNeeded(
-    mlir::ModuleOp module,
-    absl::Span<const std::optional<xla::ifrt::ArrayRef>> weights,
+    mlir::ModuleOp module, absl::Span<const std::optional<ArgSpec>> weights,
     absl::Span<const xla::ifrt::Shape> input_shapes,
     absl::Span<const xla::ifrt::DType> input_dtypes,
     absl::Span<const int> module_kept_var_idx) {
@@ -371,8 +369,8 @@ absl::Status RefineShapesIfNeeded(
         return absl::InvalidArgumentError(
             absl::StrCat("Weight #", idx, " is required, but not loaded."));
       }
-      args_shapes.push_back(weight_spec.value()->shape());
-      args_dtypes.push_back(weight_spec.value()->dtype());
+      args_shapes.push_back(ToIfrtShape(weight_spec.value().shape));
+      args_dtypes.push_back(weight_spec.value().dtype);
     } else {
       int64_t index = idx - num_weights;
       args_shapes.push_back(input_shapes[index]);

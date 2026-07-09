@@ -19,21 +19,23 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "absl/base/call_once.h"  // from @abseil-cpp
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/base/thread_annotations.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
+#include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/hash/hash.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
@@ -103,7 +105,6 @@ class StableHloRunner {
   }
 
   struct ExecuteOptions {
-    bool require_h2d = true;
     bool require_d2h = true;
   };
 
@@ -118,11 +119,9 @@ class StableHloRunner {
   // (as passed to `Create`) will be looked in `IfrtLoadedVariableRegistry` from
   // the variable name. These will be passed as the first arguments to the
   // computation. The inputs and outputs are wrapped in `neptune::Value` containers.
-  // If options.require_h2d is true, the underlying type of each input value
-  // must be `HostBuffer`. If options.require_d2h is true, each returned value
-  // will wrap a `HostBuffer`. If these options are false, Stage 1 will return
-  // absl::UnimplementedError since PJRT array handles are not yet
-  // supported directly.
+  // If options.require_d2h is true, each returned value
+  // will wrap a `HostBuffer`. If this option is false, it returns
+  // a `neptune::DeviceBuffer`.
   absl::StatusOr<std::vector<neptune::Value>> Execute(
       absl::Span<const neptune::Value> inputs, ExecuteOptions options,
       const RunContext& run_context);
@@ -156,6 +155,10 @@ class StableHloRunner {
   // Container for lazily-evaluated compilation artifacts and execution
   // metadata.
   struct CachedExecutableBundle {
+    using ShardingList = std::vector<xla::ifrt::ShardingRef>;
+    using PortableShardingMap =
+        absl::flat_hash_map<xla::ifrt::DeviceId, ShardingList>;
+
     // The indices of model inputs that need to be passed to the main function
     // of the MLIR module.
     std::vector<int> module_kept_var_idx;
@@ -172,20 +175,34 @@ class StableHloRunner {
     // server) and as a fallback when the canonical program fingerprint is not
     // available.
     std::string program_fingerprint_with_timestamp;
-    std::vector<xla::ifrt::ShardingRef> arg_ifrt_shardings;
-    // Only populated when portable execution is used, currently only single
-    // device sharding is supported.
-    //
-    // We store a pre-allocated std::vector of ShardingRefs (where all elements
-    // point to the same single device sharding) instead of a single reference.
-    // This avoids repeated `malloc` calls on the inference hot path: the
-    // batched H2DTransferExecutor requires an `absl::Span`, so storing the
-    // fully expanded vector here allows us to pass a zero-allocation pointer
-    // slice (O(1) subspan) instead of dynamically allocating a new
-    // std::vector on every request.
-    absl::flat_hash_map<xla::ifrt::DeviceId,
-                        std::vector<xla::ifrt::ShardingRef>>
-        portable_single_device_shardings;
+    // Cached IFRT shardings for the model inputs.
+    // To enforce mutual exclusivity between fixed and portable execution modes,
+    // this field holds one of three states:
+    // 1. std::monostate: Uninitialized default state.
+    // 2. ShardingList: Used when the executable is not portable (i.e., when
+    //    targeting a specific fixed device assignment).
+    // 3. PortableShardingMap: Populated when portable execution is used.
+    //    Currently only single device sharding is supported. To avoid repeated
+    //    `malloc` calls on the inference hot path, this map pre-allocates and
+    //    stores fully expanded vectors of ShardingRefs per device ID, allowing
+    //    zero-allocation pointer slices (O(1) subspans) to be passed directly
+    //    to the batched H2DTransferExecutor.
+    std::variant<std::monostate, ShardingList, PortableShardingMap>
+        arg_shardings;
+    // Cached IFRT shardings for the model outputs.
+    // To enforce mutual exclusivity between fixed and portable execution modes,
+    // this field holds one of three states:
+    // 1. std::monostate: Uninitialized default state.
+    // 2. ShardingList: Used when the executable is not portable (i.e., when
+    //    targeting a specific fixed device assignment).
+    // 3. PortableShardingMap: Populated when portable execution is used.
+    //    Currently only single device sharding is supported. To avoid repeated
+    //    `malloc` calls on the inference hot path, this map pre-allocates and
+    //    stores fully expanded vectors of ShardingRefs per device ID, allowing
+    //    zero-allocation pointer slices (O(1) subspans) to be passed directly
+    //    when resolving output buffer layouts and wrapping device arrays.
+    std::variant<std::monostate, ShardingList, PortableShardingMap>
+        output_shardings;
     std::optional<int64_t> callback_id;
 
     CachedExecutableBundle() = default;
@@ -195,6 +212,28 @@ class StableHloRunner {
     CachedExecutableBundle(const CachedExecutableBundle& other) = delete;
     CachedExecutableBundle& operator=(const CachedExecutableBundle& other) =
         delete;
+
+    // Helper method to resolve and retrieve the output sharding layout.
+    // If the executable is portable, it looks up the pre-populated sharding
+    // for the specified target device ID. Otherwise, it simply returns the
+    // universally cached output shardings.
+    absl::StatusOr<absl::Span<const xla::ifrt::ShardingRef>> GetOutputShardings(
+        xla::ifrt::DeviceId device_id) const {
+      if (const auto* portable_map =
+              std::get_if<PortableShardingMap>(&output_shardings)) {
+        auto it = portable_map->find(device_id);
+        if (it != portable_map->end()) {
+          return absl::MakeConstSpan(it->second);
+        }
+        return absl::InternalError(absl::StrCat(
+            "No portable single device output sharding found for device ",
+            device_id.value()));
+      } else if (const auto* sharding_list =
+                     std::get_if<ShardingList>(&output_shardings)) {
+        return absl::MakeConstSpan(*sharding_list);
+      }
+      return absl::InternalError("Output shardings are uninitialized.");
+    }
   };
   // A helper class to convert the inputs and outputs between
   // `HostBuffer` and `xla::ifrt::Array`.
@@ -215,20 +254,25 @@ class StableHloRunner {
     absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ConvertInput(
         absl::Span<const HostBuffer> inputs,
         const CachedExecutableBundle& executable_bundle,
-        int input_offset) const;
+        absl::Span<const int> stablehlo_indices) const;
 
     // Converts the outputs from `xla::ifrt::Array` to `HostBuffer`.
     absl::StatusOr<std::vector<HostBuffer>> ConvertOutput(
         absl::Span<const xla::ifrt::ArrayRef> stablehlo_outputs,
-        const StableHloIOSpec& model_io_spec);
+        const CachedExecutableBundle& executable_bundle);
 
    private:
     // Validates input data types and shapes against the model specification
-    // and resolves the corresponding physical sharding references.
+    // and resolves the corresponding physical sharding references. Uses the
+    // provided `mixed_shardings_storage` to safely hold non-contiguous
+    // references without heap allocation, returning an O(1) pointer subspan
+    // when possible.
     absl::StatusOr<absl::Span<const xla::ifrt::ShardingRef>>
     ValidateAndResolveShardings(absl::Span<const HostBuffer> inputs,
                                 const CachedExecutableBundle& executable_bundle,
-                                int input_offset) const;
+                                absl::Span<const int> stablehlo_indices,
+                                absl::InlinedVector<xla::ifrt::ShardingRef, 16>&
+                                    mixed_shardings_storage) const;
 
     // Performs standard host-to-device transfers for inputs using the default
     // IFRT MakeArrayFromHostBuffer path.

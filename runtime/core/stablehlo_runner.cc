@@ -17,14 +17,13 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
-#include <iterator>
 #include <memory>
 #include <numeric>
 #include <optional>
 #include <string>
 #include <tuple>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "absl/base/call_once.h"  // from @abseil-cpp
@@ -32,6 +31,7 @@
 #include "absl/base/optimization.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_set.h"  // from @abseil-cpp
+#include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/log/vlog_is_on.h"  // from @abseil-cpp
@@ -88,6 +88,7 @@
 #include "xla/python/pjrt_ifrt/xla_sharding.h"  // from @xla
 #include "xla/python/refine_polymorphic_shapes.h"  // from @xla
 #include "xla/service/computation_placer.h"  // from @xla
+#include "xla/status_macros.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/concurrency/ref_count.h"  // from @xla
 #include "xla/tsl/framework/serving_device_selector.h"  // from @xla
@@ -182,6 +183,47 @@ void AnnotateConstantWeights(mlir::ModuleOp module, int input_offset) {
   }
 }
 
+absl::Status ValidateDeviceBufferInput(const xla::ifrt::Array& original_input,
+                                       xla::ifrt::DType target_dtype,
+                                       const xla::ifrt::Shape& target_shape,
+                                       int idx_in_stablehlo_spec) {
+  if (original_input.dtype() != target_dtype) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Input DType mismatch for device buffer at index ",
+                     idx_in_stablehlo_spec, ". Expected ", target_dtype,
+                     ", but got ", original_input.dtype()));
+  }
+  if (original_input.shape() != target_shape) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Zero-copy D2D execution requires the input "
+        "shape to exactly match the optimized model's target shape. "
+        "Expected ",
+        target_shape, ", but got ", original_input.shape(), ". ",
+        "To fix this, you must pre-reshape the device array to match the "
+        "optimized signature. Otherwise, provide a HostBuffer to allow "
+        "StableHloRunner to perform the reshape via host memory."));
+  }
+  return absl::OkStatus();
+}
+
+absl::Status ValidateOutputArray(const xla::ifrt::Array& array_for_copy,
+                                 xla::ifrt::DType expected_dtype,
+                                 const ArgShape& expected_shape,
+                                 int output_index) {
+  if (array_for_copy.dtype() != expected_dtype) {
+    return absl::InternalError(absl::StrCat(
+        "Output DType mismatch at index ", output_index, ". Expected ",
+        expected_dtype, ", but got ", array_for_copy.dtype()));
+  }
+  if (auto status = InputShapeEqual(expected_shape, array_for_copy.shape());
+      !status.ok()) {
+    return absl::InternalError(absl::StrCat("Output shape mismatch at index ",
+                                            output_index, ". ",
+                                            status.message()));
+  }
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 StableHloRunner::DataConverter::DataConverter(
@@ -199,16 +241,24 @@ StableHloRunner::DataConverter::DataConverter(
 absl::StatusOr<absl::Span<const xla::ifrt::ShardingRef>>
 StableHloRunner::DataConverter::ValidateAndResolveShardings(
     absl::Span<const HostBuffer> inputs,
-    const CachedExecutableBundle& executable_bundle, int input_offset) const {
-  if (input_offset + inputs.size() > executable_bundle.io_spec.inputs.size()) {
-    return absl::InvalidArgumentError("Too many inputs provided.");
+    const CachedExecutableBundle& executable_bundle,
+    absl::Span<const int> stablehlo_indices,
+    absl::InlinedVector<xla::ifrt::ShardingRef, 16>& mixed_shardings_storage)
+    const {
+  if (stablehlo_indices.size() != inputs.size()) {
+    return absl::InvalidArgumentError(
+        "Mismatched inputs and stablehlo_indices size.");
   }
 
   // Validate data types and shapes before passing to executor to prevent
   // buffer over-reads during memcpy.
   for (int i = 0; i < inputs.size(); ++i) {
+    int idx_in_stablehlo_spec = stablehlo_indices[i];
+    if (idx_in_stablehlo_spec >= executable_bundle.io_spec.inputs.size()) {
+      return absl::InvalidArgumentError("Index out of bounds.");
+    }
     const ArgSpec& input_spec =
-        executable_bundle.io_spec.inputs[input_offset + i];
+        executable_bundle.io_spec.inputs[idx_in_stablehlo_spec];
     if (inputs[i].dtype() != input_spec.dtype) {
       return absl::InvalidArgumentError(
           absl::StrCat("Input dtype mismatch. Expected: ", input_spec.dtype,
@@ -217,24 +267,57 @@ StableHloRunner::DataConverter::ValidateAndResolveShardings(
     TF_RETURN_IF_ERROR(InputShapeEqual(input_spec.shape, inputs[i].shape()));
   }
 
-  if (!executable_bundle.portable_single_device_shardings.empty()) {
-    DCHECK(!device_list_->devices().empty());
-    auto it = executable_bundle.portable_single_device_shardings.find(
-        device_list_->devices()[0]->Id());
-    if (it == executable_bundle.portable_single_device_shardings.end()) {
+  absl::Span<const xla::ifrt::ShardingRef> all_shardings;
+  if (const auto* portable_map = std::get_if<
+          StableHloRunner::CachedExecutableBundle::PortableShardingMap>(
+          &executable_bundle.arg_shardings)) {
+    TF_RET_CHECK(!device_list_->devices().empty())
+        << "Device list cannot be empty";
+    auto it = portable_map->find(device_list_->devices()[0]->Id());
+    if (it == portable_map->end()) {
       return absl::FailedPreconditionError(
           absl::StrCat("No portable single device sharding found for device ",
                        device_list_->devices()[0]->Id()));
     }
-    return absl::MakeConstSpan(it->second).subspan(input_offset, inputs.size());
+    all_shardings = absl::MakeConstSpan(it->second);
+  } else if (const auto* sharding_list = std::get_if<
+                 StableHloRunner::CachedExecutableBundle::ShardingList>(
+                 &executable_bundle.arg_shardings)) {
+    all_shardings = absl::MakeConstSpan(*sharding_list);
+  } else {
+    return absl::InternalError("Arg shardings are uninitialized.");
   }
 
-  if (input_offset + inputs.size() >
-      executable_bundle.arg_ifrt_shardings.size()) {
-    return absl::InternalError("IFRT Executable arg shardings size mismatch.");
+  // Check if requested indices are strictly contiguous (The Fast Path)
+  bool is_contiguous = true;
+  for (int i = 0; i < stablehlo_indices.size(); ++i) {
+    if (stablehlo_indices[i] != executable_bundle.input_offset + i) {
+      is_contiguous = false;
+      break;
+    }
   }
-  return absl::MakeConstSpan(executable_bundle.arg_ifrt_shardings)
-      .subspan(input_offset, inputs.size());
+
+  if (is_contiguous) {
+    if (executable_bundle.input_offset + stablehlo_indices.size() >
+        all_shardings.size()) {
+      return absl::InternalError(
+          "IFRT Executable arg shardings size mismatch.");
+    }
+    // O(1) Zero-allocation, zero-refcount-bump fast path
+    return all_shardings.subspan(executable_bundle.input_offset,
+                                 stablehlo_indices.size());
+  }
+
+  // Fallback for mixed inputs, pushing into the caller-owned InlinedVector
+  mixed_shardings_storage.reserve(stablehlo_indices.size());
+  for (int idx : stablehlo_indices) {
+    if (idx >= all_shardings.size()) {
+      return absl::InternalError(
+          "IFRT Executable arg shardings size mismatch.");
+    }
+    mixed_shardings_storage.push_back(all_shardings[idx]);
+  }
+  return absl::MakeConstSpan(mixed_shardings_storage);
 }
 
 absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
@@ -261,7 +344,8 @@ StableHloRunner::DataConverter::ExecuteDefaultTransfer(
 absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
 StableHloRunner::DataConverter::ConvertInput(
     absl::Span<const HostBuffer> inputs,
-    const CachedExecutableBundle& executable_bundle, int input_offset) const {
+    const CachedExecutableBundle& executable_bundle,
+    absl::Span<const int> stablehlo_indices) const {
   tsl::profiler::TraceMe trace_me([&]() {
     return tsl::profiler::TraceMeEncode(h2d_transfer_executor_ != nullptr
                                             ? "ArenaTransferFromHostToDevice"
@@ -269,9 +353,13 @@ StableHloRunner::DataConverter::ConvertInput(
                                         {});
   });
 
+  // Storage must live for the duration of ConvertInput to prevent dangling span
+  // pointers
+  absl::InlinedVector<xla::ifrt::ShardingRef, 16> mixed_shardings_storage;
   TF_ASSIGN_OR_RETURN(
       absl::Span<const xla::ifrt::ShardingRef> shardings_span,
-      ValidateAndResolveShardings(inputs, executable_bundle, input_offset));
+      ValidateAndResolveShardings(inputs, executable_bundle, stablehlo_indices,
+                                  mixed_shardings_storage));
 
   if (h2d_transfer_executor_ != nullptr) {
     arena_cell_->IncrementBy(1);
@@ -285,21 +373,34 @@ StableHloRunner::DataConverter::ConvertInput(
 absl::StatusOr<std::vector<HostBuffer>>
 StableHloRunner::DataConverter::ConvertOutput(
     absl::Span<const xla::ifrt::ArrayRef> stablehlo_outputs,
-    const StableHloIOSpec& io_spec) {
+    const CachedExecutableBundle& executable_bundle) {
   tsl::profiler::TraceMe trace_me([&]() {
     return tsl::profiler::TraceMeEncode("TransferFromDeviceToHost", {});
   });
   std::vector<tsl::Future<HostBuffer>> output_futures;
   output_futures.reserve(stablehlo_outputs.size());
 
+  TF_RET_CHECK(!device_list_->devices().empty())
+      << "Device list cannot be empty";
+  TF_ASSIGN_OR_RETURN(
+      absl::Span<const xla::ifrt::ShardingRef> output_shardings,
+      executable_bundle.GetOutputShardings(device_list_->devices()[0]->Id()));
+
   for (int i = 0; i < stablehlo_outputs.size(); ++i) {
     const xla::ifrt::ArrayRef& array_for_copy = stablehlo_outputs[i];
+
+    if (VLOG_IS_ON(2)) {
+      TF_RETURN_IF_ERROR(ValidateOutputArray(
+          *array_for_copy, executable_bundle.io_spec.outputs[i].dtype,
+          executable_bundle.io_spec.outputs[i].shape, i));
+    }
+
     // IFRT's return does not contain sufficient information; so we use
     // sharding spec from metadata.
     VLOG(2) << "Output sharding: " << array_for_copy->sharding();
     output_futures.push_back(sharding_internal::MakeHostBufferFromArray(
-        *ifrt_client_, *array_for_copy, io_spec.outputs[i].sharding,
-        device_list_, *thread_pool_));
+        *ifrt_client_, *array_for_copy, output_shardings[i], device_list_,
+        *thread_pool_));
   }
 
   std::vector<HostBuffer> converted_outputs;
@@ -437,22 +538,10 @@ StableHloRunner::CreateExecutableSynchronously(
     std::unique_ptr<LoadedStableHlo::ModuleBundle> module_bundle,
     const StablehloOptimizer::Args& args) {
   // Refine the dynamic shapes in the module.
-  // Use any device list's weight arrays, because the weight specs are the
-  // same across all device lists.
-  // TODO: Pass weight specs instead of weight arrays to
-  // `RefineShapesIfNeeded()`.
-  if (device_list_to_resources_map_.empty()) {
-    return absl::FailedPreconditionError(
-        "No device list resources initialized.");
-  }
-  TF_RETURN_IF_ERROR(
-      device_list_to_resources_map_.begin()->second->weight_arrays.status());
-  std::vector<std::optional<xla::ifrt::ArrayRef>>* weight_arrays =
-      &device_list_to_resources_map_.begin()->second->weight_arrays.value();
   TF_RETURN_WITH_CONTEXT_IF_ERROR(
-      RefineShapesIfNeeded(module_bundle->module.get(), *weight_arrays,
-                           input_shapes, input_dtypes,
-                           module_bundle->module_kept_var_idx),
+      RefineShapesIfNeeded(module_bundle->module.get(),
+                           loaded_stablehlo_->weight_specs(), input_shapes,
+                           input_dtypes, module_bundle->module_kept_var_idx),
       "Failed to refine shapes.");
   TF_RETURN_IF_ERROR(xla::ValidateStaticShapes(module_bundle->module.get()));
 
@@ -614,25 +703,39 @@ StableHloRunner::LookUpOrCreateExecutable(
                << executable_bundle.status().message();
   } else {
     if (IsPortableExecutable()) {
+      CachedExecutableBundle::PortableShardingMap arg_map;
+      CachedExecutableBundle::PortableShardingMap output_map;
       for (xla::ifrt::Device* device : ifrt_client_->addressable_devices()) {
         xla::ifrt::ShardingRef sharding =
             xla::ifrt::SingleDeviceSharding::Create(device,
                                                     xla::ifrt::MemoryKind());
-        (*executable_bundle)->portable_single_device_shardings[device->Id()] =
-            std::vector<xla::ifrt::ShardingRef>(
-                (*executable_bundle)->io_spec.inputs.size(), sharding);
+        arg_map[device->Id()] = std::vector<xla::ifrt::ShardingRef>(
+            (*executable_bundle)->io_spec.inputs.size(), sharding);
+        output_map[device->Id()] = std::vector<xla::ifrt::ShardingRef>(
+            (*executable_bundle)->io_spec.outputs.size(), sharding);
       }
+      (*executable_bundle)->arg_shardings = std::move(arg_map);
+      (*executable_bundle)->output_shardings = std::move(output_map);
     } else {
-      (*executable_bundle)
-          ->arg_ifrt_shardings.reserve(
-              (*executable_bundle)->io_spec.inputs.size());
+      CachedExecutableBundle::ShardingList arg_list;
+      arg_list.reserve((*executable_bundle)->io_spec.inputs.size());
       for (const auto& arg_spec : (*executable_bundle)->io_spec.inputs) {
         TF_ASSIGN_OR_RETURN(auto ifrt_sharding,
                             ToIfrtSharding(*ifrt_client_, arg_spec.sharding,
                                            assigned_device_list_));
-        (*executable_bundle)
-            ->arg_ifrt_shardings.push_back(std::move(ifrt_sharding));
+        arg_list.push_back(std::move(ifrt_sharding));
       }
+      (*executable_bundle)->arg_shardings = std::move(arg_list);
+
+      CachedExecutableBundle::ShardingList output_list;
+      output_list.reserve((*executable_bundle)->io_spec.outputs.size());
+      for (const auto& out_spec : (*executable_bundle)->io_spec.outputs) {
+        TF_ASSIGN_OR_RETURN(auto ifrt_sharding,
+                            ToIfrtSharding(*ifrt_client_, out_spec.sharding,
+                                           assigned_device_list_));
+        output_list.push_back(std::move(ifrt_sharding));
+      }
+      (*executable_bundle)->output_shardings = std::move(output_list);
     }
   }
 
@@ -761,50 +864,31 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
     }
   });
 
-  std::vector<HostBuffer> host_buffers;
-  std::vector<neptune::DeviceBuffer> device_buffers;
-  if (options.require_h2d) {
-    TF_ASSIGN_OR_RETURN(host_buffers,
-                        neptune::internal::UnpackFromValues<HostBuffer>(inputs));
-  } else {
-    TF_ASSIGN_OR_RETURN(
-        device_buffers,
-        neptune::internal::UnpackFromValues<neptune::DeviceBuffer>(inputs));
-  }
+  std::vector<xla::ifrt::Shape> input_shapes;
+  input_shapes.reserve(inputs.size() + 1);
+  std::vector<xla::ifrt::DType> input_dtypes;
+  input_dtypes.reserve(inputs.size() + 1);
 
   int64_t batch_size = 1;
-  if (options.require_h2d) {
-    for (const auto& buffer : host_buffers) {
-      if (!buffer.shape().dims().empty()) {
-        batch_size = buffer.shape().dims()[0];
-        break;
+  // Gather shapes before appending streaming IDs to match cache signature.
+  for (const auto& input : inputs) {
+    if (input.IsType<HostBuffer>()) {
+      const auto& host_buf = input.Get<HostBuffer>();
+      input_shapes.push_back(host_buf.shape());
+      input_dtypes.push_back(host_buf.dtype());
+      if (batch_size == 1 && !host_buf.shape().dims().empty()) {
+        batch_size = host_buf.shape().dims()[0];
       }
-    }
-  } else {
-    for (const auto& buffer : device_buffers) {
-      if (!buffer.ifrt_array->shape().dims().empty()) {
-        batch_size = buffer.ifrt_array->shape().dims()[0];
-        break;
+    } else if (input.IsType<neptune::DeviceBuffer>()) {
+      const auto& device_buf = input.Get<neptune::DeviceBuffer>();
+      input_shapes.push_back(device_buf.ifrt_array->shape());
+      input_dtypes.push_back(device_buf.ifrt_array->dtype());
+      if (batch_size == 1 && !device_buf.ifrt_array->shape().dims().empty()) {
+        batch_size = device_buf.ifrt_array->shape().dims()[0];
       }
-    }
-  }
-
-  // Lookup the executable bundle in the cache.
-  std::vector<xla::ifrt::Shape> input_shapes;
-  std::vector<xla::ifrt::DType> input_dtypes;
-  if (options.require_h2d) {
-    input_shapes.reserve(host_buffers.size() + 1);
-    input_dtypes.reserve(host_buffers.size() + 1);
-    for (const auto& input : host_buffers) {
-      input_shapes.push_back(input.shape());
-      input_dtypes.push_back(input.dtype());
-    }
-  } else {
-    input_shapes.reserve(device_buffers.size() + 1);
-    input_dtypes.reserve(device_buffers.size() + 1);
-    for (const auto& input : device_buffers) {
-      input_shapes.push_back(input.ifrt_array->shape());
-      input_dtypes.push_back(input.ifrt_array->dtype());
+    } else {
+      return absl::InvalidArgumentError(
+          "StableHloRunner inputs must be HostBuffer or neptune::DeviceBuffer.");
     }
   }
   // If the model is streaming and the caller did not provide the request ID
@@ -843,6 +927,8 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
                       resources_it->second->weight_arrays);
   DataConverter* data_converter = resources_it->second->data_converter.get();
 
+  std::vector<neptune::Value> unpacked_inputs(inputs.begin(), inputs.end());
+
   // If the model is streaming and the caller did not provide the request ID
   // input, we dynamically construct and append the request ID buffer here.
   if (has_streaming && inputs.size() == expected_num_inputs) {
@@ -851,32 +937,9 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
     TF_ASSIGN_OR_RETURN(
         neptune::HostBuffer request_ids_buffer,
         neptune::CreateRequestIdsBuffer(batch_size, request_id));
-    if (options.require_h2d) {
-      host_buffers.push_back(std::move(request_ids_buffer));
-    } else {
-      TF_ASSIGN_OR_RETURN(
-          xla::ifrt::ShardingRef sharding,
-          ToIfrtSharding(*ifrt_client_,
-                         executable_bundle->io_spec.inputs.back().sharding,
-                         device_list));
-      auto shared_buffer =
-          std::make_shared<neptune::HostBuffer>(std::move(request_ids_buffer));
-      TF_ASSIGN_OR_RETURN(
-          tsl::RCReference<xla::ifrt::Array> ifrt_array,
-          ifrt_client_->MakeArrayFromHostBuffer(
-              shared_buffer->base(), shared_buffer->dtype(),
-              shared_buffer->shape(), /*byte_strides=*/std::nullopt,
-              std::move(sharding), /*layout=*/nullptr,
-              xla::ifrt::Client::HostBufferSemantics::
-                  kImmutableUntilTransferCompletes,
-              [shared_buffer]() {}));
-      device_buffers.push_back(neptune::DeviceBuffer{
-          .ifrt_client = ifrt_client_,
-          .ifrt_array = std::move(ifrt_array),
-          .sharding = executable_bundle->io_spec.inputs.back().sharding,
-          .device_list = device_list,
-      });
-    }
+    // Downstream logic will automatically detect this is a HostBuffer
+    // and perform the H2D transfer during ConvertInput.
+    unpacked_inputs.emplace_back(std::move(request_ids_buffer));
   }
 
   // `used_input_indices` is used to track the index of used inputs in
@@ -889,66 +952,60 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
     }
   }
 
-  std::vector<HostBuffer> reshaped_inputs;
-  std::vector<xla::ifrt::ArrayRef> converted_device_inputs;
-  if (options.require_h2d) {
-    reshaped_inputs.reserve(used_input_indices.size());
-    for (int i = 0; i < used_input_indices.size(); ++i) {
-      int idx_in_stablehlo_spec = i + executable_bundle->input_offset;
-      int original_input_idx = used_input_indices[i];
-      auto& original_input = host_buffers[original_input_idx];
+  std::vector<HostBuffer> host_buffers_to_convert;
+  std::vector<int> host_buffers_stablehlo_indices;
 
-      // If the optimizer is not set, the input shape won't be changed. If the
-      // input is already rank 1 or is a scalar, we can copy the input without
-      // doing any reshaping.
-      if (optimizer_ == nullptr || original_input.shape().dims().size() <= 1) {
-        reshaped_inputs.push_back(std::move(original_input));
-        continue;
-      }
+  std::vector<std::optional<xla::ifrt::ArrayRef>> final_used_inputs(
+      used_input_indices.size(), std::nullopt);
 
-      // R1 optimization is applied, the shape expected by StableHlo is changed
-      // to rank 1, so here we need to reshape the input to rank 1.
-      xla::ifrt::Shape shape = ToIfrtShape(
-          executable_bundle->io_spec.inputs[idx_in_stablehlo_spec].shape);
+  for (int i = 0; i < used_input_indices.size(); ++i) {
+    int idx_in_stablehlo_spec = i + executable_bundle->input_offset;
+    int original_input_idx = used_input_indices[i];
+    auto& original_input_value = unpacked_inputs[original_input_idx];
+    if (original_input_value.IsType<neptune::DeviceBuffer>()) {
+      auto& device_buf = original_input_value.Get<neptune::DeviceBuffer>();
+      xla::ifrt::ArrayRef original_input = std::move(device_buf.ifrt_array);
 
-      // The original HostBuffer in `inputs` will be alive during the execution,
-      // so there is no need to give the `reshaped_buffer` an owner.
-      HostBuffer reshaped_buffer(original_input.base(), original_input.dtype(),
-                                 shape);
-      reshaped_inputs.push_back(std::move(reshaped_buffer));
-    }
-  } else {
-    converted_device_inputs.reserve(used_input_indices.size());
-    for (int i = 0; i < used_input_indices.size(); ++i) {
-      int idx_in_stablehlo_spec = i + executable_bundle->input_offset;
-      int original_input_idx = used_input_indices[i];
-      xla::ifrt::ArrayRef original_input =
-          device_buffers[original_input_idx].ifrt_array;
+      TF_RETURN_IF_ERROR(ValidateDeviceBufferInput(
+          *original_input,
+          executable_bundle->io_spec.inputs[idx_in_stablehlo_spec].dtype,
+          ToIfrtShape(
+              executable_bundle->io_spec.inputs[idx_in_stablehlo_spec].shape),
+          idx_in_stablehlo_spec));
+      final_used_inputs[i] = std::move(original_input);
+    } else if (original_input_value.IsType<HostBuffer>()) {
+      auto& original_input = original_input_value.Get<HostBuffer>();
 
       xla::ifrt::Shape target_shape = ToIfrtShape(
           executable_bundle->io_spec.inputs[idx_in_stablehlo_spec].shape);
 
-      if (original_input->shape() != target_shape) {
-        return absl::InvalidArgumentError(absl::StrCat(
-            "Zero-copy D2D execution (require_h2d=false) requires the input "
-            "shape to exactly match the optimized model's target shape. "
-            "Expected ",
-            target_shape, ", but got ", original_input->shape(), ". "));
+      if (original_input.shape() == target_shape) {
+        // Shapes match, use the buffer directly.
+        host_buffers_to_convert.push_back(std::move(original_input));
+      } else {
+        // Shapes differ (e.g., due to optimization). Perform a zero-copy
+        // reshape to match the model's expected signature.
+        HostBuffer reshaped_buffer(original_input.base(),
+                                   original_input.dtype(), target_shape);
+        host_buffers_to_convert.push_back(std::move(reshaped_buffer));
       }
-      converted_device_inputs.push_back(std::move(original_input));
+      host_buffers_stablehlo_indices.push_back(idx_in_stablehlo_spec);
     }
   }
 
-  // TODO: Consider validating that the inputs and outputs match
-  // the model IO spec before converting.
   std::vector<xla::ifrt::ArrayRef> converted_inputs;
-  if (options.require_h2d) {
-    TF_ASSIGN_OR_RETURN(
-        converted_inputs,
-        data_converter->ConvertInput(reshaped_inputs, *executable_bundle,
-                                     executable_bundle->input_offset));
-  } else {
-    converted_inputs = std::move(converted_device_inputs);
+  if (!host_buffers_to_convert.empty()) {
+    TF_ASSIGN_OR_RETURN(converted_inputs,
+                        data_converter->ConvertInput(
+                            host_buffers_to_convert, *executable_bundle,
+                            host_buffers_stablehlo_indices));
+  }
+
+  int host_buf_idx = 0;
+  for (int i = 0; i < used_input_indices.size(); ++i) {
+    if (!final_used_inputs[i].has_value()) {
+      final_used_inputs[i] = std::move(converted_inputs[host_buf_idx++]);
+    }
   }
 
   std::vector<xla::ifrt::ArrayRef> inputs_with_weights;
@@ -966,11 +1023,11 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
       inputs_with_weights.push_back(*weight_array);
     }
   }
-  // `converted_inputs` only contains used inputs, so we just insert them
+  // `final_used_inputs` only contains used inputs, so we just insert them
   // at the end of the list.
-  inputs_with_weights.insert(inputs_with_weights.end(),
-                             std::make_move_iterator(converted_inputs.begin()),
-                             std::make_move_iterator(converted_inputs.end()));
+  for (auto& arr : final_used_inputs) {
+    inputs_with_weights.push_back(std::move(*arr));
+  }
   TF_ASSIGN_OR_RETURN(
       xla::ifrt::LoadedExecutable::ExecuteResult execution_result,
       executable_bundle->ifrt_executable->Execute(
@@ -990,21 +1047,29 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
     TF_ASSIGN_OR_RETURN(
         std::vector<HostBuffer> host_outputs,
         data_converter->ConvertOutput(absl::MakeSpan(execution_result.outputs),
-                                      executable_bundle->io_spec));
+                                      *executable_bundle));
     return neptune::internal::PackAsValues(std::move(host_outputs));
   } else {
+    TF_RET_CHECK(!data_converter->device_list()->devices().empty())
+        << "Device list cannot be empty";
+    TF_ASSIGN_OR_RETURN(
+        absl::Span<const xla::ifrt::ShardingRef> output_shardings,
+        executable_bundle->GetOutputShardings(
+            data_converter->device_list()->devices()[0]->Id()));
+
     std::vector<neptune::DeviceBuffer> device_outputs;
     device_outputs.reserve(execution_result.outputs.size());
     for (int i = 0; i < execution_result.outputs.size(); ++i) {
-      // TODO: Precompute and cache the `xla::ifrt::HloSharding`
-      // (or `xla::ifrt::ShardingRef`) directly in the `CachedExecutableBundle`.
-      // Currently, copying `xla::HloSharding` by value per-request and
-      // dynamically recreating the `ifrt_sharding` during D2H transfers brings
-      // unnecessary CPU overhead.
+      if (VLOG_IS_ON(2)) {
+        TF_RETURN_IF_ERROR(ValidateOutputArray(
+            *execution_result.outputs[i],
+            executable_bundle->io_spec.outputs[i].dtype,
+            executable_bundle->io_spec.outputs[i].shape, i));
+      }
       device_outputs.push_back(neptune::DeviceBuffer{
           .ifrt_client = ifrt_client_,
           .ifrt_array = std::move(execution_result.outputs[i]),
-          .sharding = executable_bundle->io_spec.outputs[i].sharding,
+          .sharding = output_shardings[i],
           .device_list = data_converter->device_list()});
     }
     return neptune::internal::PackAsValues(std::move(device_outputs));
