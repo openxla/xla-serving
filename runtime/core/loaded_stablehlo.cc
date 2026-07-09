@@ -23,6 +23,7 @@
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/log/vlog_is_on.h"  // from @abseil-cpp
 #include "absl/memory/memory.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
@@ -229,7 +230,7 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
     TF_RETURN_IF_ERROR(ValidateIOSpecs(stablehlo_io_spec.inputs, spec.inputs,
                                        spec.mlir_module_kept_var_idx));
     TF_RETURN_IF_ERROR(ValidateIOSpecs(stablehlo_io_spec.outputs, spec.outputs,
-                                       /*module_kept_var_idx=*/{}));
+                                       /*module_kept_var_indices=*/{}));
 
     // Create bundle for polymorphic or concrete StableHLO(s).
     //
@@ -260,7 +261,8 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
                   .bundle =
                       LoadedStableHlo::ModuleBundle{
                           .module = std::move(module),
-                          .module_kept_var_idx = spec.mlir_module_kept_var_idx,
+                          .module_kept_var_indices =
+                              spec.mlir_module_kept_var_idx,
                           .input_offset = GetInputOffset(
                               spec.mlir_module_kept_var_idx, num_weights),
                       },
@@ -289,7 +291,8 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
                   .bundle =
                       LoadedStableHlo::ModuleBundle{
                           .module = std::move(module),
-                          .module_kept_var_idx = spec.mlir_module_kept_var_idx,
+                          .module_kept_var_indices =
+                              spec.mlir_module_kept_var_idx,
                           .input_offset = GetInputOffset(
                               spec.mlir_module_kept_var_idx, num_weights),
                       },

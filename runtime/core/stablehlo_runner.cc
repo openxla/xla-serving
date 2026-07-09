@@ -539,9 +539,9 @@ StableHloRunner::CreateExecutableSynchronously(
     const StablehloOptimizer::Args& args) {
   // Refine the dynamic shapes in the module.
   TF_RETURN_WITH_CONTEXT_IF_ERROR(
-      RefineShapesIfNeeded(module_bundle->module.get(),
-                           loaded_stablehlo_->weight_specs(), input_shapes,
-                           input_dtypes, module_bundle->module_kept_var_idx),
+      RefineShapesIfNeeded(
+          module_bundle->module.get(), loaded_stablehlo_->weight_specs(),
+          input_shapes, input_dtypes, module_bundle->module_kept_var_indices),
       "Failed to refine shapes.");
   TF_RETURN_IF_ERROR(xla::ValidateStaticShapes(module_bundle->module.get()));
 
@@ -617,9 +617,8 @@ StableHloRunner::CreateExecutableSynchronously(
 
   SharedCachedExecutableBundle executable_bundle =
       std::make_shared<CachedExecutableBundle>();
-  executable_bundle->module_kept_var_idx =
-      std::vector<int>(module_bundle->module_kept_var_idx.begin(),
-                       module_bundle->module_kept_var_idx.end());
+  executable_bundle->module_kept_var_indices =
+      module_bundle->module_kept_var_indices;
   executable_bundle->input_offset = module_bundle->input_offset;
   executable_bundle->io_spec = io_spec;
 
@@ -632,7 +631,8 @@ StableHloRunner::CreateExecutableSynchronously(
 
   // With streaming, there will be an addtional input for the request id.
   if (callback_id.has_value()) {
-    executable_bundle->module_kept_var_idx.push_back(io_spec.inputs.size() - 1);
+    executable_bundle->module_kept_var_indices.push_back(io_spec.inputs.size() -
+                                                         1);
   }
 
   return executable_bundle;
@@ -946,7 +946,7 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
   // stablehlo spec because some inputs may be presented in the model signature
   // but not used by StableHlo.
   std::vector<int> used_input_indices;
-  for (int idx : executable_bundle->module_kept_var_idx) {
+  for (int idx : executable_bundle->module_kept_var_indices) {
     if (idx >= weights_array.size()) {
       used_input_indices.push_back(idx - weights_array.size());
     }
@@ -1009,8 +1009,9 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
   }
 
   std::vector<xla::ifrt::ArrayRef> inputs_with_weights;
-  inputs_with_weights.reserve(executable_bundle->module_kept_var_idx.size());
-  for (int idx : executable_bundle->module_kept_var_idx) {
+  inputs_with_weights.reserve(
+      executable_bundle->module_kept_var_indices.size());
+  for (int idx : executable_bundle->module_kept_var_indices) {
     if (idx < weights_array.size()) {
       const auto& weight_array = weights_array[idx];
       if (!weight_array.has_value()) {

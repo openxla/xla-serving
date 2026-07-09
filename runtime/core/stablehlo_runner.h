@@ -161,7 +161,7 @@ class StableHloRunner {
 
     // The indices of model inputs that need to be passed to the main function
     // of the MLIR module.
-    std::vector<int> module_kept_var_idx;
+    std::vector<int> module_kept_var_indices;
     // The offset of user input index in the main function of the MLIR module.
     // Unused weights are excluded.
     int input_offset;

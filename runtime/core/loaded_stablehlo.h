@@ -55,7 +55,7 @@ class LoadedStableHlo {
     // Sorted indices of weights and user inputs that are actually passed to the
     // the main function in MLIR module. The other inputs are unused and don't
     // need to be passed.
-    std::vector<int> module_kept_var_idx;
+    std::vector<int> module_kept_var_indices;
     // The offset of user input index in list of arguments to the main function
     // of the MLIR module. Note input_offset may not be the same as the number
     // of weights, since some weights may be unused and don't need to be passed
@@ -66,7 +66,7 @@ class LoadedStableHlo {
     ModuleBundle Clone() {
       return ModuleBundle{
           .module = module->clone(),
-          .module_kept_var_idx = module_kept_var_idx,
+          .module_kept_var_indices = module_kept_var_indices,
           .input_offset = input_offset,
       };
     }
