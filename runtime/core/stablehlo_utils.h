@@ -31,7 +31,6 @@
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/layout.h"  // from @xla
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
-#include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
@@ -115,8 +114,8 @@ absl::Status SetPlatformIndex(mlir::ModuleOp module,
 //
 // Args:
 //   - `module`: The MLIR module to refine.
-//   - `weights`: The IFRT arrays for the weights of the model. The IFRT array
-//      is nullopt if the weight is unused by StableHLO(s).
+//   - `weights`: The dynamic weight specifications (`ArgSpec`) of the
+//      model. The spec is nullopt if the weight is unused by StableHLO(s).
 //   - `input_shapes`: The static shapes of the inputs (excluding weights),
 //      regardless of whether they are used by the "main" function.
 //   - `input_dtypes`: The data types of the inputs (excluding weights),
@@ -124,8 +123,7 @@ absl::Status SetPlatformIndex(mlir::ModuleOp module,
 //   - `module_kept_var_idx`: Specifies which of the weights and user inputs
 //      need to be passed to the "main" function as arguments.
 absl::Status RefineShapesIfNeeded(
-    mlir::ModuleOp module,
-    absl::Span<const std::optional<xla::ifrt::ArrayRef>> weights,
+    mlir::ModuleOp module, absl::Span<const std::optional<ArgSpec>> weights,
     absl::Span<const xla::ifrt::Shape> input_shapes,
     absl::Span<const xla::ifrt::DType> input_dtypes,
     absl::Span<const int> module_kept_var_idx);
@@ -146,7 +144,7 @@ absl::Status ValidateIOType(xla::ifrt::DType dtype);
 //      it is assumed that all JAX model function input args are required to be
 //      passed to the StableHLO function.
 absl::Status ValidateIOSpecs(absl::Span<const ArgSpec> stablehlo_arg_specs,
-                             absl::Span<const ArgSpec> model_arg_regardless,
+                             absl::Span<const ArgSpec> model_arg_specs,
                              absl::Span<const int> module_kept_var_idx);
 
 // Verifies the StableHLO input shape matches the actual input shape. This

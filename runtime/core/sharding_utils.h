@@ -16,14 +16,11 @@
 #define THIRD_PARTY_NEPTUNE_RUNTIME_SHARDING_UTILS_H_
 
 #include <cstdint>
-#include <optional>
 #include <vector>
 
-#include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/host_buffer.h"  // from @neptune
-#include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
@@ -31,9 +28,7 @@
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
-#include "xla/shape.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
-#include "xla/tsl/concurrency/ref_count.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
 namespace neptune::sharding_internal {
@@ -90,7 +85,7 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
 //
 tsl::Future<HostBuffer> MakeHostBufferFromArray(
     xla::ifrt::Client& ifrt_client, xla::ifrt::Array& input_array,
-    const xla::HloSharding& hlo_sharding,
+    const xla::ifrt::ShardingRef& ifrt_sharding,
     const xla::ifrt::DeviceListRef& device_list,
     tsl::thread::ThreadPool& thread_pool);
 
