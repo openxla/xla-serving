@@ -4,10 +4,7 @@ load("@rules_proto//proto:defs.bzl", "proto_library")
 load("@com_google_protobuf//bazel:py_proto_library.bzl", "py_proto_library")
 
 package(default_visibility = [
-    "//learning/infra/mira/experimental/orbax_model:__subpackages__",
-    "@neptune//examples:__subpackages__",
-    "@neptune//neptune_model:__subpackages__",
-    "@neptune//runtime:__subpackages__",
+    "//visibility:public",
 ])
 
 # Proto definitions for host_buffer.proto
