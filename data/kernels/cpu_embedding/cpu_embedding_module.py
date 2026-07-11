@@ -72,11 +72,15 @@ class CpuEmbeddingResource:
       table_data: dict[str, np.ndarray],
       combine_modes: dict[str, str],
       feature_specs: Sequence[dict[str, Any]],
+      max_cpu_slots: int = 8,
+      block_size: int = 64,
   ) -> None:
     self._temp_dir = tempfile.TemporaryDirectory(prefix="jce_resource_")
 
     # Create Manifest Proto
     manifest = cpu_embedding_pb2.CpuEmbeddingManifest()
+    manifest.max_cpu_slots = max_cpu_slots
+    manifest.block_size = block_size
 
     for table_name, data in table_data.items():
       if "/" in table_name or "\\" in table_name or ".." in table_name:

@@ -1,3 +1,5 @@
+#define EIGEN_USE_THREADS
+
 // Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,8 +16,10 @@
 
 #include "data/cpu_embedding/cc/cpu_embedding_engine.h"  // from @neptune
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
 #include <utility>
@@ -32,6 +36,7 @@
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "Eigen/Core"
+#include "unsupported/Eigen/CXX11/Tensor"
 #include "unsupported/Eigen/CXX11/ThreadPool"
 #include "data/cpu_embedding/cc/array.h"  // from @neptune
 #include "data/cpu_embedding/cc/compute_activations.h"  // from @neptune
@@ -201,11 +206,74 @@ absl::StatusOr<absl::Span<T>> CpuEmbeddingEngine::Execute(
         "Weights size is less than the final element of row pointers.");
   }
   const size_t num_samples = row_pointers.size() - 1;
-  absl::Span<T> buffer =
-      allocator(embedding_table->EmbeddingDim() * num_samples);
-  absl::c_fill(buffer, T(0));
-  RETURN_IF_ERROR(ComputeEmbeddingActivations(
-      embedding_ids, row_pointers, weights, *embedding_table, buffer));
+  const size_t dim = embedding_table->EmbeddingDim();
+  absl::Span<T> buffer = allocator(dim * num_samples);
+
+  const size_t block_size = options_.block_size;
+  const int slots = options_.max_cpu_slots > 0 ? options_.max_cpu_slots : 8;
+
+  if (block_size == std::numeric_limits<size_t>::max()) {
+    // Mode: Eigen Loop Partitioner (parallelFor)
+    Eigen::ThreadPoolDevice device(thread_pool_.get(), slots);
+
+    // Cost model per sample: bytes loaded/stored, computation cycles
+    // Load: row_pointers (4B) + average index read (4B) + weights read (dim*4B)
+    // Store: outputs (dim*4B)
+    Eigen::TensorOpCost cost(8 + dim * 4, dim * 4, dim * 2);
+
+    absl::Mutex status_mu;
+    absl::Status status;
+
+    device.parallelFor(
+        num_samples, cost, [&](Eigen::Index start, Eigen::Index end) {
+          auto block_buffer = buffer.subspan(start * dim, (end - start) * dim);
+          absl::Status s = ComputeEmbeddingActivations(
+              embedding_ids, row_pointers.subspan(start, end - start + 1),
+              weights, *embedding_table, block_buffer);
+          if (!s.ok()) {
+            absl::MutexLock lock(status_mu);
+            status.Update(s);
+          }
+        });
+    RETURN_IF_ERROR(status);
+  } else {
+    // Mode: Manual Blocking (Static or Custom Dynamic)
+    size_t active_block_size = block_size;
+    if (active_block_size == 0) {
+      active_block_size =
+          std::max<size_t>(256, (num_samples + (slots * 2) - 1) / (slots * 2));
+    }
+
+    if (num_samples <= active_block_size) {
+      RETURN_IF_ERROR(ComputeEmbeddingActivations(
+          embedding_ids, row_pointers, weights, *embedding_table, buffer));
+    } else {
+      const size_t num_blocks =
+          (num_samples + active_block_size - 1) / active_block_size;
+      absl::BlockingCounter counter(num_blocks);
+      absl::Mutex status_mu;
+      absl::Status status;
+
+      for (size_t block = 0; block < num_blocks; ++block) {
+        size_t start = block * active_block_size;
+        size_t end = std::min(start + active_block_size, num_samples);
+
+        thread_pool_->Schedule([&, start, end]() {
+          auto block_buffer = buffer.subspan(start * dim, (end - start) * dim);
+          absl::Status s = ComputeEmbeddingActivations(
+              embedding_ids, row_pointers.subspan(start, end - start + 1),
+              weights, *embedding_table, block_buffer);
+          if (!s.ok()) {
+            absl::MutexLock lock(status_mu);
+            status.Update(s);
+          }
+          counter.DecrementCount();
+        });
+      }
+      counter.Wait();
+      RETURN_IF_ERROR(status);
+    }
+  }
   return buffer;
 }
 
