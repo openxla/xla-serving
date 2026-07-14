@@ -39,6 +39,8 @@ message CpuEmbeddingManifest {
 
   repeated EmbeddingTable tables = 1;
   repeated FeatureSpec feature_specs = 2;
+  int32 max_cpu_slots = 3;
+  int32 block_size = 4;
 }
 
 message CpuEmbeddingLookupTransformConfig {

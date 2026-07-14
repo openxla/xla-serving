@@ -362,6 +362,7 @@ absl::Status CpuEmbeddingLookupTransform::PropagateSignatureImpl(
     std::vector<int64_t> output_dims;
 
     if (i < output_shapes_.size() && !output_shapes_[i].empty()) {
+      output_dims.reserve(output_shapes_[i].size());
       for (int64_t d : output_shapes_[i]) {
         output_dims.push_back(d < 0 ? kDynamicDimension : d);
       }
@@ -407,6 +408,7 @@ absl::StatusOr<TransformConfig> CpuEmbeddingLookupTransform::ToProto() const {
     detail.add_output_feature_names(name);
   }
   detail.set_dense_lookup(dense_lookup_);
+  detail.set_embedding_dim(embedding_dim_);
   config.mutable_detail()->PackFrom(detail);
 
   return config;
@@ -435,6 +437,7 @@ ND_REGISTER_TRANSFORM(CpuEmbeddingLookupTransform,
           std::vector<std::string> feature_names;
           std::vector<std::string> output_feature_names;
           bool dense_lookup = false;
+          int64_t embedding_dim = 128;
           if (config.has_detail() && config.detail().UnpackTo(&detail)) {
             if (detail.feature_names_size() > 0) {
               feature_names.reserve(detail.feature_names_size());
@@ -451,6 +454,9 @@ ND_REGISTER_TRANSFORM(CpuEmbeddingLookupTransform,
               }
             }
             dense_lookup = detail.dense_lookup();
+            if (detail.embedding_dim() > 0) {
+              embedding_dim = detail.embedding_dim();
+            }
           }
           if (feature_names.empty()) {
             feature_names.push_back(std::string(config.name()));
@@ -458,7 +464,7 @@ ND_REGISTER_TRANSFORM(CpuEmbeddingLookupTransform,
 
           return CpuEmbeddingLookupTransform::Create(
               std::move(resource), std::move(feature_names), dense_lookup,
-              std::move(output_feature_names));
+              std::move(output_feature_names), embedding_dim);
         });
 
 }  // namespace composite

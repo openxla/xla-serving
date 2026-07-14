@@ -24,6 +24,7 @@ from data.ops import packing
 from data.processor.proto import transform_config_pb2
 from data.processor.python import composite_processor_pybind
 from data.processor.python import processor
+from neptune_model._src.processors import composite_processor
 
 
 def build_embedding_lookup(
@@ -33,7 +34,7 @@ def build_embedding_lookup(
     jce_resource: Any,
     embedding_dim: int | None = None,
     dense_lookup: bool = True,
-) -> processor.NDProcessor:
+) -> composite_processor.CompositeProcessor:
   """Builds a generic preprocessor CompositeProcessor for CPU embedding lookups.
 
   Args:
@@ -118,8 +119,9 @@ def build_embedding_lookup(
       'pack_ids', pack_ids_module.transform, input_edges_ids
   )
 
-  # Node 1: Pack RPs
+  # Node 1: Pack RPs (empty input edges when dense_lookup=True)
   if dense_lookup:
+
     node_1_idx = graph.add_node('pack_rps', pack_rps_module.transform, [])
   else:
     input_edges_rps = [
@@ -200,7 +202,7 @@ def build_embedding_lookup(
   )
   graph.io_structure = io_structure
 
-  return processor.NDProcessor.from_graph(
+  return composite_processor.CompositeProcessor.from_graph(
       name=name,
       graph=graph,
       assets=jce_resource.export_assets(),

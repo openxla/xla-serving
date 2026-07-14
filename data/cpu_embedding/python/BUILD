@@ -62,6 +62,7 @@ py_library(
         "@neptune//data/processor/proto:transform_config_py_pb2",
         "@neptune//data/processor/python:composite_processor_pybind",
         "@neptune//data/processor/python:processor",
+        "@neptune//neptune_model/_src/processors:composite_processor",
         "@neptune_pypi//jax",
     ],
 )

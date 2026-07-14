@@ -60,10 +60,10 @@ class EmbeddingUtilsTest(googletest.TestCase):
     )
 
     self.assertIsNotNone(processor)
-    processor.prepare(input_signature)
-    self.assertLen(processor.output_signature, 2)
-    self.assertEqual(processor.output_signature[0].shape, (-1, 64))
-    self.assertEqual(processor.output_signature[1].shape, (2, 13))
+    prepared = processor.prepare(input_signature)
+    self.assertLen(prepared.output_signature, 2)
+    self.assertEqual(prepared.output_signature[0].shape, (None, 64))
+    self.assertEqual(prepared.output_signature[1].shape, (2, 13))
 
   def test_build_3d_sequence_features(self):
     feature_specs = [
@@ -87,9 +87,9 @@ class EmbeddingUtilsTest(googletest.TestCase):
     )
 
     self.assertIsNotNone(processor)
-    processor.prepare(input_signature)
-    self.assertLen(processor.output_signature, 1)
-    self.assertEqual(processor.output_signature[0].shape, (-1, 10, 64))
+    prepared = processor.prepare(input_signature)
+    self.assertLen(prepared.output_signature, 1)
+    self.assertEqual(prepared.output_signature[0].shape, (None, 10, 64))
 
   def test_build_mixed_pipeline(self):
     feature_specs = [
@@ -114,14 +114,14 @@ class EmbeddingUtilsTest(googletest.TestCase):
     )
 
     self.assertIsNotNone(processor)
-    processor.prepare(input_signature)
-    self.assertLen(processor.output_signature, 3)
-    # Output 0: 2D combined feat_0 -> (-1, 64)
-    self.assertEqual(processor.output_signature[0].shape, (-1, 64))
-    # Output 1: 3D sequence seq_feat -> (-1, 5, 64)
-    self.assertEqual(processor.output_signature[1].shape, (-1, 5, 64))
+    prepared = processor.prepare(input_signature)
+    self.assertLen(prepared.output_signature, 3)
+    # Output 0: 2D combined feat_0 -> (None, 64)
+    self.assertEqual(prepared.output_signature[0].shape, (None, 64))
+    # Output 1: 3D sequence seq_feat -> (None, 5, 64)
+    self.assertEqual(prepared.output_signature[1].shape, (None, 5, 64))
     # Output 2: Passthrough dense_passthrough -> (2, 8)
-    self.assertEqual(processor.output_signature[2].shape, (2, 8))
+    self.assertEqual(prepared.output_signature[2].shape, (2, 8))
 
 
 if __name__ == "__main__":
