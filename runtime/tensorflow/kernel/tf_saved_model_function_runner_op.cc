@@ -111,13 +111,13 @@ TfSavedModelFunctionRunnerOp::TfSavedModelFunctionRunnerOp(
     std::unique_ptr<FlatSignature> input_signature,
     std::unique_ptr<FlatSignature> output_signature, bool pre_data_conversion,
     bool post_data_conversion)
-    : tf_saved_model_runner_(tf_saved_model_runner),
+    : CancellableKernel(std::move(input_signature),
+                        std::move(output_signature)),
+      tf_saved_model_runner_(tf_saved_model_runner),
       function_name_(std::move(function_name)),
       input_names_(std::move(input_names)),
       sorted_output_names_(std::move(sorted_output_names)),
       output_original_indices_(std::move(output_original_indices)),
-      input_signature_(std::move(input_signature)),
-      output_signature_(std::move(output_signature)),
       pre_data_conversion_(pre_data_conversion),
       post_data_conversion_(post_data_conversion) {}
 
@@ -221,28 +221,13 @@ absl::Status TfSavedModelFunctionRunnerOp::RunInternal(
   });
   const int num_inputs = GetNumInputs();
 
-  std::vector<Value> inputs_values_storage;
-  absl::Span<const Value> inputs_values;
-  if (input_signature_) {
-    inputs_values_storage.reserve(num_inputs);
-    TF_RETURN_IF_ERROR(input_signature_->FillArgs(inputs_values_storage,
-                                                  context.named_values));
-    if (inputs_values_storage.size() != num_inputs) {
-      return absl::InvalidArgumentError(absl::StrFormat(
-          "TfSavedModelFunctionRunnerOp expects %d inputs after signature "
-          "mapping, but got %d",
-          num_inputs, inputs_values_storage.size()));
-    }
-    inputs_values = inputs_values_storage;
-  } else {
-    if (context.inputs.size() != num_inputs) {
-      return absl::InvalidArgumentError(absl::StrFormat(
-          "TfSavedModelFunctionRunnerOp supports %d inputs, but "
-          "got %d",
-          num_inputs, context.inputs.size()));
-    }
-    inputs_values = context.inputs;
+  if (context.inputs.size() != num_inputs) {
+    return absl::InvalidArgumentError(
+        absl::StrFormat("TfSavedModelFunctionRunnerOp supports %d inputs, but "
+                        "got %d",
+                        num_inputs, context.inputs.size()));
   }
+  absl::Span<const Value> inputs_values = context.inputs;
 
   TfSavedModelRunner::NameToTensorMap named_inputs;
   named_inputs.reserve(num_inputs);
@@ -309,19 +294,7 @@ absl::Status TfSavedModelFunctionRunnerOp::RunInternal(
     output_values = internal::PackAsValues(std::move(outputs));
   }
 
-  if (output_signature_) {
-    absl::flat_hash_map<std::string, Value> map_outputs;
-    TF_ASSIGN_OR_RETURN(map_outputs, output_signature_->UnflattenToMap(
-                                              std::move(output_values)));
-    for (auto& [key, value] : map_outputs) {
-      if (!context.named_values.insert({key, std::move(value)}).second) {
-        return absl::InvalidArgumentError(absl::StrCat(
-            "Duplicate output key: ", key, " in TF SavedModel processor"));
-      }
-    }
-  } else {
-    context.outputs = std::move(output_values);
-  }
+  context.outputs = std::move(output_values);
 
   return absl::OkStatus();
 }

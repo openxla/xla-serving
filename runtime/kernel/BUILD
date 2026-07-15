@@ -98,10 +98,13 @@ cc_library(
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/types:span",
+        "@neptune//runtime/core:flat_signature",
         "@neptune//runtime/core:value",
         "@neptune//runtime/interpreter:context",
         "@xla//xla/pjrt:pjrt_future",
         "@xla//xla/tsl/concurrency:future",
+        "@xla//xla/tsl/platform:errors",
+        "@xla//xla/tsl/platform:statusor",
     ],
 )
 

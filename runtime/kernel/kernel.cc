@@ -17,6 +17,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/base/no_destructor.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
@@ -26,9 +27,14 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
+#include "runtime/core/flat_signature.h"  // from @neptune
+#include "runtime/core/value.h"  // from @neptune
 #include "runtime/kernel/kernel_builder_context.h"  // from @neptune
 #include "xla/pjrt/pjrt_future.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
 
 namespace neptune {
 
@@ -37,19 +43,74 @@ absl::Status CancellableKernel::Run(ExecuteContext& context) {
     return absl::CancelledError(
         absl::StrCat("Kernel '", Name(), "' is cancelled."));
   }
-  return RunInternal(context);
+
+  std::vector<Value> flat_inputs;
+  bool inputs_flattened = false;
+  if (context.inputs.empty() && input_signature_ != nullptr) {
+    TF_RETURN_IF_ERROR(
+        input_signature_->FillArgs(flat_inputs, context.named_values));
+    context.inputs = flat_inputs;
+    inputs_flattened = true;
+  }
+
+  absl::Status status = RunInternal(context);
+
+  if (inputs_flattened) {
+    context.inputs = absl::Span<const Value>();
+  }
+
+  if (!status.ok()) return status;
+
+  if (inputs_flattened && output_signature_ != nullptr) {
+    TF_ASSIGN_OR_RETURN(auto map,
+                        output_signature_->UnflattenToMap(context.outputs));
+    for (auto& [key, value] : map) {
+      if (!context.named_values.insert({key, std::move(value)}).second) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("Duplicate output key: ", key));
+      }
+    }
+    context.outputs.clear();
+  }
+
+  return absl::OkStatus();
 }
 
 tsl::Future<> CancellableAsyncKernel::RunAsync(ExecuteContext& context) {
-  // Because the kernel asynchronous execution is defined in the implementation,
-  // we can only cancel the kernel at the point this kernel is launched, which
-  // is likely before any async work has happened. Ideally, we also check for
-  // cancellation upon actually executing the asynchronous work.
   if (context.run_context.cancellation_context.IsCancelled()) {
     return tsl::Future<void>(absl::CancelledError(
         absl::StrCat("Async kernel '", Name(), "' is cancelled.")));
   }
-  return RunAsyncInternal(context);
+
+  std::vector<Value> flat_inputs;
+  bool inputs_flattened = false;
+  if (context.inputs.empty() && input_signature_ != nullptr) {
+    auto status = input_signature_->FillArgs(flat_inputs, context.named_values);
+    if (!status.ok()) return tsl::Future<void>(status);
+    context.inputs = flat_inputs;
+    inputs_flattened = true;
+  }
+
+  tsl::Future<> future = RunAsyncInternal(context);
+
+  return future.Map([&context, this, inputs_flattened,
+                      keep_alive = std::move(flat_inputs)]() -> absl::Status {
+    if (inputs_flattened) {
+      context.inputs = absl::Span<const Value>();
+    }
+    if (inputs_flattened && output_signature_ != nullptr) {
+      auto map_or = output_signature_->UnflattenToMap(context.outputs);
+      if (!map_or.ok()) return map_or.status();
+      for (auto& [key, value] : *map_or) {
+        if (!context.named_values.insert({key, std::move(value)}).second) {
+          return absl::InvalidArgumentError(
+              absl::StrCat("Duplicate output key: ", key));
+        }
+      }
+      context.outputs.clear();
+    }
+    return absl::OkStatus();
+  });
 }
 
 KernelRegistry& GetGlobalKernelRegistry() {

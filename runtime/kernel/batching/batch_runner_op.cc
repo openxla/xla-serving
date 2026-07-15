@@ -29,6 +29,7 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/batching/shared_batch_scheduler.h"  // from @neptune
+#include "runtime/core/flat_signature.h"  // from @neptune
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "runtime/core/streaming/utils.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
@@ -159,6 +160,7 @@ tsl::Future<> BatchRunnerOp::RunAsyncInternal(ExecuteContext& context) {
       },
       tsl::profiler::ContextType::kJaxServingExecutor);
   context.metadata.trace_id = trace_me.GetContextId();
+
   auto [promise, future] = tsl::MakePromise<>();
   auto create_batch_task_fn = []() {
     auto batch_task = std::make_unique<BatchResourceBase::BatchTask>();
@@ -228,7 +230,19 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateBatchRunnerOp(
   tsl::core::RefCountPtr<JsvBatchResource> batch_resource(
       new JsvBatchResource(std::move(kernels), batcher, queue_options,
                            options.allowed_batch_sizes, thread_pool));
-  return std::make_unique<BatchRunnerOp>(std::move(batch_resource));
+  std::unique_ptr<FlatSignature> input_signature;
+
+  if (!options.input_signature.empty()) {
+    input_signature = std::make_unique<FlatSignature>(options.input_signature);
+  }
+  std::unique_ptr<FlatSignature> output_signature;
+  if (!options.output_signature.empty()) {
+    output_signature =
+        std::make_unique<FlatSignature>(options.output_signature);
+  }
+  return std::make_unique<BatchRunnerOp>(std::move(batch_resource),
+                                         std::move(input_signature),
+                                         std::move(output_signature));
 }
 
 }  // namespace neptune

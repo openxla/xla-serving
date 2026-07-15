@@ -72,16 +72,6 @@ class TfSavedModelFunctionRunnerOp : public CancellableKernel {
   std::vector<std::string> input_names_;
   std::vector<std::string> sorted_output_names_;
   std::vector<int> output_original_indices_;
-  // Describes TF SavedModel function inputs. If not null, it indicates that not
-  // all values in context are needed for the kernel and `input_signature_`
-  // will be used to filter and map `context.named_values` to TF kernel inputs
-  // via `FlatSignature::FillArgs`. Otherwise, `context.inputs` are used as TF
-  // kernel inputs directly.
-  std::unique_ptr<FlatSignature> input_signature_;
-  // Describes TF SavedModel function outputs. If not null, maps TF kernel
-  // outputs to `context.named_values` via `FlatSignature::UnflattenToMap`.
-  // Otherwise, kernel outputs will be assigned to `context.outputs`.
-  std::unique_ptr<FlatSignature> output_signature_;
   bool pre_data_conversion_ = false;
   bool post_data_conversion_ = false;
 };

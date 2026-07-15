@@ -75,15 +75,13 @@ class StableHloRunnerOp : public CancellableKernel {
   explicit StableHloRunnerOp(std::unique_ptr<StableHloRunner> stablehlo_runner,
                              std::unique_ptr<FlatSignature> input_signature,
                              std::unique_ptr<FlatSignature> output_signature)
-      : stablehlo_runner_(std::move(stablehlo_runner)),
-        input_signature_(std::move(input_signature)),
-        output_signature_(std::move(output_signature)) {}
+      : CancellableKernel(std::move(input_signature),
+                          std::move(output_signature)),
+        stablehlo_runner_(std::move(stablehlo_runner)) {}
 
   absl::Status RunInternal(ExecuteContext& context) override;
 
   std::unique_ptr<StableHloRunner> stablehlo_runner_;
-  std::unique_ptr<FlatSignature> input_signature_;
-  std::unique_ptr<FlatSignature> output_signature_;
 };
 
 }  // namespace neptune

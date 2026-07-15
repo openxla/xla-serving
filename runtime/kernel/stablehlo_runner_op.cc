@@ -157,33 +157,12 @@ absl::Status StableHloRunnerOp::RunInternal(ExecuteContext& context) {
         {{"model_id", absl::StrCat(context.metadata.model_name, ":",
                                    context.metadata.model_version)}});
   });
-  std::vector<Value> flat_inputs_values;
-  absl::Span<const Value> inputs_span;
-  if (input_signature_) {
-    // Use strict_match=false because named_values may contain values not used
-    // by this kernel.
-    TF_RETURN_IF_ERROR(
-        input_signature_->FillArgs(flat_inputs_values, context.named_values));
-    inputs_span = flat_inputs_values;
-  } else {
-    inputs_span = context.inputs;
-  }
 
   TF_ASSIGN_OR_RETURN(
       std::vector<Value> output_values,
-      stablehlo_runner_->Execute(inputs_span, context.run_context));
-  if (output_signature_) {
-    TF_ASSIGN_OR_RETURN(
-        auto map, output_signature_->UnflattenToMap(std::move(output_values)));
-    for (auto& [key, value] : map) {
-      if (!context.named_values.insert({key, std::move(value)}).second) {
-        return absl::InvalidArgumentError(absl::StrCat(
-            "Duplicate output key: ", key, " in StableHloRunnerOp"));
-      }
-    }
-  } else {
-    context.outputs = std::move(output_values);
-  }
+      stablehlo_runner_->Execute(context.inputs, context.run_context));
+  context.outputs = std::move(output_values);
+
   return absl::OkStatus();
 }
 

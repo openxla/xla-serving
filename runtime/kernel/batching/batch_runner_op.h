@@ -30,6 +30,7 @@
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
 #include "runtime/core/batching/shared_batch_scheduler.h"  // from @neptune
 #include "runtime/core/default_allocator.h"  // from @neptune
+#include "runtime/core/flat_signature.h"  // from @neptune
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
 #include "runtime/kernel/batching/batch_resource_base.h"  // from @neptune
@@ -42,7 +43,10 @@
 namespace neptune {
 
 struct BatchRunnerOpOptions {
+  std::vector<MetaArgSpec> input_signature;
+  std::vector<MetaArgSpec> output_signature;
   int num_batch_threads = 0;
+
   int max_enqueued_batches = 0;
   int max_batch_size = 0;
   int batch_timeout_micros = 0;
@@ -112,8 +116,12 @@ class BatchRunnerOp : public CancellableAsyncKernel {
 
   // TODO: Make it to private and use `CreateBatchRunnerOp`.
   explicit BatchRunnerOp(
-      tsl::core::RefCountPtr<JsvBatchResource> batch_resource)
-      : batch_resource_(std::move(batch_resource)) {}
+      tsl::core::RefCountPtr<JsvBatchResource> batch_resource,
+      std::unique_ptr<FlatSignature> input_signature = nullptr,
+      std::unique_ptr<FlatSignature> output_signature = nullptr)
+      : CancellableAsyncKernel(std::move(input_signature),
+                               std::move(output_signature)),
+        batch_resource_(std::move(batch_resource)) {}
 
   Kernel::IODataTypes GetIODataTypes() const override {
     return {.input = KernelIODataType::kHostBuffer,

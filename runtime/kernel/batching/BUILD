@@ -76,6 +76,7 @@ cc_library(
         "@abseil-cpp//absl/types:span",
         "@neptune//runtime/core:allocator",
         "@neptune//runtime/core:default_allocator",
+        "@neptune//runtime/core:flat_signature",
         "@neptune//runtime/core:host_buffer",
         "@neptune//runtime/core:value",
         "@neptune//runtime/core:value_utils",

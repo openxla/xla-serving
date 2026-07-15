@@ -207,6 +207,16 @@ absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
               << "Forcing disable_large_batch_splitting to true.";
   }
 
+  std::vector<MetaArgSpec> input_signature;
+  if (!batched_kernels.empty() &&
+      batched_kernels.front()->input_signature() != nullptr) {
+    input_signature = batched_kernels.front()->input_signature()->specs();
+  }
+  std::vector<MetaArgSpec> output_signature;
+  if (!batched_kernels.empty() &&
+      batched_kernels.back()->output_signature() != nullptr) {
+    output_signature = batched_kernels.back()->output_signature()->specs();
+  }
   BatchOptions::BatchPaddingPolicy batch_padding_policy =
       batch_options.batch_padding_policy();
   TF_ASSIGN_OR_RETURN(std::string batch_padding_policy_string,
@@ -217,6 +227,9 @@ absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
           batch_options.mixed_priority_batching_policy()));
 
   BatchRunnerOpOptions batch_runner_op_options = {
+      .input_signature = std::move(input_signature),
+      .output_signature = std::move(output_signature),
+
       // Allow overriding  `num_batch_threads` and `max_enqueued_batches` from
       // the create options.
       .num_batch_threads = std::max(batch_options.num_batch_threads(),
