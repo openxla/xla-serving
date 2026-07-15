@@ -64,6 +64,8 @@ bool DataTypeCanUseMemCpy(xla::ifrt::DType dtype) {
     case xla::ifrt::DType::Kind::kS4:
     case xla::ifrt::DType::Kind::kU4:
     case xla::ifrt::DType::Kind::kF4E2M1FN:
+    case xla::ifrt::DType::Kind::kF6E2M3FN:
+    case xla::ifrt::DType::Kind::kF6E3M2FN:
     case xla::ifrt::DType::Kind::kPred:
     case xla::ifrt::DType::Kind::kS8:
     case xla::ifrt::DType::Kind::kU8:
