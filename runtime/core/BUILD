@@ -221,8 +221,14 @@ cc_library(
 
 cc_library(
     name = "stablehlo_runner",
-    srcs = ["stablehlo_runner.cc"],
-    hdrs = ["stablehlo_runner.h"],
+    srcs = [
+        "aot_stablehlo_runner.cc",
+        "stablehlo_runner.cc",
+    ],
+    hdrs = [
+        "aot_stablehlo_runner.h",
+        "stablehlo_runner.h",
+    ],
     visibility = [":core_users"],
     deps = [
         ":device_buffer",
@@ -426,6 +432,7 @@ cc_library(
     name = "loaded_stablehlo",
     srcs = ["loaded_stablehlo.cc"],
     hdrs = ["loaded_stablehlo.h"],
+    visibility = [":core_users"],
     deps = [
         ":stablehlo",
         ":stablehlo_utils",

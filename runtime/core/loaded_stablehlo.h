@@ -85,6 +85,19 @@ class LoadedStableHlo {
       absl::string_view platform_name,
       std::optional<xla::CompileOptionsProto> compile_options);
 
+  // Creates a LoadedStableHlo object specifically configured for AOT execution.
+  //
+  // Args:
+  //   stablehlo: The StableHlo object containing the specifications.
+  //   num_weights: The number of weights irrespective of whether they are
+  //                passed to the main function in MLIR module or not.
+  //
+  // Returns:
+  //   A unique pointer to the created LoadedStableHlo object, or an error
+  //   status.
+  static absl::StatusOr<std::unique_ptr<LoadedStableHlo>> CreateForAot(
+      std::shared_ptr<StableHlo> stablehlo, int num_weights);
+
   // Returns a clone of ModuleBundle for the given input shapes.
   // When the loaded StableHLO(s) is concrete, the ModuleBundle will be looked
   // up by the input shapes (user inputs without weights).

@@ -808,4 +808,32 @@ absl::StatusOr<HostBuffer> MakeHostBufferFromDisassembledBuffers(
   return output_buffer;
 }
 
+absl::StatusOr<xla::ifrt::ShardingRef> ToIfrtSharding(
+    xla::ifrt::Client& ifrt_client, const xla::HloSharding& hlo_sharding,
+    const xla::ifrt::DeviceListRef& device_list) {
+  if (!hlo_sharding.IsTiled() && !hlo_sharding.IsReplicatedOrSingleDevice()) {
+    return absl::UnimplementedError(absl::StrCat(
+        "Only support MAXIMAL, OTHER or REPLICATED, but got sharding : ",
+        hlo_sharding.ToString()));
+  }
+
+  if (device_list->size() == 1) {
+    return xla::ifrt::SingleDeviceSharding::Create(
+        device_list->devices().front(), xla::ifrt::MemoryKind());
+  }
+
+  if (hlo_sharding.IsSingleDevice()) {
+    VLOG(1) << "Single device fast path for Maximal tiled tensor";
+    xla::ifrt::Device* device;
+    int unique_device_id = hlo_sharding.GetUniqueDevice();
+    TF_ASSIGN_OR_RETURN(device, ifrt_client.LookupDevice(
+                                    xla::ifrt::DeviceId(unique_device_id)));
+    return xla::ifrt::SingleDeviceSharding::Create(device,
+                                                   xla::ifrt::MemoryKind());
+  }
+
+  return xla::ifrt::HloSharding::Create(device_list, xla::ifrt::MemoryKind(),
+                                        hlo_sharding);
+}
+
 }  // namespace neptune::sharding_internal

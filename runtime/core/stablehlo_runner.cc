@@ -85,7 +85,6 @@
 #include "xla/python/ifrt/memory.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
-#include "xla/python/pjrt_ifrt/xla_sharding.h"  // from @xla
 #include "xla/python/refine_polymorphic_shapes.h"  // from @xla
 #include "xla/service/computation_placer.h"  // from @xla
 #include "xla/status_macros.h"  // from @xla
@@ -127,33 +126,7 @@ absl::StatusOr<xla::DeviceAssignment> GetRuntimeXlaDeviceAssignment(
   return da;
 }
 
-absl::StatusOr<xla::ifrt::ShardingRef> ToIfrtSharding(
-    xla::ifrt::Client& ifrt_client, const xla::HloSharding& hlo_sharding,
-    const xla::ifrt::DeviceListRef& device_list) {
-  if (!hlo_sharding.IsTiled() && !hlo_sharding.IsReplicatedOrSingleDevice()) {
-    return absl::UnimplementedError(absl::StrCat(
-        "Only support MAXIMAL, OTHER or REPLICATED, but got sharding : ",
-        hlo_sharding.ToString()));
-  }
 
-  if (device_list->size() == 1) {
-    return xla::ifrt::SingleDeviceSharding::Create(
-        device_list->devices().front(), xla::ifrt::MemoryKind());
-  }
-
-  if (hlo_sharding.IsSingleDevice()) {
-    VLOG(1) << "Single device fast path for Maximal tiled tensor";
-    xla::ifrt::Device* device;
-    int unique_device_id = hlo_sharding.GetUniqueDevice();
-    TF_ASSIGN_OR_RETURN(device, ifrt_client.LookupDevice(
-                                    xla::ifrt::DeviceId(unique_device_id)));
-    return xla::ifrt::SingleDeviceSharding::Create(device,
-                                                   xla::ifrt::MemoryKind());
-  }
-
-  return xla::ifrt::HloSharding::Create(device_list, xla::ifrt::MemoryKind(),
-                                        hlo_sharding);
-}
 
 auto* input_transfer_counter =
     ::tsl::monitoring::Counter<1>::New("/jsv/input_transfer/dispatched",
@@ -720,9 +693,10 @@ StableHloRunner::LookUpOrCreateExecutable(
       CachedExecutableBundle::ShardingList arg_list;
       arg_list.reserve((*executable_bundle)->io_spec.inputs.size());
       for (const auto& arg_spec : (*executable_bundle)->io_spec.inputs) {
-        TF_ASSIGN_OR_RETURN(auto ifrt_sharding,
-                            ToIfrtSharding(*ifrt_client_, arg_spec.sharding,
-                                           assigned_device_list_));
+        TF_ASSIGN_OR_RETURN(
+            auto ifrt_sharding,
+            sharding_internal::ToIfrtSharding(*ifrt_client_, arg_spec.sharding,
+                                              assigned_device_list_));
         arg_list.push_back(std::move(ifrt_sharding));
       }
       (*executable_bundle)->arg_shardings = std::move(arg_list);
@@ -730,9 +704,10 @@ StableHloRunner::LookUpOrCreateExecutable(
       CachedExecutableBundle::ShardingList output_list;
       output_list.reserve((*executable_bundle)->io_spec.outputs.size());
       for (const auto& out_spec : (*executable_bundle)->io_spec.outputs) {
-        TF_ASSIGN_OR_RETURN(auto ifrt_sharding,
-                            ToIfrtSharding(*ifrt_client_, out_spec.sharding,
-                                           assigned_device_list_));
+        TF_ASSIGN_OR_RETURN(
+            auto ifrt_sharding,
+            sharding_internal::ToIfrtSharding(*ifrt_client_, out_spec.sharding,
+                                              assigned_device_list_));
         output_list.push_back(std::move(ifrt_sharding));
       }
       (*executable_bundle)->output_shardings = std::move(output_list);
@@ -946,6 +921,7 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
   // stablehlo spec because some inputs may be presented in the model signature
   // but not used by StableHlo.
   std::vector<int> used_input_indices;
+  used_input_indices.reserve(executable_bundle->module_kept_var_indices.size());
   for (int idx : executable_bundle->module_kept_var_indices) {
     if (idx >= weights_array.size()) {
       used_input_indices.push_back(idx - weights_array.size());
@@ -954,6 +930,8 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
 
   std::vector<HostBuffer> host_buffers_to_convert;
   std::vector<int> host_buffers_stablehlo_indices;
+  host_buffers_to_convert.reserve(used_input_indices.size());
+  host_buffers_stablehlo_indices.reserve(used_input_indices.size());
 
   std::vector<std::optional<xla::ifrt::ArrayRef>> final_used_inputs(
       used_input_indices.size(), std::nullopt);
@@ -1029,6 +1007,7 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
   for (auto& arr : final_used_inputs) {
     inputs_with_weights.push_back(std::move(*arr));
   }
+
   TF_ASSIGN_OR_RETURN(
       xla::ifrt::LoadedExecutable::ExecuteResult execution_result,
       executable_bundle->ifrt_executable->Execute(
@@ -1038,8 +1017,12 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
               .launch_id = xla_launch_id,
               .fill_status = true,
           },
+          // IFRT requires an explicit device mapping when executing portable
+          //  or unbound executables. If the executable already has
+          // baked-in devices (bound), we pass std::nullopt to defer to the
+          // binary's ground truth.
           /*devices=*/
-          IsPortableExecutable()
+          !executable_bundle->ifrt_executable->devices().has_value()
               ? std::make_optional(data_converter->device_list())
               : std::nullopt));
   TF_RETURN_IF_ERROR(execution_result.status.Await());

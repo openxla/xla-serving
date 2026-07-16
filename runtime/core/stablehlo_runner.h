@@ -69,6 +69,25 @@
 
 namespace neptune {
 
+struct StableHloRunnerOptions {
+  // IFRT Client backend (e.g. TPU, GPU) that the executables are bound to.
+  absl_nonnull std::shared_ptr<xla::ifrt::Client> client;
+  // Thread pool used for host-side dispatch and asynchronous compilation
+  // tasks.
+  tsl::thread::ThreadPool* absl_nonnull thread_pool;
+  // Mapping registry to retrieve physical weight buffers by variable name.
+  IfrtLoadedVariableRegistry* absl_nonnull ifrt_loaded_variable_registry;
+  // Ordered list of original weight variable names defined by the model.
+  std::vector<std::string> weights;
+  // Topology and shard mapping assignment for the physical execution devices.
+  absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices;
+  // Optional ID for host callback dispatch in streaming execution.
+  std::optional<int64_t> callback_id = std::nullopt;
+};
+
+// Forward declaration for friend class.
+class AotStableHloRunner;
+
 class StableHloRunner {
  public:
   static absl::StatusOr<std::unique_ptr<StableHloRunner>> Create(
@@ -87,6 +106,10 @@ class StableHloRunner {
       std::unique_ptr<H2DTransferExecutorFactory>
           h2d_transfer_executor_factory = nullptr,
       std::optional<int64_t> callback_id = std::nullopt);
+
+  // Virtual destructor is required for safe polymorphic destruction of
+  // subclasses.
+  virtual ~StableHloRunner() = default;
 
   // Movable but not copyable.
   StableHloRunner(StableHloRunner&& other) = default;
@@ -393,7 +416,7 @@ class StableHloRunner {
   // - `input_shapes` and `input_dtypes` are the shapes and dtypes of the
   // inputs (excluding the weights) irrespective of whether they are used by the
   // module "main" function.
-  tsl::Future<SharedCachedExecutableBundle> LookUpOrCreateExecutable(
+  virtual tsl::Future<SharedCachedExecutableBundle> LookUpOrCreateExecutable(
       absl::Span<const xla::ifrt::Shape> input_shapes,
       absl::Span<const xla::ifrt::DType> input_dtypes);
 
@@ -471,6 +494,8 @@ class StableHloRunner {
       device_list_to_resources_map_;
 
   friend class StableHloRunnerTestPeer;
+  // Grants AotStableHloRunner access to private caches and constructor.
+  friend class AotStableHloRunner;
 };
 
 }  // namespace neptune

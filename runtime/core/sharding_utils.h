@@ -21,6 +21,7 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/host_buffer.h"  // from @neptune
+#include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
@@ -92,6 +93,11 @@ tsl::Future<HostBuffer> MakeHostBufferFromArray(
 // Creates an `xla::ifrt::DeviceList` from a list of device ids.
 absl::StatusOr<xla::ifrt::DeviceListRef> CreateDeviceList(
     xla::ifrt::Client& ifrt_client, absl::Span<const int> device_ids);
+
+// Converts `hlo_sharding` to `xla::ifrt::Sharding`.
+absl::StatusOr<xla::ifrt::ShardingRef> ToIfrtSharding(
+    xla::ifrt::Client& ifrt_client, const xla::HloSharding& hlo_sharding,
+    const xla::ifrt::DeviceListRef& device_list);
 
 }  // namespace neptune::sharding_internal
 

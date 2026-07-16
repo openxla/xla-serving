@@ -162,7 +162,70 @@ bool HasStreaming(mlir::ModuleOp module) {
   return found;
 }
 
+// Verifies that all StableHLO modules (shape buckets) have a consistent
+// number of user inputs and outputs. This ensures that dynamic shape
+// bucketing is structurally sound before execution.
+absl::Status VerifyMultiBucketConsistency(
+    const std::shared_ptr<StableHlo>& stablehlo, int num_weights,
+    int* num_user_inputs_out, int* num_outputs_out) {
+  if (stablehlo->specs().empty()) {
+    return absl::InvalidArgumentError("StableHLO has no specs.");
+  }
+
+  if (stablehlo->specs()[0].inputs.size() < num_weights) {
+    return absl::InvalidArgumentError(absl::StrFormat(
+        "StableHLO module has fewer inputs (%d) than the number of "
+        "weights (%d)",
+        stablehlo->specs()[0].inputs.size(), num_weights));
+  }
+  int num_user_inputs = stablehlo->specs()[0].inputs.size() - num_weights;
+  int num_outputs = stablehlo->specs()[0].outputs.size();
+
+  for (int i = 1; i < stablehlo->specs().size(); ++i) {
+    if (stablehlo->specs()[i].inputs.size() < num_weights) {
+      return absl::InvalidArgumentError(absl::StrFormat(
+          "StableHLO module has fewer inputs (%d) than the number of "
+          "weights (%d)",
+          stablehlo->specs()[i].inputs.size(), num_weights));
+    }
+    int cur_user_inputs = stablehlo->specs()[i].inputs.size() - num_weights;
+    int cur_outputs = stablehlo->specs()[i].outputs.size();
+
+    if (cur_user_inputs != num_user_inputs) {
+      return absl::InvalidArgumentError(
+          "Mismatched number of user inputs across buckets");
+    }
+    if (cur_outputs != num_outputs) {
+      return absl::InvalidArgumentError(
+          "Mismatched number of outputs across buckets");
+    }
+  }
+
+  if (num_user_inputs_out) *num_user_inputs_out = num_user_inputs;
+  if (num_outputs_out) *num_outputs_out = num_outputs;
+  return absl::OkStatus();
+}
+
 }  // namespace
+
+absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::CreateForAot(
+    absl_nonnull std::shared_ptr<StableHlo> stablehlo, int num_weights) {
+  int num_user_inputs = 0;
+  int num_outputs = 0;
+  TF_RETURN_IF_ERROR(VerifyMultiBucketConsistency(
+      stablehlo, num_weights, &num_user_inputs, &num_outputs));
+
+  TF_ASSIGN_OR_RETURN(std::vector<std::optional<ArgSpec>> weight_specs,
+                      GetWeightSpecs(stablehlo, num_weights));
+
+  return absl::WrapUnique(new LoadedStableHlo(
+      /*concrete_module_bundles=*/std::nullopt,
+      /*symbolic_module_bundle=*/std::nullopt, std::move(weight_specs),
+      num_user_inputs, num_outputs,
+      // TODO: Set has_streaming based on AOT executable metadata
+      // when AOT + streaming execution is formally supported.
+      /*has_streaming=*/false));
+}
 
 absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
     absl_nonnull std::shared_ptr<StableHlo> stablehlo, int num_weights,
@@ -272,7 +335,8 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
       if (spec.inputs.size() < num_weights) {
         return absl::InvalidArgumentError(absl::StrFormat(
             "StableHLO module has fewer inputs (%d) than the number of "
-            "weights (%d)", spec.inputs.size(), num_weights));
+            "weights (%d)",
+            spec.inputs.size(), num_weights));
       }
       user_input_shapes.reserve(spec.inputs.size() - num_weights);
       for (int i = num_weights; i < spec.inputs.size(); ++i) {
@@ -305,28 +369,12 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
     }
   }
 
-  // Verify that all StableHLO modules have the same number of user inputs.
-  int num_user_inputs = stablehlo->specs()[0].inputs.size() - num_weights;
-  for (int i = 1; i < stablehlo->specs().size(); ++i) {
-    int cur_num_user_inputs = stablehlo->specs()[i].inputs.size() - num_weights;
-    if (cur_num_user_inputs != num_user_inputs) {
-      return absl::InvalidArgumentError(
-          absl::StrCat("StableHLO should have the same number of user inputs,"
-                       " but found ",
-                       cur_num_user_inputs, " vs. ", num_user_inputs));
-    }
-  }
-
-  // Verify that all StableHLO modules have the same number of outputs.
-  int num_outputs = stablehlo->specs()[0].outputs.size();
-  for (int i = 1; i < stablehlo->specs().size(); ++i) {
-    if (stablehlo->specs()[i].outputs.size() != num_outputs) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "StableHLO should have the same number of outputs,"
-          " but found ",
-          stablehlo->specs()[i].outputs.size(), " vs. ", num_outputs));
-    }
-  }
+  // Verify that all StableHLO modules have the same number of user inputs and
+  // outputs.
+  int num_user_inputs = 0;
+  int num_outputs = 0;
+  TF_RETURN_IF_ERROR(VerifyMultiBucketConsistency(
+      stablehlo, num_weights, &num_user_inputs, &num_outputs));
 
   bool has_streaming = false;
   if (symbolic_module_bundle.has_value()) {
