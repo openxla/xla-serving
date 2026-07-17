@@ -102,7 +102,6 @@ cc_library(
         ":host_buffer_type_utils",
         ":sharding_utils_core",
         "@abseil-cpp//absl/container:btree",
-        "@abseil-cpp//absl/container:inlined_vector",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/log:check",
         "@abseil-cpp//absl/status",
@@ -112,7 +111,6 @@ cc_library(
         "@eigen_archive//:eigen3",
         "@llvm-project//llvm:Support",
         "@tsl//tsl/profiler/lib:traceme",
-        "@xla//xla:shape_util",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/hlo/ir:hlo",
         "@xla//xla/python/ifrt",
@@ -150,7 +148,6 @@ cc_library(
         "@xla//xla/tsl/concurrency:ref_count",
         "@xla//xla/tsl/lib/core:status_test_util",
         "@xla//xla/tsl/platform:env",
-        "@xla//xla/tsl/platform:status_matchers",
         "@xla//xla/tsl/platform:statusor",
     ],
     alwayslink = 1,
@@ -213,10 +210,7 @@ cc_library(
     name = "device_buffer",
     hdrs = ["device_buffer.h"],
     visibility = [":core_users"],
-    deps = [
-        "@xla//xla/hlo/ir:hlo_sharding",
-        "@xla//xla/python/ifrt",
-    ],
+    deps = ["@xla//xla/python/ifrt"],
 )
 
 cc_library(

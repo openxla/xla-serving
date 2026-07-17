@@ -53,6 +53,7 @@
 #include "runtime/core/streaming/stream.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
 #include "runtime/data_loader/data_loader.h"  // from @neptune
+#include "runtime/interpreter/bundle_interpreter.h"  // from @neptune
 #include "runtime/interpreter/context.h"  // from @neptune
 #include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
 #include "runtime/interpreter/linear_graph_execute.h"  // from @neptune
@@ -638,6 +639,11 @@ absl::StatusOr<std::unique_ptr<Interpreter>> Interpreter::Create(
     return absl::InvalidArgumentError("create_options must not be null.");
   }
   TF_RETURN_IF_ERROR(ValidateInterpreterCreateOptions(*create_options));
+
+  // Call Bundle Interpreter if it's a bundle
+  if (BundleInterpreter::IsBundle(create_options->model_path)) {
+    return BundleInterpreter::Create(std::move(create_options));
+  }
   std::unique_ptr<Interpreter> interpreter =
       absl::WrapUnique(new Interpreter(std::move(create_options)));
   // TODO: make the load method static so it can be called before

@@ -1,3 +1,4 @@
+load("//learning/infra/mira/experimental/orbax_model/interpreter/testdata:gen_obm.bzl", "gen_obm")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package_group(
@@ -145,8 +146,14 @@ cc_library(
 # "tensorflow:interpreter_tensorflow_support" target.
 cc_library(
     name = "interpreter",
-    srcs = ["interpreter.cc"],
-    hdrs = ["interpreter.h"],
+    srcs = [
+        "bundle_interpreter.cc",
+        "interpreter.cc",
+    ],
+    hdrs = [
+        "bundle_interpreter.h",
+        "interpreter.h",
+    ],
     visibility = [
         ":internal",
         ":interpreter_users",
@@ -176,9 +183,11 @@ cc_library(
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/types:span",
+        "@neptune//protos:bundle_orchestration_cc_proto",
         "@neptune//protos:manifest_cc_proto",
         "@neptune//protos:orchestration_cc_proto",
         "@neptune//protos:type_cc_proto",
+        "@neptune//runtime/core:common_util",
         "@neptune//runtime/core:constants",
         "@neptune//runtime/core:flat_signature",
         "@neptune//runtime/core:ifrt_loaded_variable_registry",
@@ -294,3 +303,8 @@ cc_library(
 
 # TODO: add a dependency check test to make sure that the interpreter does not depend
 # on any TensorFlow library. Currently this is blocked. See cl/704297184 for more details.
+
+gen_obm(
+    name = "increment_model",
+    exec_tool = "@neptune//runtime/interpreter/testdata/increment:increment_model",
+)

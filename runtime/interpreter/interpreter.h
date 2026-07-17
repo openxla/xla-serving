@@ -63,20 +63,22 @@ class Interpreter {
   static absl::StatusOr<std::unique_ptr<Interpreter>> Create(
       std::unique_ptr<InterpreterCreateOptions> create_options);
 
+  virtual ~Interpreter() = default;
+
   // Returns the names of the pipelines in the model.
-  std::vector<std::string> GetPipelineNames() const;
+  virtual std::vector<std::string> GetPipelineNames() const;
 
   // Returns the signature of the given pipeline, or an error if the pipeline
   // name is invalid.
   // Note: each flat signature returned by this method either contains names for
   // all tensors (when `named_signature` is available) or does not contain
   // names for any tensors (when `named_signature` is not available).
-  absl::StatusOr<FunctionFlatSignature> GetPipelineSignature(
+  virtual absl::StatusOr<FunctionFlatSignature> GetPipelineSignature(
       absl::string_view pipeline_name) const;
 
   // Returns the pipeline proto for the given pipeline name.
-  absl::StatusOr<neptune_model_orchestration::Pipeline> GetPipelineProto(
-      absl::string_view pipeline_name) const;
+  virtual absl::StatusOr<neptune_model_orchestration::Pipeline>
+  GetPipelineProto(absl::string_view pipeline_name) const;
 
   // Runs a pipeline in the model with the given inputs. `pipeline_name` is the
   // name of the pipeline to run. `positional_inputs` is a list of positional
@@ -93,7 +95,7 @@ class Interpreter {
   // This method runs in the caller's thread instead of the internal worker
   // pool. This is primarily for (advanced) users who manages their own
   // threadpool and want to run the model in the same thread as the caller.
-  absl::StatusOr<std::vector<Value>> Run(
+  virtual absl::StatusOr<std::vector<Value>> Run(
       absl::string_view pipeline_name,
       absl::Span<const Value> positional_inputs,
       const absl::flat_hash_map<std::string, Value>& keyword_inputs = {},
@@ -101,7 +103,8 @@ class Interpreter {
 
   // Same as `Run`, but returns a map of output values. Unlike `Run`, this
   // version can only be used when the model's output names are available.
-  absl::StatusOr<absl::flat_hash_map<std::string, Value>> RunWithMapReturn(
+  virtual absl::StatusOr<absl::flat_hash_map<std::string, Value>>
+  RunWithMapReturn(
       absl::string_view pipeline_name,
       absl::Span<const Value> positional_inputs,
       const absl::flat_hash_map<std::string, Value>& keyword_inputs,
@@ -114,7 +117,7 @@ class Interpreter {
   // outstanding threads running the model synchronously. The input values are
   // assumed to be either reference counted or simply copyable such that copy of
   // `Value` can keep the input values alive.
-  tsl::Future<std::vector<Value>> RunAsync(
+  virtual tsl::Future<std::vector<Value>> RunAsync(
       absl::string_view pipeline_name,
       absl::Span<const Value> positional_inputs,
       const absl::flat_hash_map<std::string, Value>& keyword_inputs = {},
@@ -122,7 +125,8 @@ class Interpreter {
 
   // Same as `RunAsync`, but returns a map of output values. Unlike `RunAsync`,
   // this version can only be used when the model's output names are available.
-  tsl::Future<absl::flat_hash_map<std::string, Value>> RunAsyncWithMapReturn(
+  virtual tsl::Future<absl::flat_hash_map<std::string, Value>>
+  RunAsyncWithMapReturn(
       absl::string_view pipeline_name,
       absl::Span<const Value> positional_inputs,
       const absl::flat_hash_map<std::string, Value>& keyword_inputs,
@@ -131,29 +135,34 @@ class Interpreter {
   // TODO: Allow the user to specify the data type.
   // Returns the accepted data type of the model input. This is determined by
   // the first computation function.
-  absl::StatusOr<KernelIODataType> GetModelInputDataType(
+  virtual absl::StatusOr<KernelIODataType> GetModelInputDataType(
       absl::string_view pipeline_name) const;
 
   // TODO: Allow the user to specify the data type.
   // Returns the data type of the model output. This is determined by the last
   // computation function.
-  absl::StatusOr<KernelIODataType> GetModelOutputDataType(
+  virtual absl::StatusOr<KernelIODataType> GetModelOutputDataType(
       absl::string_view pipeline_name) const;
 
   // Marks the interpreter to fully initialized. All kernels in the graph will
   // be fully initialized after this is called. After this is called,
   // time-consuming tasks not suitable for the production environment will be
   // disallowed.
-  absl::Status MarkFullyInitialized();
+  virtual absl::Status MarkFullyInitialized();
 
   std::string GetModelName() const { return create_options_->model_name; }
+
+ protected:
+  explicit Interpreter(
+      std::unique_ptr<InterpreterCreateOptions> create_options);
+  const InterpreterCreateOptions* create_options() const {
+    return create_options_.get();
+  }
 
  private:
   // TODO: Remove this peer class once JSV fully supports
   // graph-based orchestration and tests can use the public API.
   friend class InterpreterPeer;
-  explicit Interpreter(
-      std::unique_ptr<InterpreterCreateOptions> create_options);
 
   // Loads the model. This will load all the pipelines in the manifest unless
   // lazy loading is enabled.
