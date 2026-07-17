@@ -20,6 +20,7 @@
 #include <functional>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -75,6 +76,19 @@
 
 namespace neptune {
 namespace {
+
+using BufferMatrix = BatchResourceBase::BufferMatrix;
+
+// Struct to hold the output BufferMatrix and split index for a subtask that is
+// being re-split. This is used to correctly populate the output BufferMatrix
+// when a subtask is re-split.
+struct InputSubtaskInfo {
+  InputSubtaskInfo(std::shared_ptr<BufferMatrix> output, int split_index)
+      : output(std::move(output)), split_index(split_index) {}
+
+  std::shared_ptr<BufferMatrix> output;
+  int split_index;
+};
 
 // Move this to a util.
 std::vector<double> GetPaddingSizeBucketLimits();
@@ -245,8 +259,6 @@ absl::StatusOr<absl::Span<const Value>> BatchResourceBase::GetInputsToBatch(
     Kernel::ExecuteContext* context) const {
   return context->inputs;
 }
-
-using BufferMatrix = std::vector<std::vector<HostBuffer>>;
 
 absl::Status BatchResourceBase::RegisterInputsForAllBatchSizes(
     int64_t guid, Kernel::ExecuteContext* context, int num_outputs,
@@ -875,13 +887,41 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
 
   std::shared_ptr<ThreadSafeStatus> shared_status = input_task.status;
 
+  const internal::InputSplitMetadata input_split_metadata(
+      input_task_size, open_batch_remaining_slot, max_batch_size);
+
+  const absl::FixedArray<int>& task_sizes = input_split_metadata.task_sizes();
+  const int num_batches = task_sizes.size();
+
+  std::optional<InputSubtaskInfo> input_subtask_info = std::nullopt;
+  std::shared_ptr<BufferMatrix> split_task_output;
+  if (input_task.is_partial) {
+    // If the input task is a subtask, we are now performing a recursive split
+    // (e.g. to pad multiple high priority tasks). We create a new BufferMatrix
+    // to accumulate the outputs of these nested sub-subtasks.
+    input_subtask_info =
+        InputSubtaskInfo(input_task.output, input_task.split_index);
+    split_task_output = std::make_shared<BufferMatrix>();
+  } else {
+    // Top-level task being split for the first time. We can directly use the
+    // input task's output buffer to store the output of subtasks.
+    split_task_output = input_task.output;
+  }
+
+  split_task_output->resize(num_batches);
+  for (int i = 0; i < num_batches; ++i) {
+    (*split_task_output)[i].resize(input_task.num_outputs);
+  }
+
   // `split_task_done_callback` runs only after all split tasks are
   // complete.
   absl::AnyInvocable<void()> split_task_done_callback =
-      [done_callback = std::move(input_task.done_callback),
-       output = input_task.output, execute_context = input_task.context,
+      [done_callback = std::move(input_task.done_callback), split_task_output,
+       input_subtask_info, execute_context = input_task.context,
        num_output = input_task.num_outputs, status = shared_status,
        thread_pool = thread_pool, allocator = allocator]() mutable {
+        // TODO: Add input_task status check once the eviction is
+        // supported. A similar check is in cl/876314593.
         if (!status->status().ok()) {
           done_callback(status->status());
           return;
@@ -892,46 +932,55 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
           // to get rid of some (probably all) memcpy when input buffers are
           // slices of another copy.
           std::vector<HostBuffer> to_concatenate;
-          to_concatenate.reserve(output->size());
-          for (int j = 0; j < output->size(); ++j) {
-            to_concatenate.push_back(std::move((*output)[j][i]));
+          to_concatenate.reserve(split_task_output->size());
+          for (int j = 0; j < split_task_output->size(); ++j) {
+            // TODO: Add defensive validation once the eviction
+            // is supported. A similar validation is in cl/877442161.
+            to_concatenate.push_back(std::move((*split_task_output)[j][i]));
           }
           absl::StatusOr<HostBuffer> output_buffer =
               Concat(thread_pool, to_concatenate, allocator);
           if (!output_buffer.ok()) {
             status->Update(output_buffer.status());
+            continue;
           }
-          // Since the `num_outputs` is known, we should consider
-          // preallocating the `outputs`
-          execute_context->outputs.push_back(Value(std::move(*output_buffer)));
+
+          if (input_subtask_info.has_value()) {
+            // If the completed task was a recursively split subtask, we write
+            // its concatenated output back into its parent's BufferMatrix at
+            // the appropriate split_index. The parent task will concatenate the
+            // results with its other sibling results once they finish.
+            (*input_subtask_info->output)[input_subtask_info->split_index][i] =
+                std::move(*output_buffer);
+          } else {
+            // For a top-level task, we have fully concatenated all outputs (and
+            // any recursively nested outputs) across all splits. Push the final
+            // assembled output buffer to the execution context.
+            //
+            // Since the `num_outputs` is known, we should consider
+            // preallocating the `outputs`
+            execute_context->outputs.push_back(
+                Value(std::move(*output_buffer)));
+          }
         }
         done_callback(status->status());
       };
   IncrementalBarrier barrier(std::move(split_task_done_callback));
 
-  const internal::InputSplitMetadata input_split_metadata(
-      input_task_size, open_batch_remaining_slot, max_batch_size);
-
-  const absl::FixedArray<int>& task_sizes = input_split_metadata.task_sizes();
-
-  const int num_batches = task_sizes.size();
   std::vector<int64_t> output_task_sizes;
   output_task_sizes.resize(num_batches);
   for (int i = 0; i < num_batches; i++) {
     output_task_sizes[i] = task_sizes[i];
   }
 
-  input_task.output->resize(num_batches);
-  for (int i = 0; i < num_batches; ++i) {
-    (*input_task.output)[i].resize(input_task.num_outputs);
-  }
-
   output_tasks->reserve(num_batches);
   for (int i = 0; i < num_batches; i++) {
     auto callback = barrier.Inc();
-    output_tasks->push_back(input_task.CreateSplitTask(
-        i, [output_addr = input_task.output, callback = std::move(callback)](
-               absl::Status status) mutable { callback(); }));
+    std::unique_ptr<BatchTask> subtask = input_task.CreateSplitTask(
+        i, [output_addr = split_task_output, callback = std::move(callback)](
+               absl::Status status) mutable { callback(); });
+    subtask->output = split_task_output;
+    output_tasks->push_back(std::move(subtask));
   }
 
   const int num_input_buffers = input_task.inputs.size();
