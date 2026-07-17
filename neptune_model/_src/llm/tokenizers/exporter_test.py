@@ -24,7 +24,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-
 from neptune_model._src.llm import config as core_config
 from neptune_model._src.llm import model_wrapper
 from neptune_model._src.llm.tokenizers import config as tokenizer_config
@@ -75,7 +74,7 @@ class ExporterTest(absltest.TestCase):
   def test_export_llm_with_keras_hub_tokenizer_success(self):
     model_path = os.path.join(
         os.path.dirname(__file__),
-        "testdata/qwen_dummy",
+        "../testdata/qwen_dummy",
     )
 
     tokenizer_config_instance = tokenizer_config.TokenizerConfig(

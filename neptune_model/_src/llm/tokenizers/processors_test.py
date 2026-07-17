@@ -21,7 +21,6 @@ import os
 from absl.testing import absltest
 import tensorflow as tf
 
-
 from neptune_model._src.llm.tokenizers import processors
 
 
@@ -56,7 +55,7 @@ class ProcessorsTest(absltest.TestCase):
   def test_keras_hub_tokenizer_tf_instantiation_and_processing(self):
     model_path = os.path.join(
         os.path.dirname(__file__),
-        "testdata/qwen_dummy",
+        "../testdata/qwen_dummy",
     )
 
     tokenizer = processors.KerasHubTokenizerTF(
