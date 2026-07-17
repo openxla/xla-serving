@@ -57,6 +57,12 @@ tf = [
     'tf_keras',
 ]
 
+tokenizer = [
+    'keras-hub',
+    'transformers',
+]
+
+
 torch = [
     'torch < 2.13.0',
     'torchax',
@@ -70,4 +76,6 @@ test = [
     'pytest-xdist',
     'requests',
     'tf-nightly',
+    'keras-hub',
+    'transformers',
 ]

@@ -19,6 +19,7 @@
 __version__ = "0.0.9"
 
 
+from neptune_model import llm
 from neptune_model._src.export.jax_model import ApplyFnBundle
 from neptune_model._src.export.jax_model import JaxModel
 from neptune_model._src.export.main_lib import save

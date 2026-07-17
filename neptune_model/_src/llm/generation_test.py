@@ -1,0 +1,132 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Unit tests for standard autoregressive decoding loop compilation."""
+
+from absl.testing import absltest
+import jax
+import jax.numpy as jnp
+import jaxtyping
+
+from neptune_model._src.llm import config as llm_config
+from neptune_model._src.llm import generation
+from neptune_model._src.llm import model_wrapper
+
+
+class MockModel(model_wrapper.LLMModelWrapper):
+  """Simple mock model implementing the generation loop duck typing contract."""
+
+  def initial_cache_factory(self, batch_size: int) -> jaxtyping.PyTree:
+    return jnp.zeros((batch_size, 1))
+
+  def prefill(
+      self,
+      params: jaxtyping.PyTree,
+      input_ids: jax.Array,
+      cache: jaxtyping.PyTree,
+      prompt_len: jax.Array,
+  ) -> tuple[jax.Array, jaxtyping.PyTree]:
+    del params, prompt_len
+    last_tokens = input_ids[:, -1]
+    next_expected = (last_tokens + 1) % 10
+
+    one_hot = jax.nn.one_hot(next_expected, num_classes=10)
+    return one_hot * 10.0, cache
+
+  def decode_step(
+      self,
+      params: jaxtyping.PyTree,
+      token_ids: jax.Array,
+      cache: jaxtyping.PyTree,
+      step: int,
+      prompt_len: jax.Array,
+  ) -> tuple[jax.Array, jaxtyping.PyTree]:
+    del params, step, prompt_len
+    last_tokens = token_ids[:, -1]
+    next_expected = (last_tokens + 1) % 10
+
+    one_hot = jax.nn.one_hot(next_expected, num_classes=10)
+    return one_hot * 10.0, cache
+
+
+class GenerationTest(absltest.TestCase):
+
+  def test_top_k_sample_direct(self):
+    key = jax.random.PRNGKey(0)
+    logits = jnp.array([1.0, 5.0, 100.0], dtype=jnp.float32)
+    # With k=1, top_k_sample should deterministically select index 2
+    sampled = generation.top_k_sample(key, logits, k=1, temperature=1.0)
+    self.assertEqual(int(sampled), 2)
+
+  def test_greedy_sample_direct(self):
+    logits = jnp.array([10.0, 500.0, 50.0], dtype=jnp.float32)
+    sampled = generation.greedy_sample(logits)
+    self.assertEqual(int(sampled), 1)
+
+  def test_greedy_generation_correctness(self):
+    config = llm_config.GenerationConfig(
+        sampling_method="greedy",
+        max_output_tokens=4,
+    )
+
+    apply_fn = generation.make_standard_loop(
+        model=MockModel(),
+        generation_config=config,
+    )
+
+    params = {}
+    inputs = {
+        "input_ids": jnp.array([[1, 2, 3]], dtype=jnp.int32),
+        "prompt_len": jnp.array([3], dtype=jnp.int32),
+    }
+    outputs = apply_fn(params, inputs)
+
+    expected_tokens = jnp.array([[4, 5, 6, 7]], dtype=jnp.int32)
+    self.assertEqual(outputs["token_ids"].tolist(), expected_tokens.tolist())
+
+  def test_top_k_generation_correctness(self):
+    config = llm_config.GenerationConfig(
+        sampling_method="top_k",
+        max_output_tokens=4,
+        top_k=2,
+        temperature=0.01,
+    )
+
+    apply_fn = generation.make_standard_loop(
+        model=MockModel(),
+        generation_config=config,
+    )
+
+    params = {}
+    inputs = {
+        "input_ids": jnp.array([[1, 2, 3]], dtype=jnp.int32),
+        "prompt_len": jnp.array([3], dtype=jnp.int32),
+    }
+    outputs = apply_fn(params, inputs)
+
+    expected_tokens = jnp.array([[4, 5, 6, 7]], dtype=jnp.int32)
+    self.assertEqual(outputs["token_ids"].tolist(), expected_tokens.tolist())
+
+  def test_beam_search_raises_value_error(self):
+    config = llm_config.GenerationConfig(sampling_method="beam_search")
+
+    with self.assertRaises(ValueError):
+      generation.make_standard_loop(
+          model=MockModel(),
+          generation_config=config,
+      )
+
+
+if __name__ == "__main__":
+  absltest.main()

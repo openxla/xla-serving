@@ -1,0 +1,17 @@
+{
+  "<|endoftext|>": 0,
+  "a": 1,
+  "b": 2,
+  "c": 3,
+  "ab": 4,
+  "abc": 5,
+  " ": 6,
+  " a": 7,
+  " b": 8,
+  " ab": 9,
+  "hello": 10,
+  "world": 11,
+  "helloworld": 12,
+  " hello": 13,
+  " world": 14
+}
