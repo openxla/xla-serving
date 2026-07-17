@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Unit tests for standard autoregressive decoding loop compilation."""
+"""Unit tests for LLMModelWrapper and compiled standard generation loop."""
 
 from absl.testing import absltest
 import jax
@@ -20,7 +20,6 @@ import jax.numpy as jnp
 import jaxtyping
 
 from neptune_model._src.llm import config as llm_config
-from neptune_model._src.llm import generation
 from neptune_model._src.llm import model_wrapper
 
 
@@ -60,30 +59,15 @@ class MockModel(model_wrapper.LLMModelWrapper):
     return one_hot * 10.0, cache
 
 
-class GenerationTest(absltest.TestCase):
-
-  def test_top_k_sample_direct(self):
-    key = jax.random.PRNGKey(0)
-    logits = jnp.array([1.0, 5.0, 100.0], dtype=jnp.float32)
-    # With k=1, top_k_sample should deterministically select index 2
-    sampled = generation.top_k_sample(key, logits, k=1, temperature=1.0)
-    self.assertEqual(int(sampled), 2)
-
-  def test_greedy_sample_direct(self):
-    logits = jnp.array([10.0, 500.0, 50.0], dtype=jnp.float32)
-    sampled = generation.greedy_sample(logits)
-    self.assertEqual(int(sampled), 1)
+class ModelWrapperTest(absltest.TestCase):
 
   def test_greedy_generation_correctness(self):
     config = llm_config.GenerationConfig(
         sampling_method="greedy",
         max_output_tokens=4,
     )
-
-    apply_fn = generation.make_standard_loop(
-        model=MockModel(),
-        generation_config=config,
-    )
+    model = MockModel()
+    apply_fn = model.compile_generation_loop(generation_config=config)
 
     params = {}
     inputs = {
@@ -102,11 +86,8 @@ class GenerationTest(absltest.TestCase):
         top_k=2,
         temperature=0.01,
     )
-
-    apply_fn = generation.make_standard_loop(
-        model=MockModel(),
-        generation_config=config,
-    )
+    model = MockModel()
+    apply_fn = model.compile_generation_loop(generation_config=config)
 
     params = {}
     inputs = {
@@ -120,12 +101,9 @@ class GenerationTest(absltest.TestCase):
 
   def test_beam_search_raises_value_error(self):
     config = llm_config.GenerationConfig(sampling_method="beam_search")
-
+    model = MockModel()
     with self.assertRaises(ValueError):
-      generation.make_standard_loop(
-          model=MockModel(),
-          generation_config=config,
-      )
+      model.compile_generation_loop(generation_config=config)
 
 
 if __name__ == "__main__":

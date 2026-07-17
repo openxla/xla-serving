@@ -57,7 +57,7 @@ tf = [
     'tf_keras',
 ]
 
-tokenizer = [
+tokenizers = [
     'keras-hub',
     'transformers',
 ]

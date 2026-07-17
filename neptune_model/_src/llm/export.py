@@ -25,7 +25,6 @@ from neptune_model._src.export import jax_model
 from neptune_model._src.export import main_lib
 from neptune_model._src.export import serving_config
 from neptune_model._src.llm import config as llm_config
-from neptune_model._src.llm import generation
 from neptune_model._src.llm import model_wrapper
 from neptune_model._src.processors import processor
 from neptune_model._src.processors import tf_processor
@@ -37,9 +36,11 @@ def _require_tf():
     import tensorflow as tf  # pylint: disable=g-import-not-at-top
   except ImportError as e:
     raise ImportError(
-        'Failed to import tensorflow. Please make sure that TF support is enabled.'
+        "Failed to import tensorflow. Please make sure that TF support is"
+        " enabled."
     ) from e
   return tf
+
 
 def export_llm(
     config: llm_config.NeptuneLLMExportConfig,
@@ -78,8 +79,7 @@ def export_llm(
   tf_resources = list(tf_trackable_resources or [])
 
   # 2. Wrap the model implementation inside the JAX generation loop
-  jax_gen_fn = generation.make_standard_loop(
-      model=model,
+  jax_gen_fn = model.compile_generation_loop(
       generation_config=config.generation_config,
   )
 
