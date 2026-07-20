@@ -943,10 +943,12 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
         post_data_conversion = batching_config.batch_postprocessing;
       }
       TF_ASSIGN_OR_RETURN(
-          sub_graph, handler->HandleFunction(
-                         create_options_->model_path, *func, *create_options_,
-                         pre_data_conversion, post_data_conversion,
-                         named_signature.inputs, named_signature.outputs));
+          std::unique_ptr<Kernel> kernel,
+          handler->HandleFunction(
+              create_options_->model_path, *func, *create_options_,
+              pre_data_conversion, post_data_conversion, named_signature.inputs,
+              named_signature.outputs));
+      sub_graph.push_back(std::move(kernel));
     }
     if (component.role() == neptune_model_orchestration::ROLE_PREPROCESSOR) {
       preprocessors.push_back(std::move(sub_graph));

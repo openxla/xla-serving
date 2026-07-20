@@ -37,7 +37,7 @@ class OptionalFunctionHandler {
   // current graph. `pre_data_conversion` and `post_data_conversion` is used to
   // determine whether to convert the input and output of the function to
   // HostBuffer.
-  virtual absl::StatusOr<std::vector<std::unique_ptr<Kernel>>> HandleFunction(
+  virtual absl::StatusOr<std::unique_ptr<Kernel>> HandleFunction(
       absl::string_view model_path,
       const neptune_model_manifest::Function& function,
       const InterpreterCreateOptions& create_options, bool pre_data_conversion,

@@ -119,7 +119,7 @@ TfCompatibleOptionalFunctionHandler::CreateTfSavedModelRunner(
       saved_model_dir, std::move(tfrt_options.saved_model_options));
 }
 
-absl::StatusOr<std::vector<std::unique_ptr<Kernel>>>
+absl::StatusOr<std::unique_ptr<Kernel>>
 TfCompatibleOptionalFunctionHandler::HandleFunction(
     absl::string_view model_path,
     const neptune_model_manifest::Function& function,
@@ -223,10 +223,7 @@ TfCompatibleOptionalFunctionHandler::HandleFunction(
                       GetGlobalKernelRegistry().Create(
                           "TfSavedModelFunctionRunnerOp", builder_context));
 
-  std::vector<std::unique_ptr<Kernel>> sub_graph;
-  sub_graph.push_back(std::move(tf_kernel));
-
-  return sub_graph;
+  return tf_kernel;
 }
 
 static const bool kUnused = []() {

@@ -38,7 +38,7 @@ namespace neptune {
 // determine whether to do data conversion before and after the TF function.
 class TfCompatibleOptionalFunctionHandler : public OptionalFunctionHandler {
  public:
-  absl::StatusOr<std::vector<std::unique_ptr<Kernel>>> HandleFunction(
+  absl::StatusOr<std::unique_ptr<Kernel>> HandleFunction(
       absl::string_view model_path,
       const neptune_model_manifest::Function& function,
       const InterpreterCreateOptions& create_options, bool pre_data_conversion,
