@@ -48,7 +48,10 @@ def export_llm_with_tokenizer(
   tokenizer_config_instance = config.tokenizer_config
   generation_config_instance = config.generation_config
 
-  if tokenizer_config_instance.tokenizer_type != "keras_hub":
+  if (
+      tokenizer_config_instance.tokenizer_type
+      != tokenizers_config.TokenizerType.KERAS_HUB
+  ):
     raise ValueError(
         "Unsupported tokenizer type:"
         f" {tokenizer_config_instance.tokenizer_type}. Only 'keras_hub' is"

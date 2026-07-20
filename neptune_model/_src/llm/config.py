@@ -16,7 +16,13 @@
 
 from collections.abc import Sequence
 import dataclasses
-from typing import Literal
+import enum
+
+
+class SamplingMethod(enum.Enum):
+  GREEDY = "greedy"
+  TOP_K = "top_k"
+  BEAM_SEARCH = "beam_search"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -24,8 +30,7 @@ class GenerationConfig:
   """Configuration for on-device JAX autoregressive token generation.
 
   Attributes:
-    sampling_method: Generation strategy. Either "greedy", "top_k", or
-      "beam_search".
+    sampling_method: Sampling method to use for token generation.
     max_output_tokens: Maximum number of tokens to generate.
     temperature: Temperature for sampling (ignored for "greedy").
     top_k: Top-k tokens to consider during sampling.
@@ -36,7 +41,7 @@ class GenerationConfig:
       calculation.
   """
 
-  sampling_method: Literal["greedy", "top_k", "beam_search"] = "greedy"
+  sampling_method: SamplingMethod = SamplingMethod.GREEDY
   max_output_tokens: int = 128
   temperature: float = 1.0
   top_k: int = 50

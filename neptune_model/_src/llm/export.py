@@ -79,9 +79,7 @@ def export_llm(
   tf_resources = list(tf_trackable_resources or [])
 
   # 2. Wrap the model implementation inside the JAX generation loop
-  jax_gen_fn = model.compile_generation_loop(
-      generation_config=config.generation_config,
-  )
+  jax_gen_fn = model.compile_generation_loop()
 
   # 3. Setup Serving default signature and processing pipelines
   if preprocessors or postprocessors:

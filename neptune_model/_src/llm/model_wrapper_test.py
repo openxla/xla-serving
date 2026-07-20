@@ -63,11 +63,11 @@ class ModelWrapperTest(absltest.TestCase):
 
   def test_greedy_generation_correctness(self):
     config = llm_config.GenerationConfig(
-        sampling_method="greedy",
+        sampling_method=llm_config.SamplingMethod.GREEDY,
         max_output_tokens=4,
     )
-    model = MockModel()
-    apply_fn = model.compile_generation_loop(generation_config=config)
+    model = MockModel(generation_config=config)
+    apply_fn = model.compile_generation_loop()
 
     params = {}
     inputs = {
@@ -81,13 +81,13 @@ class ModelWrapperTest(absltest.TestCase):
 
   def test_top_k_generation_correctness(self):
     config = llm_config.GenerationConfig(
-        sampling_method="top_k",
+        sampling_method=llm_config.SamplingMethod.TOP_K,
         max_output_tokens=4,
         top_k=2,
         temperature=0.01,
     )
-    model = MockModel()
-    apply_fn = model.compile_generation_loop(generation_config=config)
+    model = MockModel(generation_config=config)
+    apply_fn = model.compile_generation_loop()
 
     params = {}
     inputs = {
@@ -100,10 +100,12 @@ class ModelWrapperTest(absltest.TestCase):
     self.assertEqual(outputs["token_ids"].tolist(), expected_tokens.tolist())
 
   def test_beam_search_raises_value_error(self):
-    config = llm_config.GenerationConfig(sampling_method="beam_search")
-    model = MockModel()
+    config = llm_config.GenerationConfig(
+        sampling_method=llm_config.SamplingMethod.BEAM_SEARCH
+    )
+    model = MockModel(generation_config=config)
     with self.assertRaises(ValueError):
-      model.compile_generation_loop(generation_config=config)
+      model.compile_generation_loop()
 
 
 if __name__ == "__main__":

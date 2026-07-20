@@ -15,7 +15,11 @@
 """Configuration for tokenization plugins in Neptune LLM."""
 
 import dataclasses
-from typing import Literal
+import enum
+
+
+class TokenizerType(enum.Enum):
+  KERAS_HUB = "keras_hub"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -31,7 +35,7 @@ class TokenizerConfig:
     pad_token_id: Padding token ID.
   """
 
-  tokenizer_type: Literal["keras_hub"] = "keras_hub"
+  tokenizer_type: TokenizerType = TokenizerType.KERAS_HUB
   vocab_path: str = ""
   model_name_or_path: str = ""
   bos_token_id: int = 1

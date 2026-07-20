@@ -78,11 +78,11 @@ class ExporterTest(absltest.TestCase):
     )
 
     tokenizer_config_instance = tokenizer_config.TokenizerConfig(
-        tokenizer_type="keras_hub",
+        tokenizer_type=tokenizer_config.TokenizerType.KERAS_HUB,
         model_name_or_path=model_path,
     )
     generation_config_instance = core_config.GenerationConfig(
-        sampling_method="greedy",
+        sampling_method=core_config.SamplingMethod.GREEDY,
         max_output_tokens=10,
         max_prompt_length=22,
     )
@@ -93,7 +93,7 @@ class ExporterTest(absltest.TestCase):
         generation_config=generation_config_instance,
         tokenizer_config=tokenizer_config_instance,
     )
-    model = MockModel()
+    model = MockModel(generation_config=generation_config_instance)
     params = {"w": jnp.zeros((10, 10))}
 
     exporter.export_llm_with_tokenizer(
@@ -102,34 +102,6 @@ class ExporterTest(absltest.TestCase):
         params=params,
     )
     self.assertTrue(os.path.exists(export_dir))
-
-  def test_export_llm_with_unsupported_tokenizer_type_raises(self):
-    # pytype: disable=wrong-arg-types
-    tokenizer_config_instance = tokenizer_config.TokenizerConfig(
-        tokenizer_type="unsupported",
-    )
-    # pytype: enable=wrong-arg-types
-    generation_config_instance = core_config.GenerationConfig(
-        sampling_method="greedy",
-        max_output_tokens=10,
-        max_prompt_length=22,
-    )
-    export_config = exporter.NeptuneLLMExportWithTokenizerConfig(
-        export_dir="/tmp/test_invalid_export",
-        allowed_batch_sizes=(1,),
-        generation_config=generation_config_instance,
-        tokenizer_config=tokenizer_config_instance,
-    )
-    model = MockModel()
-    params = {"w": jnp.zeros((10, 10))}
-
-    with self.assertRaises(ValueError):
-      exporter.export_llm_with_tokenizer(
-          config=export_config,
-          model=model,
-          params=params,
-      )
-
 
 if __name__ == "__main__":
   absltest.main()

@@ -14,7 +14,6 @@
 
 """Base contract wrapper for LLMs exported to Neptune."""
 
-from typing import Any
 import jax
 import jax.numpy as jnp
 import jaxtyping
@@ -25,83 +24,112 @@ from neptune_model._src.llm import sampling
 
 
 class LLMModelWrapper:
-  """Base class for wrapping an LLM model to be exported using the Neptune LLM framework."""
+  """Base contract wrapper for exported LLMs in the Neptune LLM framework.
 
-  def initial_cache_factory(self, batch_size: int) -> Any:
-    """Returns the initial KV Cache state for a given batch size."""
+  Subclasses implement model-specific execution primitives (cache allocation,
+  prompt prefill, and single-step token decoding). The wrapper compiles these
+  primitives into JAX-native autoregressive generation loops compatible with
+  Neptune Model export and serving pipelines.
+  """
+
+  def __init__(
+      self,
+      generation_config: llm_config.GenerationConfig,
+  ):
+    """Initializes the wrapper with generation configuration.
+
+    Args:
+      generation_config: Generation configuration specifying decoding
+        parameters.
+    """
+    self.generation_config = generation_config
+
+  def initial_cache_factory(self, batch_size: int) -> jaxtyping.PyTree:
+    """Allocates and returns the initial KV Cache state for a given batch size.
+
+    Args:
+      batch_size: Number of concurrent input sequences to allocate cache for.
+
+    Returns:
+      Initial KV cache PyTree state.
+    """
     raise NotImplementedError()
 
   def prefill(
       self,
-      params: Any,
+      params: jaxtyping.PyTree,
       input_ids: jax.Array,
-      cache: Any,
+      cache: jaxtyping.PyTree,
       prompt_len: jax.Array,
-  ) -> tuple[jax.Array, Any]:
-    """Runs the prefill pass and returns (last_token_logits, next_cache).
+  ) -> tuple[jax.Array, jaxtyping.PyTree]:
+    """Runs prefill for the given prompt input.
 
     Args:
-      params: Model parameters.
-      input_ids: Input token IDs, shape (batch_size, max_seq_len).
-      cache: Initial KV cache.
-      prompt_len: Actual length of each prompt, shape (batch_size,).
+      params: Model parameters PyTree.
+      input_ids: 2D array of prompt token IDs with shape (batch_size,
+        max_seq_len).
+      cache: Initial KV cache PyTree allocated by initial_cache_factory.
+      prompt_len: 1D array of shape (batch_size,) containing actual unpadded
+        prompt lengths.
 
     Returns:
-      last_token_logits: Logits for the last token of the prompt, shape
-        (batch_size, vocab_size).
-      next_cache: Updated KV cache.
+      A tuple of (last_token_logits, next_cache) where last_token_logits has
+      shape (batch_size, vocab_size) and next_cache is the updated KV cache.
     """
     raise NotImplementedError()
 
   def decode_step(
       self,
-      params: Any,
+      params: jaxtyping.PyTree,
       token_ids: jax.Array,
-      cache: Any,
+      cache: jaxtyping.PyTree,
       step: int,
       prompt_len: jax.Array,
-  ) -> tuple[jax.Array, Any]:
-    """Runs a single decode step and returns (logits, next_cache).
+  ) -> tuple[jax.Array, jaxtyping.PyTree]:
+    """Runs a single autoregressive decode step for generated tokens.
 
     Args:
-      params: Model parameters.
-      token_ids: Last generated tokens, shape (batch_size * beam_size, 1) or
-        (batch_size, 1).
-      cache: Current KV cache.
-      step: Current step index (1-indexed, starts at 1, goes up to
-        max_output_tokens-1).
-      prompt_len: Actual prompt length, shape (batch_size,).
+      params: Model parameters PyTree.
+      token_ids: 2D array of the latest generated tokens with shape
+        (num_active_seqs, 1).
+      cache: Current KV cache PyTree.
+      step: Current 1-indexed generation step (1 <= step < max_output_tokens).
+      prompt_len: 1D array of shape (batch_size,) containing prompt lengths.
 
     Returns:
-      logits: Logits for the step, shape (batch_size * beam_size, vocab_size) or
-        (batch_size, vocab_size).
-      next_cache: Updated KV cache.
+      A tuple of (logits, next_cache) where logits has shape
+      (num_active_seqs, vocab_size) and next_cache is the updated KV cache.
     """
     raise NotImplementedError()
 
+  def get_generation_config(self) -> llm_config.GenerationConfig:
+    """Returns the generation configuration."""
+    return self.generation_config
+
   def compile_generation_loop(
       self,
-      generation_config: llm_config.GenerationConfig,
   ) -> neptune_typing.ApplyFn:
-    """Compiles standard greedy / top_k autoregressive decoding loop.
+    """Compiles an autoregressive generation loop into a callable JAX function.
 
     Subclasses can override this method to provide custom decoding algorithms
-    (such as TPU PagedAttention beam search) while delegating other sampling
+    (such as TPU PagedAttention beam search) while delegating standard sampling
     strategies back to super().
 
-    Args:
-      generation_config: Generation configuration.
-
     Returns:
-      A compiled JAX function to generate tokens.
+      A JAX apply function accepting (params, inputs) and returning a dictionary
+      of output tensors (e.g. {"token_ids": output_tokens}).
     """
-    max_output_tokens = generation_config.max_output_tokens
-    sampling_method = generation_config.sampling_method
+    max_output_tokens = self.generation_config.max_output_tokens
+    sampling_method = self.generation_config.sampling_method
 
-    if sampling_method not in ("greedy", "top_k"):
+    if sampling_method not in (
+        llm_config.SamplingMethod.GREEDY,
+        llm_config.SamplingMethod.TOP_K,
+    ):
       raise ValueError(
-          f"Unsupported standard sampling method: {sampling_method}. Beam"
-          " search must be handled by custom model wrapper implementations."
+          f"Unsupported standard sampling method: {sampling_method}. Only"
+          " GREEDY and TOP_K are supported. Other sampling methods must be"
+          " handled by custom model wrapper implementations."
       )
 
     def generate_fn(
@@ -113,7 +141,7 @@ class LLMModelWrapper:
         prompt_len = inputs["prompt_len"]
       else:
         prompt_len = jnp.sum(
-            input_ids != generation_config.pad_token_id,
+            input_ids != self.generation_config.pad_token_id,
             axis=-1,
             dtype=jnp.int32,
         )
@@ -126,10 +154,10 @@ class LLMModelWrapper:
       )
 
       # 2. Select First Generated Token
-      if sampling_method == "greedy":
+      if sampling_method == llm_config.SamplingMethod.GREEDY:
         next_token = sampling.greedy_sample(prefill_logits)
         keys = None
-      elif sampling_method == "top_k":
+      elif sampling_method == llm_config.SamplingMethod.TOP_K:
         hash_seeds = jnp.sum(input_ids, axis=-1, dtype=jnp.int32)
         master_key = jax.random.PRNGKey(1337)
         keys = jax.vmap(lambda seed: jax.random.fold_in(master_key, seed))(
@@ -140,11 +168,14 @@ class LLMModelWrapper:
         step_key = split_keys[:, 1, :]
         next_token = jax.vmap(
             lambda k, l: sampling.top_k_sample(
-                k, l, generation_config.top_k, generation_config.temperature
+                k,
+                l,
+                self.generation_config.top_k,
+                self.generation_config.temperature,
             )
         )(step_key, prefill_logits)
       else:
-        raise ValueError(f"Unexpected sampling method: {sampling_method}")
+        raise ValueError(f"Unsupported sampling method: {sampling_method}")
 
       # Pre-allocate output token buffer of shape
       # [batch_size, max_output_tokens].
@@ -166,15 +197,18 @@ class LLMModelWrapper:
         )
 
         # Select next token
-        if sampling_method == "greedy":
+        if sampling_method == llm_config.SamplingMethod.GREEDY:
           next_token_step = sampling.greedy_sample(step_logits)
-        elif sampling_method == "top_k":
+        elif sampling_method == llm_config.SamplingMethod.TOP_K:
           split_keys = jax.vmap(jax.random.split)(keys)
           keys = split_keys[:, 0, :]
           step_key = split_keys[:, 1, :]
           next_token_step = jax.vmap(
               lambda k, l: sampling.top_k_sample(
-                  k, l, generation_config.top_k, generation_config.temperature
+                  k,
+                  l,
+                  self.generation_config.top_k,
+                  self.generation_config.temperature,
               )
           )(step_key, step_logits)
         else:
