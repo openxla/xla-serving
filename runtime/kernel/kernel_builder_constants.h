@@ -42,6 +42,12 @@ inline constexpr absl::string_view kFunctionFlatOutputSignature =
 inline constexpr absl::string_view kServingCoreSelector =
     "serving_core_selector";
 inline constexpr absl::string_view kStableCallbackId = "stable_callback_id";
+
+// Constants for AOT execution path.
+inline constexpr absl::string_view kIfrtLoadedExecutables =
+    "ifrt_loaded_executables";
+inline constexpr absl::string_view kIfrtAotMemoryRegions =
+    "ifrt_aot_memory_regions";
 }  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_BUILDER_CONSTANTS_H_

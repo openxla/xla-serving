@@ -80,7 +80,7 @@ absl::StatusOr<std::unique_ptr<AotStableHloRunner>> AotStableHloRunner::Create(
       /*h2d_transfer_executor_factory=*/nullptr,
       options.base_options.callback_id));
 
-  runner->aot_memory_regions_ = std::move(options.memory_regions);
+  runner->aot_memory_regions_ = std::move(options.aot_memory_regions);
 
   TF_RETURN_IF_ERROR(runner->Init(options.base_options.thread_pool));
   TF_RETURN_IF_ERROR(runner->PopulateAotExecutableCache(std::move(options)));

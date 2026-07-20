@@ -23,7 +23,7 @@ namespace neptune {
 // `executables`, `module_kept_var_indices`, and `io_specs` are parallel
 // arrays representing one entry per shape bucket (if dynamic shape bucketings
 // are used). `weights` represents the names of all weights before any Dead
-// Code Elimination (DCE) is applied. `memory_regions` holds pre-loaded AOT
+// Code Elimination (DCE) is applied. `aot_memory_regions` holds pre-loaded AOT
 // memory buffers whose lifetime is tied to this runner.
 struct StableHloRunnerAotOptions {
   StableHloRunnerOptions base_options;
@@ -33,7 +33,7 @@ struct StableHloRunnerAotOptions {
   // Original StableHlo capturing all specs
   std::shared_ptr<StableHlo> stablehlo;
   // Backing memory mapped regions.
-  std::vector<std::shared_ptr<tsl::ReadOnlyMemoryRegion>> memory_regions;
+  std::vector<std::shared_ptr<tsl::ReadOnlyMemoryRegion>> aot_memory_regions;
 };
 
 class AotStableHloRunner : public StableHloRunner {
@@ -59,6 +59,8 @@ class AotStableHloRunner : public StableHloRunner {
 
   // Keep memory regions for AOT executables alive.
   std::vector<std::shared_ptr<tsl::ReadOnlyMemoryRegion>> aot_memory_regions_;
+
+  friend class StableHloRunnerTestPeer;
 };
 
 }  // namespace neptune

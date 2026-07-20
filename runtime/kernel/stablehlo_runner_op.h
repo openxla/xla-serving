@@ -15,7 +15,9 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_STABLEHLO_RUNNER_OP_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_STABLEHLO_RUNNER_OP_H_
 
+#include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -82,6 +84,8 @@ class StableHloRunnerOp : public CancellableKernel {
   absl::Status RunInternal(ExecuteContext& context) override;
 
   std::unique_ptr<StableHloRunner> stablehlo_runner_;
+
+  friend class StableHloRunnerTestPeer;
 };
 
 }  // namespace neptune
