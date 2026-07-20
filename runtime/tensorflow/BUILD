@@ -4,6 +4,7 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 package_group(
     name = "tf_function_internal_users",
     packages = [
+        "//examples/...",
         "//runtime/python/...",
         "//runtime/serving/...",
     ],
