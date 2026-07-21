@@ -132,6 +132,7 @@ cc_library(
 JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS = [
     ":flags",
     ":grpc_status_utils",
+    "@abseil-cpp//absl/cleanup",
     "@abseil-cpp//absl/container:flat_hash_map",
     "@abseil-cpp//absl/flags:flag",
     "@abseil-cpp//absl/log",

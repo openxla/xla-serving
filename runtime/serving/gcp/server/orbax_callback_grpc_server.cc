@@ -19,6 +19,7 @@
 #include <string>
 #include <utility>
 
+#include "absl/cleanup/cleanup.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/flags/flag.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
@@ -26,6 +27,7 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/time/clock.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "include/grpcpp/server_context.h"  // from @com_github_grpc_grpc
@@ -42,6 +44,8 @@
 #include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
 #include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 #include "google/protobuf/util/delimited_message_util.h"
+#include "xla/tsl/lib/monitoring/counter.h"  // from @xla
+#include "xla/tsl/lib/monitoring/sampler.h"  // from @xla
 #include "xla/tsl/platform/file_system.h"  // from @xla
 #if ENABLE_TF == 1
   #include "runtime/tensorflow/tf_compatible_interpreter_create_options.h"  // from @neptune
@@ -70,6 +74,34 @@ namespace {
 static constexpr char kDefaultServingSignatureDefKey[] = "serving_default";
 static constexpr char kWarmupRequestsRelativePath[] =
     "assets.extra/neptune_serving_warmup_requests";
+
+inline constexpr std::initializer_list<double> kRequestLatencyBuckets = {
+    0,       0.1,     0.2,     0.3,     0.4,     0.5,     0.55,    0.61,
+    0.67,    0.73,    0.81,    0.89,    0.97,    1.07,    1.18,    1.30,
+    1.43,    1.57,    1.73,    1.90,    2.09,    2.30,    2.53,    2.78,
+    3.06,    3.36,    3.70,    4.07,    4.48,    4.92,    5.42,    5.96,
+    6.55,    7.21,    7.93,    8.72,    9.60,    10.56,   11.61,   12.77,
+    14.05,   15.46,   17.0,    18.7,    20.57,   22.63,   24.89,   27.38,
+    30.12,   33.13,   36.45,   40.09,   44.10,   48.51,   53.36,   58.70,
+    64,      90,      120,     160,     200,     300,     500,     800,
+    1100,    1500,    2000,    2500,    3000,    3500,    4000,    4500,
+    5000,    5500,    6000,    6500,    7000,    7500,    8000,    8500,
+    9000,    9500,    10000,   11000,   12000,   13000,   14000,   15000,
+    16000,   17000,   18000,   19000,   20000,   25000,   30000,   35000,
+    40000,   50000,   60000,   90000,   120000,  150000,  180000,  220000,
+    260000,  320000,  380000,  450000,  540000,  640000,  760000,  900000,
+    1100000, 1300000, 1550000, 1800000, 2160000, 2600000, 3100000, 3800000};
+
+auto* const request_count_metric = tsl::monitoring::Counter<3>::New(
+    "/neptune/external/serving/request_count",
+    "Counts requests broken down by model_name, rpc_method, and status.",
+    "model_name", "rpc_method", "status");
+
+auto* const request_latency_metric = tsl::monitoring::Sampler<3>::New(
+    {"/neptune/external/serving/request_latencies",
+     "Request latencies for processed requests in milliseconds.", "model_name",
+     "rpc_method", "status"},
+    tsl::monitoring::Buckets::Explicit(kRequestLatencyBuckets));
 
 #if ENABLE_TF == 1
 tensorflow::tfrt_stub::SavedModel::Options GetSavedModelOptions(
@@ -178,9 +210,21 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
   VLOG(4) << "Received PredictRequest: " << request->DebugString();
   grpc::ServerUnaryReactor* reactor = context->DefaultReactor();
 
+  absl::Time start_time = absl::Now();
+  absl::Status status = absl::OkStatus();
+
+  auto record_metrics_on_exit = absl::MakeCleanup([&]() {
+    double latency_ms = absl::ToDoubleMilliseconds(absl::Now() - start_time);
+    std::string status_str = absl::StatusCodeToString(status.code());
+    request_count_metric->GetCell(model_name_, "Predict", status_str)
+        ->IncrementBy(1);
+    request_latency_metric->GetCell(model_name_, "Predict", status_str)
+        ->Add(latency_ms);
+  });
+
   if (interpreter_ == nullptr) {
-    reactor->Finish(grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
-                                 "Interpreter not initialized."));
+    status = absl::FailedPreconditionError("Interpreter not initialized.");
+    reactor->Finish(ToGrpcStatus(status));
     return reactor;
   }
 
@@ -196,13 +240,15 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
   absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>> output_with_names =
       RunPredictInternal(*request, pipeline_name, run_options);
   if (!output_with_names.ok()) {
-    reactor->Finish(ToGrpcStatus(output_with_names.status()));
+    status = output_with_names.status();
+    reactor->Finish(ToGrpcStatus(status));
     return reactor;
   }
   absl::StatusOr<neptune::KernelIODataType> output_data_type =
       interpreter_->GetModelOutputDataType(pipeline_name);
   if (!output_data_type.ok()) {
-    reactor->Finish(ToGrpcStatus(output_data_type.status()));
+    status = output_data_type.status();
+    reactor->Finish(ToGrpcStatus(status));
     return reactor;
   }
   bool output_is_tensor = (*output_data_type == neptune::KernelIODataType::kTensor);
@@ -217,7 +263,8 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
         host_buffer = value.Get<neptune::HostBuffer>();
       }
       if (!host_buffer.ok()) {
-        reactor->Finish(ToGrpcStatus(host_buffer.status()));
+        status = host_buffer.status();
+        reactor->Finish(ToGrpcStatus(status));
         return reactor;
       }
       HostBufferProto host_buffer_proto =
@@ -326,17 +373,35 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::GetModelMetadata(
   VLOG(4) << "Received GetModelMetadataRequest: " << request->DebugString();
   grpc::ServerUnaryReactor* reactor = context->DefaultReactor();
 
+  absl::Time start_time = absl::Now();
+  absl::Status status = absl::OkStatus();
+
+  std::string target_model_name =
+      interpreter_ != nullptr ? std::string(interpreter_->GetModelName())
+                              : model_name_;
+
+  auto record_metrics_on_exit = absl::MakeCleanup([&]() {
+    double latency_ms = absl::ToDoubleMilliseconds(absl::Now() - start_time);
+    std::string status_str = absl::StatusCodeToString(status.code());
+    request_count_metric
+        ->GetCell(target_model_name, "GetModelMetadata", status_str)
+        ->IncrementBy(1);
+    request_latency_metric
+        ->GetCell(target_model_name, "GetModelMetadata", status_str)
+        ->Add(latency_ms);
+  });
+
   if (interpreter_ == nullptr) {
-    reactor->Finish(grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
-                                 "Interpreter not initialized."));
+    status = absl::FailedPreconditionError("Interpreter not initialized.");
+    reactor->Finish(ToGrpcStatus(status));
     return reactor;
   }
 
   if (request->model_spec().name() != interpreter_->GetModelName()) {
-    reactor->Finish(grpc::Status(
-        grpc::StatusCode::FAILED_PRECONDITION,
+    status = absl::FailedPreconditionError(
         absl::StrCat("Model name mismatch: got [", request->model_spec().name(),
-                     "] but expected [", interpreter_->GetModelName(), "]")));
+                     "] but expected [", interpreter_->GetModelName(), "]"));
+    reactor->Finish(ToGrpcStatus(status));
     return reactor;
   }
 
@@ -347,6 +412,7 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::GetModelMetadata(
 
   auto pipeline_or = interpreter_->GetPipelineProto(signature_name);
   if (!pipeline_or.ok()) {
+    status = pipeline_or.status();
     reactor->Finish(ToGrpcStatus(pipeline_or.status()));
     return reactor;
   }
