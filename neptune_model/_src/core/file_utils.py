@@ -21,7 +21,11 @@ import shutil
 _file_opener = open
 _mkdir_p = lambda path: os.makedirs(path, exist_ok=True)
 _copy = shutil.copyfile
+_copytree = shutil.copytree
 _exists = os.path.exists
+_isdir = os.path.isdir
+_remove = os.remove
+_rmtree = shutil.rmtree
 
 
 @contextlib.contextmanager
@@ -43,5 +47,21 @@ def copy(source: str, dest: str) -> None:
   _copy(source, dest)
 
 
+def copytree(source: str, dest: str) -> None:
+  _copytree(source, dest)
+
+
 def exists(path: str) -> bool:
   return _exists(path)
+
+
+def isdir(path: str) -> bool:
+  return _isdir(path)
+
+
+def remove(path: str) -> None:
+  _remove(path)
+
+
+def rmtree(path: str) -> None:
+  _rmtree(path)
