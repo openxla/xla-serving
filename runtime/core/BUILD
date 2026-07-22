@@ -29,6 +29,7 @@ cc_library(
     hdrs = ["common_util.h"],
     visibility = [
         ":core_users",
+        "@neptune//runtime/interpreter:__pkg__",
     ],
     deps = [
         ":constants",
