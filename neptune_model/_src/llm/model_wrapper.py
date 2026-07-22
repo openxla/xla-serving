@@ -109,7 +109,7 @@ class LLMModelWrapper:
   def compile_generation_loop(
       self,
   ) -> neptune_typing.ApplyFn:
-    """Compiles an autoregressive generation loop into a callable JAX function.
+    """Compiles an autoregressive generation loop or scoring function into a callable JAX function.
 
     Subclasses can override this method to provide custom decoding algorithms
     (such as TPU PagedAttention beam search) while delegating standard sampling
@@ -117,20 +117,23 @@ class LLMModelWrapper:
 
     Returns:
       A JAX apply function accepting (params, inputs) and returning a dictionary
-      of output tensors (e.g. {"token_ids": output_tokens}).
+      of output tensors (e.g. {"token_ids": output_tokens}, or {"logits":
+      logits, "log_probs": log_probs, "target_log_probs": target_log_probs} when in SCORING mode).
     """
-    max_output_tokens = self.generation_config.max_output_tokens
     sampling_method = self.generation_config.sampling_method
 
     if sampling_method not in (
         llm_config.SamplingMethod.GREEDY,
         llm_config.SamplingMethod.TOP_K,
+        llm_config.SamplingMethod.SCORING,
     ):
       raise ValueError(
           f"Unsupported standard sampling method: {sampling_method}. Only"
-          " GREEDY and TOP_K are supported. Other sampling methods must be"
-          " handled by custom model wrapper implementations."
+          " GREEDY, TOP_K, and SCORING are supported. Other sampling methods"
+          " must be handled by custom model wrapper implementations."
       )
+
+    max_output_tokens = self.generation_config.max_output_tokens
 
     def generate_fn(
         params: jaxtyping.PyTree,
@@ -152,6 +155,9 @@ class LLMModelWrapper:
       prefill_logits, cache = self.prefill(
           params, input_ids, empty_cache, prompt_len
       )
+
+      if sampling_method == llm_config.SamplingMethod.SCORING:
+        return sampling.compute_scores(prefill_logits, inputs.get("target_ids"))
 
       # 2. Select First Generated Token
       if sampling_method == llm_config.SamplingMethod.GREEDY:

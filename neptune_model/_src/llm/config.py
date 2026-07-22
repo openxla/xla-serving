@@ -23,6 +23,7 @@ class SamplingMethod(enum.Enum):
   GREEDY = "greedy"
   TOP_K = "top_k"
   BEAM_SEARCH = "beam_search"
+  SCORING = "scoring"
 
 
 @dataclasses.dataclass(frozen=True)

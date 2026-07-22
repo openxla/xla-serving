@@ -31,3 +31,20 @@ def top_k_sample(
   probs = jax.nn.softmax(top_values / temperature, axis=-1)
   sample_idx = jax.random.categorical(key, jnp.log(probs + 1e-9))
   return top_indices[sample_idx]
+
+
+def compute_scores(
+    logits: jax.Array, target_ids: jax.Array | None = None
+) -> dict[str, jax.Array]:
+  """Computes sequence scores including logits and log probabilities."""
+  log_probs = jax.nn.log_softmax(logits, axis=-1)
+  outputs = {
+      "logits": logits,
+      "log_probs": log_probs,
+  }
+  if target_ids is not None:
+    target_log_probs = jnp.take_along_axis(
+        log_probs, target_ids[:, None], axis=-1
+    ).squeeze(axis=-1)
+    outputs["target_log_probs"] = target_log_probs
+  return outputs

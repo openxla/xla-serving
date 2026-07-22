@@ -107,6 +107,43 @@ class ModelWrapperTest(absltest.TestCase):
     with self.assertRaises(ValueError):
       model.compile_generation_loop()
 
+  def test_scoring_mode_correctness(self):
+    config = llm_config.GenerationConfig(
+        sampling_method=llm_config.SamplingMethod.SCORING
+    )
+    model = MockModel(generation_config=config)
+    score_fn = model.compile_generation_loop()
+
+    params = {}
+    inputs = {
+        "input_ids": jnp.array([[1, 2, 3]], dtype=jnp.int32),
+        "prompt_len": jnp.array([3], dtype=jnp.int32),
+    }
+    outputs = score_fn(params, inputs)
+
+    self.assertIn("logits", outputs)
+    self.assertIn("log_probs", outputs)
+    self.assertEqual(outputs["logits"].shape, (1, 10))
+    self.assertEqual(outputs["log_probs"].shape, (1, 10))
+
+  def test_scoring_mode_with_target_ids(self):
+    config = llm_config.GenerationConfig(
+        sampling_method=llm_config.SamplingMethod.SCORING
+    )
+    model = MockModel(generation_config=config)
+    score_fn = model.compile_generation_loop()
+
+    params = {}
+    inputs = {
+        "input_ids": jnp.array([[1, 2, 3]], dtype=jnp.int32),
+        "target_ids": jnp.array([4], dtype=jnp.int32),
+    }
+    outputs = score_fn(params, inputs)
+
+    self.assertIn("target_log_probs", outputs)
+    self.assertEqual(outputs["target_log_probs"].shape, (1,))
+
 
 if __name__ == "__main__":
   absltest.main()
+

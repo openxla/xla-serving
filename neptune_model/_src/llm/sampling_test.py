@@ -34,6 +34,21 @@ class SamplingTest(absltest.TestCase):
     sampled = sampling.greedy_sample(logits)
     self.assertEqual(int(sampled), 1)
 
+  def test_compute_scores_direct(self):
+    logits = jnp.array([[10.0, 500.0, 50.0]], dtype=jnp.float32)
+    outputs = sampling.compute_scores(logits)
+    self.assertIn("logits", outputs)
+    self.assertIn("log_probs", outputs)
+    self.assertEqual(outputs["logits"].shape, (1, 3))
+    self.assertEqual(outputs["log_probs"].shape, (1, 3))
+
+  def test_compute_scores_with_target_ids(self):
+    logits = jnp.array([[10.0, 500.0, 50.0]], dtype=jnp.float32)
+    target_ids = jnp.array([1], dtype=jnp.int32)
+    outputs = sampling.compute_scores(logits, target_ids)
+    self.assertIn("target_log_probs", outputs)
+    self.assertEqual(outputs["target_log_probs"].shape, (1,))
+
 
 if __name__ == "__main__":
   absltest.main()
