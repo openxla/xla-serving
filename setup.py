@@ -92,7 +92,7 @@ def stage_xla_protos(target_dir):
       .strip()
   )
 
-  xla_base_dir = pathlib.Path(output_base_dir) / "external" / "xla~" / "xla"
+  xla_base_dir = pathlib.Path(output_base_dir) / "external" / "xla+" / "xla"
 
   staged = []
   for src in xla_base_dir.rglob("*.proto"):

@@ -18,8 +18,8 @@ NEPTUNE_SERVING_MAIN_COMMON_DEPS = [
     "@abseil-cpp//absl/log:check",
     "@abseil-cpp//absl/status:statusor",
     "@abseil-cpp//absl/strings",
-    "@com_github_grpc_grpc//:grpc++",
-    "@com_github_grpc_grpc//:grpc++_reflection",
+    "@grpc//:grpc++",
+    "@grpc//:grpc++_reflection",
     "@neptune//runtime/serving/gcp/auth:utils",
     "@xla//xla/tsl/platform:status",
     "@tsl//tsl/platform:platform_port",
@@ -125,7 +125,7 @@ cc_library(
     hdrs = ["grpc_status_utils.h"],
     deps = [
         "@abseil-cpp//absl/status",
-        "@com_github_grpc_grpc//:grpc++",
+        "@grpc//:grpc++",
     ],
 )
 
@@ -141,7 +141,7 @@ JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS = [
     "@abseil-cpp//absl/status:statusor",
     "@abseil-cpp//absl/strings",
     "@abseil-cpp//absl/time",
-    "@com_github_grpc_grpc//:grpc++",
+    "@grpc//:grpc++",
     "@neptune//runtime/core:host_buffer",
     "@neptune//runtime/core:value",
     "@neptune//protos/grpc:host_buffer_cc_proto",

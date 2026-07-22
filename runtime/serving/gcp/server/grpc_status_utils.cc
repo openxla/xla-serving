@@ -3,7 +3,7 @@
 #include <string>
 
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "include/grpcpp/support/status.h"  // from @com_github_grpc_grpc
+#include "include/grpcpp/support/status.h"  // from @grpc
 
 namespace neptune {
 namespace serving {

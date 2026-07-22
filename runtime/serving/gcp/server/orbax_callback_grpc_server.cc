@@ -30,9 +30,9 @@
 #include "absl/time/clock.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "include/grpcpp/server_context.h"  // from @com_github_grpc_grpc
-#include "include/grpcpp/support/server_callback.h"  // from @com_github_grpc_grpc
-#include "include/grpcpp/support/status.h"  // from @com_github_grpc_grpc
+#include "include/grpcpp/server_context.h"  // from @grpc
+#include "include/grpcpp/support/server_callback.h"  // from @grpc
+#include "include/grpcpp/support/status.h"  // from @grpc
 #include "protos/grpc/host_buffer.pb.h"  // from @neptune
 #include "protos/grpc/model.pb.h"  // from @neptune
 #include "protos/grpc/prediction_log.pb.h"  // from @neptune

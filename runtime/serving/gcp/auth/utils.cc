@@ -20,9 +20,9 @@
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
-#include "include/grpc/grpc_security_constants.h"  // from @com_github_grpc_grpc
-#include "include/grpcpp/security/credentials.h"  // from @com_github_grpc_grpc
-#include "include/grpcpp/security/server_credentials.h"  // from @com_github_grpc_grpc
+#include "include/grpc/grpc_security_constants.h"  // from @grpc
+#include "include/grpcpp/security/credentials.h"  // from @grpc
+#include "include/grpcpp/security/server_credentials.h"  // from @grpc
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 

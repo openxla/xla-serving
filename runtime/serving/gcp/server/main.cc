@@ -26,9 +26,9 @@
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
-#include "include/grpcpp/security/server_credentials.h"  // from @com_github_grpc_grpc
-#include "include/grpcpp/server.h"  // from @com_github_grpc_grpc
-#include "include/grpcpp/server_builder.h"  // from @com_github_grpc_grpc
+#include "include/grpcpp/security/server_credentials.h"  // from @grpc
+#include "include/grpcpp/server.h"  // from @grpc
+#include "include/grpcpp/server_builder.h"  // from @grpc
 #include "runtime/serving/gcp/auth/utils.h"  // from @neptune
 #include "runtime/serving/gcp/server/orbax_callback_grpc_server.h"  // from @neptune
 #include "xla/tsl/platform/status.h"  // from @xla

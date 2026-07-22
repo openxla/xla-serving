@@ -9,7 +9,7 @@ cc_binary(
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
-        "@com_github_grpc_grpc//:grpc++",
+        "@grpc//:grpc++",
         "@neptune//protos/grpc:host_buffer_cc_proto",
         "@neptune//protos/grpc:model_cc_proto",
         "@neptune//protos/grpc:predict_cc_proto",

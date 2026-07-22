@@ -21,14 +21,6 @@ package_group(
     includes = ["@neptune//runtime/interpreter:interpreter_users"],
 )
 
-filegroup(
-    name = "testdata",
-    srcs = glob([
-        "testdata/*.mlir",
-    ]),
-    visibility = [":kernel_internal"],
-)
-
 cc_library(
     name = "kernel_builder_context",
     srcs = [],

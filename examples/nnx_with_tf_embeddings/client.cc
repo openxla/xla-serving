@@ -27,11 +27,11 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "include/grpcpp/channel.h"  // from @com_github_grpc_grpc
-#include "include/grpcpp/client_context.h"  // from @com_github_grpc_grpc
-#include "include/grpcpp/create_channel.h"  // from @com_github_grpc_grpc
-#include "include/grpcpp/security/credentials.h"  // from @com_github_grpc_grpc
-#include "include/grpcpp/support/status.h"  // from @com_github_grpc_grpc
+#include "include/grpcpp/channel.h"  // from @grpc
+#include "include/grpcpp/client_context.h"  // from @grpc
+#include "include/grpcpp/create_channel.h"  // from @grpc
+#include "include/grpcpp/security/credentials.h"  // from @grpc
+#include "include/grpcpp/support/status.h"  // from @grpc
 #include "protos/grpc/host_buffer.pb.h"  // from @neptune
 #include "protos/grpc/model.pb.h"  // from @neptune
 #include "protos/grpc/predict.pb.h"  // from @neptune

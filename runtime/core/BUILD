@@ -15,14 +15,6 @@ package_group(
     ],
 )
 
-filegroup(
-    name = "testdata",
-    srcs = glob([
-        "testdata/*.mlir",
-    ]),
-    visibility = ["@neptune//runtime/core/google:__subpackages__"],
-)
-
 cc_library(
     name = "constants",
     hdrs = ["constants.h"],
@@ -35,6 +27,9 @@ cc_library(
     name = "common_util",
     srcs = ["common_util.cc"],
     hdrs = ["common_util.h"],
+    visibility = [
+        ":core_users",
+    ],
     deps = [
         ":constants",
         "@abseil-cpp//absl/status",

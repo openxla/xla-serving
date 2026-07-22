@@ -1,4 +1,3 @@
-load("//learning/infra/mira/experimental/orbax_model/interpreter/testdata:gen_obm.bzl", "gen_obm")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package_group(
@@ -303,8 +302,3 @@ cc_library(
 
 # TODO: add a dependency check test to make sure that the interpreter does not depend
 # on any TensorFlow library. Currently this is blocked. See cl/704297184 for more details.
-
-gen_obm(
-    name = "increment_model",
-    exec_tool = "@neptune//runtime/interpreter/testdata/increment:increment_model",
-)

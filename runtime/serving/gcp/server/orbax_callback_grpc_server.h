@@ -24,8 +24,8 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "include/grpcpp/server_context.h"  // from @com_github_grpc_grpc
-#include "include/grpcpp/support/server_callback.h"  // from @com_github_grpc_grpc
+#include "include/grpcpp/server_context.h"  // from @grpc
+#include "include/grpcpp/support/server_callback.h"  // from @grpc
 #include "protos/grpc/get_model_metadata.pb.h"  // from @neptune
 #include "protos/grpc/predict.pb.h"  // from @neptune
 #include "protos/grpc/prediction_service.grpc.pb.h"  // from @neptune
