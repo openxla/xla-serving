@@ -22,8 +22,11 @@ from typing import Any, Dict, Sequence
 import jax
 from jax import export as jax_export
 from jax.experimental import layout as jax_layout
+import jaxtyping
 
+from neptune_model._src.core import compile_options_util
 from neptune_model._src.core import shlo_function
+from neptune_model._src.core import shlo_type
 from neptune_model._src.core import unstructured_data
 from neptune_model._src.core import value
 from neptune_model._src.jax2npt import constants
@@ -237,4 +240,49 @@ def convert_path_to_value(
           mime_type=mime_type,
           version=version,
       ),
+  )
+
+
+def convert_apply_fn_bundle_to_shlo(
+    apply_fn_bundle: typing.ApplyFnBundle,
+    params: jaxtyping.PyTree | None,
+    input_signature: jaxtyping.PyTree[shlo_type.ShloTensorSpec],
+    model_param_names: Sequence[str] | None = None,
+    jax_mesh: jax.sharding.Mesh | None = None,
+) -> Sequence[shlo_function.ShloFunction]:
+  """Converts an ApplyFnBundle to SHLO functions."""
+  args_specs = jax_export.symbolic_args_specs(
+      args=utils.to_jax_spec((params, input_signature)),
+      shapes_specs=(
+          "...",
+          apply_fn_bundle.input_polymorphic_shapes,
+      ),
+      constraints=apply_fn_bundle.polymorphic_constraints,
+  )
+  if apply_fn_bundle.input_polymorphic_shape_symbol_values is not None:
+    args_specs_list = utils._concretize_polymorphic_shapes(
+        args_specs,
+        apply_fn_bundle.input_polymorphic_shape_symbol_values,
+    )
+  else:
+    args_specs_list = [args_specs]
+
+  compile_options_per_platform = (
+      compile_options_util.generate_xla_compile_options(
+          native_serialization_platforms=apply_fn_bundle.jax_export_kwargs.get(
+              "platforms", None
+          ),
+          jax_mesh=jax_mesh,
+      )
+  )
+  return tuple(
+      convert(
+          fun_jax=apply_fn_bundle.apply_fn,
+          args_spec=args_spec,
+          kwargs_spec={},
+          jax_export_kwargs=apply_fn_bundle.jax_export_kwargs,
+          xla_compile_options_per_platform=compile_options_per_platform,
+          model_param_names=model_param_names,
+      )
+      for args_spec in args_specs_list
   )

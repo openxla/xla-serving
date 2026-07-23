@@ -37,8 +37,8 @@ from neptune_model._src.core import value
 from neptune_model._src.export import constants
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import serving_config
-from neptune_model._src.export import utils
 from neptune_model._src.export import warmup
+from neptune_model._src.jax2npt import utils as jax2npt_utils
 from neptune_model._src.processors import jax_processor
 from neptune_model._src.processors import processor
 from neptune_model._src.processors import tf_processor
@@ -298,8 +298,12 @@ def _update_save_bundle(
     pipeline_output_signature = node_output_signature
     input_signature = node_output_signature
 
-  shlo_input_signature = utils.to_shlo_tensor_spec(pipeline_input_signature)
-  shlo_output_signature = utils.to_shlo_tensor_spec(pipeline_output_signature)
+  shlo_input_signature = jax2npt_utils.to_shlo_tensor_spec(
+      pipeline_input_signature
+  )
+  shlo_output_signature = jax2npt_utils.to_shlo_tensor_spec(
+      pipeline_output_signature
+  )
 
   pipeline_proto = save_bundle.pipelines.name_to_pipeline[cfg.serving_signature]
 

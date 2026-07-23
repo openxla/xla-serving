@@ -12,10 +12,39 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
+import dataclasses
+from typing import Any
 import jaxtyping
 
 
 # ApplyFn take two arguments, the first one is the model_params, the second one
 # is the model_inputs.
 ApplyFn = Callable[[jaxtyping.PyTree, jaxtyping.PyTree], jaxtyping.PyTree]
+
+
+@dataclasses.dataclass(frozen=True)
+class ApplyFnBundle:
+  """Bundles an apply_fn with arguments for jax2npt.convert.
+
+  Attributes:
+    apply_fn: The function to apply.
+    input_polymorphic_shapes: Polymorphic shapes for function inputs, for
+      `shapes_specs` in `jax.export.symbolic_args_specs`.
+    polymorphic_constraints: Constraints on polymorphic dimensions, for
+      `constraints` in `jax.export.symbolic_args_specs`.
+    input_polymorphic_shape_symbol_values: A mapping of symbol names to values
+      for the symbols in `input_polymorphic_shapes`.
+    jax_export_kwargs: Keyword arguments for `jax.export.export`. Current
+      available kwargs are platforms, _override_lowering_rules, disabled_checks.
+      See
+      https://docs.jax.dev/en/latest/_autosummary/jax.export.export.html#jax.export.export.
+  """
+
+  apply_fn: ApplyFn
+  input_polymorphic_shapes: Any | None = None
+  polymorphic_constraints: Sequence[str] = ()
+  input_polymorphic_shape_symbol_values: Mapping[str, Sequence[int]] | None = (
+      None
+  )
+  jax_export_kwargs: Mapping[str, Any] = dataclasses.field(default_factory=dict)

@@ -30,7 +30,6 @@ from neptune_model._src.core import shlo_type
 from neptune_model._src.core import value
 from neptune_model._src.export import constants
 from neptune_model._src.export import jax_model
-from neptune_model._src.export import utils
 from neptune_model._src.processors import processor
 
 
@@ -188,18 +187,30 @@ class JaxProcessor:
 
     if not self.name:
       raise ValueError("JaxProcessor name must not be empty")
+    method_key = self.method_key
+    if method_key is None:
+      if len(self.model.apply_fn_bundles) != 1:
+        raise ValueError(
+            "Method key is not specified but model has more than one apply_fn"
+        )
+      (method_key,) = self.model.apply_fn_bundles.keys()
 
-    # Instructs the runtime to only load the model parameters from the
-    # checkpoint, not all keys present in the checkpoint.
+    apply_fn_bundle = self.model.apply_fn_bundles.get(method_key)
+    if not apply_fn_bundle:
+      raise ValueError(f"Method key {method_key!r} not found in ApplyFnBundle")
+
     param_names_tree = jax.tree.map_with_path(
         lambda path, _: jax.tree_util.keystr(path, simple=True, separator="."),
         self.model.params,
     )
+    model_param_names = jax.tree.leaves(param_names_tree)
 
-    shlo_functions = self.model.get_shlo_functions(
-        utils.to_jax_spec(input_signature),
-        self.method_key,
-        model_param_names=jax.tree.leaves(param_names_tree),
+    shlo_functions = jax2npt.convert_apply_fn_bundle_to_shlo(
+        apply_fn_bundle=apply_fn_bundle,
+        params=self.model.params,
+        input_signature=jax2npt.utils.to_jax_spec(input_signature),
+        model_param_names=model_param_names,
+        jax_mesh=self.model.jax_mesh,
     )
 
     if not shlo_functions:

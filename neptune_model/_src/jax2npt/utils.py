@@ -15,8 +15,10 @@
 """Common utils shared between jax_to_polymorphic_function.py and main_lib.py."""
 
 from collections.abc import Iterable, Mapping, Sequence
+import itertools
 from typing import Any, TypeVar
 
+from absl import logging
 import jax
 from jax import export as jax_export
 from jax.experimental import layout as jax_layout
@@ -26,6 +28,7 @@ import jaxtyping
 import numpy as np
 
 from neptune_model._src.core import shlo_type
+from neptune_model._src.export import constants
 from neptune_model._src.jax2npt import typing
 from neptune_model.protos import manifest_pb2
 from neptune_model.protos.xla import xla_data_pb2  # pylint: disable=g-direct-tensorflow-import
@@ -310,3 +313,127 @@ def to_shlo_spec_tree(
   if name_leaves:
     jax_tree = jax.tree_util.tree_map_with_path(_name_leaf, jax_tree)
   return jax_tree
+
+
+def to_jax_spec(tree: jaxtyping.PyTree) -> jaxtyping.PyTree:
+  """Converts a PyTree with tensor-like leaves to one with ShapeDtypeStruct leaves.
+
+  Args:
+    tree: A PyTree where leaves have `shape` and `dtype` attributes.
+
+  Returns:
+    A PyTree with the same structure as the input, but with leaves replaced by
+    jax.ShapeDtypeStruct instances.
+
+  Raises:
+    ValueError: If any leaf node in the tree lacks `shape` or `dtype`
+    attributes.
+  """
+
+  def _convert_leaf(x: Any) -> jax.ShapeDtypeStruct:
+    try:
+      if isinstance(x, shlo_type.ShloTensorSpec):
+        return jax.ShapeDtypeStruct(
+            x.shape, shlo_type.shlo_dtype_to_np_dtype(x.dtype)
+        )
+      return jax.ShapeDtypeStruct(x.shape, x.dtype)
+    except Exception as err:
+      raise ValueError(
+          f"Failed to convert {x!r} to jax.ShapeDtypeStruct"
+      ) from err
+
+  return jax.tree.map(_convert_leaf, tree)
+
+
+def to_shlo_tensor_spec(
+    tree: jaxtyping.PyTree,
+) -> jaxtyping.PyTree[shlo_type.ShloTensorSpec]:
+  """Converts leafs of a PyTree of shape/dtype objects to ShloTensorSpec.
+
+  Args:
+    tree: A PyTree where leaves have shape/dtype attributes.
+
+  Returns:
+    A PyTree with the same structure as the input, but with leaves converted to
+    ShloTensorSpec.
+
+  Raises:
+    ValueError: If any leaf node in the tree cannot be converted to
+      ShloTensorSpec.
+  """
+
+  def _convert_leaf(path, x: Any) -> shlo_type.ShloTensorSpec:
+    if isinstance(x, shlo_type.ShloTensorSpec):
+      return x
+
+    # ShloTensorSpec.name is propagated to the named signature and
+    # can also be used as by processors as a preferred name (e.g.
+    # for the SignatureDef in the TF SavedModel).
+    if hasattr(x, "name") and x.name is not None:
+      name = x.name
+    else:
+      name = jax.tree_util.keystr(path, simple=True, separator=".")
+
+    try:
+      if hasattr(x.dtype, "as_numpy_dtype"):
+        np_dtype = np.dtype(x.dtype.as_numpy_dtype())
+      else:
+        np_dtype = np.dtype(x.dtype)
+      return shlo_type.ShloTensorSpec(
+          x.shape, shlo_type.np_dtype_to_shlo_dtype(np_dtype), name=name
+      )
+    except Exception as err:
+      raise ValueError(f"Failed to convert {x!r} to ShloTensorSpec") from err
+
+  return jax.tree.map_with_path(_convert_leaf, tree)
+
+
+def _concretize_polymorphic_shapes(
+    symbolic_specs: (
+        Mapping[Any, jaxtyping.PyTree[jax.ShapeDtypeStruct]]
+        | Sequence[jaxtyping.PyTree[jax.ShapeDtypeStruct]]
+    ),
+    symbol_to_values: Mapping[str, Sequence[int]],
+) -> Sequence[jaxtyping.PyTree[jax.ShapeDtypeStruct]]:
+  """Concretizes a symbolic polymorphic shape to a list of concrete shapes."""
+  symbol_names = list(symbol_to_values.keys())
+  symbol_value_combos = list(
+      itertools.product(*(symbol_to_values[name] for name in symbol_names))
+  )
+
+  def _concretize_shapes(symbol_to_value: Mapping[str, int]):
+    return jax.tree_util.tree_map(
+        lambda spec: _concretize_spec(spec, symbol_to_value),
+        symbolic_specs,
+    )
+
+  logging.info(
+      "%s Concretizing polymorphic shapes for symbols %s with values %s.",
+      constants.LOG_PREFIX,
+      symbol_names,
+      symbol_value_combos,
+  )
+  return [
+      _concretize_shapes(dict(zip(symbol_names, symbol_value_combo)))
+      for symbol_value_combo in symbol_value_combos
+  ]
+
+
+def _concretize_spec(
+    symbolic_spec: jax.ShapeDtypeStruct,
+    symbol_to_value: Mapping[str, int],
+) -> jax.ShapeDtypeStruct:
+  """Concretizes a symbolic spec with polymorphic shapes to a concrete one."""
+  concrete_shape = []
+  for d in symbolic_spec.shape:
+    if isinstance(d, int):
+      concrete_shape.append(d)
+    else:
+      d_str = str(d)
+      if d_str not in symbol_to_value:
+        raise ValueError(
+            f"Symbol {d_str!r} not found in symbol_to_value map:"
+            f" {symbol_to_value}"
+        )
+      concrete_shape.append(symbol_to_value[d_str])
+  return jax.ShapeDtypeStruct(tuple(concrete_shape), symbolic_spec.dtype)
