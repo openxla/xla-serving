@@ -62,7 +62,7 @@ class SaveModelTest(test_utils.NptTestCase):
     )
     export_path = self.create_tempdir().full_path
     main_lib.save(
-        model=model,
+        model,
         export_path=export_path,
         serving_configs=[cfg],
     )
@@ -345,7 +345,7 @@ class SaveModelTest(test_utils.NptTestCase):
     )
     export_path = self.create_tempdir().full_path
     main_lib.save(
-        model=model,
+        model,
         export_path=export_path,
         serving_configs=[cfg],
     )
@@ -485,7 +485,7 @@ class SaveModelTest(test_utils.NptTestCase):
     )
     export_path = self.create_tempdir().full_path
     main_lib.save(
-        model=model,
+        model,
         export_path=export_path,
         serving_configs=[cfg],
     )
@@ -526,7 +526,7 @@ class SaveModelTest(test_utils.NptTestCase):
         'serving_default': [{'x': jnp.ones((4,), dtype=jnp.float32)}],
     }
     main_lib.save(
-        model=model,
+        model,
         export_path=export_path,
         serving_configs=[cfg],
         warmup_examples=warmup_examples,
@@ -578,9 +578,9 @@ class ValidateSaveParamsTest(absltest.TestCase):
       )
 
   def test_ambiguous_method_key(self):
-    with self.assertRaisesRegex(ValueError, 'does not specify a method key'):
+    with self.assertRaisesRegex(ValueError, 'Method key is not specified'):
       main_lib.save(
-          model=jax_model.JaxModel(
+          jax_model.JaxModel(
               apply_fn_bundle={
                   'key1': jax_model.ApplyFnBundle(apply_fn=lambda p, x: x),
                   'key2': jax_model.ApplyFnBundle(apply_fn=lambda p, x: x),
@@ -597,7 +597,7 @@ class ValidateSaveParamsTest(absltest.TestCase):
       )
 
   def test_invalid_method_key(self):
-    with self.assertRaisesRegex(ValueError, 'does not exist in the JAX model'):
+    with self.assertRaisesRegex(ValueError, 'not found in ApplyFnBundle'):
       main_lib.save(
           jax_model.JaxModel(
               apply_fn_bundle=jax_model.ApplyFnBundle(apply_fn=lambda p, x: x),

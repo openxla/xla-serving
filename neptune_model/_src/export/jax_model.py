@@ -152,6 +152,7 @@ class JaxModel:
   Exactly one of `params` or `checkpoint_path` must be provided.
 
   Attributes:
+    name: The name of the model.
     apply_fn_bundle: The function bundle for applying the model, or a mapping of
       such bundles.
     params: The parameters of the model.
@@ -163,6 +164,7 @@ class JaxModel:
       apply_fn_bundle: ApplyFnBundle | Mapping[str, ApplyFnBundle],
       params: jaxtyping.PyTree | None = None,
       jax_mesh: jax.sharding.Mesh | None = None,
+      name: str = 'jax_model',
   ):
     if isinstance(apply_fn_bundle, Mapping):
       self._apply_fn_bundle = apply_fn_bundle
@@ -170,6 +172,11 @@ class JaxModel:
       self._apply_fn_bundle = {SERVING_DEFAULT_KEY: apply_fn_bundle}
     self._params = params
     self._jax_mesh = jax_mesh
+    self._name = name
+
+  @property
+  def name(self) -> str:
+    return self._name
 
   @property
   def params(self) -> jaxtyping.PyTree | None:

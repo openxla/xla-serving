@@ -83,7 +83,7 @@ def export_model(export_path: str):
 
   main_lib.save(
       export_path=export_path,
-      model=jax_model.JaxModel(
+      models=jax_model.JaxModel(
           apply_fn_bundle=jax_model.ApplyFnBundle(
               apply_fn=apply_fn,
               input_polymorphic_shapes={

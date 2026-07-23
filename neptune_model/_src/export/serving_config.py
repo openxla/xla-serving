@@ -14,10 +14,9 @@
 
 """Serving configuration for JAX models."""
 
-from collections.abc import Sequence
+from collections.abc import Sequence, Set
 import dataclasses
 import itertools
-from typing import Any
 
 from absl import logging
 import jaxtyping
@@ -26,13 +25,48 @@ from neptune_model._src.processors import processor
 from neptune_model.protos import orchestration_pb2
 
 
+@dataclasses.dataclass(frozen=True)
+class ModelCall:
+  """Configuration for invoking a specific model method within an orchestration.
+
+  Attributes:
+    model_name: The name of the model to call.
+    method_key: The identifier of the method to invoke on the model.
+    input_keys: The keys of the input dict that the function expects. Only used
+      when the `graph_based` flag is True.
+    output_keys: The keys of the output dict that the function produces. Only
+      used when the `graph_based` flag is True.
+    use_batching: Whether to enable batching for this call.
+  """
+
+  model_name: str
+  method_key: str
+  input_keys: Sequence[str] = dataclasses.field(default_factory=list)
+  output_keys: Sequence[str] = dataclasses.field(default_factory=list)
+  use_batching: bool = False
+
+
+@dataclasses.dataclass(frozen=True)
+class Orchestration:
+  """Defines an ordered or dependency-driven workflow of model invocations.
+
+  Attributes:
+    model_calls: The sequence of model calls to execute.
+    graph_based: If False, calls are executed sequentially in order. If True,
+      execution order is determined by data dependencies.
+  """
+
+  model_calls: Sequence[ModelCall]
+  graph_based: bool = False
+
+
 @dataclasses.dataclass(kw_only=True)
 class ServingConfig:
   """Serving config for a Jax model.
 
   Attributes:
-    serving_signature: The name that uniquely identifies this serving config
-      in the serving pipeline. Defaults to "serving_default".
+    serving_signature: The name that uniquely identifies this serving config in
+      the serving pipeline. Defaults to "serving_default".
     method_key: An optional key used to select a specific `apply_fn` from the
       model. If not provided, the model must only have one `apply_fn`.
     input_signature: The expected structure and shape of inputs for the model,
@@ -42,6 +76,8 @@ class ServingConfig:
     processing: Optional processing configuration. If not provided, only a JAX
       model will be exported. If provided, the JAX model will be augmented by
       the processors defined in the processing pipeline.
+    orchestration: Optional workflow defining a sequence or dependency graph of
+      model invocations.
   """
 
   serving_signature: str = "serving_default"
@@ -50,9 +86,16 @@ class ServingConfig:
   input_signature: jaxtyping.PyTree = None
   batch_options: orchestration_pb2.BatchOptions | None = None
   processing: processor.Processing | None = None
+  orchestration: Orchestration | None = None
 
   def __post_init__(self):
-    """Validates the batch options."""
+    """Validates the batch options and processing/orchestration."""
+    if self.processing is not None and self.orchestration is not None:
+      raise ValueError(
+          "Cannot specify both processing and orchestration in ServingConfig."
+          " They are mutually exclusive."
+      )
+
     if self.batch_options is None or self.batch_options.batch_component in (
         orchestration_pb2.BatchOptions.BATCH_COMPONENT_UNSPECIFIED,
         orchestration_pb2.BatchOptions.NO_BATCHING,

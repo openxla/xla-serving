@@ -45,6 +45,9 @@ from neptune_model._src.processors import tf_processor
 from neptune_model.protos import orchestration_pb2
 
 
+Model = jax_model.JaxModel
+
+
 @dataclasses.dataclass
 class NeptuneModelSaveBundle:
   """A bundle of objects to be saved in the Neptune model format.
@@ -94,30 +97,75 @@ class PipelineNode:
   role: orchestration_pb2.Role
 
 
+def _build_orchestration_pipeline_nodes(
+    models: Sequence[Model],
+    orchestration: serving_config.Orchestration,
+) -> Sequence[PipelineNode]:
+  """Builds pipeline nodes based on orchestration."""
+
+  pipeline_nodes = []
+  for model_call in orchestration.model_calls:
+    model = None
+    for m in models:
+      if hasattr(m, 'name') and m.name == model_call.model_name:
+        model = m
+        break
+    if model is None:
+      raise ValueError(
+          f'Model {model_call.model_name!r} not found in provided models'
+      )
+
+    if isinstance(model, jax_model.JaxModel):
+      if model_call.method_key not in model.method_keys():
+        raise ValueError(
+            f'Method {model_call.method_key!r} not found in model'
+            f' {model.name!r}'
+        )
+      processor_inst = jax_processor.JaxProcessor(
+          model=model,
+          name=f'{model.name}_{model_call.method_key}',
+          method_key=model_call.method_key,
+          checkpoint_path=f'{constants.DEFAULT_CHECKPOINT_SUBDIR}/{model.name}',
+          weights_name=f'{model.name}_{constants.WEIGHTS_NAME}',
+      )
+    else:
+      raise ValueError(f'Unknown model type: {type(model)}')
+    # TODO: Add support for graph based orchestration.
+    pipeline_nodes.append(
+        PipelineNode(
+            processor=processor_inst,
+            role=getattr(model_call, 'role', orchestration_pb2.ROLE_MODEL),
+        )
+    )
+
+  return pipeline_nodes
+
+
 def _build_pipeline_nodes(
-    model: jax_model.JaxModel,
+    models: Sequence[Model],
     cfg: serving_config.ServingConfig,
 ) -> Sequence[PipelineNode]:
-  """Builds a sequence of PipelineNodes for the given model and serving config.
+  """Builds a sequence of PipelineNodes for the given models and serving config.
 
-  The pipeline nodes are created based on the processing configuration in the
-  serving config.
+  The pipeline nodes are created based on the orchestration and processing
+  configurations in the serving config.
 
   Args:
-    model: The JAX model being exported.
-    cfg: The serving configuration for this model.
+    models: A sequence of models available for the pipeline.
+    cfg: The serving configuration for this pipeline.
 
   Returns:
     A sequence of PipelineNodes. The ordering of the nodes is going to be
     preserved in the exported model.
 
   Raises:
-    ValueError: If processing configuration is inconsistent with serving config
-    batch options.
+    ValueError: If a model/method is not found or batch options are invalid.
   """
+  if cfg.orchestration:
+    return _build_orchestration_pipeline_nodes(models, cfg.orchestration)
 
   jax_processor_inst = jax_processor.JaxProcessor(
-      model=model,
+      model=models[0],
       name=cfg.serving_signature,
       method_key=cfg.method_key,
       checkpoint_path=constants.DEFAULT_CHECKPOINT_SUBDIR,
@@ -272,21 +320,30 @@ def _update_save_bundle(
 
 
 def _validate_save_params(
-    model: jax_model.JaxModel,
+    models: Sequence[Model],
     serving_configs: Sequence[serving_config.ServingConfig],
 ) -> None:
-  """Validates the save parameters for the given model and serving configs.
+  """Validates the save parameters for the given models and serving configs.
 
-  Should be used for validations that cross multiple serving configs and the
-  JAX model.
+  Should be used for validations that cross multiple models/serving configs.
 
   Args:
-    model: The JAX model being exported.
+    models: The models to validate.
     serving_configs: The serving configurations to validate.
 
   Raises:
     ValueError: If save params are not valid.
   """
+  if not models:
+    raise ValueError('Must specify at least one model.')
+
+  model_names = [m.name for m in models if hasattr(m, 'name')]
+  if len(set(model_names)) != len(model_names):
+    raise ValueError(
+        'Model names must be unique across all provided models. Got:'
+        f' {model_names}'
+    )
+
   serving_signatures = {cfg.serving_signature for cfg in serving_configs}
   if len(serving_signatures) != len(serving_configs):
     raise ValueError(
@@ -298,48 +355,53 @@ def _validate_save_params(
       raise ValueError(
           f'Serving config {cfg.serving_signature!r} must have input signature'
       )
-    if cfg.method_key is None and len(model.method_keys()) != 1:
+    if cfg.orchestration and cfg.processing:
       raise ValueError(
-          f'Serving config {cfg.serving_signature!r} does not specify a'
-          ' method key, but the JAX model has more than one apply_fn:'
-          f' {list(model.method_keys())}. Please specify a method key'
-          ' explicitly.'
+          f'Serving config {cfg.serving_signature!r} cannot specify both'
+          ' orchestration and processing.'
       )
-    if cfg.method_key is not None and cfg.method_key not in model.method_keys():
+    if len(models) > 1 and cfg.orchestration is None:
       raise ValueError(
-          f'Serving config {cfg.serving_signature!r} method key'
-          f' `{cfg.method_key!r}` does not exist in the JAX model'
+          'When multiple models are provided, orchestration must be specified'
+          f' in ServingConfig {cfg.serving_signature!r}.'
       )
 
 
 def save(
-    model: jax_model.JaxModel,
-    export_path: str,
-    serving_configs: Sequence[serving_config.ServingConfig],
+    models: Sequence[Model] | Model,
+    export_path: str = '',
+    serving_configs: Sequence[serving_config.ServingConfig] = (),
     *,
     warmup_examples: Mapping[str, Sequence[Any]] | None = None,
 ) -> None:
-  """Saves a JAX model to neptune model format.
+  """Saves model(s) to neptune model format.
 
   Args:
-    model: The JAX model to save.
+    models: The model or sequence of models to save.
     export_path: The directory to which to save the model.
     serving_configs: The serving configurations.
     warmup_examples: Optional mapping of serving signatures to a sequence of
       warmup examples. Each example is a dictionary mapping input names to
       tensors, NumPy arrays, or any object convertible to a NumPy array.
   """
+  if models is None:
+    raise ValueError('Must specify models.')
+
+  if not isinstance(models, Sequence):
+    models = [models]
+
   logging.info(
       'Saving model=%s to export_path=%s with serving_configs=%s',
-      model,
+      models,
       export_path,
       serving_configs,
   )
-  _validate_save_params(model, serving_configs)
+  _validate_save_params(models, serving_configs)
+
   save_bundle = NeptuneModelSaveBundle()
   for cfg in serving_configs:
     _update_save_bundle(
-        pipeline_nodes=_build_pipeline_nodes(model, cfg),
+        pipeline_nodes=_build_pipeline_nodes(models, cfg),
         cfg=cfg,
         save_bundle=save_bundle,
     )

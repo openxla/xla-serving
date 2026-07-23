@@ -105,7 +105,7 @@ class MainLibOrchestrationTest(test_utils.NptTestCase):
 
     export_path = pathlib.Path(self.create_tempdir().full_path)
     main_lib.save(
-        model=model,
+        model,
         export_path=str(export_path),
         serving_configs=[cfg],
     )
@@ -169,6 +169,97 @@ class MainLibOrchestrationTest(test_utils.NptTestCase):
       # Check that variables var1 and var2 are present and have correct values
       self.assertEqual(var1_loaded.numpy(), 1.0)
       self.assertEqual(var2_loaded.numpy(), 2.0)
+
+  def test_save_multiple_jax_models_with_orchestration(self):
+    model1 = jax_model.JaxModel(
+        name='model1',
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=lambda params, inputs: {'y': inputs['x'] * params['w']},
+            jax_export_kwargs={'platforms': ['cpu']},
+        ),
+        params={'w': jnp.array(2.0, dtype=jnp.float32)},
+    )
+    model2 = jax_model.JaxModel(
+        name='model2',
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=lambda params, inputs: {'z': inputs['y'] + params['v']},
+            jax_export_kwargs={'platforms': ['cpu']},
+        ),
+        params={'v': jnp.array(5.0, dtype=jnp.float32)},
+    )
+
+    orchestration = serving_config.Orchestration(
+        model_calls=[
+            serving_config.ModelCall(
+                model_name='model1',
+                method_key='serving_default',
+            ),
+            serving_config.ModelCall(
+                model_name='model2',
+                method_key='serving_default',
+            ),
+        ]
+    )
+
+    cfg = serving_config.ServingConfig(
+        serving_signature='serving_default',
+        input_signature={
+            'x': jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.float32)
+        },
+        orchestration=orchestration,
+    )
+
+    export_path = pathlib.Path(self.create_tempdir().full_path)
+    main_lib.save(
+        models=[model1, model2],
+        export_path=str(export_path),
+        serving_configs=[cfg],
+    )
+
+    self.assertTrue((export_path / 'checkpoint' / 'model1').exists())
+    self.assertTrue((export_path / 'checkpoint' / 'model2').exists())
+
+    with open(export_path / 'orchestration.pb', 'rb') as f:
+      pipelines_proto = orchestration_pb2.Pipelines.FromString(f.read())
+
+    pipeline = pipelines_proto.name_to_pipeline['serving_default']
+    self.assertLen(pipeline.components, 2)
+    self.assertEqual(
+        pipeline.components[0].function_name, 'model1_serving_default'
+    )
+    self.assertEqual(
+        pipeline.components[1].function_name, 'model2_serving_default'
+    )
+
+  def test_duplicate_model_names(self):
+    model1 = jax_model.JaxModel(
+        name='model1',
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=lambda params, inputs: {'y': inputs['x'] * params['w']},
+            jax_export_kwargs={'platforms': ['cpu']},
+        ),
+        params={'w': jnp.array(2.0, dtype=jnp.float32)},
+    )
+    model2 = jax_model.JaxModel(
+        name='model1',
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=lambda params, inputs: {'z': inputs['y'] + params['v']},
+            jax_export_kwargs={'platforms': ['cpu']},
+        ),
+        params={'v': jnp.array(5.0, dtype=jnp.float32)},
+    )
+    cfg = serving_config.ServingConfig(
+        serving_signature='serving_default',
+        input_signature={
+            'x': jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.float32)
+        },
+    )
+    with self.assertRaisesRegex(ValueError, 'Model names must be unique'):
+      main_lib.save(
+          models=[model1, model2],
+          export_path='test_path',
+          serving_configs=[cfg],
+      )
 
 
 if __name__ == '__main__':

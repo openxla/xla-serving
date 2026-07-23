@@ -16,7 +16,7 @@
 
 from collections.abc import Callable, Mapping, Sequence
 import dataclasses
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 import jaxtyping
 
@@ -156,7 +156,7 @@ class SequentialProcessing:
   Example:
 
     main_lib.save(
-        model=jax_model,
+        models=jax_model,
         export_path=export_path,
         serving_configs=[
             serving_config.ServingConfig(

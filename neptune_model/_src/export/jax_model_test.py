@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for neptune.model._src.export.jax_model."""
+"""Tests for neptune.model._src.export.jax_module."""
 
 from absl.testing import absltest
 import jax
@@ -25,6 +25,7 @@ class JaxModelTest(absltest.TestCase):
   def test_create_jax_model_with_bundle_and_params(self):
     bundle = jax_model.ApplyFnBundle(apply_fn=lambda p, x: x * p['w'])
     model = jax_model.JaxModel(
+        name='test_model',
         apply_fn_bundle=bundle,
         params={'w': jnp.array(2.0)},
     )
@@ -37,6 +38,7 @@ class JaxModelTest(absltest.TestCase):
   def test_create_jax_model_with_bundle_map_and_params(self):
     bundle = jax_model.ApplyFnBundle(apply_fn=lambda p, x: x * p['w'])
     model = jax_model.JaxModel(
+        name='test_model',
         apply_fn_bundle={'another_key': bundle},
         params={'w': jnp.array(2.0)},
     )

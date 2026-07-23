@@ -141,7 +141,7 @@ def export_llm(
 
   # 6. Save model bundle
   main_lib.save(
-      model=npt_jax_model,
+      models=npt_jax_model,
       export_path=config.export_dir,
       serving_configs=[serving_cfg],
   )
