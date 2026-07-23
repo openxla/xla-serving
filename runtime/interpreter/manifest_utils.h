@@ -15,6 +15,7 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_MANIFEST_UTILS_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_MANIFEST_UTILS_H_
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <vector>
@@ -31,7 +32,6 @@
 #include "protos/type.pb.h"  // from @neptune
 #include "runtime/core/flat_signature.h"  // from @neptune
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
-#include "runtime/core/type.h"  // from @neptune
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
@@ -183,6 +183,12 @@ GetStableHloFunctionsByObjectName(
                               const neptune_model_manifest::TopLevelObject*>&
         manifest_objects,
     absl::string_view function_object_name);
+
+// Validates the compiled executable metadata (such as aot_kept_var_idx) against
+// the number of function inputs.
+absl::Status ValidateCompiledExecutable(
+    const neptune_model_manifest::CompiledExecutableBody& compiled_exec,
+    size_t num_inputs);
 
 }  // namespace neptune
 

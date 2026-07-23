@@ -15,6 +15,7 @@
 #include "runtime/interpreter/manifest_utils.h"  // from @neptune
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -62,7 +63,6 @@
 namespace neptune {
 
 using type::Dict;
-using type::None;
 using type::StringTypePairs;
 using type::Tuple;
 using type::Type;
@@ -834,6 +834,19 @@ GetStableHloFunctionsByObjectName(
     }
   }
   return functions;
+}
+
+absl::Status ValidateCompiledExecutable(
+    const neptune_model_manifest::CompiledExecutableBody& compiled_exec,
+    size_t num_inputs) {
+  for (int idx : compiled_exec.aot_kept_var_idx()) {
+    if (idx < 0 || idx >= num_inputs) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "CompiledExecutableBody has invalid aot_kept_var_idx: ", idx,
+          ", expected in [0, ", num_inputs, ")"));
+    }
+  }
+  return absl::OkStatus();
 }
 
 }  // namespace neptune

@@ -179,6 +179,7 @@ cc_library(
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:cord",
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/types:span",
@@ -189,6 +190,7 @@ cc_library(
         "@neptune//runtime/core:common_util",
         "@neptune//runtime/core:constants",
         "@neptune//runtime/core:flat_signature",
+        "@neptune//runtime/core:ifrt_device_utils",
         "@neptune//runtime/core:ifrt_loaded_variable_registry",
         "@neptune//runtime/core:stablehlo",
         "@neptune//runtime/core:stablehlo_utils",
@@ -208,6 +210,8 @@ cc_library(
         "@tsl//tsl/platform:path",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/python/ifrt",
+        "@xla//xla/python/ifrt:serdes",
+        "@xla//xla/python/pjrt_ifrt:xla_ifrt",
         "@xla//xla/tsl/concurrency:future",
         "@xla//xla/tsl/lib/monitoring:counter",
         "@xla//xla/tsl/lib/monitoring:counter_gauge",
@@ -302,3 +306,36 @@ cc_library(
 
 # TODO: add a dependency check test to make sure that the interpreter does not depend
 # on any TensorFlow library. Currently this is blocked. See cl/704297184 for more details.
+
+cc_library(
+    name = "aot_interpreter_test_lib",
+    testonly = 1,
+    srcs = ["aot_interpreter_test.cc"],
+    data = [
+        "//learning/infra/mira/experimental/orbax_model/interpreter/testdata:linear_model_gen",
+        "//learning/infra/mira/experimental/orbax_model/interpreter/testdata:linear_model_unsharded_gen",
+    ],
+    deps = [
+        ":interpreter",
+        ":interpreter_create_options",
+        ":interpreter_test_base",
+        ":manifest_utils",
+        "//devtools/build/runtime:get_runfiles_dir",
+        "//testing/base/public:gunit_main",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/synchronization",
+        "@llvm-project//mlir:IR",
+        "@neptune//protos:manifest_cc_proto",
+        "@neptune//protos:orchestration_cc_proto",
+        "@xla//xla/pjrt:mlir_to_hlo",
+        "@xla//xla/pjrt/proto:compile_options_proto_cc",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/python/ifrt:serdes",
+        "@xla//xla/python/ifrt/hlo:hlo_program",
+        "@xla//xla/python/pjrt_ifrt:xla_ifrt",
+        "@xla//xla/tsl/platform:env",
+    ],
+    alwayslink = 1,
+)

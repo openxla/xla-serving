@@ -22,6 +22,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -36,6 +37,7 @@
 #include "absl/random/random.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/cord.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
@@ -47,6 +49,7 @@
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
 #include "runtime/core/constants.h"  // from @neptune
 #include "runtime/core/flat_signature.h"  // from @neptune
+#include "runtime/core/ifrt_device_utils.h"  // from @neptune
 #include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune
 #include "runtime/core/stablehlo.h"  // from @neptune
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
@@ -70,11 +73,16 @@
 #include "google/protobuf/repeated_ptr_field.h"
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
+#include "xla/python/ifrt/device_list.h"  // from @xla
+#include "xla/python/ifrt/executable.h"  // from @xla
+#include "xla/python/ifrt/serdes.h"  // from @xla
+#include "xla/python/pjrt_ifrt/xla_compiler.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/lib/monitoring/counter.h"  // from @xla
 #include "xla/tsl/lib/monitoring/counter_gauge.h"  // from @xla
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
+#include "xla/tsl/platform/file_system.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
@@ -111,6 +119,11 @@ auto* request_count = tsl::monitoring::Counter<4>::New(
 
 using KernelSubGraph = std::vector<std::unique_ptr<Kernel>>;
 
+struct BucketAotData {
+  xla::ifrt::LoadedExecutableRef executable;
+  StableHlo::Spec spec;
+};
+
 absl::Status ValidateStableHlo(
     absl::Span<const neptune_model_manifest::Function* absl_nonnull const>
         funcs) {
@@ -129,6 +142,83 @@ absl::Status ValidateStableHlo(
     // TODO b/401364010: Verify all have the same number of inputs and outputs.
   }
   return absl::OkStatus();
+}
+
+absl::StatusOr<std::shared_ptr<tsl::ReadOnlyMemoryRegion>> MapAotMemoryRegion(
+    absl::string_view model_path,
+    const neptune_model_manifest::CompiledExecutableBody& compiled_exec) {
+  if (!compiled_exec.has_aot_executable()) {
+    return absl::InvalidArgumentError(
+        "CompiledExecutableBody missing aot_executable.");
+  }
+  const auto& aot_exec = compiled_exec.aot_executable();
+  if (!aot_exec.has_file_system_location()) {
+    return absl::InvalidArgumentError(
+        "aot_executable missing file_system_location.");
+  }
+  const auto& location = aot_exec.file_system_location();
+  TF_ASSIGN_OR_RETURN(std::string file_path,
+                      GetAbsoluteFileSystemPath(model_path, location));
+
+  LOG(INFO) << "Mapping AOT executable file: " << file_path;
+
+  std::unique_ptr<tsl::ReadOnlyMemoryRegion> memory_region;
+  TF_RETURN_IF_ERROR(tsl::Env::Default()->NewReadOnlyMemoryRegionFromFile(
+      file_path, &memory_region));
+
+  return std::shared_ptr<tsl::ReadOnlyMemoryRegion>(std::move(memory_region));
+}
+
+absl::StatusOr<const neptune_model_manifest::CompiledExecutableBody*>
+SelectCompiledExecutable(const neptune_model_manifest::Function& func,
+                         absl::string_view target_topology_label) {
+  if (target_topology_label.empty()) {
+    return absl::InvalidArgumentError(
+        "target_topology_label is strictly required for AOT execution "
+        "routing.");
+  }
+  for (const auto& compiled_exec :
+       func.body().stable_hlo_body().compiled_executables()) {
+    if (target_topology_label == compiled_exec.target_topology_label()) {
+      return &compiled_exec;
+    }
+  }
+
+  return absl::NotFoundError(
+      absl::StrCat("No matching AOT executable found for topology: ",
+                   target_topology_label));
+}
+
+absl::Status VerifyExecutableCompatibility(
+    xla::ifrt::Client& ifrt_client,
+    const neptune_model_manifest::CompiledExecutableBody& compiled_exec,
+    xla::ifrt::DeviceListRef ifrt_device_list,
+    xla::ifrt::Serialized* serialized_executable_version) {
+  if (compiled_exec.executable_version().empty()) {
+    return absl::InvalidArgumentError(
+        "AOT executable_version is missing in the manifest.");
+  }
+  if (!serialized_executable_version->ParseFromString(
+          compiled_exec.executable_version())) {
+    return absl::InvalidArgumentError(
+        "Failed to parse executable_version proto.");
+  }
+  auto deserialized_version =
+      xla::ifrt::Deserialize<xla::ifrt::ExecutableVersion>(
+          *serialized_executable_version,
+          std::make_unique<xla::ifrt::DeserializeOptions>());
+  if (!deserialized_version.ok()) {
+    return deserialized_version.status();
+  }
+  absl::Status compat_status =
+      ifrt_client.GetDefaultCompiler()->IsExecutableVersionCompatible(
+          **deserialized_version, ifrt_device_list);
+  if (absl::IsUnimplemented(compat_status)) {
+    VLOG(2) << "IFRT client skipped version compatibility checks "
+               "(unimplemented).";
+    return absl::OkStatus();
+  }
+  return compat_status;
 }
 
 bool ShouldShloRunOnHost(
@@ -631,6 +721,97 @@ absl::Status ValidateInterpreterCreateOptions(
   return absl::OkStatus();
 }
 // LINT.ThenChange(//depot//third_party/neptune/runtime/interpreter/interpreter_create_options.h:InterpreterCreateOptions)
+
+// Modular execution bucket loader
+absl::StatusOr<BucketAotData> LoadAotExecutableForBucket(
+    const neptune_model_manifest::Function& func,
+    absl::string_view target_topology_label, absl::string_view component_name,
+    absl::string_view model_path, const AssignedDevices& assigned_devices,
+    xla::ifrt::Client* ifrt_client,
+    std::vector<std::shared_ptr<tsl::ReadOnlyMemoryRegion>>& memory_regions) {
+  TF_ASSIGN_OR_RETURN(const auto* compiled_exec,
+                      SelectCompiledExecutable(func, target_topology_label));
+
+  VLOG(1) << "Loading AOT compiled executable for " << component_name;
+
+  auto mapped_region = MapAotMemoryRegion(model_path, *compiled_exec);
+  if (!mapped_region.ok()) return mapped_region.status();
+
+  std::shared_ptr<tsl::ReadOnlyMemoryRegion> memory_region =
+      *std::move(mapped_region);
+  absl::string_view serialized_executable(
+      static_cast<const char*>(memory_region->data()), memory_region->length());
+  memory_regions.push_back(memory_region);
+
+  std::vector<int> aot_kept_var_idx(compiled_exec->aot_kept_var_idx().begin(),
+                                    compiled_exec->aot_kept_var_idx().end());
+
+  auto input_specs = GetInputSpec(func);
+  if (!input_specs.ok()) return input_specs.status();
+  auto output_specs = GetOutputSpec(func);
+  if (!output_specs.ok()) return output_specs.status();
+
+  TF_RETURN_IF_ERROR(
+      ValidateCompiledExecutable(*compiled_exec, input_specs->size()));
+
+  StableHlo::Spec spec;
+  spec.inputs = *std::move(input_specs);
+  spec.outputs = *std::move(output_specs);
+  spec.mlir_module_kept_var_idx = std::move(aot_kept_var_idx);
+  spec.target_platforms.reserve(
+      func.body().stable_hlo_body().lowering_platforms().size());
+  for (const auto& platform :
+       func.body().stable_hlo_body().lowering_platforms()) {
+    spec.target_platforms.push_back(platform);
+  }
+
+  auto assigned_ifrt_devices =
+      GetAssignedIfrtDevices(*ifrt_client, assigned_devices.num_replicas,
+                             assigned_devices.num_cores_per_replica,
+                             assigned_devices.device_assignment);
+  if (!assigned_ifrt_devices.ok()) return assigned_ifrt_devices.status();
+
+  auto ifrt_device_list = ifrt_client->MakeDeviceList(*assigned_ifrt_devices);
+  if (!ifrt_device_list.ok()) return ifrt_device_list.status();
+
+  xla::ifrt::Serialized serialized_executable_version;
+  absl::Status compat_status = VerifyExecutableCompatibility(
+      *ifrt_client, *compiled_exec, *ifrt_device_list,
+      &serialized_executable_version);
+  if (!compat_status.ok()) {
+    LOG(WARNING) << "AOT executable version is not compatible for "
+                 << component_name << ": " << compat_status.message();
+    return compat_status;
+  }
+
+  auto deserialize_options =
+      std::make_unique<xla::ifrt::XlaDeserializeExecutableOptions>(
+          /*compile_options=*/std::nullopt, *ifrt_device_list);
+
+  absl::Cord serialized_executable_cord = absl::MakeCordFromExternal(
+      serialized_executable, [memory_region](absl::string_view) {
+        // Captures memory_region (shared_ptr) to keep the mmap alive zero-copy.
+      });
+  auto loaded_executable_future =
+      ifrt_client->GetDefaultCompiler()->DeserializeLoadedExecutable(
+          serialized_executable_cord, std::move(deserialize_options));
+
+  auto executable_ref = loaded_executable_future.Await();
+  if (!executable_ref.ok()) return executable_ref.status();
+
+  if (!(*executable_ref)->devices().has_value()) {
+    int total_devices =
+        assigned_devices.num_replicas * assigned_devices.num_cores_per_replica;
+    if (total_devices > 1) {
+      return absl::InvalidArgumentError(
+          "Invalid AOT payload: The XLA compiler strictly requires "
+          "multi-device executables to be bound to a specific device "
+          "assignment, but the loaded artifact is portable.");
+    }
+  }
+  return BucketAotData{std::move(*executable_ref), std::move(spec)};
+}
+
 }  // namespace
 
 absl::StatusOr<std::unique_ptr<Interpreter>> Interpreter::Create(
@@ -782,6 +963,35 @@ absl::Status Interpreter::LoadGraphs() {
   return absl::OkStatus();
 }
 
+// TODO: Support partial loading of per-function data.
+absl::StatusOr<std::vector<std::string>> Interpreter::GetOrLoadWeightNames(
+    absl::string_view weights_name,
+    absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs,
+    const AssignedDevices& assigned_devices,
+    std::shared_ptr<xla::ifrt::Client> ifrt_client) {
+  if (weights_name.empty()) {
+    return std::vector<std::string>{};
+  }
+  absl::MutexLock l(weight_sets_mutex_);
+  // It is possible that multiple pipelines share the set of weights. So it is
+  // okay if `inserted` is true.
+  auto [iter, inserted] = weight_sets_.try_emplace(weights_name);
+
+  // We should always try to load the weights, since only used weights by
+  // the provided `stablehlo_funcs` will be loaded, and `stablehlo_funcs`
+  // across pipelines may need different weights in the same set.
+  TF_ASSIGN_OR_RETURN(DataLoader::LoadResult load_result,
+                      LoadWeights(weights_name, stablehlo_funcs,
+                                  assigned_devices, ifrt_client));
+  if (inserted) {
+    LOG(INFO) << "Adding weight set \"" << iter->first << "\" with "
+              << load_result.data_names.size() << " weights.";
+    // `loaded_weight_names` is used below; we should make a copy
+    iter->second = load_result.data_names;
+  }
+  return load_result.data_names;
+}
+
 absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadStableHloRunnerOp(
     absl::string_view model_function_name, absl::string_view weights_name,
     const neptune_model_orchestration::NamedTensorTypeList* named_inputs,
@@ -815,7 +1025,7 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadStableHloRunnerOp(
       AssignedDevices assigned_devices,
       GetAssignedDevices(
           manifest_, *stablehlo_funcs[0],
-          compile_options.has_value() ? &compile_options.value() : nullptr,
+          compile_options.has_value() ? &*compile_options : nullptr,
           create_options_->ignore_device_assignment_in_manifest));
 
   std::shared_ptr<xla::ifrt::Client> ifrt_client =
@@ -823,28 +1033,11 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadStableHloRunnerOp(
                                     ? create_options_->host_ifrt_client
                                     : create_options_->ifrt_client)
                              : create_options_->ifrt_client;
-  std::vector<std::string> loaded_weight_names;
-  // TODO: Support partial loading of per-function data.
-  if (!weights_name.empty()) {
-    absl::MutexLock l(weight_sets_mutex_);
-    // It is possible that multiple pipelines share the set of weights. So it is
-    // okay if `inserted` is true.
-    auto [iter, inserted] = weight_sets_.try_emplace(weights_name);
 
-    // We should always try to load the weights, since only used weights by
-    // the provided `stablehlo_funcs` will be loaded, and `stablehlo_funcs`
-    // across pipelines may need different weights in the same set.
-    TF_ASSIGN_OR_RETURN(DataLoader::LoadResult load_result,
-                        LoadWeights(weights_name, stablehlo_funcs,
-                                    assigned_devices, ifrt_client));
-    loaded_weight_names = load_result.data_names;
-    if (inserted) {
-      LOG(INFO) << "Adding weight set \"" << iter->first << "\" with "
-                << loaded_weight_names.size() << " weights.";
-      // `loaded_weight_names` is used below; we should make a copy
-      iter->second = loaded_weight_names;
-    }
-  }
+  TF_ASSIGN_OR_RETURN(std::vector<std::string> loaded_weight_names,
+                      GetOrLoadWeightNames(weights_name, stablehlo_funcs,
+                                           assigned_devices, ifrt_client));
+
   LOG(INFO) << "Adding StableHlo function: " << model_function_name;
   return CreateStableHloRunnerOp(
       stablehlo_funcs, manifest_, loaded_weight_names, named_inputs,
@@ -852,6 +1045,170 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadStableHloRunnerOp(
       compile_options.has_value() ? &compile_options.value() : nullptr,
       ifrt_client, *create_options_, create_options_->computation_thread_pool,
       &ifrt_loaded_variable_registry_, callback_id_);
+}
+
+absl::StatusOr<Interpreter::AotLoadResult> Interpreter::LoadAotExecutable(
+    const neptune_model_orchestration::Component& component,
+    absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs,
+    absl::string_view target_topology_label) {
+  if (stablehlo_funcs.empty()) {
+    return absl::InternalError("stablehlo_funcs must not be empty.");
+  }
+
+  AotLoadResult result;
+
+  // 1. Initial validation
+  TF_ASSIGN_OR_RETURN(
+      std::optional<xla::CompileOptionsProto> compile_options,
+      GetCompileOptions(stablehlo_funcs, create_options_->platform_name));
+
+  if (!compile_options.has_value()) {
+    result.last_deserialization_error = absl::FailedPreconditionError(
+        "AOT compilation options not found in manifest.");
+    return result;
+  }
+
+  auto assigned_devices = GetAssignedDevices(
+      manifest_, *stablehlo_funcs[0],
+      compile_options.has_value() ? &*compile_options : nullptr,
+      create_options_->ignore_device_assignment_in_manifest);
+  if (!assigned_devices.ok()) {
+    result.last_deserialization_error = assigned_devices.status();
+    return result;
+  }
+  result.shared_assigned_devices =
+      std::make_shared<const AssignedDevices>(*std::move(assigned_devices));
+
+  // 2. Load Weights outside the bucket loop
+  // TODO: Support multiple weight sets in AOT mode.
+  TF_ASSIGN_OR_RETURN(
+      result.loaded_weight_names,
+      GetOrLoadWeightNames(component.weights_name(), stablehlo_funcs,
+                           *result.shared_assigned_devices,
+                           create_options_->ifrt_client));
+
+  result.executables.reserve(stablehlo_funcs.size());
+  result.aot_memory_regions.reserve(stablehlo_funcs.size());
+  std::vector<StableHlo::Spec> aot_specs;
+  aot_specs.reserve(stablehlo_funcs.size());
+
+  // 3. Safely load executables per bucket
+  for (const auto* func : stablehlo_funcs) {
+    auto bucket_result = LoadAotExecutableForBucket(
+        *func, target_topology_label, component.function_name(),
+        create_options_->model_path, *result.shared_assigned_devices,
+        create_options_->ifrt_client.get(), result.aot_memory_regions);
+
+    if (!bucket_result.ok()) {
+      result.last_deserialization_error = bucket_result.status();
+      break;
+    }
+    result.executables.push_back(std::move(bucket_result->executable));
+    aot_specs.push_back(std::move(bucket_result->spec));
+  }
+
+  // 4. Final validation block
+  // TODO: Update 1:1 validation when exporting multiple JAX
+  // modules as a single OBM model.
+  if (result.executables.size() == stablehlo_funcs.size()) {
+    auto aot_stablehlo = StableHlo::Create(std::move(aot_specs));
+    if (!aot_stablehlo.ok()) {
+      result.last_deserialization_error = aot_stablehlo.status();
+    } else {
+      result.aot_match_found = true;
+      result.aot_stablehlo = *std::move(aot_stablehlo);
+    }
+  }
+
+  return result;
+}
+
+absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadAotRunnerOp(
+    AotLoadResult aot_result,
+    const neptune_model_orchestration::NamedTensorTypeList* named_inputs,
+    const neptune_model_orchestration::NamedTensorTypeList* named_outputs) {
+  KernelBuilderContext builder;
+  TF_RETURN_IF_ERROR(builder.SetConfig(kStableHlo, aot_result.aot_stablehlo));
+  TF_RETURN_IF_ERROR(builder.SetConfig(kIfrtLoadedExecutables,
+                                       std::move(aot_result.executables)));
+  TF_RETURN_IF_ERROR(builder.SetConfig(
+      kIfrtAotMemoryRegions, std::move(aot_result.aot_memory_regions)));
+
+  TF_RETURN_IF_ERROR(
+      builder.SetConfig(kIfrtClient, create_options_->ifrt_client));
+  TF_RETURN_IF_ERROR(builder.SetConfig(
+      kIfrtWorkerThreadPool, create_options_->computation_thread_pool));
+  TF_RETURN_IF_ERROR(builder.SetConfig(kIfrtLoadedVariableRegistry,
+                                       &ifrt_loaded_variable_registry_));
+  TF_RETURN_IF_ERROR(
+      builder.SetConfig(kWeights, aot_result.loaded_weight_names));
+  TF_RETURN_IF_ERROR(
+      builder.SetConfig(kAssignedDevices, aot_result.shared_assigned_devices));
+
+  if (named_inputs != nullptr) {
+    TF_ASSIGN_OR_RETURN(FlatSignature input_flat_signature,
+                        GetFlatSignatureFromNamedSignature(*named_inputs));
+    TF_RETURN_IF_ERROR(
+        builder.SetConfig(kFunctionFlatInputSignature, input_flat_signature));
+  }
+  if (named_outputs != nullptr) {
+    TF_ASSIGN_OR_RETURN(FlatSignature output_flat_signature,
+                        GetFlatSignatureFromNamedSignature(*named_outputs));
+    TF_RETURN_IF_ERROR(
+        builder.SetConfig(kFunctionFlatOutputSignature, output_flat_signature));
+  }
+
+  return GetGlobalKernelRegistry().Create("StableHloRunnerOp", builder);
+}
+
+absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadModelRunnerOp(
+    const neptune_model_orchestration::Component& component,
+    const neptune_model_orchestration::NamedTensorTypeList* named_inputs,
+    const neptune_model_orchestration::NamedTensorTypeList* named_outputs) {
+  TF_ASSIGN_OR_RETURN(
+      std::vector<const neptune_model_manifest::Function*> stablehlo_funcs,
+      GetStableHloFunctionsByObjectName(manifest_objects_,
+                                        component.function_name()));
+
+  if (stablehlo_funcs.empty()) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "No StableHLO functions found for ", component.function_name()));
+  }
+
+  bool has_any_aot = false;
+  for (const auto* func : stablehlo_funcs) {
+    if (!func->body().stable_hlo_body().compiled_executables().empty()) {
+      has_any_aot = true;
+      break;
+    }
+  }
+
+  if (has_any_aot) {
+    TF_ASSIGN_OR_RETURN(
+        AotLoadResult aot_result,
+        LoadAotExecutable(component, stablehlo_funcs,
+                          create_options_->target_topology_label));
+
+    if (aot_result.aot_match_found) {
+      return LoadAotRunnerOp(std::move(aot_result), named_inputs,
+                             named_outputs);
+    }
+
+    if (create_options_->allow_jit_fallback_for_aot) {
+      LOG(WARNING) << "AOT executable loading failed; falling back to JIT "
+                      "compilation. Reason: "
+                   << aot_result.last_deserialization_error;
+    } else {
+      return aot_result.last_deserialization_error.ok()
+                 ? absl::FailedPreconditionError(
+                       "AOT executable missing or Topology mismatch")
+                 : aot_result.last_deserialization_error;
+    }
+  }
+
+  return LoadStableHloRunnerOp(component.function_name(),
+                               component.weights_name(), named_inputs,
+                               named_outputs, create_options_->platform_name);
 }
 
 absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
@@ -875,7 +1232,9 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
   KernelGraph graph;
   std::vector<std::unique_ptr<Kernel>> batched_kernels;
   std::vector<KernelSubGraph> preprocessors;
+  preprocessors.reserve(components.size());
   std::vector<KernelSubGraph> postprocessors;
+  postprocessors.reserve(components.size());
   std::unique_ptr<Kernel> stablehlo_runner_op;
 
   // Explicitly start loading the stablehlo runner op first to accelerate the
@@ -891,12 +1250,10 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
         return absl::InvalidArgumentError(
             "A pipeline can only support one JAX function.");
       }
-      TF_ASSIGN_OR_RETURN(
-          stablehlo_runner_op,
-          LoadStableHloRunnerOp(component.function_name(),
-                                component.weights_name(),
-                                named_signature.inputs, named_signature.outputs,
-                                create_options_->platform_name));
+
+      TF_ASSIGN_OR_RETURN(stablehlo_runner_op,
+                          LoadModelRunnerOp(component, named_signature.inputs,
+                                            named_signature.outputs));
     }
   }
   // Load data processors.
@@ -965,7 +1322,10 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
     }
     preprocessors.clear();
   }
-  if (batching_config.batch_model) {
+  // Add stablehlo_runner_op to batched_kernels only if it was successfully
+  // created (non-null), avoiding inserting null kernel pointers into the graph
+  // for pipelines without a model component.
+  if (batching_config.batch_model && stablehlo_runner_op != nullptr) {
     batched_kernels.push_back(std::move(stablehlo_runner_op));
     stablehlo_runner_op.reset();
   }

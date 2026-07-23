@@ -36,6 +36,7 @@
 #include "protos/orchestration.pb.h"  // from @neptune
 #include "runtime/core/flat_signature.h"  // from @neptune
 #include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune
+#include "runtime/core/stablehlo.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
 #include "runtime/data_loader/data_loader.h"  // from @neptune
 #include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
@@ -45,7 +46,10 @@
 #include "runtime/kernel/kernel.h"  // from @neptune
 #include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
 #include "google/protobuf/repeated_ptr_field.h"
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/python/ifrt/executable.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
+#include "xla/tsl/platform/file_system.h"  // from @xla
 
 namespace neptune {
 
@@ -251,6 +255,57 @@ class Interpreter {
   // - assigned_devices: the assigned devices for the weights.
   absl::StatusOr<DataLoader::LoadResult> LoadWeights(
       absl::string_view weight_set_name,
+      absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs,
+      const AssignedDevices& assigned_devices,
+      std::shared_ptr<xla::ifrt::Client> ifrt_client);
+
+  struct AotLoadResult {
+    // True if a compatible AOT executable was successfully found and loaded.
+    bool aot_match_found = false;
+    // Shared device topology mapping applied across all buckets.
+    std::shared_ptr<const AssignedDevices> shared_assigned_devices;
+    // Names of successfully loaded weights from the variable registry.
+    std::vector<std::string> loaded_weight_names;
+    // Deserialized IFRT loaded executables, strictly ordered by function
+    // bucket.
+    std::vector<xla::ifrt::LoadedExecutableRef> executables;
+    // Synthesized StableHlo instance.
+    std::shared_ptr<StableHlo> aot_stablehlo;
+    // Backing memory regions for the deserialized AOT payload binaries.
+    std::vector<std::shared_ptr<tsl::ReadOnlyMemoryRegion>> aot_memory_regions;
+    // Error status captured during the last failed AOT loading attempt.
+    absl::Status last_deserialization_error;
+  };
+
+  // Loads the model runner kernel for a component, attempting AOT loading first
+  // and falling back to JIT compilation if configured.
+  absl::StatusOr<std::unique_ptr<Kernel>> LoadModelRunnerOp(
+      const neptune_model_orchestration::Component& component,
+      const neptune_model_orchestration::NamedTensorTypeList* named_inputs =
+          nullptr,
+      const neptune_model_orchestration::NamedTensorTypeList* named_outputs =
+          nullptr);
+
+  // Loads an AOT compiled executable for the given component and StableHLO
+  // functions.
+  absl::StatusOr<AotLoadResult> LoadAotExecutable(
+      const neptune_model_orchestration::Component& component,
+      absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs,
+      absl::string_view target_topology_label);
+
+  // Creates a StableHloRunnerOp kernel from an AOT load result and named
+  // signature tensors.
+  absl::StatusOr<std::unique_ptr<Kernel>> LoadAotRunnerOp(
+      AotLoadResult aot_result,
+      const neptune_model_orchestration::NamedTensorTypeList* named_inputs =
+          nullptr,
+      const neptune_model_orchestration::NamedTensorTypeList* named_outputs =
+          nullptr);
+
+  // Loads weights for the given functions or registers and returns the loaded
+  // weight names.
+  absl::StatusOr<std::vector<std::string>> GetOrLoadWeightNames(
+      absl::string_view weights_name,
       absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs,
       const AssignedDevices& assigned_devices,
       std::shared_ptr<xla::ifrt::Client> ifrt_client);
