@@ -1,0 +1,17 @@
+diff --git a/tensorflow/core/kernels/where_op_gpu.cu.h b/tensorflow/core/kernels/where_op_gpu.cu.h
+index 1234567..89abcdef 100644
+--- a/tensorflow/core/kernels/where_op_gpu.cu.h
++++ b/tensorflow/core/kernels/where_op_gpu.cu.h
+@@ -37,3 +37,4 @@
+ #include "tensorflow/core/platform/macros.h"
+ #include "tensorflow/core/platform/types.h"
+ #include "tensorflow/core/util/gpu_kernel_helper.h"
++#include <thrust/iterator/iterator_facade.h>
+@@ -203,3 +203,5 @@
+   typedef int64& reference;
+ 
+-#if (THRUST_VERSION >= 100700)
++#if defined(CCCL_VERSION) && CCCL_VERSION >= 3000000
++  typedef std::random_access_iterator_tag iterator_category;
++#elif (THRUST_VERSION >= 100700)
+    // Use Thrust's iterator categories so we can use these iterators in Thrust
