@@ -126,11 +126,13 @@ def export_llm(
       "input_ids": input_ids_shape,
   }
 
+  jax_export_kwargs = {"platforms": ["tpu"]}
+
   apply_fn_bundle = jax_model.ApplyFnBundle(
       apply_fn=jax_gen_fn,
       input_polymorphic_shapes=model_input_polymorphic_shapes,
       input_polymorphic_shape_symbol_values=symbol_values,
-      jax_export_kwargs={"platforms": ["tpu"]},
+      jax_export_kwargs=jax_export_kwargs,
   )
 
   npt_jax_model = jax_model.JaxModel(

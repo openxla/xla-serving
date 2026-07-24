@@ -142,6 +142,23 @@ class KerasHubTokenizerTF:
         vocabulary=vocab,
         merges=formatted_merges,
     )
+    # Warmup / build all tokenizer tables so StaticHashTables are constructed
+    _ = self.tokenizer(tf.constant(["test"]))
+    _ = self.tokenizer.detokenize(tf.constant([[1, 2]], dtype=tf.int32))
+    # Replace cache.id2value MutableHashTable with a StaticHashTable so it is
+    # saved into GraphDef assets instead of requiring checkpoint variables.
+    if hasattr(self.tokenizer, "cache") and hasattr(
+        self.tokenizer.cache, "id2value"
+    ):
+      table = tf.lookup.StaticHashTable(
+          tf.lookup.KeyValueTensorInitializer(
+              tf.constant([0], dtype=tf.int64),
+              tf.constant(["__dummy__"], dtype=tf.string),
+          ),
+          default_value="",
+      )
+      table.insert = lambda keys, values: None
+      self.tokenizer.cache.id2value = table
 
   def pre_process_fn(
       self, inputs: dict[str, tf.Tensor]

@@ -113,6 +113,10 @@ def jax_exported_to_shlo_fn(
           exported.out_shardings_hlo, out_named_shardings, exported.out_avals
       )
   ])
+  num_user_outputs = exported.out_tree.num_leaves
+  out_avals = exported.out_avals[:num_user_outputs]
+  out_shardings_hlo = out_shardings_hlo[:num_user_outputs]
+
   # TODO: properly get the name for the input signature.
   shlo_in_sig = utils.to_shlo_spec_tree(
       exported.in_avals,
@@ -131,7 +135,7 @@ def jax_exported_to_shlo_fn(
   # while the following tf data processor has the input signature like
   # "input_model_output: ShloTensorSpec(...)".
   shlo_out_sig = utils.to_shlo_spec_tree(
-      exported.out_avals,
+      out_avals,
       out_shardings_hlo,
       None,
       exported.out_tree,
@@ -157,8 +161,7 @@ def jax_exported_to_shlo_fn(
           for v in exported.in_avals
       ),
       physical_out_dtypes=tuple(
-          utils.get_physical_dtype(utils.aval_dtype(v))
-          for v in exported.out_avals
+          utils.get_physical_dtype(utils.aval_dtype(v)) for v in out_avals
       ),
   )
   return shlo_func
