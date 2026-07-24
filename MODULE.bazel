@@ -1,7 +1,7 @@
 module(name = "neptune")
 
 # go/keep-sorted start
-bazel_dep(name = "abseil-cpp", version = "20260107.1")
+bazel_dep(name = "abseil-cpp", version = "20260526.1")
 bazel_dep(name = "abseil-py", version = "2.1.0", repo_name = "absl_py")
 bazel_dep(name = "aspect_bazel_lib", version = "2.11.0")
 bazel_dep(name = "bazel_features", version = "1.50.0")
@@ -14,7 +14,7 @@ bazel_dep(name = "highway", version = "1.3.0", repo_name = "com_google_highway")
 bazel_dep(name = "lz4", version = "1.10.0.bcr.1")
 bazel_dep(name = "nanobind_bazel", version = "2.12.0")
 bazel_dep(name = "nlohmann_json", version = "3.12.0.bcr.1")
-bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "platforms", version = "1.1.0")
 bazel_dep(name = "protobuf", version = "32.1", repo_name = "com_google_protobuf")
 bazel_dep(name = "pybind11_abseil", version = "202402.0")
 bazel_dep(name = "pybind11_bazel", version = "3.0.1")
@@ -81,14 +81,14 @@ archive_override(
 bazel_dep(name = "xla")
 archive_override(
     module_name = "xla",
-    integrity = "sha256-bX4lJ6rIWNvofqlLzr1pToQFuVf6txImf2f5rrGAbFY=",
+    integrity = "sha256-HWw+kRDMfnyL7uSTnhW3JEUKZEVMmu8BDHKOI3MbT18=",
     patch_strip = 1,
     patches = [
         "//third_party/xla:xla_bzlmod_llvm.patch",
         "//third_party/xla:xla_python_3_12.patch",
     ],
-    strip_prefix = "xla-9ab1e95548ebf46a765ef97e3344295d89102549",
-    urls = ["https://github.com/openxla/xla/archive/9ab1e95548ebf46a765ef97e3344295d89102549.tar.gz"],
+    strip_prefix = "xla-6cec4be47c1bff2dfc613a41d4fd53aed8a3b8ae",
+    urls = ["https://github.com/openxla/xla/archive/6cec4be47c1bff2dfc613a41d4fd53aed8a3b8ae.tar.gz"],
 )
 
 xla_third_party = use_extension("@xla//third_party/extensions:third_party.bzl", "third_party_ext")
@@ -106,14 +106,14 @@ override_repo(
 bazel_dep(name = "tensorflow", repo_name = "org_tensorflow")
 archive_override(
     module_name = "tensorflow",
-    integrity = "sha256-17qxh0+UqHWGoQ+DX0GoEMi2C3rnx3K6r2wcJmvMLwo=",
+    integrity = "sha256-wqQ2X7vD1qK7yPnCl511rEGUOTO11oIPf61H5xt7jHU=",
     patch_strip = 1,
     patches = [
         "//third_party/tensorflow:saved_model.patch",
         "//third_party/tensorflow:where_op_gpu.patch",
     ],
-    strip_prefix = "tensorflow-f57c5520be50c8185286b98507074af236251ca0",
-    urls = ["https://github.com/tensorflow/tensorflow/archive/f57c5520be50c8185286b98507074af236251ca0.zip"],
+    strip_prefix = "tensorflow-07a1b0c67f10fc75682d61cd59a737d97e97c94f",
+    urls = ["https://github.com/tensorflow/tensorflow/archive/07a1b0c67f10fc75682d61cd59a737d97e97c94f.zip"],
 )
 
 tf_third_party = use_extension("@org_tensorflow//third_party/extensions:third_party.bzl", "third_party_ext")
