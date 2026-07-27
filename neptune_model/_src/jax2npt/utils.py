@@ -333,10 +333,11 @@ def to_jax_spec(tree: jaxtyping.PyTree) -> jaxtyping.PyTree:
   def _convert_leaf(x: Any) -> jax.ShapeDtypeStruct:
     try:
       if isinstance(x, shlo_type.ShloTensorSpec):
-        return jax.ShapeDtypeStruct(
-            x.shape, shlo_type.shlo_dtype_to_np_dtype(x.dtype)
-        )
-      return jax.ShapeDtypeStruct(x.shape, x.dtype)
+        dtype = shlo_type.shlo_dtype_to_np_dtype(x.dtype)
+      else:
+        dtype = x.dtype
+      shape = tuple(str(s) if s is None else s for s in x.shape)
+      return jax.ShapeDtypeStruct(shape, dtype)
     except Exception as err:
       raise ValueError(
           f"Failed to convert {x!r} to jax.ShapeDtypeStruct"
