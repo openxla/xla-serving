@@ -55,6 +55,28 @@ pybind_extension(
     ],
 )
 
+pybind_extension(
+    name = "optimizer",
+    srcs = ["optimizer.cc"],
+    visibility = [
+        ":friends",
+        ":internal",
+    ],
+    deps = [
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:string_view",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//mlir:BytecodeWriter",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:Parser",
+        "@llvm-project//mlir:Support",
+        "@nanobind_bazel//:nanobind",
+        "@neptune//runtime/core:stablehlo_optimizer",
+        "@xla//xla/pjrt:mlir_to_hlo",
+    ],
+)
+
 config_setting(
     name = "linux_x86_64",
     constraint_values = [
