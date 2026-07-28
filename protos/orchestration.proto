@@ -110,6 +110,8 @@ message Component {
   // This field is primarily used for model functions and is typically omitted
   // for data processors.
   optional string weights_name = 5;
+  // If true, indicates that the function should be batched.
+  bool use_batching = 6;
 }
 // A form of function signature where the input (and output) signature is a flat
 // list of `TensorType`s each associated with a name. This form of signature is

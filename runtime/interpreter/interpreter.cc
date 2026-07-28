@@ -1365,22 +1365,44 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
   return graph;
 }
 
-// TODO: refactor this method into smaller ones.
 // TODO: Add metric to monitor the model that use the legacy
 // fields and remove this function once all models are migrated to the new
 // components.
 absl::StatusOr<KernelGraph> Interpreter::LoadGraph(
     const neptune_model_orchestration::Pipeline& pipeline) {
-  // When there are components in the pipeline and the pipeline is keyword
-  // arguments based, we load the graph from the component proto for now as the
-  // LoadGraphFromComponentProto method is not fully implemented yet.
+  google::protobuf::RepeatedPtrField<neptune_model_orchestration::Component> components;
   if (!pipeline.components().empty()) {
-    return LoadGraphFromComponentProto(pipeline);
+    components = pipeline.components();
+  } else {
+    // If there are no components in the pipeline, create them from legacy
+    // fields and then call LoadGraphFromComponentProto.
+    components = CreateAuxiliaryComponents(pipeline);
   }
-  // If there are no components in the pipeline, create them from legacy fields
-  // and then call LoadGraphFromComponentProto.
-  google::protobuf::RepeatedPtrField<neptune_model_orchestration::Component> components =
-      CreateAuxiliaryComponents(pipeline);
+
+  // Mapping the legacy BatchComponent proto to the new Component.use_batching
+  // flags so that we can have a unified way to handle batching.
+  BatchingConfig batching_config =
+      GetBatchingConfig(*create_options_, pipeline);
+  for (auto& component : components) {
+    bool use_batching = false;
+    switch (component.role()) {
+      case neptune_model_orchestration::ROLE_PREPROCESSOR:
+        use_batching = batching_config.batch_preprocessing;
+        break;
+      case neptune_model_orchestration::ROLE_MODEL:
+        use_batching = batching_config.batch_model;
+        break;
+      case neptune_model_orchestration::ROLE_POSTPROCESSOR:
+        use_batching = batching_config.batch_postprocessing;
+        break;
+      default:
+        break;
+    }
+    if (use_batching) {
+      component.set_use_batching(true);
+    }
+  }
+
   return LoadGraphFromComponentProto(pipeline, &components);
 }
 
