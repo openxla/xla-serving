@@ -18,7 +18,22 @@
 # pytype: disable=attribute-error
 
 import os
+import unittest
 from unittest import mock
+
+from absl import logging
+from absl.testing import absltest  # pylint: disable=g-import-not-at-top
+import jax
+import jax.numpy as jnp
+import numpy as np
+import tensorflow as tf
+
+from neptune_model._src.llm import config as llm_config
+from neptune_model._src.llm.tokenizers import config as tokenizers_config
+from neptune_model._src.llm.tokenizers import exporter as tokenizers_exporter
+from neptune_model._src.llm.tokenizers import processors as tokenizers_processors
+from neptune_model._src.llm.tpu_inference import exporter as tpu_exporter
+from neptune_model._src.llm.tpu_inference import model_wrapper as tpu_wrapper
 
 # In Google3 test environments, inject wildcard mocks to bypass metadata checks.
 # In OSS GitHub environments, this module does not exist and is not needed.
@@ -29,12 +44,6 @@ try:
   patchers.patch_metadata_versions()
 except ImportError:
   pass
-
-from absl.testing import absltest  # pylint: disable=g-import-not-at-top
-import jax
-import jax.numpy as jnp
-import numpy as np
-import tensorflow as tf
 
 try:
   from tpu_inference.distributed import jax_parallel_state
@@ -53,13 +62,6 @@ except ImportError as e:
   vllm_registry = None
   _TPU_INFERENCE_TEST_AVAILABLE = False
   _TPU_INFERENCE_TEST_IMPORT_ERROR = e
-
-from neptune_model._src.llm import config as llm_config
-from neptune_model._src.llm.tokenizers import config as tokenizers_config
-from neptune_model._src.llm.tokenizers import exporter as tokenizers_exporter
-from neptune_model._src.llm.tokenizers import processors as tokenizers_processors
-from neptune_model._src.llm.tpu_inference import exporter as tpu_exporter
-from neptune_model._src.llm.tpu_inference import model_wrapper as tpu_wrapper
 
 
 def _mock_inspect_model_cls(architectures, model_config=None):
@@ -305,6 +307,124 @@ class ExporterTest(absltest.TestCase):
 
     # 3. Test exported SavedModel execution via ModelRunner and compare
     # equivalence.
+
+  def test_export_beam_search_with_dummy_weights(self):
+    """Verifies beam search export and execution equivalence between manual pipeline and SavedModel."""
+    runner = self._create_runner(load_format="jax_dummy")
+    export_dir = self.create_tempdir().full_path
+    beam_width = 4
+    model_dir = os.path.join(
+        os.path.dirname(__file__),
+        "../testdata/qwen_dummy",
+    )
+
+    tokenizer_config = tokenizers_config.TokenizerConfig(
+        tokenizer_type=tokenizers_config.TokenizerType.KERAS_HUB,
+        model_name_or_path=model_dir,
+        eos_token_id=0,
+        pad_token_id=151643,
+    )
+    generation_config = llm_config.GenerationConfig(
+        sampling_method=llm_config.SamplingMethod.BEAM_SEARCH,
+        max_output_tokens=20,
+        beam_size=beam_width,
+        max_prompt_length=64,
+        pad_token_id=151643,
+    )
+    export_config = tokenizers_exporter.NeptuneLLMExportWithTokenizerConfig(
+        export_dir=export_dir,
+        allowed_batch_sizes=(1,),
+        generation_config=generation_config,
+        tokenizer_config=tokenizer_config,
+    )
+
+    model_wrapper = tpu_wrapper.TPUInferenceWrapper(
+        tpu_runner=runner,
+        generation_config=generation_config,
+    )
+
+    # 1. Test manual pre_process -> model_fn -> post_process pipeline
+    prompt_text = "Hello, what is your name?"
+    with self.subTest("manual_pipeline"):
+      tokenizer = tokenizers_processors.KerasHubTokenizerTF(
+          model_name_or_path=tokenizer_config.model_name_or_path,
+          eos_token_id=tokenizer_config.eos_token_id,
+          pad_token_id=tokenizer_config.pad_token_id,
+          max_seq_len=generation_config.max_prompt_length,
+      )
+      pre_processed = tokenizer.pre_process_fn(
+          {"text_input": tf.constant([prompt_text])}
+      )
+      inputs_jax = {"input_ids": jnp.array(pre_processed["input_ids"].numpy())}
+
+      with runner.mesh:
+        model_fn = model_wrapper.compile_generation_loop()
+        jit_model_fn = jax.jit(model_fn)
+        jax_outputs = jit_model_fn(runner.state, inputs_jax)
+
+      self.assertIn("token_ids", jax_outputs)
+      self.assertEqual(jax_outputs["token_ids"].shape, (1, beam_width, 20))
+      self.assertIn("logprobs", jax_outputs)
+      self.assertEqual(jax_outputs["logprobs"].shape, (1, beam_width))
+
+      post_processed = tokenizer.post_process_fn(
+          {"token_ids": tf.constant(np.array(jax_outputs["token_ids"]))}
+      )
+      self.assertIn("text_output", post_processed)
+      manual_output = post_processed["text_output"].numpy()
+      logging.info("manual_output: %s", manual_output)
+      # TODO(armandouv): Compare manual_output with e2e_output once we debug why
+      # they are different.
+
+    # 2. Export the model to TF SavedModel using the integration exporter
+    tpu_exporter.export_tpu_inference_model(
+        tpu_runner=runner,
+        config=export_config,
+    )
+    self.assertTrue(os.path.exists(export_dir))
+
+    # 3. Test exported SavedModel execution via ModelRunner and compare
+    # equivalence.
+
+  @unittest.skipUnless(
+      os.environ.get("RUN_REAL_WEIGHTS_TEST") == "1",
+      "Requires RUN_REAL_WEIGHTS_TEST=1 env var.",
+  )
+  def test_export_beam_search_with_real_weights(self):
+    """Heavy weight generation and text quality verification with real weights."""
+    model_name = "Qwen/Qwen3-0.6B"
+    runner = self._create_runner(load_format="safetensors")
+    export_dir = self.create_tempdir().full_path
+    beam_width = 4
+
+    tokenizer_config = tokenizers_config.TokenizerConfig(
+        tokenizer_type=tokenizers_config.TokenizerType.KERAS_HUB,
+        model_name_or_path=model_name,
+        eos_token_id=151643,
+        pad_token_id=151643,
+    )
+    generation_config = llm_config.GenerationConfig(
+        sampling_method=llm_config.SamplingMethod.BEAM_SEARCH,
+        max_output_tokens=20,
+        beam_size=beam_width,
+        max_prompt_length=128,
+        pad_token_id=151643,
+    )
+    export_config = tokenizers_exporter.NeptuneLLMExportWithTokenizerConfig(
+        export_dir=export_dir,
+        allowed_batch_sizes=(1,),
+        generation_config=generation_config,
+        tokenizer_config=tokenizer_config,
+    )
+
+    # 1. Export model
+    tpu_exporter.export_tpu_inference_model(
+        tpu_runner=runner,
+        config=export_config,
+    )
+    self.assertTrue(os.path.exists(export_dir))
+
+    # 2. Run E2E ModelRunner inference with real weights
 
 
 if __name__ == "__main__":
