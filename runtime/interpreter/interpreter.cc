@@ -194,9 +194,14 @@ absl::Status VerifyExecutableCompatibility(
     const neptune_model_manifest::CompiledExecutableBody& compiled_exec,
     xla::ifrt::DeviceListRef ifrt_device_list,
     xla::ifrt::Serialized* serialized_executable_version) {
+  // TODO: Standard PJRT backends currently do not track XLA
+  // executable versions. We gracefully skip version compatibility checks
+  // when the exporter yields an empty version string.
   if (compiled_exec.executable_version().empty()) {
-    return absl::InvalidArgumentError(
-        "AOT executable_version is missing in the manifest.");
+    LOG_FIRST_N(WARNING, 1)
+        << "AOT executable_version is missing in the manifest. "
+           "Skipping fast-path version compatibility checks.";
+    return absl::OkStatus();
   }
   if (!serialized_executable_version->ParseFromString(
           compiled_exec.executable_version())) {
@@ -734,11 +739,8 @@ absl::StatusOr<BucketAotData> LoadAotExecutableForBucket(
 
   VLOG(1) << "Loading AOT compiled executable for " << component_name;
 
-  auto mapped_region = MapAotMemoryRegion(model_path, *compiled_exec);
-  if (!mapped_region.ok()) return mapped_region.status();
-
-  std::shared_ptr<tsl::ReadOnlyMemoryRegion> memory_region =
-      *std::move(mapped_region);
+  TF_ASSIGN_OR_RETURN(std::shared_ptr<tsl::ReadOnlyMemoryRegion> memory_region,
+                      MapAotMemoryRegion(model_path, *compiled_exec));
   absl::string_view serialized_executable(
       static_cast<const char*>(memory_region->data()), memory_region->length());
   memory_regions.push_back(memory_region);
@@ -746,17 +748,15 @@ absl::StatusOr<BucketAotData> LoadAotExecutableForBucket(
   std::vector<int> aot_kept_var_idx(compiled_exec->aot_kept_var_idx().begin(),
                                     compiled_exec->aot_kept_var_idx().end());
 
-  auto input_specs = GetInputSpec(func);
-  if (!input_specs.ok()) return input_specs.status();
-  auto output_specs = GetOutputSpec(func);
-  if (!output_specs.ok()) return output_specs.status();
+  TF_ASSIGN_OR_RETURN(auto input_specs, GetInputSpec(func));
+  TF_ASSIGN_OR_RETURN(auto output_specs, GetOutputSpec(func));
 
   TF_RETURN_IF_ERROR(
-      ValidateCompiledExecutable(*compiled_exec, input_specs->size()));
+      ValidateCompiledExecutable(*compiled_exec, input_specs.size()));
 
   StableHlo::Spec spec;
-  spec.inputs = *std::move(input_specs);
-  spec.outputs = *std::move(output_specs);
+  spec.inputs = std::move(input_specs);
+  spec.outputs = std::move(output_specs);
   spec.mlir_module_kept_var_idx = std::move(aot_kept_var_idx);
   spec.target_platforms.reserve(
       func.body().stable_hlo_body().lowering_platforms().size());
@@ -765,18 +765,18 @@ absl::StatusOr<BucketAotData> LoadAotExecutableForBucket(
     spec.target_platforms.push_back(platform);
   }
 
-  auto assigned_ifrt_devices =
+  TF_ASSIGN_OR_RETURN(
+      auto assigned_ifrt_devices,
       GetAssignedIfrtDevices(*ifrt_client, assigned_devices.num_replicas,
                              assigned_devices.num_cores_per_replica,
-                             assigned_devices.device_assignment);
-  if (!assigned_ifrt_devices.ok()) return assigned_ifrt_devices.status();
+                             assigned_devices.device_assignment));
 
-  auto ifrt_device_list = ifrt_client->MakeDeviceList(*assigned_ifrt_devices);
-  if (!ifrt_device_list.ok()) return ifrt_device_list.status();
+  TF_ASSIGN_OR_RETURN(auto ifrt_device_list,
+                      ifrt_client->MakeDeviceList(assigned_ifrt_devices));
 
   xla::ifrt::Serialized serialized_executable_version;
   absl::Status compat_status = VerifyExecutableCompatibility(
-      *ifrt_client, *compiled_exec, *ifrt_device_list,
+      *ifrt_client, *compiled_exec, ifrt_device_list,
       &serialized_executable_version);
   if (!compat_status.ok()) {
     LOG(WARNING) << "AOT executable version is not compatible for "
@@ -786,7 +786,7 @@ absl::StatusOr<BucketAotData> LoadAotExecutableForBucket(
 
   auto deserialize_options =
       std::make_unique<xla::ifrt::XlaDeserializeExecutableOptions>(
-          /*compile_options=*/std::nullopt, *ifrt_device_list);
+          /*compile_options=*/std::nullopt, ifrt_device_list);
 
   absl::Cord serialized_executable_cord = absl::MakeCordFromExternal(
       serialized_executable, [memory_region](absl::string_view) {
@@ -1041,8 +1041,7 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadStableHloRunnerOp(
   LOG(INFO) << "Adding StableHlo function: " << model_function_name;
   return CreateStableHloRunnerOp(
       stablehlo_funcs, manifest_, loaded_weight_names, named_inputs,
-      named_outputs,
-      compile_options.has_value() ? &compile_options.value() : nullptr,
+      named_outputs, compile_options.has_value() ? &*compile_options : nullptr,
       ifrt_client, *create_options_, create_options_->computation_thread_pool,
       &ifrt_loaded_variable_registry_, callback_id_);
 }
