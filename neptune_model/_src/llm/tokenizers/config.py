@@ -38,6 +38,6 @@ class TokenizerConfig:
   tokenizer_type: TokenizerType = TokenizerType.KERAS_HUB
   vocab_path: str = ""
   model_name_or_path: str = ""
-  bos_token_id: int = 1
-  eos_token_id: int = 2
-  pad_token_id: int = 0
+  bos_token_id: int | None = None
+  eos_token_id: int | None = None
+  pad_token_id: int | None = None

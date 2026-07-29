@@ -491,6 +491,10 @@ class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
       token IDs and cumulative log probabilities.
     """
     config = self.get_generation_config()
+    if config.pad_token_id is None:
+      raise ValueError(
+          "pad_token_id must be already set in the generation config."
+      )
     sampling_method = config.sampling_method
 
     if sampling_method != llm_config.SamplingMethod.BEAM_SEARCH:
@@ -504,12 +508,9 @@ class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
         inputs: dict[str, jax.Array],
     ) -> dict[str, jax.Array]:
       input_ids = inputs["input_ids"]
-      if "prompt_len" in inputs:
-        prompt_len = inputs["prompt_len"]
-      else:
-        prompt_len = jnp.sum(
-            input_ids != config.pad_token_id, axis=-1, dtype=jnp.int32
-        )
+      prompt_len = jnp.sum(
+          input_ids != config.pad_token_id, axis=-1, dtype=jnp.int32
+      )
       batch_size = input_ids.shape[0]
 
       if batch_size > 1:

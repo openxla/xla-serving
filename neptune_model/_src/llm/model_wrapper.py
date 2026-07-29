@@ -118,8 +118,14 @@ class LLMModelWrapper:
     Returns:
       A JAX apply function accepting (params, inputs) and returning a dictionary
       of output tensors (e.g. {"token_ids": output_tokens}, or {"logits":
-      logits, "log_probs": log_probs, "target_log_probs": target_log_probs} when in SCORING mode).
+      logits, "log_probs": log_probs, "target_log_probs": target_log_probs} when
+      in SCORING mode).
     """
+    if self.generation_config.pad_token_id is None:
+      raise ValueError(
+          "pad_token_id must be already set in the generation config."
+      )
+
     sampling_method = self.generation_config.sampling_method
 
     if sampling_method not in (
@@ -140,14 +146,11 @@ class LLMModelWrapper:
         inputs: dict[str, jax.Array],
     ) -> dict[str, jax.Array]:
       input_ids = inputs["input_ids"]
-      if "prompt_len" in inputs:
-        prompt_len = inputs["prompt_len"]
-      else:
-        prompt_len = jnp.sum(
-            input_ids != self.generation_config.pad_token_id,
-            axis=-1,
-            dtype=jnp.int32,
-        )
+      prompt_len = jnp.sum(
+          input_ids != self.generation_config.pad_token_id,
+          axis=-1,
+          dtype=jnp.int32,
+      )
       batch_size = input_ids.shape[0]
 
       # 1. Allocate KV Cache and execute Prefill Pass

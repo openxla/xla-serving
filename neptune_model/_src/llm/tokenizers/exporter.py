@@ -86,6 +86,13 @@ def export_llm_with_tokenizer(
   )
   trackable_resources = tokenizer.get_trackable_resources()
 
+  if generation_config_instance.pad_token_id is None:
+    generation_config_instance = dataclasses.replace(
+        generation_config_instance,
+        pad_token_id=tokenizer.pad_token_id,
+    )
+    model.generation_config = generation_config_instance
+
   # Map back to Core Config
   core_export_config = core_config.NeptuneLLMExportConfig(
       export_dir=config.export_dir,

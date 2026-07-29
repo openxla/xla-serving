@@ -17,6 +17,7 @@
 # pylint: disable=g-import-not-at-top
 # pytype: disable=attribute-error
 
+import dataclasses
 import os
 import unittest
 from unittest import mock
@@ -170,14 +171,11 @@ class ExporterTest(absltest.TestCase):
     tokenizer_config = tokenizers_config.TokenizerConfig(
         tokenizer_type=tokenizers_config.TokenizerType.KERAS_HUB,
         model_name_or_path=model_dir,
-        eos_token_id=0,
-        pad_token_id=151643,
     )
     generation_config = llm_config.GenerationConfig(
         sampling_method=llm_config.SamplingMethod.GREEDY,
         max_output_tokens=20,
         max_prompt_length=64,
-        pad_token_id=151643,
     )
     export_config = tokenizers_exporter.NeptuneLLMExportWithTokenizerConfig(
         export_dir=export_dir,
@@ -196,16 +194,22 @@ class ExporterTest(absltest.TestCase):
     with self.subTest("manual_pipeline"):
       tokenizer = tokenizers_processors.KerasHubTokenizerTF(
           model_name_or_path=tokenizer_config.model_name_or_path,
-          eos_token_id=tokenizer_config.eos_token_id,
-          pad_token_id=tokenizer_config.pad_token_id,
           max_seq_len=generation_config.max_prompt_length,
       )
       pre_processed = tokenizer.pre_process_fn(
           {"text_input": tf.constant([prompt_text])}
       )
-      inputs_jax = {"input_ids": jnp.array(pre_processed["input_ids"].numpy())}
-
+      inputs_jax = {
+          "input_ids": jnp.array(pre_processed["input_ids"].numpy()),
+      }
       with runner.mesh:  # pytype: disable=attribute-error
+        # The exporter automatically plumbs the pad_token_id, but for the manual
+        # path we must manually inject it into the GenerationConfig before
+        # compile.
+        model_wrapper.generation_config = dataclasses.replace(
+            model_wrapper.generation_config,
+            pad_token_id=tokenizer.pad_token_id,
+        )
         model_fn = model_wrapper.compile_generation_loop()
         jit_model_fn = jax.jit(model_fn)
         jax_outputs = jit_model_fn(runner.state, inputs_jax)
@@ -244,8 +248,6 @@ class ExporterTest(absltest.TestCase):
     tokenizer_config = tokenizers_config.TokenizerConfig(
         tokenizer_type=tokenizers_config.TokenizerType.KERAS_HUB,
         model_name_or_path=model_dir,
-        eos_token_id=0,
-        pad_token_id=151643,
     )
     generation_config = llm_config.GenerationConfig(
         sampling_method=llm_config.SamplingMethod.TOP_K,
@@ -253,7 +255,6 @@ class ExporterTest(absltest.TestCase):
         max_prompt_length=64,
         top_k=2,
         temperature=0.01,
-        pad_token_id=151643,
     )
     export_config = tokenizers_exporter.NeptuneLLMExportWithTokenizerConfig(
         export_dir=export_dir,
@@ -272,16 +273,22 @@ class ExporterTest(absltest.TestCase):
     with self.subTest("manual_pipeline"):
       tokenizer = tokenizers_processors.KerasHubTokenizerTF(
           model_name_or_path=tokenizer_config.model_name_or_path,
-          eos_token_id=tokenizer_config.eos_token_id,
-          pad_token_id=tokenizer_config.pad_token_id,
           max_seq_len=generation_config.max_prompt_length,
       )
       pre_processed = tokenizer.pre_process_fn(
           {"text_input": tf.constant([prompt_text])}
       )
-      inputs_jax = {"input_ids": jnp.array(pre_processed["input_ids"].numpy())}
-
+      inputs_jax = {
+          "input_ids": jnp.array(pre_processed["input_ids"].numpy()),
+      }
       with runner.mesh:  # pytype: disable=attribute-error
+        # The exporter automatically plumbs the pad_token_id, but for the manual
+        # path we must manually inject it into the GenerationConfig before
+        # compile.
+        model_wrapper.generation_config = dataclasses.replace(
+            model_wrapper.generation_config,
+            pad_token_id=tokenizer.pad_token_id,
+        )
         model_fn = model_wrapper.compile_generation_loop()
         jit_model_fn = jax.jit(model_fn)
         jax_outputs = jit_model_fn(runner.state, inputs_jax)
@@ -321,15 +328,12 @@ class ExporterTest(absltest.TestCase):
     tokenizer_config = tokenizers_config.TokenizerConfig(
         tokenizer_type=tokenizers_config.TokenizerType.KERAS_HUB,
         model_name_or_path=model_dir,
-        eos_token_id=0,
-        pad_token_id=151643,
     )
     generation_config = llm_config.GenerationConfig(
         sampling_method=llm_config.SamplingMethod.BEAM_SEARCH,
         max_output_tokens=20,
         beam_size=beam_width,
         max_prompt_length=64,
-        pad_token_id=151643,
     )
     export_config = tokenizers_exporter.NeptuneLLMExportWithTokenizerConfig(
         export_dir=export_dir,
@@ -348,16 +352,22 @@ class ExporterTest(absltest.TestCase):
     with self.subTest("manual_pipeline"):
       tokenizer = tokenizers_processors.KerasHubTokenizerTF(
           model_name_or_path=tokenizer_config.model_name_or_path,
-          eos_token_id=tokenizer_config.eos_token_id,
-          pad_token_id=tokenizer_config.pad_token_id,
           max_seq_len=generation_config.max_prompt_length,
       )
       pre_processed = tokenizer.pre_process_fn(
           {"text_input": tf.constant([prompt_text])}
       )
-      inputs_jax = {"input_ids": jnp.array(pre_processed["input_ids"].numpy())}
-
-      with runner.mesh:
+      inputs_jax = {
+          "input_ids": jnp.array(pre_processed["input_ids"].numpy()),
+      }
+      with runner.mesh:  # pytype: disable=attribute-error
+        # The exporter automatically plumbs the pad_token_id, but for the manual
+        # path we must manually inject it into the GenerationConfig before
+        # compile.
+        model_wrapper.generation_config = dataclasses.replace(
+            model_wrapper.generation_config,
+            pad_token_id=tokenizer.pad_token_id,
+        )
         model_fn = model_wrapper.compile_generation_loop()
         jit_model_fn = jax.jit(model_fn)
         jax_outputs = jit_model_fn(runner.state, inputs_jax)
@@ -400,15 +410,12 @@ class ExporterTest(absltest.TestCase):
     tokenizer_config = tokenizers_config.TokenizerConfig(
         tokenizer_type=tokenizers_config.TokenizerType.KERAS_HUB,
         model_name_or_path=model_name,
-        eos_token_id=151643,
-        pad_token_id=151643,
     )
     generation_config = llm_config.GenerationConfig(
         sampling_method=llm_config.SamplingMethod.BEAM_SEARCH,
         max_output_tokens=20,
         beam_size=beam_width,
         max_prompt_length=128,
-        pad_token_id=151643,
     )
     export_config = tokenizers_exporter.NeptuneLLMExportWithTokenizerConfig(
         export_dir=export_dir,

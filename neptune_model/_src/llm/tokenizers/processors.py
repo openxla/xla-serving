@@ -105,26 +105,40 @@ class KerasHubTokenizerTF:
   def __init__(
       self,
       model_name_or_path: str,
-      eos_token_id: int = 2,
-      pad_token_id: int = 0,
+      eos_token_id: int | None = None,
+      pad_token_id: int | None = None,
       max_seq_len: int = 64,
   ):
     """Initializes the Keras Hub TF tokenizer.
 
     Args:
       model_name_or_path: Hugging Face model identifier or directory path.
-      eos_token_id: End of sequence token ID.
-      pad_token_id: Padding token ID.
+      eos_token_id: End of sequence token ID. If None, pulled from tokenizer.
+      pad_token_id: Padding token ID. If None, pulled from tokenizer.
       max_seq_len: Maximum sequence length to pad or slice to.
     """
     self.model_name_or_path = model_name_or_path
-    self.eos_token_id = eos_token_id
-    self.pad_token_id = pad_token_id
     self.max_seq_len = max_seq_len
 
     # Load Hugging Face tokenizer to extract vocab and merges
     print(f"Loading Hugging Face tokenizer for {model_name_or_path}...")
     real_tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+
+    self.pad_token_id = (
+        pad_token_id
+        if pad_token_id is not None
+        else real_tokenizer.pad_token_id
+    )
+    if self.pad_token_id is None:
+      raise ValueError("pad_token_id could not be resolved from tokenizer")
+
+    self.eos_token_id = (
+        eos_token_id
+        if eos_token_id is not None
+        else real_tokenizer.eos_token_id
+    )
+    if self.eos_token_id is None:
+      raise ValueError("eos_token_id could not be resolved from tokenizer")
 
     vocab = real_tokenizer.get_vocab()
     vocab = {k: v for k, v in sorted(vocab.items(), key=lambda item: item[1])}

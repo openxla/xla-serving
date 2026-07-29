@@ -60,10 +60,10 @@ class ProcessorsTest(absltest.TestCase):
 
     tokenizer = processors.KerasHubTokenizerTF(
         model_name_or_path=model_path,
-        eos_token_id=0,
-        pad_token_id=0,
         max_seq_len=16,
     )
+    self.assertEqual(tokenizer.eos_token_id, 0)
+    self.assertEqual(tokenizer.pad_token_id, 0)
     resources_list = tokenizer.get_trackable_resources()
     self.assertIsInstance(resources_list, list)
 

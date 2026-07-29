@@ -65,6 +65,7 @@ class ModelWrapperTest(absltest.TestCase):
     config = llm_config.GenerationConfig(
         sampling_method=llm_config.SamplingMethod.GREEDY,
         max_output_tokens=4,
+        pad_token_id=0,
     )
     model = MockModel(generation_config=config)
     apply_fn = model.compile_generation_loop()
@@ -72,7 +73,6 @@ class ModelWrapperTest(absltest.TestCase):
     params = {}
     inputs = {
         "input_ids": jnp.array([[1, 2, 3]], dtype=jnp.int32),
-        "prompt_len": jnp.array([3], dtype=jnp.int32),
     }
     outputs = apply_fn(params, inputs)
 
@@ -85,6 +85,7 @@ class ModelWrapperTest(absltest.TestCase):
         max_output_tokens=4,
         top_k=2,
         temperature=0.01,
+        pad_token_id=0,
     )
     model = MockModel(generation_config=config)
     apply_fn = model.compile_generation_loop()
@@ -92,7 +93,6 @@ class ModelWrapperTest(absltest.TestCase):
     params = {}
     inputs = {
         "input_ids": jnp.array([[1, 2, 3]], dtype=jnp.int32),
-        "prompt_len": jnp.array([3], dtype=jnp.int32),
     }
     outputs = apply_fn(params, inputs)
 
@@ -109,7 +109,8 @@ class ModelWrapperTest(absltest.TestCase):
 
   def test_scoring_mode_correctness(self):
     config = llm_config.GenerationConfig(
-        sampling_method=llm_config.SamplingMethod.SCORING
+        sampling_method=llm_config.SamplingMethod.SCORING,
+        pad_token_id=0,
     )
     model = MockModel(generation_config=config)
     score_fn = model.compile_generation_loop()
@@ -117,7 +118,6 @@ class ModelWrapperTest(absltest.TestCase):
     params = {}
     inputs = {
         "input_ids": jnp.array([[1, 2, 3]], dtype=jnp.int32),
-        "prompt_len": jnp.array([3], dtype=jnp.int32),
     }
     outputs = score_fn(params, inputs)
 
@@ -128,7 +128,8 @@ class ModelWrapperTest(absltest.TestCase):
 
   def test_scoring_mode_with_target_ids(self):
     config = llm_config.GenerationConfig(
-        sampling_method=llm_config.SamplingMethod.SCORING
+        sampling_method=llm_config.SamplingMethod.SCORING,
+        pad_token_id=0,
     )
     model = MockModel(generation_config=config)
     score_fn = model.compile_generation_loop()

@@ -38,8 +38,9 @@ class GenerationConfig:
     beam_size: Beam size for beam_search strategy. If None, beam search is
       disabled.
     max_prompt_length: Maximum number of input prompt tokens allowed.
-    pad_token_id: Padding token ID used for prompt padding and length
-      calculation.
+    pad_token_id: Padding token ID used for prompt padding and real length
+      calculation. If None, it will be automatically obtained from the
+      tokenizer.
   """
 
   sampling_method: SamplingMethod = SamplingMethod.GREEDY
@@ -48,7 +49,7 @@ class GenerationConfig:
   top_k: int = 50
   beam_size: int | None = None
   max_prompt_length: int = 1024
-  pad_token_id: int = 0
+  pad_token_id: int | None = None
 
 
 @dataclasses.dataclass(frozen=True)
