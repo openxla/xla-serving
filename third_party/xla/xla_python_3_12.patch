@@ -1,23 +1,18 @@
 --- a/MODULE.bazel
 +++ b/MODULE.bazel
-@@ -143,4 +143,5 @@
+@@ -164,6 +164,7 @@
  python = use_extension("@rules_python//python/extensions:python.bzl", "python")
  python.defaults(python_version = "3.11")
  python.toolchain(python_version = "3.11")
 +python.toolchain(python_version = "3.12")
  use_repo(python, "pythons_hub")
-@@ -170,11 +171,22 @@
- pip.parse(
-     extra_hub_aliases = {
-         "numpy": ["numpy_headers"],
-     },
-     hub_name = "xla_pypi",
-     python_version = "3.11",
-     requirements_lock = "//:requirements_lock_3_11.txt",
+ 
+ pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
+@@ -198,6 +199,17 @@
      whl_modifications = {
          "@pypi_mods//:numpy.json": "numpy",
      },
- )
++)
 +pip.parse(
 +    extra_hub_aliases = {
 +        "numpy": ["numpy_headers"],
@@ -28,4 +23,6 @@
 +    whl_modifications = {
 +        "@pypi_mods//:numpy.json": "numpy",
 +    },
-+)
+ )
+ use_repo(pip, "pypi_mods", pypi = "xla_pypi")
+ 

@@ -1,0 +1,12 @@
+diff --git a/python/private/pypi/whl_installer/wheel_installer.py b/python/private/pypi/whl_installer/wheel_installer.py
+--- a/python/private/pypi/whl_installer/wheel_installer.py
++++ b/python/private/pypi/whl_installer/wheel_installer.py
+@@ -144,7 +144,8 @@ def main() -> None:
+     pip_args = (
+         [sys.executable, "-m", "pip"]
+         + (["--isolated"] if args.isolated else [])
+         + (["download", "--only-binary=:all:"] if args.download_only else ["wheel"])
++        + ["--index-url", "https://pypi.org/simple"]
+         + ["--no-deps"]
+         + deserialized_args["extra_pip_args"]
+     )

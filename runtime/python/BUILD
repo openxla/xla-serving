@@ -17,6 +17,14 @@ package(default_visibility = [
     ":internal",
 ])
 
+cc_library(
+    name = "model_runner_linkopts",
+    linkopts = [
+        "-Wl,--icf=all",
+        "-Wl,--gc-sections",
+    ],
+)
+
 pybind_extension(
     name = "model_runner",
     srcs = ["model_runner.cc"],
@@ -26,6 +34,7 @@ pybind_extension(
     ],
     deps = [
         ":ifrt_client_factory",
+        ":model_runner_linkopts",
         ":numpy_utils",
         "@abseil-cpp//absl/base:nullability",
         "@abseil-cpp//absl/container:flat_hash_map",
