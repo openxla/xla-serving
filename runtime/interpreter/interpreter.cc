@@ -38,6 +38,7 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/cord.h"  // from @abseil-cpp
+#include "absl/strings/match.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
@@ -230,7 +231,7 @@ bool ShouldShloRunOnHost(
     absl::Span<const neptune_model_manifest::Function* absl_nonnull const>
         funcs,
     absl::string_view platform_name) {
-  if (platform_name == "cpu") {
+  if (absl::EqualsIgnoreCase(platform_name, "cpu")) {
     return true;
   }
   for (auto* func : funcs) {
