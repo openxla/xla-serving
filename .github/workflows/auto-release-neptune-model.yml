@@ -15,7 +15,10 @@ jobs:
   # ==========================================
   check-version:
     name: Check Version
-    runs-on: ubuntu-latest
+    runs-on: linux-x86-n2-16
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
+
     # We must explicitly map the step outputs to Job outputs so Job 2 can see them
     outputs:
       is_new: ${{ steps.release_check.outputs.is_new }}
@@ -32,6 +35,7 @@ jobs:
           VERSION=$(python -c "import re; print(re.search(r'''__version__\s*=\s*['\"]([^'\"]+)['\"]''', open('__init__.py').read()).group(1))")
           echo "Found version: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+
 
       - name: Check if Release Already Exists
         id: release_check

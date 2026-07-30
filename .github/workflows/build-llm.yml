@@ -6,7 +6,10 @@ on:
 jobs:
   build-and-test-llm:
     name: "build-llm (Python ${{ matrix.python-version }}, jax ${{ matrix.jax-version }})"
-    runs-on: ubuntu-latest
+    runs-on: linux-x86-n2-16
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
+
     strategy:
       matrix:
         # TODO(hjswe): Re-enable once the tests are fixed.
@@ -20,17 +23,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
 
       - name: Disable Android configuration
         run: |

@@ -10,7 +10,9 @@ on:
 jobs:
   build-and-test:
     name: "build-model (Python ${{ matrix.python-version }}, jax ${{ matrix.jax-version }})"
-    runs-on: ubuntu-latest
+    runs-on: linux-x86-n2-16
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
     strategy:
       matrix:
         # TODO(hjswe): Re-enable once the tests are fixed.
@@ -26,17 +28,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
-
       - name: Disable Android configuration
         run: |
           # 1. Clear the variables
@@ -45,6 +36,7 @@ jobs:
           # 2. Nuke the empty ghost folders so Bazel gives up searching
           sudo rm -rf /usr/local/lib/android
           sudo rm -rf /usr/lib/android-sdk
+
 
       - name: Set up Python
         uses: actions/setup-python@v5
