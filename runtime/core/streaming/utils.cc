@@ -21,11 +21,13 @@
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_set.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/log/vlog_is_on.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "llvm/include/llvm/ADT/SmallVector.h"  // from @llvm-project
 #include "llvm/include/llvm/Support/Casting.h"  // from @llvm-project
 #include "mlir/include/mlir/Dialect/Func/IR/FuncOps.h"  // from @llvm-project
@@ -39,6 +41,7 @@
 #include "mlir/include/mlir/IR/Value.h"  // from @llvm-project
 #include "mlir/include/mlir/Support/LLVM.h"  // from @llvm-project
 #include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/libs/mlir/dump_mlir_util.h"  // from @neptune
 #include "stablehlo/dialect/StablehloOps.h"  // from @stablehlo
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
@@ -52,24 +55,26 @@ constexpr absl::string_view kNeptuneStreamOpName = "neptune_stream";
 constexpr absl::string_view kBackendConfigAttr = "mhlo.backend_config";
 constexpr absl::string_view kOutputNamesAttr = "output_names";
 
-bool ContainsNeptuneStream(mlir::Operation* op,
-                           absl::flat_hash_set<mlir::Operation*>& visited) {
+bool ContainsNeptuneStream(mlir::Operation* op);
+
+bool ContainsNeptuneStreamImpl(mlir::Operation* op,
+                               absl::flat_hash_set<mlir::Operation*>& visited) {
   if (visited.contains(op)) return false;
   visited.insert(op);
 
-  // Direct check for custom call target
+  // Direct check for stablehlo.custom_call target name
   if (auto custom_call = llvm::dyn_cast<mlir::stablehlo::CustomCallOp>(op)) {
     if (custom_call.getCallTargetName().str() == kNeptuneStreamOpName) {
       return true;
     }
   }
 
-  // Direct check for call op
+  // Direct check for func.call
   if (auto call_op = llvm::dyn_cast<mlir::func::CallOp>(op)) {
     mlir::ModuleOp module = call_op->getParentOfType<mlir::ModuleOp>();
     auto called_func =
         module.lookupSymbol<mlir::func::FuncOp>(call_op.getCallee());
-    if (called_func && ContainsNeptuneStream(called_func, visited)) {
+    if (called_func && ContainsNeptuneStreamImpl(called_func, visited)) {
       return true;
     }
   }
@@ -78,29 +83,25 @@ bool ContainsNeptuneStream(mlir::Operation* op,
   bool found = false;
   op->walk([&](mlir::Operation* nested_op) {
     if (found) return;
-    if (nested_op == op) return;  // Skip self to avoid infinite recursion
 
     if (auto custom_call =
             llvm::dyn_cast<mlir::stablehlo::CustomCallOp>(nested_op)) {
       if (custom_call.getCallTargetName().str() == kNeptuneStreamOpName) {
         found = true;
+        return;
       }
     } else if (auto call_op = llvm::dyn_cast<mlir::func::CallOp>(nested_op)) {
       mlir::ModuleOp module = call_op->getParentOfType<mlir::ModuleOp>();
       auto called_func =
           module.lookupSymbol<mlir::func::FuncOp>(call_op.getCallee());
-      if (called_func && ContainsNeptuneStream(called_func, visited)) {
+      if (called_func && ContainsNeptuneStreamImpl(called_func, visited)) {
         found = true;
+        return;
       }
     }
   });
 
   return found;
-}
-
-bool ContainsNeptuneStream(mlir::Operation* op) {
-  absl::flat_hash_set<mlir::Operation*> visited;
-  return ContainsNeptuneStream(op, visited);
 }
 
 absl::Status AddStepIdToCustomCall(mlir::OpBuilder& builder,
@@ -151,10 +152,17 @@ absl::Status AddStepIdToCustomCall(mlir::OpBuilder& builder,
   if (operand_layouts) {
     llvm::SmallVector<mlir::Attribute, 4> new_layouts(operand_layouts.begin(),
                                                       operand_layouts.end());
-    llvm::SmallVector<int64_t, 1> step_id_layout_values = {0};
-    mlir::DenseIntElementsAttr step_id_layout = mlir::DenseIntElementsAttr::get(
-        mlir::RankedTensorType::get({1}, mlir_builder.getIndexType()),
-        step_id_layout_values);
+    mlir::DenseIntElementsAttr step_id_layout;
+    if (llvm::cast<mlir::RankedTensorType>(step_id.getType()).getRank() == 0) {
+      step_id_layout = mlir::DenseIntElementsAttr::get(
+          mlir::RankedTensorType::get({0}, mlir_builder.getIndexType()),
+          llvm::ArrayRef<int64_t>{});
+    } else {
+      llvm::SmallVector<int64_t, 1> step_id_layout_values = {0};
+      step_id_layout = mlir::DenseIntElementsAttr::get(
+          mlir::RankedTensorType::get({1}, mlir_builder.getIndexType()),
+          step_id_layout_values);
+    }
     new_layouts.push_back(step_id_layout);
     custom_call.setOperandLayoutsAttr(mlir_builder.getArrayAttr(new_layouts));
   }
@@ -366,9 +374,17 @@ absl::Status PropagateBlock(
   return absl::OkStatus();
 }
 
+bool ContainsNeptuneStream(mlir::Operation* op) {
+  absl::flat_hash_set<mlir::Operation*> visited;
+  return ContainsNeptuneStreamImpl(op, visited);
+}
+
 }  // namespace
 
-absl::Status PropagateStreamingStepId(mlir::ModuleOp module) {
+absl::Status PropagateStreamingStepId(mlir::ModuleOp module, bool is_batched) {
+  if (VLOG_IS_ON(1)) {
+    neptune::DumpMlirOpToFile("module_before_step_id_propagation", module);
+  }
   mlir::func::FuncOp main_func =
       module.lookupSymbol<mlir::func::FuncOp>("main");
   if (!main_func) {
@@ -384,22 +400,39 @@ absl::Status PropagateStreamingStepId(mlir::ModuleOp module) {
   }
 
   mlir::OpBuilder builder(module.getContext());
-  mlir::RankedTensorType ranked_type;
-  for (int i = main_func.getNumArguments() - 1; i >= 0; --i) {
-    if (auto type = llvm::dyn_cast<mlir::RankedTensorType>(
-            main_func.getArgument(i).getType())) {
-      if (type.getRank() >= 1) {
-        ranked_type = type;
-        break;
+  mlir::Type step_id_type;
+  if (is_batched) {
+    mlir::RankedTensorType ranked_type;
+    for (int i = main_func.getNumArguments() - 1; i >= 0; --i) {
+      bool is_const_arg = false;
+      if (auto arg_attr = main_func.getArgAttrOfType<mlir::DictionaryAttr>(
+              i, "mhlo.frontend_attributes")) {
+        if (auto is_const = arg_attr.get("is_constant")) {
+          if (auto str = llvm::dyn_cast<mlir::StringAttr>(is_const)) {
+            if (str.getValue() == "true") is_const_arg = true;
+          } else if (auto b = llvm::dyn_cast<mlir::BoolAttr>(is_const)) {
+            if (b.getValue()) is_const_arg = true;
+          }
+        }
+      }
+      if (is_const_arg) continue;
+      if (auto type = llvm::dyn_cast<mlir::RankedTensorType>(
+              main_func.getArgument(i).getType())) {
+        if (type.getRank() >= 1) {
+          ranked_type = type;
+          break;
+        }
       }
     }
+    int64_t batch_dim = 1;
+    if (ranked_type) {
+      batch_dim = ranked_type.getShape()[0];
+    }
+    step_id_type =
+        mlir::RankedTensorType::get({batch_dim}, builder.getI32Type());
+  } else {
+    step_id_type = mlir::RankedTensorType::get({}, builder.getI32Type());
   }
-  int64_t batch_dim = 1;
-  if (ranked_type) {
-    batch_dim = ranked_type.getShape()[0];
-  }
-  mlir::Type step_id_type =
-      mlir::RankedTensorType::get({batch_dim}, builder.getI32Type());
 
   // 1. Insert step_id argument into the main entry function signature.
   if (mlir::failed(
@@ -418,8 +451,14 @@ absl::Status PropagateStreamingStepId(mlir::ModuleOp module) {
   mlir::Block* entry_block = &main_func.getBody().front();
   builder.setInsertionPointToStart(entry_block);
 
-  return PropagateBlock(builder, entry_block, main_step_id, value_in_block,
-                        mutated_funcs);
+  TF_RETURN_IF_ERROR(PropagateBlock(builder, entry_block, main_step_id,
+                                    value_in_block, mutated_funcs));
+
+  if (VLOG_IS_ON(1)) {
+    neptune::DumpMlirOpToFile("module_after_step_id_propagation", module);
+  }
+
+  return absl::OkStatus();
 }
 
 absl::StatusOr<neptune::HostBuffer> CreateRequestIdsBuffer(int64_t batch_size,
@@ -432,6 +471,33 @@ absl::StatusOr<neptune::HostBuffer> CreateRequestIdsBuffer(int64_t batch_size,
 
   for (int64_t i = 0; i < batch_size; ++i) {
     data[i] = request_id;
+  }
+
+  return host_buffer;
+}
+
+absl::StatusOr<neptune::HostBuffer> CreateScalarRequestIdBuffer(
+    int32_t request_id) {
+  xla::ifrt::Shape shape({});
+  xla::ifrt::DType dtype{xla::ifrt::DType::Kind::kS32};
+
+  neptune::HostBuffer host_buffer(dtype, shape);
+  *reinterpret_cast<int32_t*>(host_buffer.base()) = request_id;
+
+  return host_buffer;
+}
+
+absl::StatusOr<neptune::HostBuffer> CreateRequestIdsBuffer(
+    absl::Span<const int32_t> request_ids) {
+  int64_t batch_size = request_ids.size();
+  xla::ifrt::Shape shape({batch_size});
+  xla::ifrt::DType dtype{xla::ifrt::DType::Kind::kS32};
+
+  neptune::HostBuffer host_buffer(dtype, shape);
+  int32_t* data = reinterpret_cast<int32_t*>(host_buffer.base());
+
+  for (int64_t i = 0; i < batch_size; ++i) {
+    data[i] = request_ids[i];
   }
 
   return host_buffer;

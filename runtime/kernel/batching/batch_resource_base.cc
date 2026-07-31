@@ -594,6 +594,12 @@ absl::Status BatchResourceBase::ConcatInputBuffers(
     concatenated_buffers->push_back(concatenated_buffer);
   }
 
+  // Pad the step ids to the padded batch size with -1 if needed.
+  if (!context->run_context.request_ids.empty() &&
+      context->run_context.request_ids.size() <
+          static_cast<size_t>(padded_batch_size)) {
+    context->run_context.request_ids.resize(padded_batch_size, -1);
+  }
   RecordExecutedBatchSize(context->metadata.model_name,
                           context->metadata.model_version, padded_batch_size);
 
@@ -758,6 +764,16 @@ void BatchResourceBase::ProcessFuncBatch(
     }
   }();
   Kernel::ExecuteContext* propagated_context = propagated_task.context;
+  std::vector<int32_t> batch_request_ids;
+  batch_request_ids.reserve(batch->size());
+  for (int i = 0; i < batch->num_tasks(); ++i) {
+    int task_size = batch->task(i).size();
+    int32_t req_id = batch->task(i).context->run_context.request_id;
+    for (int s = 0; s < task_size; ++s) {
+      batch_request_ids.push_back(req_id);
+    }
+  }
+  propagated_context->run_context.request_ids = std::move(batch_request_ids);
   // Regardless of the outcome, we need to propagate the status to the
   // individual tasks and signal that they are done. We use MakeCleanup() to
   // ensure that this happens no matter how we exit the method below.

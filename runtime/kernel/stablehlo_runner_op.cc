@@ -30,10 +30,12 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/aot_stablehlo_runner.h"  // from @neptune
 #include "runtime/core/flat_signature.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @neptune
 #include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune
 #include "runtime/core/stablehlo.h"  // from @neptune
 #include "runtime/core/stablehlo_optimizer.h"  // from @neptune
 #include "runtime/core/stablehlo_runner.h"  // from @neptune
+#include "runtime/core/streaming/utils.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
 #include "runtime/interpreter/manifest_utils.h"  // from @neptune
 #include "runtime/kernel/kernel.h"  // from @neptune
@@ -232,10 +234,31 @@ absl::Status StableHloRunnerOp::RunInternal(ExecuteContext& context) {
         {{"model_id", absl::StrCat(context.metadata.model_name, ":",
                                    context.metadata.model_version)}});
   });
+  absl::Span<const Value> inputs_span = context.inputs;
+  std::vector<Value> inputs_with_stream_step_id;
+  if (stablehlo_runner_->has_streaming()) {
+    int32_t request_id = context.run_context.request_id;
+    if (inputs_span.size() == stablehlo_runner_->GetNumInputs()) {
+      absl::StatusOr<neptune::HostBuffer> request_ids_buffer_status;
+      if (!context.run_context.request_ids.empty()) {
+        request_ids_buffer_status =
+            neptune::CreateRequestIdsBuffer(context.run_context.request_ids);
+      } else {
+        request_ids_buffer_status =
+            neptune::CreateScalarRequestIdBuffer(request_id);
+      }
+      TF_ASSIGN_OR_RETURN(neptune::HostBuffer request_ids_buffer,
+                          request_ids_buffer_status);
+      inputs_with_stream_step_id.assign(inputs_span.begin(), inputs_span.end());
+      inputs_with_stream_step_id.push_back(
+          Value(std::move(request_ids_buffer)));
+      inputs_span = inputs_with_stream_step_id;
+    }
+  }
 
   TF_ASSIGN_OR_RETURN(
       std::vector<Value> output_values,
-      stablehlo_runner_->Execute(context.inputs, context.run_context));
+      stablehlo_runner_->Execute(inputs_span, context.run_context));
   context.outputs = std::move(output_values);
 
   return absl::OkStatus();

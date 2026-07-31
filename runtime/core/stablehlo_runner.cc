@@ -509,7 +509,7 @@ StableHloRunner::CreateExecutableSynchronously(
     absl::Span<const xla::ifrt::Shape> input_shapes,
     absl::Span<const xla::ifrt::DType> input_dtypes,
     std::unique_ptr<LoadedStableHlo::ModuleBundle> module_bundle,
-    const StablehloOptimizer::Args& args) {
+    const StablehloOptimizer::Args& args, bool is_streaming) {
   // Refine the dynamic shapes in the module.
   TF_RETURN_WITH_CONTEXT_IF_ERROR(
       RefineShapesIfNeeded(
@@ -527,12 +527,22 @@ StableHloRunner::CreateExecutableSynchronously(
                      module_bundle->module.get());
   }
 
-  TF_RETURN_IF_ERROR(
-      neptune::PropagateStreamingStepId(module_bundle->module.get()));
+  if (is_streaming) {
+    // Differentiate if multi-request batching is used
+    // (!run_context.request_ids.empty()). When batching is active, a 1D shape
+    // {batch_size} (dims().size() == 1) was appended to input_shapes for taking
+    // step_id of different requests as inputs; for unbatched single request, a
+    // 0D scalar shape {} (dims().size() == 0) was appended. This is only valid
+    // for streaming models.
+    bool is_batched_in_streaming =
+        !input_shapes.empty() && input_shapes.back().dims().size() == 1;
+    TF_RETURN_IF_ERROR(neptune::PropagateStreamingStepId(
+        module_bundle->module.get(), is_batched_in_streaming));
 
-  if (VLOG_IS_ON(1)) {
-    DumpMlirOpToFile("stablehlo_module_after_streaming_step_id_propagation",
-                     module_bundle->module.get());
+    if (VLOG_IS_ON(1)) {
+      DumpMlirOpToFile("stablehlo_module_after_streaming_step_id_propagation",
+                       module_bundle->module.get());
+    }
   }
 
   // If we have a streaming_host_callback_id_, try to set it in the module.
@@ -670,7 +680,8 @@ StableHloRunner::LookUpOrCreateExecutable(
   }
   absl::StatusOr<SharedCachedExecutableBundle> executable_bundle =
       CreateExecutableSynchronously(input_shapes, input_dtypes,
-                                    std::move(module_bundle), args);
+                                    std::move(module_bundle), args,
+                                    has_streaming());
   if (!executable_bundle.ok()) {
     LOG(ERROR) << "Failed to create executable: "
                << executable_bundle.status().message();
@@ -844,23 +855,16 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
   std::vector<xla::ifrt::DType> input_dtypes;
   input_dtypes.reserve(inputs.size() + 1);
 
-  int64_t batch_size = 1;
   // Gather shapes before appending streaming IDs to match cache signature.
   for (const auto& input : inputs) {
     if (input.IsType<HostBuffer>()) {
       const auto& host_buf = input.Get<HostBuffer>();
       input_shapes.push_back(host_buf.shape());
       input_dtypes.push_back(host_buf.dtype());
-      if (batch_size == 1 && !host_buf.shape().dims().empty()) {
-        batch_size = host_buf.shape().dims()[0];
-      }
     } else if (input.IsType<neptune::DeviceBuffer>()) {
       const auto& device_buf = input.Get<neptune::DeviceBuffer>();
       input_shapes.push_back(device_buf.ifrt_array->shape());
       input_dtypes.push_back(device_buf.ifrt_array->dtype());
-      if (batch_size == 1 && !device_buf.ifrt_array->shape().dims().empty()) {
-        batch_size = device_buf.ifrt_array->shape().dims()[0];
-      }
     } else {
       return absl::InvalidArgumentError(
           "StableHloRunner inputs must be HostBuffer or neptune::DeviceBuffer.");
@@ -870,7 +874,12 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
   // input, we need to append the shape and dtype of the request ID input
   // for the cache lookup.
   if (has_streaming && inputs.size() == expected_num_inputs) {
-    input_shapes.push_back(xla::ifrt::Shape({batch_size}));
+    if (!run_context.request_ids.empty()) {
+      input_shapes.push_back(xla::ifrt::Shape(
+          {static_cast<int64_t>(run_context.request_ids.size())}));
+    } else {
+      input_shapes.push_back(xla::ifrt::Shape({}));
+    }
     input_dtypes.push_back(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32));
   }
 
@@ -903,19 +912,6 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
   DataConverter* data_converter = resources_it->second->data_converter.get();
 
   std::vector<neptune::Value> unpacked_inputs(inputs.begin(), inputs.end());
-
-  // If the model is streaming and the caller did not provide the request ID
-  // input, we dynamically construct and append the request ID buffer here.
-  if (has_streaming && inputs.size() == expected_num_inputs) {
-    int32_t request_id =
-        run_context.request_id != -1 ? run_context.request_id : xla_launch_id;
-    TF_ASSIGN_OR_RETURN(
-        neptune::HostBuffer request_ids_buffer,
-        neptune::CreateRequestIdsBuffer(batch_size, request_id));
-    // Downstream logic will automatically detect this is a HostBuffer
-    // and perform the H2D transfer during ConvertInput.
-    unpacked_inputs.emplace_back(std::move(request_ids_buffer));
-  }
 
   // `used_input_indices` is used to track the index of used inputs in
   // stablehlo spec because some inputs may be presented in the model signature

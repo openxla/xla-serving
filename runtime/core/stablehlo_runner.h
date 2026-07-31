@@ -429,7 +429,7 @@ class StableHloRunner {
       absl::Span<const xla::ifrt::Shape> input_shapes,
       absl::Span<const xla::ifrt::DType> input_dtypes,
       std::unique_ptr<LoadedStableHlo::ModuleBundle> module_bundle,
-      const StablehloOptimizer::Args& args);
+      const StablehloOptimizer::Args& args, bool is_streaming = false);
 
   // Initializes the runner. This is called right after the constructor.
   absl::Status Init(tsl::thread::ThreadPool* absl_nonnull thread_pool);

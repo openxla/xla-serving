@@ -19,6 +19,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
@@ -42,6 +43,11 @@ struct RunContext {
       streamed_output_callback = nullptr;
   // TODO: Change this to uint64_t.
   int32_t request_id = -1;
+  // `request_ids` is reserved for streaming use cases in batching. When
+  // batching is enabled, the size of this vector will be the same as the
+  // batch size. Each element in this vector corresponds to the request ID of
+  // the same position in the batch.
+  std::vector<int32_t> request_ids;
   std::optional<int64_t> callback_id;
 
   static RunContext Create(const RunOptions& run_options,

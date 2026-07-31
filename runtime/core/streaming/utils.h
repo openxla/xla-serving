@@ -30,11 +30,17 @@ inline constexpr absl::string_view kStreamedResultBatchedStepIdName =
 // custom calls.
 // Returns an error if the propagation fails.
 // This function assumes that the shape refinements have already been performed.
-absl::Status PropagateStreamingStepId(mlir::ModuleOp module);
+absl::Status PropagateStreamingStepId(mlir::ModuleOp module,
+                                      bool is_batched = false);
 
 // Creates a HostBuffer containing request_ids for streaming.
 absl::StatusOr<neptune::HostBuffer> CreateRequestIdsBuffer(int64_t batch_size,
                                                        int32_t request_id);
+
+absl::StatusOr<neptune::HostBuffer> CreateScalarRequestIdBuffer(int32_t request_id);
+
+absl::StatusOr<neptune::HostBuffer> CreateRequestIdsBuffer(
+    absl::Span<const int32_t> request_ids);
 
 }  // namespace neptune
 

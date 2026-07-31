@@ -90,27 +90,21 @@ absl::StatusOr<std::vector<std::pair<int64_t, std::vector<neptune::HostBuffer>>>
 SliceBuffersByRequestId(absl::Span<const int32_t> step_ids,
                         absl::Span<const neptune::HostBuffer> combined_buffers) {
   std::vector<std::pair<int64_t, std::vector<neptune::HostBuffer>>> responses;
-  absl::flat_hash_set<int64_t> processed_request_ids;
 
   int64_t batch_size = step_ids.size();
   int64_t start_idx = 0;
   while (start_idx < batch_size) {
     int64_t current_request_id = step_ids[start_idx];
+    // TODO (b/492320525): Make kInvalidStepId a global constant so that we can
+    // reuse the same constant at step ID creation and batching padding.
+    if (current_request_id == kInvalidStepId) {
+      break;
+    }
 
     // Find the end of the contiguous block of identical request IDs.
     int64_t end_idx = start_idx + 1;
     while (end_idx < batch_size && step_ids[end_idx] == current_request_id) {
       end_idx++;
-    }
-
-    // Skip if we have already processed this request ID.
-    // If we encounter a request ID that has already been processed, we assume
-    // we have reached the trailing padding section of the batch (which reuses
-    // valid request IDs). Since padding is always at the end, we can safely
-    // stop processing the batch.
-    auto [_, inserted] = processed_request_ids.insert(current_request_id);
-    if (!inserted) {
-      break;
     }
 
     // Slice all combined buffers for the current request's range.
@@ -123,7 +117,9 @@ SliceBuffersByRequestId(absl::Span<const int32_t> step_ids,
       sliced_user_buffers.push_back(std::move(sliced_buffer));
     }
 
-    responses.push_back({current_request_id, std::move(sliced_user_buffers)});
+    if (!sliced_user_buffers.empty()) {
+      responses.push_back({current_request_id, std::move(sliced_user_buffers)});
+    }
     start_idx = end_idx;
   }
 
@@ -154,10 +150,6 @@ absl::StatusOr<std::optional<int64_t>> SetStreamCallbackId(
       stream_callback_registry->stream_interface();
 
   absl::string_view controller_address = stream_interface.controller_address();
-  mlir::StringAttr controller_address_attr =
-      builder.getStringAttr(controller_address);
-
-  mlir::IntegerAttr callback_id_attr = builder.getI64IntegerAttr(callback_id);
 
   for (mlir::stablehlo::CustomCallOp op : ops) {
     mlir::DictionaryAttr backend_config =
@@ -165,14 +157,19 @@ absl::StatusOr<std::optional<int64_t>> SetStreamCallbackId(
 
     llvm::SmallVector<mlir::NamedAttribute, 4> new_attrs;
     if (backend_config) {
-      new_attrs.append(backend_config.getValue().begin(),
-                       backend_config.getValue().end());
+      for (mlir::NamedAttribute attr : backend_config) {
+        if (attr.getName().str() == kControllerAddressAttr ||
+            attr.getName().str() == kCallbackIdAttr) {
+          continue;
+        }
+        new_attrs.push_back(attr);
+      }
     }
 
     new_attrs.push_back({builder.getStringAttr(kControllerAddressAttr),
-                         controller_address_attr});
-    new_attrs.push_back(
-        {builder.getStringAttr(kCallbackIdAttr), callback_id_attr});
+                         builder.getStringAttr(controller_address)});
+    new_attrs.push_back({builder.getStringAttr(kCallbackIdAttr),
+                         builder.getI64IntegerAttr(callback_id)});
 
     op->setAttr(kBackendConfigAttr, builder.getDictionaryAttr(new_attrs));
   }
@@ -442,16 +439,28 @@ absl::Status Stream(xla::RunId run_id, ffi::Dictionary attrs,
   auto step_id_arg = args.get<ffi::AnyBuffer>(args.size() - 1);
   if (!step_id_arg.ok()) return step_id_arg.status();
 
-  if (step_id_arg->dimensions().size() != 1) {
-    return absl::InternalError(absl::StrFormat(
-        "Expected step ID argument to be a 1D tensor, but got rank %d",
-        step_id_arg->dimensions().size()));
-  }
-
   if (step_id_arg->element_type() != xla::PrimitiveType::S32) {
     return absl::InternalError(
         absl::StrFormat("Expected step ID argument to be S32, but got %d",
                         static_cast<int>(step_id_arg->element_type())));
+  }
+
+  using ResponseType =
+      std::vector<std::pair<int64_t, std::vector<neptune::HostBuffer>>>;
+
+  if (step_id_arg->dimensions().empty()) {
+    // Unbatched single-request inference: step_id is a rank-0 scalar tensor.
+    int32_t step_id =
+        *reinterpret_cast<const int32_t*>(step_id_arg->untyped_data());
+    ResponseType responses;
+    responses.push_back({step_id, std::move(host_buffers)});
+    return state->stream->InvokeStreamCallback(cb_id, user_names, responses);
+  }
+
+  if (step_id_arg->dimensions().size() != 1) {
+    return absl::InternalError(absl::StrFormat(
+        "Expected step ID argument to be a 0D or 1D tensor, but got rank %d",
+        step_id_arg->dimensions().size()));
   }
 
   int64_t batch_size = step_id_arg->dimensions()[0];
