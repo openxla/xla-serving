@@ -1274,16 +1274,19 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
                                 : NamedSignature{};
     std::vector<std::unique_ptr<Kernel>> sub_graph;
     if (func->body().has_stable_hlo_body()) {
-      bool running_on_host =
-          ShouldShloRunOnHost({func}, create_options_->platform_name);
-      std::string platform_name =
-          running_on_host ? "cpu" : create_options_->platform_name;
+      if (!ShouldShloRunOnHost({func}, create_options_->platform_name)) {
+        std::string error_msg =
+            absl::StrCat("StableHLO function ", component.function_name(),
+                         " is not supported to run on host.");
+        return absl::InvalidArgumentError(error_msg);
+      }
       TF_ASSIGN_OR_RETURN(
-          std::unique_ptr<Kernel> shlo_kernel,
-          LoadStableHloRunnerOp(
-              component.function_name(), component.weights_name(),
-              named_signature.inputs, named_signature.outputs, platform_name));
-      sub_graph.push_back(std::move(shlo_kernel));
+          std::unique_ptr<Kernel> host_shlo_kernel,
+          LoadStableHloRunnerOp(component.function_name(),
+                                component.weights_name(),
+                                named_signature.inputs, named_signature.outputs,
+                                /*platform_name=*/"cpu"));
+      sub_graph.push_back(std::move(host_shlo_kernel));
     } else {
       TF_ASSIGN_OR_RETURN(std::string key, GetKeyFromProcessorMimeType(*func));
       TF_ASSIGN_OR_RETURN(OptionalFunctionHandler * handler,
