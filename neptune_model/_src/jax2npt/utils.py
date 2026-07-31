@@ -56,6 +56,7 @@ def assert_not_in_jax_transformation():
     raise ValueError("convert must be used outside all JAX transformations.")
 
 JaxDType = np.dtype[Any]
+JaxArrayPyTree = jaxtyping.PyTree[Any]
 
 
 def aval_dtype(a) -> JaxDType:

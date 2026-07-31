@@ -177,6 +177,10 @@ def convert(
     ) = None,
     model_param_names: Sequence[str] | None = None,
     model_inputs_layout: Sequence[jax_layout.Layout] | None = None,
+    platforms: Sequence[manifest_pb2.Platform] | None = None,
+    native_serialization_disabled_checks: Sequence[
+        jax_export.DisabledSafetyCheck
+    ] = (),
 ) -> shlo_function.ShloFunction:
   """Converts a JAX function to an Orbax Model `ShloFunction`.
 
@@ -209,6 +213,9 @@ def convert(
       is executed.
     model_inputs_layout: Optional. A sequence of `jax_layout.Layout` objects
       specifying the layouts for the model inputs (weights and user inputs)
+    platforms: Optional sequence of platforms for compatibility.
+    native_serialization_disabled_checks: Optional disabled checks for
+      compatibility.
 
   Returns:
     An Orbax Model `ShloFunction`.
@@ -216,9 +223,22 @@ def convert(
   if not hasattr(fun_jax, "trace"):
     fun_jax = jax.jit(fun_jax)
 
+  jax_export_kwargs = dict(jax_export_kwargs or {})
+  if platforms is not None:
+    jax_export_kwargs["platforms"] = platforms
+  if native_serialization_disabled_checks:
+    jax_export_kwargs["disabled_checks"] = native_serialization_disabled_checks
+  if not jax_export_kwargs.get("platforms", None):
+    jax_export_kwargs["platforms"] = ["tpu"]
+  elif "platforms" in jax_export_kwargs and jax_export_kwargs["platforms"]:
+    jax_export_kwargs["platforms"] = [
+        manifest_pb2.Platform.Name(p).lower() if isinstance(p, int) else str(p)
+        for p in jax_export_kwargs["platforms"]
+    ]
+
   exported_creator = jax_export.export(
       fun_jax,
-      **(jax_export_kwargs or {}),
+      **jax_export_kwargs,
   )
 
   utils.assert_not_in_jax_transformation()
@@ -233,7 +253,10 @@ def convert(
 
 
 def convert_path_to_value(
-    path: str, mime_type: str | None = None, version: str | None = None
+    path: str,
+    mime_type: str | None = None,
+    version: str | None = None,
+    loader_type: int | None = None,
 ) -> value.ExternalValue:
   return value.ExternalValue(
       data=manifest_pb2.UnstructuredData(
@@ -243,6 +266,7 @@ def convert_path_to_value(
           mime_type=mime_type,
           version=version,
       ),
+      loader_type=loader_type,
   )
 
 
