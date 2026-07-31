@@ -49,6 +49,13 @@ def save_tf_functions(
   )
 
 
+def find_ragged_inputs_indices_if_any(
+    input_signature: jaxtyping.PyTree,
+) -> list[tuple[int, int]]:
+  """Finds the indices of ragged inputs in the input signature."""
+  return _require_tf2npt().type_conversion.find_ragged_inputs_indices_if_any(input_signature)
+
+
 @dataclasses.dataclass(frozen=True)
 class PreparedTfProcessor(processor.ProcessorDefaults):
   """TensorFlow processor that is prepared for export."""

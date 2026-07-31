@@ -138,6 +138,27 @@ class TypeConversionTest(tf.test.TestCase):
         ),
     )
 
+  def test_find_ragged_indices(self):
+    input_signature = {
+        "x": tf.TensorSpec(shape=(None, 10), dtype=tf.float32),
+        "y": tf.RaggedTensorSpec(shape=(None, None), dtype=tf.int32),
+        "z": tf.TensorSpec(shape=(None,), dtype=tf.float32),
+        "sparse": tf.SparseTensorSpec(shape=(None, 5), dtype=tf.int32),
+        "w": tf.TensorSpec(shape=(), dtype=tf.int32),
+    }
+    # tf.nest.flatten sorts the keys by default.
+    # tf saved model also sorts the signature in the same order.
+    # Sorted keys: sparse, w, x, y, z
+    # sparse -> flat indices 0, 1, 2
+    # w -> flat index 3
+    # x -> flat index 4
+    # y -> flat indices 5, 6
+    # z -> flat index 7
+    self.assertEqual(
+        type_conversion.find_ragged_inputs_indices_if_any(input_signature),
+        [(5, 6)],
+    )
+
 
 if __name__ == "__main__":
   absltest.main()

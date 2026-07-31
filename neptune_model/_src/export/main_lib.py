@@ -321,6 +321,16 @@ def _update_save_bundle(
   )
   if cfg.batch_options is not None:
     pipeline_proto.batch_options.CopyFrom(cfg.batch_options)
+    ragged_indices = tf_processor.find_ragged_inputs_indices_if_any(
+        cfg.input_signature
+    )
+    if ragged_indices:
+      for val_idx, split_idx in ragged_indices:
+        pipeline_proto.metadata_for_batching.ragged_inputs.append(
+            orchestration_pb2.RaggedInputSpec(
+                flat_values_index=val_idx, row_splits_index=split_idx
+            )
+        )
 
 
 def _validate_save_params(

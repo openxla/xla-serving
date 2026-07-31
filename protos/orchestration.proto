@@ -92,6 +92,10 @@ message Pipeline {
   // user-provided input/output keys are used to define dependencies
   // between data processors and JAX models during OEX export.
   bool keyword_arguments_based = 8;
+
+  // Metadata for batching to capture information on ragged inputs etc. so that
+  // downstream runtime can perform batching correctly.
+  optional MetadataForBatching metadata_for_batching = 9;
 }
 
 message Component {
@@ -388,4 +392,23 @@ message BatchOptions {
 
   // Controls the internal queue batching strategy.
   PriorityBatchingPolicy priority_batching_policy = 12;
+}
+
+message MetadataForBatching {
+  // Configuration for ragged inputs, if there are ragged inputs in the input
+  // signature.
+  repeated RaggedInputSpec ragged_inputs = 1;
+}
+
+// Configuration for a single ragged input.
+message RaggedInputSpec {
+  // Index of the flat_values tensor in the flat signature.
+  int32 flat_values_index = 1;
+
+  // Index of the row_splits tensor in the flat signature.
+  // We are only supporting ragged_rank=1 for now, so there will be only one
+  // row_splits tensor.
+  // If we want to support higher ranks for ragged, we can change
+  // row_splits_index to be a repeated field.
+  int32 row_splits_index = 2;
 }

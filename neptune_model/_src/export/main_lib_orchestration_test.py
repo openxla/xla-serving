@@ -261,6 +261,88 @@ class MainLibOrchestrationTest(test_utils.NptTestCase):
           serving_configs=[cfg],
       )
 
+  def test_save_model_with_ragged_input(self):
+    """Tests that ragged inputs are correctly identified and batched."""
+
+    @tf.function
+    def pre_fn(inputs):
+      ragged = inputs['ragged_input']
+      dense = inputs['dense_input']
+      # Sum over ragged dimension to make it dense (batch, 1)
+      # We need to cast to float32 because JAX model expects float32
+      result = tf.reduce_sum(ragged, axis=1, keepdims=True)
+      result = result + dense
+      return {
+          'processed_input': tf.cast(
+              tf.reduce_sum(result, axis=1, keepdims=True), tf.float32
+          )
+      }
+
+    def model_fn(params, inputs):
+      return {'out': inputs['processed_input'] * params['w']}
+
+    model = jax_model.JaxModel(
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=model_fn,
+            jax_export_kwargs={'platforms': ['cpu']},
+            input_polymorphic_shapes={'processed_input': 'b, 1'},
+        ),
+        params={'w': jnp.array(2.0, dtype=jnp.float32)},
+    )
+
+    batch_options = orchestration_pb2.BatchOptions(
+        batch_component=orchestration_pb2.BatchOptions.WHOLE_PIPELINE,
+        max_batch_size=8,
+        allowed_batch_sizes=[2, 4, 8],
+        batch_timeout_micros=1000,
+        max_enqueued_batches=10,
+        num_batch_threads=2,
+    )
+
+    cfg = serving_config.ServingConfig(
+        serving_signature='serving_default',
+        input_signature={
+            'ragged_input': tf.RaggedTensorSpec(
+                shape=(None, None), dtype=tf.int32, ragged_rank=1
+            ),
+            'dense_input': tf.TensorSpec(shape=(None, 1), dtype=tf.int32),
+        },
+        processing=processor_lib.SequentialProcessing(
+            preprocessors=[
+                tf_processor.TfProcessor('pre', pre_fn),
+            ],
+        ),
+        batch_options=batch_options,
+    )
+
+    export_path = pathlib.Path(self.create_tempdir().full_path)
+    main_lib.save(
+        model,
+        export_path=str(export_path),
+        serving_configs=[cfg],
+    )
+
+    with open(export_path / 'orchestration.pb', 'rb') as f:
+      pipelines_proto = orchestration_pb2.Pipelines.FromString(f.read())
+
+    pipeline = pipelines_proto.name_to_pipeline['serving_default']
+
+    input_names = [
+        item.name for item in pipeline.named_signature.inputs.named_tensor_types
+    ]
+    self.assertEqual(
+        input_names,
+        ['dense_input', 'ragged_input', 'ragged_input_1'],
+    )
+
+    self.assertLen(pipeline.metadata_for_batching.ragged_inputs, 1)
+    self.assertEqual(
+        pipeline.metadata_for_batching.ragged_inputs[0].flat_values_index, 1
+    )
+    self.assertEqual(
+        pipeline.metadata_for_batching.ragged_inputs[0].row_splits_index, 2
+    )
+
 
 if __name__ == '__main__':
   absltest.main()

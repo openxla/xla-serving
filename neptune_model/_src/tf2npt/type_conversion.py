@@ -99,3 +99,50 @@ def shlo_tensor_spec_from(
 
     case _:
       return spec
+
+
+def find_ragged_inputs_indices_if_any(
+    input_signature: Any,
+) -> list[tuple[int, int]]:
+  """Finds the flat indices of row_splits and ragged_values in the signature.
+
+  Args:
+    input_signature: PyTree of input specs.
+
+  Returns:
+    A list of (flat_values_index, row_splits_index) tuples.
+  """
+  ragged_inputs = []
+
+  if not input_signature:
+    return []
+
+  # tf.nest.flatten sorts the keys by default.
+  # tf saved model also sorts the signature in the same order.
+  high_level_leaves = tf.nest.flatten(input_signature, expand_composites=False)
+
+  flat_index = 0
+  for leaf in high_level_leaves:
+    if isinstance(leaf, tf.RaggedTensorSpec):
+      if leaf.ragged_rank != 1:
+        raise ValueError(
+            f"Only ragged_rank=1 is supported for now. Got: {leaf.ragged_rank}"
+        )
+      # For ragged_rank=1, flattening yields: [flat_values, row_splits]
+      ragged_inputs.append((flat_index, flat_index + 1))
+      flat_index += 2
+    elif isinstance(leaf, tf.SparseTensorSpec):
+      # For SparseTensorSpec, flattening yields: [indices, values, dense_shape]
+      # We might raise error for the support for SparseTensorSpec in the
+      # future due to lack for batching support.
+      flat_index += len(tf.nest.flatten(leaf, expand_composites=True))
+    else:
+      num_components = len(tf.nest.flatten(leaf, expand_composites=True))
+      if num_components > 1:
+        raise ValueError(
+            "Only Single Tensors, RaggedTensorSpec and SparseTensorSpec are"
+            f" supported for now.Got: {type(leaf)}"
+        )
+      flat_index += num_components
+
+  return ragged_inputs
