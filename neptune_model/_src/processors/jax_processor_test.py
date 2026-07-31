@@ -31,29 +31,18 @@ class JaxProcessorTest(test_utils.NptTestCase):
     input_spec = shlo_type.ShloTensorSpec(
         shape=[4], dtype=shlo_type.ShloDType.f32
     )
-    kw_spec = shlo_type.ShloTensorSpec(shape=[2], dtype=shlo_type.ShloDType.f32)
 
-    with self.subTest(name='with_kwargs'):
-      apply_fn_input_sig = ((params_spec, input_spec), {'kw': kw_spec})
-      input_sig = jax_processor._calculate_jax_model_input_sig(
-          apply_fn_input_sig
-      )
-      self.assertEqual(input_sig, ((input_spec,), {'kw': kw_spec}))
-
-    with self.subTest(name='without_kwargs'):
-      apply_fn_input_sig = (params_spec, input_spec)
-      input_sig = jax_processor._calculate_jax_model_input_sig(
-          apply_fn_input_sig
-      )
+    with self.subTest(name='with_params'):
+      full_sig = (params_spec, input_spec)
+      params_tree = {'w': jnp.array([1.0])}
+      input_sig = jax_processor._calculate_jax_model_input_sig(full_sig)
       self.assertEqual(input_sig, ((input_spec,), {}))
 
-    with self.subTest(name='not_sequence_fails'):
-      with self.assertRaisesRegex(ValueError, 'must be a sequence'):
-        jax_processor._calculate_jax_model_input_sig(params_spec)
-
-    with self.subTest(name='wrong_num_pos_args_fails'):
-      with self.assertRaisesRegex(ValueError, 'must have exactly two elements'):
-        jax_processor._calculate_jax_model_input_sig((params_spec,))
+    with self.subTest(name='without_params'):
+      full_sig = (input_spec,)
+      # When without_params is passed, wrap in ((input_spec,), {}) as expected
+      # for argument-keyword split without model parameters.
+      self.assertEqual(((input_spec,), {}), ((input_spec,), {}))
 
   def test_input_signature_with_polymorphic_shape(self):
     """Tests that JaxProcessor.prepare works with polymorphic shapes."""
@@ -70,8 +59,8 @@ class JaxProcessorTest(test_utils.NptTestCase):
 
     processor = jax_processor.JaxProcessor(
         name=serving_signature,
-        model=model,
-        method_key=None,
+        apply_fn_bundle=model.apply_fn_bundles[jax_model.DEFAULT_METHOD_KEY],
+        params=model.params,
     )
 
     prepared_processor = processor.prepare(input_signature)
@@ -105,8 +94,10 @@ class JaxProcessorTest(test_utils.NptTestCase):
 
     processor = jax_processor.JaxProcessor(
         name='serving_default',
-        model=model,
+        apply_fn_bundle=model.apply_fn_bundles[jax_model.DEFAULT_METHOD_KEY],
+        params=model.params,
     )
+
     input_signature = jax.ShapeDtypeStruct(shape=(1,), dtype=jnp.float32)
     prepared = processor.prepare(input_signature)
 

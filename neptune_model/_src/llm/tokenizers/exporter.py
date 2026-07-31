@@ -20,12 +20,12 @@ import dataclasses
 import jax
 import jaxtyping
 
+from neptune_model._src.export import tensorflow_model
 from neptune_model._src.llm import config as core_config
 from neptune_model._src.llm import export as core_exporter
 from neptune_model._src.llm import model_wrapper
 from neptune_model._src.llm.tokenizers import config as tokenizers_config
 from neptune_model._src.llm.tokenizers import processors
-from neptune_model._src.processors import tf_processor
 
 
 @dataclasses.dataclass(frozen=True)
@@ -76,15 +76,14 @@ def export_llm_with_tokenizer(
       max_seq_len=max_prompt_length,
   )
 
-  preprocessor = tf_processor.TfProcessor(
-      name="llm_pre_process",
-      fn=tokenizer.pre_process_fn,
+  tf_model = tensorflow_model.TensorflowModel(
+      name="tf_model",
+      tf_functions={
+          "preprocessing": tokenizer.pre_process_fn,
+          "postprocessing": tokenizer.post_process_fn,
+      },
+      trackable_resources=tokenizer.get_trackable_resources(),
   )
-  postprocessor = tf_processor.TfProcessor(
-      name="llm_post_process",
-      fn=tokenizer.post_process_fn,
-  )
-  trackable_resources = tokenizer.get_trackable_resources()
 
   if generation_config_instance.pad_token_id is None:
     generation_config_instance = dataclasses.replace(
@@ -106,7 +105,5 @@ def export_llm_with_tokenizer(
       model=model,
       params=params,
       jax_mesh=jax_mesh,
-      pre_processor=preprocessor,
-      post_processor=postprocessor,
-      tf_trackable_resources=trackable_resources,
+      tf_model=tf_model,
   )

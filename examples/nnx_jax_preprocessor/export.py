@@ -26,8 +26,7 @@ from examples.nnx import model as nnx_model
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import main_lib
 from neptune_model._src.export import serving_config
-from neptune_model._src.processors import jax_processor
-from neptune_model._src.processors import processor
+from neptune_model.protos import orchestration_pb2
 
 
 def export_model(export_path: str):
@@ -93,37 +92,44 @@ def export_model(export_path: str):
           jax_export_kwargs={'platforms': ['cpu']},
       ),
       params=emb_params,
+      name='embedding_layer',
+  )
+
+  main_jax_model = jax_model.JaxModel(
+      apply_fn_bundle=jax_model.ApplyFnBundle(
+          apply_fn=apply_fn,
+          input_polymorphic_shapes={
+              'feature_1': 'b, _, _',
+              'feature_2': 'b, _, _',
+              'feature_3': 'b, _, _',
+              'feature_4': 'b, _, _',
+          },
+          jax_export_kwargs={'platforms': ['cpu', 'tpu']},
+      ),
+      params=model_params,
+      name='jax_model',
   )
 
   main_lib.save(
+      [emb_jax_model, main_jax_model],
       export_path=export_path,
-      models=jax_model.JaxModel(
-          apply_fn_bundle=jax_model.ApplyFnBundle(
-              apply_fn=apply_fn,
-              input_polymorphic_shapes={
-                  'feature_1': 'b, _, _',
-                  'feature_2': 'b, _, _',
-                  'feature_3': 'b, _, _',
-                  'feature_4': 'b, _, _',
-              },
-              jax_export_kwargs={'platforms': ['cpu', 'tpu']},
-          ),
-          params=model_params,
-      ),
       serving_configs=[
           serving_config.ServingConfig(
               serving_signature='serving_default',
               input_signature=input_signature,
-              processing=processor.SequentialProcessing(
-                  preprocessors=[
-                      jax_processor.JaxProcessor(
-                          name='embedding_layer',
-                          model=emb_jax_model,
-                          checkpoint_path='preprocessor_ckpt',
-                          weights_name='preprocessor_weights',
-                      )
-                  ],
-                  postprocessors=[],
+              orchestration=serving_config.Orchestration(
+                  model_calls=[
+                      serving_config.ModelCall(
+                          model_name='embedding_layer',
+                          method_key='serving_default',
+                          role=orchestration_pb2.ROLE_PREPROCESSOR,
+                      ),
+                      serving_config.ModelCall(
+                          model_name='jax_model',
+                          method_key='serving_default',
+                          role=orchestration_pb2.ROLE_MODEL,
+                      ),
+                  ]
               ),
           )
       ],

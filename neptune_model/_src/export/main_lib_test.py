@@ -17,20 +17,15 @@
 import pathlib
 
 from absl.testing import absltest
-from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
 
-from neptune_model._src import assets2npt
 from neptune_model._src.core import persistence_lib
 from neptune_model._src.core import test_utils
-from neptune_model._src.core import value
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import main_lib
 from neptune_model._src.export import serving_config
 from neptune_model._src.export import warmup
-from neptune_model._src.processors import processor
-from neptune_model.protos import manifest_pb2
 from neptune_model.protos import orchestration_pb2
 
 
@@ -409,104 +404,8 @@ class SaveModelTest(test_utils.NptTestCase):
           )
       )
 
-  def test_save_model_with_assets(self):
-    """Tests that on_persist_result returning either a supplemental or a value works."""
-    src_asset_dir = self.create_tempdir('src_assets')
-    src_asset = src_asset_dir.create_file(
-        'asset1.txt', 'asset_content'
-    ).full_path
-
-    def save_test_values(export_path: str):
-      result = {
-          'my_value': value.ExternalValue(
-              data=manifest_pb2.UnstructuredData(
-                  mime_type='test/value',
-                  inlined_string='value_content',
-              )
-          ),
-      }
-      asset_map = assets2npt.AssetMap('test_processor')
-      asset_map.add_asset(str(src_asset))
-      assets2npt.save_assets(asset_map, export_path)
-      return result
-
-    class PreparedTestProcessor:
-
-      def __init__(self, input_signature, output_signature):
-        self._input_signature = input_signature
-        self._output_signature = output_signature
-
-      @property
-      def name(self) -> str:
-        return 'test_processor'
-
-      @property
-      def input_signature(self):
-        return self._input_signature
-
-      @property
-      def output_signature(self):
-        return self._output_signature
-
-      @property
-      def weights_name(self) -> str | None:
-        return None
-
-      def to_npt_saveable(self):
-        return value.ExternalValue(
-            data=manifest_pb2.UnstructuredData(mime_type='mock')
-        )
-
-      def on_persist(self):
-        return save_test_values
-
-    class TestProcessor:
-
-      def prepare(self, input_signature, **kwargs):
-        del kwargs
-        return PreparedTestProcessor(input_signature, input_signature)
-
-    model = jax_model.JaxModel(
-        apply_fn_bundle=jax_model.ApplyFnBundle(
-            apply_fn=lambda params, inputs: {'out': inputs['x'] * params['w']},
-            jax_export_kwargs={'platforms': ['cpu']},
-        ),
-        params={'w': jnp.array([2.0], dtype=jnp.float32)},
-    )
-    cfg = serving_config.ServingConfig(
-        serving_signature='serving_default',
-        input_signature={
-            'x': jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.float32)
-        },
-        processing=processor.SequentialProcessing(
-            preprocessors=[TestProcessor()],
-            postprocessors=[],
-        ),
-    )
-    export_path = self.create_tempdir().full_path
-    main_lib.save(
-        model,
-        export_path=export_path,
-        serving_configs=[cfg],
-    )
-
-    manifest_proto = persistence_lib.load(export_path)
-
-    with self.subTest(name='validate_assets'):
-      self.assertNotIn('my_supp', manifest_proto.supplemental_info)
-      dest_asset_path = (
-          pathlib.Path(export_path) / 'test_processor' / 'assets' / 'asset1.txt'
-      )
-      self.assertTrue(dest_asset_path.exists())
-      self.assertEqual(dest_asset_path.read_text(), 'asset_content')
-
-    with self.subTest(name='validate_value'):
-      self.assertIn('my_value', manifest_proto.objects)
-      val = manifest_proto.objects['my_value'].value.external.data
-      self.assertEqual(val.mime_type, 'test/value')
-      self.assertEqual(val.inlined_string, 'value_content')
-
   def test_save_model_with_warmup(self):
+
     """Tests that save() works with warmup examples."""
     model = jax_model.JaxModel(
         apply_fn_bundle=jax_model.ApplyFnBundle(
@@ -577,8 +476,36 @@ class ValidateSaveParamsTest(absltest.TestCase):
           ],
       )
 
+  def test_multiple_models_without_orchestration(self):
+    with self.assertRaisesRegex(
+        ValueError, 'When multiple models are provided, orchestration'
+    ):
+      main_lib.save(
+          models=[
+              jax_model.JaxModel(
+                  apply_fn_bundle=jax_model.ApplyFnBundle(
+                      apply_fn=lambda p, x: x
+                  ),
+                  name='model1',
+              ),
+              jax_model.JaxModel(
+                  apply_fn_bundle=jax_model.ApplyFnBundle(
+                      apply_fn=lambda p, x: x
+                  ),
+                  name='model2',
+              ),
+          ],
+          export_path='test_path',
+          serving_configs=[
+              serving_config.ServingConfig(
+                  serving_signature='serving_default',
+                  input_signature={'x': jax.ShapeDtypeStruct((), jnp.float32)},
+              )
+          ],
+      )
+
   def test_ambiguous_method_key(self):
-    with self.assertRaisesRegex(ValueError, 'Method key is not specified'):
+    with self.assertRaisesRegex(ValueError, 'multiple apply functions'):
       main_lib.save(
           jax_model.JaxModel(
               apply_fn_bundle={
@@ -591,13 +518,12 @@ class ValidateSaveParamsTest(absltest.TestCase):
               serving_config.ServingConfig(
                   serving_signature='serving_default',
                   input_signature={'x': jax.ShapeDtypeStruct((), jnp.float32)},
-                  method_key=None,
               )
           ],
       )
 
   def test_invalid_method_key(self):
-    with self.assertRaisesRegex(ValueError, 'not found in ApplyFnBundle'):
+    with self.assertRaisesRegex(ValueError, 'not found in model'):
       main_lib.save(
           jax_model.JaxModel(
               apply_fn_bundle=jax_model.ApplyFnBundle(apply_fn=lambda p, x: x),
@@ -607,54 +533,14 @@ class ValidateSaveParamsTest(absltest.TestCase):
               serving_config.ServingConfig(
                   serving_signature='serving_default',
                   input_signature={'x': jax.ShapeDtypeStruct((), jnp.float32)},
-                  method_key='invalid_key',
+                  orchestration=serving_config.Orchestration(
+                      model_calls=[
+                          serving_config.ModelCall(
+                              model_name='jax_model', method_key='invalid_key'
+                          )
+                      ]
+                  ),
               )
-          ],
-      )
-
-
-class BatchOptionsForProcessorsTest(parameterized.TestCase):
-
-  @parameterized.named_parameters(
-      (
-          'requires_preprocessor',
-          orchestration_pb2.BatchOptions.PRE_PROCESSOR_AND_MODEL_FUNCTION,
-          (
-              'Batch component is set to PRE_PROCESSOR_AND_MODEL_FUNCTION, but'
-              ' there are no preprocessors.'
-          ),
-      ),
-      (
-          'requires_postprocessor',
-          orchestration_pb2.BatchOptions.MODEL_FUNCTION_AND_POST_PROCESSOR,
-          (
-              'Batch component is set to POST_PROCESSOR_AND_MODEL_FUNCTION, but'
-              ' there are no postprocessors.'
-          ),
-      ),
-  )
-  def test_batch_component_requires_processors(
-      self, batch_component, expected_error
-  ):
-    with self.assertRaisesRegex(ValueError, expected_error):
-      main_lib.save(
-          jax_model.JaxModel(
-              apply_fn_bundle=jax_model.ApplyFnBundle(apply_fn=lambda p, x: x),
-          ),
-          'test_path',
-          [
-              serving_config.ServingConfig(
-                  serving_signature='serving_default',
-                  input_signature={'x': jax.ShapeDtypeStruct((), jnp.float32)},
-                  processing=processor.SequentialProcessing(
-                      preprocessors=[], postprocessors=[]
-                  ),
-                  batch_options=orchestration_pb2.BatchOptions(
-                      batch_component=batch_component,
-                      max_batch_size=8,
-                      max_enqueued_batches=10,
-                  ),
-              ),
           ],
       )
 

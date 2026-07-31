@@ -1,125 +1,7 @@
 # proto-file: third_party/neptune/protos/manifest.proto
 # proto-message: Manifest
 objects {
-  key: "post"
-  value {
-    function {
-      signature {
-        input {
-          tuple {
-            elements {
-              tuple {
-                elements {
-                  leaf {
-                    tensor_type {
-                      shape {
-                        shape_with_known_rank {
-                          dimension_sizes {
-                            size: 4
-                          }
-                        }
-                      }
-                      dtype: f32
-                    }
-                  }
-                }
-              }
-            }
-            elements {
-              dict {
-              }
-            }
-          }
-        }
-        output {
-          leaf {
-            tensor_type {
-              shape {
-                shape_with_known_rank {
-                  dimension_sizes {
-                    size: 4
-                  }
-                }
-              }
-              dtype: f32
-            }
-          }
-        }
-      }
-      body {
-        other {
-          file_system_location {
-            string_path: "post.pb"
-          }
-          mime_type: "application/protobuf; type=neptune_model_tf_concrete_function_handle.TfConcreteFunctionHandle"
-          version: "0.0.1"
-        }
-      }
-      visibility: PUBLIC
-    }
-  }
-}
-objects {
-  key: "pre"
-  value {
-    function {
-      signature {
-        input {
-          tuple {
-            elements {
-              tuple {
-                elements {
-                  leaf {
-                    tensor_type {
-                      shape {
-                        shape_with_known_rank {
-                          dimension_sizes {
-                            size: 4
-                          }
-                        }
-                      }
-                      dtype: f32
-                    }
-                  }
-                }
-              }
-            }
-            elements {
-              dict {
-              }
-            }
-          }
-        }
-        output {
-          leaf {
-            tensor_type {
-              shape {
-                shape_with_known_rank {
-                  dimension_sizes {
-                    size: 4
-                  }
-                }
-              }
-              dtype: f32
-            }
-          }
-        }
-      }
-      body {
-        other {
-          file_system_location {
-            string_path: "pre.pb"
-          }
-          mime_type: "application/protobuf; type=neptune_model_tf_concrete_function_handle.TfConcreteFunctionHandle"
-          version: "0.0.1"
-        }
-      }
-      visibility: PUBLIC
-    }
-  }
-}
-objects {
-  key: "serving_default"
+  key: "serving_default_jax_model_serving_default"
   value {
     function {
       signature {
@@ -151,6 +33,140 @@ objects {
                       shape {
                         shape_with_known_rank {
                           dimension_sizes {
+                          }
+                        }
+                      }
+                      dtype: f32
+                    }
+                  }
+                }
+              }
+            }
+            elements {
+              dict {
+              }
+            }
+          }
+        }
+        output {
+          leaf {
+            tensor_type {
+              shape {
+                shape_with_known_rank {
+                  dimension_sizes {
+                  }
+                }
+              }
+              dtype: f32
+            }
+          }
+        }
+      }
+      body {
+        stable_hlo_body {
+          stable_hlo {
+            inlined_bytes: ""
+            mime_type: "application/x.mlir-stablehlo"
+            version: "1.0"
+          }
+          calling_convention_version: 10
+          lowering_platforms: "cpu"
+          module_kept_var_idx: 0
+          module_kept_var_idx: 1
+        }
+      }
+      data_names: "w"
+      visibility: PUBLIC
+    }
+  }
+}
+objects {
+  key: "jax_model_weights"
+  value {
+    value {
+      external {
+        data {
+          file_system_location {
+            string_path: "checkpoint/jax_model"
+          }
+          mime_type: "application/x.orbax-checkpoint"
+        }
+      }
+    }
+  }
+}
+objects {
+  key: "serving_default_tf_model_postprocessing"
+  value {
+    function {
+      signature {
+        input {
+          tuple {
+            elements {
+              tuple {
+                elements {
+                  leaf {
+                    tensor_type {
+                      shape {
+                        shape_with_known_rank {
+                          dimension_sizes {
+                          }
+                        }
+                      }
+                      dtype: f32
+                    }
+                  }
+                }
+              }
+            }
+            elements {
+              dict {
+              }
+            }
+          }
+        }
+        output {
+          leaf {
+            tensor_type {
+              shape {
+                shape_with_known_rank {
+                  dimension_sizes {
+                  }
+                }
+              }
+              dtype: f32
+            }
+          }
+        }
+      }
+      body {
+        other {
+          file_system_location {
+            string_path: "serving_default_tf_model_postprocessing.pb"
+          }
+          mime_type: "application/protobuf; type=neptune_model_tf_concrete_function_handle.TfConcreteFunctionHandle"
+          version: "0.0.1"
+        }
+      }
+      visibility: PUBLIC
+    }
+  }
+}
+objects {
+  key: "serving_default_tf_model_preprocessing"
+  value {
+    function {
+      signature {
+        input {
+          tuple {
+            elements {
+              tuple {
+                elements {
+                  leaf {
+                    tensor_type {
+                      shape {
+                        shape_with_known_rank {
+                          dimension_sizes {
                             size: 4
                           }
                         }
@@ -183,39 +199,20 @@ objects {
         }
       }
       body {
-        stable_hlo_body {
-          stable_hlo {
-            inlined_bytes: ""
-            mime_type: "application/x.mlir-stablehlo"
-            version: "1.0"
+        other {
+          file_system_location {
+            string_path: "serving_default_tf_model_preprocessing.pb"
           }
-          calling_convention_version: 10
-          lowering_platforms: "cpu"
-          module_kept_var_idx: 0
-          module_kept_var_idx: 1
+          mime_type: "application/protobuf; type=neptune_model_tf_concrete_function_handle.TfConcreteFunctionHandle"
+          version: "0.0.1"
         }
       }
-      data_names: "w"
       visibility: PUBLIC
     }
   }
 }
-objects {
-  key: "weights"
-  value {
-    value {
-      external {
-        data {
-          file_system_location {
-            string_path: "checkpoint"
-          }
-          mime_type: "application/x.orbax-checkpoint"
-        }
-      }
-    }
-  }
-}
 supplemental_info {
+
   key: "orchestration"
   value {
     file_system_location {

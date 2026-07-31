@@ -20,8 +20,8 @@ import tensorflow as tf
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import main_lib
 from neptune_model._src.export import serving_config
-from neptune_model._src.processors import processor
-from neptune_model._src.processors import tf_processor
+from neptune_model._src.export import tensorflow_model
+from neptune_model.protos import orchestration_pb2
 
 
 @tf.function
@@ -85,32 +85,48 @@ def export_model(export_path: str):
       ),
   }
 
-  main_lib.save(
-      export_path=export_path,
-      models=jax_model.JaxModel(
-          apply_fn_bundle=jax_model.ApplyFnBundle(
-              apply_fn=apply_fn,
-              input_polymorphic_shapes={"processed_input": "b, _"},
-              jax_export_kwargs={"platforms": ["cpu"]},
-          ),
-          params={"w": jnp.asarray(2.0, dtype=jnp.float32)},
+  tf_proc_model = tensorflow_model.TensorflowModel(
+      name="tf_model",
+      tf_functions={
+          "first_preprocessor": first_preprocessor,
+          "second_preprocessor": second_preprocessor,
+      },
+  )
+  jm = jax_model.JaxModel(
+      apply_fn_bundle=jax_model.ApplyFnBundle(
+          apply_fn=apply_fn,
+          input_polymorphic_shapes={"processed_input": "b, _"},
+          jax_export_kwargs={"platforms": ["cpu"]},
       ),
+      params={"w": jnp.asarray(2.0, dtype=jnp.float32)},
+      name="jax_model",
+  )
+
+  main_lib.save(
+      [tf_proc_model, jm],
+      export_path=export_path,
       serving_configs=[
           serving_config.ServingConfig(
               serving_signature="serving_default",
               input_signature=input_signature,
-              processing=processor.SequentialProcessing(
-                  preprocessors=[
-                      tf_processor.TfProcessor(
-                          name="first_preprocessor",
-                          fn=first_preprocessor,
+              orchestration=serving_config.Orchestration(
+                  model_calls=[
+                      serving_config.ModelCall(
+                          model_name="tf_model",
+                          method_key="first_preprocessor",
+                          role=orchestration_pb2.ROLE_PREPROCESSOR,
                       ),
-                      tf_processor.TfProcessor(
-                          name="second_preprocessor",
-                          fn=second_preprocessor,
+                      serving_config.ModelCall(
+                          model_name="tf_model",
+                          method_key="second_preprocessor",
+                          role=orchestration_pb2.ROLE_PREPROCESSOR,
                       ),
-                  ],
-                  postprocessors=[],
+                      serving_config.ModelCall(
+                          model_name="jax_model",
+                          method_key="serving_default",
+                          role=orchestration_pb2.ROLE_MODEL,
+                      ),
+                  ]
               ),
           )
       ],

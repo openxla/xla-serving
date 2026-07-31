@@ -14,20 +14,17 @@
 
 """E2E Orchestrator for exporting LLMs with Neptune."""
 
-from collections.abc import Sequence
-from typing import Any
+import pathlib
 
 import jax
 import jaxtyping
 
 from neptune_model._src.export import jax_model
-
 from neptune_model._src.export import main_lib
 from neptune_model._src.export import serving_config
+from neptune_model._src.export import tensorflow_model
 from neptune_model._src.llm import config as llm_config
 from neptune_model._src.llm import model_wrapper
-from neptune_model._src.processors import processor
-from neptune_model._src.processors import tf_processor
 from neptune_model.protos import orchestration_pb2
 
 
@@ -47,54 +44,56 @@ def export_llm(
     model: model_wrapper.LLMModelWrapper,
     params: jaxtyping.PyTree,
     jax_mesh: jax.sharding.Mesh | None = None,
-    pre_processor: tf_processor.TfProcessor | None = None,
-    post_processor: tf_processor.TfProcessor | None = None,
-    tf_trackable_resources: Sequence[Any] | None = None,
+    tf_model: tensorflow_model.TensorflowModel | None = None,
 ) -> None:
-  """Exports a JAX LLM to the Neptune Model format using a 3-stage pipeline.
-
-  This function wraps the user's forward pass into a JAX-native generation loop,
-  appends TF-based preprocessing/postprocessing tokenizer steps, compiles the
-  pipeline for the specified batch size buckets, and saves the final SavedModel.
-
-  Args:
-    config: Consolidated configuration for LLM export.
-    model: An implementation of LLMModelWrapper.
-    params: Model parameters PyTree.
-    jax_mesh: Optional JAX mesh configuration for TPU sharding.
-    pre_processor: Optional custom TF pre-processor.
-    post_processor: Optional custom TF post-processor.
-    tf_trackable_resources: Optional TF trackable resources for the processors.
-  """
+  """Exports a JAX LLM to the Neptune Model format using a 3-stage pipeline."""
   tf = _require_tf()
-  preprocessors = []
 
-  if pre_processor is not None:
-    preprocessors.append(pre_processor)
-
-  postprocessors = []
-  if post_processor is not None:
-    postprocessors.append(post_processor)
-
-  tf_resources = list(tf_trackable_resources or [])
+  # 1. Setup export directory
+  pathlib.Path(config.export_dir).mkdir(parents=True, exist_ok=True)
 
   # 2. Wrap the model implementation inside the JAX generation loop
   jax_gen_fn = model.compile_generation_loop()
 
-  # 3. Setup Serving default signature and processing pipelines
-  if preprocessors or postprocessors:
-    processing = processor.SequentialProcessing(
-        preprocessors=preprocessors,
-        postprocessors=postprocessors,
-        options=processor.ProcessingOptions(
-            tf_trackable_resources=tf_resources
-        ),
+  # 3. Setup Serving default signature and orchestration pipelines
+  models = []
+  model_calls = []
+
+  if tf_model is not None:
+    models.append(tf_model)
+    if "preprocessing" in tf_model.tf_functions:
+      model_calls.append(
+          serving_config.ModelCall(
+              model_name=tf_model.name,
+              method_key="preprocessing",
+              role=orchestration_pb2.ROLE_PREPROCESSOR,
+          )
+      )
+
+  model_calls.append(
+      serving_config.ModelCall(
+          model_name="jax_model",
+          method_key="serving_default",
+          role=orchestration_pb2.ROLE_MODEL,
+      )
+  )
+
+  if tf_model is not None and "postprocessing" in tf_model.tf_functions:
+    model_calls.append(
+        serving_config.ModelCall(
+            model_name=tf_model.name,
+            method_key="postprocessing",
+            role=orchestration_pb2.ROLE_POSTPROCESSOR,
+        )
     )
+
+  if tf_model is not None:
+    orchestration = serving_config.Orchestration(model_calls=model_calls)
     input_signature = {
         "text_input": tf.TensorSpec(shape=(None,), dtype=tf.string)
     }
   else:
-    processing = None
+    orchestration = None
     prompt_dim = config.generation_config.max_prompt_length
     input_signature = {
         "input_ids": tf.TensorSpec(shape=(None, prompt_dim), dtype=tf.int32),
@@ -109,7 +108,7 @@ def export_llm(
   serving_cfg = serving_config.ServingConfig(
       serving_signature="serving_default",
       input_signature=input_signature,
-      processing=processing,
+      orchestration=orchestration,
       batch_options=batch_options,
   )
 
@@ -117,7 +116,7 @@ def export_llm(
   symbol_values = {"b": list(config.allowed_batch_sizes)}
   if (
       config.generation_config.max_prompt_length is not None
-      or pre_processor is not None
+      or tf_model is not None
   ):
     input_ids_shape = "b, _"
   else:
@@ -139,11 +138,13 @@ def export_llm(
       apply_fn_bundle=apply_fn_bundle,
       params=params,
       jax_mesh=jax_mesh,
+      name="jax_model",
   )
+  models.append(npt_jax_model)
 
   # 6. Save model bundle
   main_lib.save(
-      models=npt_jax_model,
+      models,
       export_path=config.export_dir,
       serving_configs=[serving_cfg],
   )

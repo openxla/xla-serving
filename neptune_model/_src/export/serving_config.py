@@ -14,14 +14,14 @@
 
 """Serving configuration for JAX models."""
 
-from collections.abc import Sequence, Set
+from collections.abc import Sequence
 import dataclasses
 import itertools
 
 from absl import logging
 import jaxtyping
 
-from neptune_model._src.processors import processor
+from neptune_model._src.export.constants import DEFAULT_METHOD_KEY
 from neptune_model.protos import orchestration_pb2
 
 
@@ -37,13 +37,16 @@ class ModelCall:
     output_keys: The keys of the output dict that the function produces. Only
       used when the `graph_based` flag is True.
     use_batching: Whether to enable batching for this call.
+    role: Optional component role in the pipeline (e.g. ROLE_PREPROCESSOR,
+      ROLE_MODEL, ROLE_POSTPROCESSOR). If None, defaults to ROLE_MODEL.
   """
 
   model_name: str
-  method_key: str
+  method_key: str = DEFAULT_METHOD_KEY
   input_keys: Sequence[str] = dataclasses.field(default_factory=list)
   output_keys: Sequence[str] = dataclasses.field(default_factory=list)
   use_batching: bool = False
+  role: orchestration_pb2.Role | None = orchestration_pb2.ROLE_MODEL
 
 
 @dataclasses.dataclass(frozen=True)
@@ -67,34 +70,23 @@ class ServingConfig:
   Attributes:
     serving_signature: The name that uniquely identifies this serving config in
       the serving pipeline. Defaults to "serving_default".
-    method_key: An optional key used to select a specific `apply_fn` from the
-      model. If not provided, the model must only have one `apply_fn`.
     input_signature: The expected structure and shape of inputs for the model,
       represented as a JAX PyTree.
     batch_options: Optional batching configuration to use when serving the
       model.
-    processing: Optional processing configuration. If not provided, only a JAX
-      model will be exported. If provided, the JAX model will be augmented by
-      the processors defined in the processing pipeline.
     orchestration: Optional workflow defining a sequence or dependency graph of
       model invocations.
   """
 
   serving_signature: str = "serving_default"
-  method_key: str | None = None
   # TODO: Evaluate if we need to make this a sequence of PyTrees.
   input_signature: jaxtyping.PyTree = None
   batch_options: orchestration_pb2.BatchOptions | None = None
-  processing: processor.Processing | None = None
   orchestration: Orchestration | None = None
 
   def __post_init__(self):
-    """Validates the batch options and processing/orchestration."""
-    if self.processing is not None and self.orchestration is not None:
-      raise ValueError(
-          "Cannot specify both processing and orchestration in ServingConfig."
-          " They are mutually exclusive."
-      )
+    # TODO (b/534785167): Update batch config validation logic.
+    """Validates the batch options."""
 
     if self.batch_options is None or self.batch_options.batch_component in (
         orchestration_pb2.BatchOptions.BATCH_COMPONENT_UNSPECIFIED,

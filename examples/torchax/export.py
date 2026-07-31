@@ -35,13 +35,13 @@ def export_model(pt_model: torch.nn.Module, export_path: str):
   }
 
   npt_export.save(
-      export_path=export_path,
-      models=jax_model.JaxModel(
+      jax_model.JaxModel(
           apply_fn_bundle=jax_model.ApplyFnBundle(
               apply_fn=apply_fn,
           ),
           params=weights,
       ),
+      export_path=export_path,
       serving_configs=[
           serving_config.ServingConfig(
               serving_signature='serving_default',

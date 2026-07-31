@@ -30,3 +30,9 @@ ORBAX_CHECKPOINT_MIME_TYPE: str = "application/x.orbax-checkpoint"
 ################################################################################
 # Prefix to use for prepending to logging messages
 LOG_PREFIX: str = "[NeptuneExport]"
+
+
+# Default method key used when a model is initialized with a single function
+# or bundle (rather than a mapping of named methods), and as the default
+# method_key in orchestration ModelCalls when not explicitly specified.
+DEFAULT_METHOD_KEY: str = "serving_default"
