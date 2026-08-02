@@ -26,7 +26,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Detect Version in __init__.py
         id: version_check
@@ -64,10 +64,10 @@ jobs:
     steps:
       # We have to checkout again because this Job runs on a brand new server!
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -92,7 +92,7 @@ jobs:
           sudo rm -rf /usr/lib/android-sdk
 
       - name: Cache Bazel Build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/bazel
           key: ${{ runner.os }}-bazel-${{ hashFiles('MODULE.bazel') }}
