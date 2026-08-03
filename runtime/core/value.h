@@ -15,12 +15,19 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_VALUE_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_VALUE_H_
 
+#include <cstdint>
+#include <memory>
 #include <new>
 #include <type_traits>
 #include <utility>
 
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "runtime/core/host_buffer.h"  // from @neptune
+#include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
 
 namespace neptune {
 
@@ -151,6 +158,23 @@ class alignas(64) Value {
   // Check if Value contains object of type T.
   template <typename T>
   bool IsType() const;
+
+  // Returns a new Value containing a HostBuffer reshaped to the shape
+  // specified. Returns an error if the value is not a HostBuffer or the number
+  // of elements mismatch.
+  absl::StatusOr<Value> Reshape(const xla::ifrt::Shape& shape) const;
+
+  // Returns a new Value containing a HostBuffer reshaped to the shape
+  // specified, reinterpreted with the dtype specified. Returns an error if
+  // the value is not a HostBuffer or the total byte sizes mismatch.
+  absl::StatusOr<Value> Bitcast(const xla::ifrt::DType& dtype,
+                                const xla::ifrt::Shape& shape) const;
+
+  // Returns a new Value containing a HostBuffer sliced along the 0th dimension
+  // covering the range [dim0_start, dim0_limit). The returned Value shares the
+  // underlying storage of this Value. Returns an error if the value is not a
+  // HostBuffer, if rank < 1, or if the indices are out of bounds.
+  absl::StatusOr<Value> Slice(int64_t dim0_start, int64_t dim0_limit) const;
 
   // Check if object of type T is stored in place.
   template <typename T>
@@ -414,6 +438,54 @@ template <typename T>
 bool Value::IsType() const {
   return handler_(value_internal::Action::kTypeInfo, const_cast<Value*>(this),
                   nullptr) == value_internal::GetTypeInfo<T>();
+}
+
+inline absl::StatusOr<Value> Value::Reshape(
+    const xla::ifrt::Shape& shape) const {
+  if (!IsType<HostBuffer>()) {
+    return absl::InvalidArgumentError("Value is not a HostBuffer");
+  }
+  const HostBuffer& hb = Get<HostBuffer>();
+  if (hb.shape().num_elements() != shape.num_elements()) {
+    return absl::InvalidArgumentError("Number of elements mismatch");
+  }
+  return Value(HostBuffer(hb.base(), hb.dtype(), shape,
+                          std::make_shared<HostBuffer>(hb)));
+}
+
+inline absl::StatusOr<Value> Value::Bitcast(
+    const xla::ifrt::DType& dtype, const xla::ifrt::Shape& shape) const {
+  if (!IsType<HostBuffer>()) {
+    return absl::InvalidArgumentError("Value is not a HostBuffer");
+  }
+  const HostBuffer& hb = Get<HostBuffer>();
+  if (!hb.dtype().byte_size().has_value() ||
+      !dtype.byte_size().has_value()) {
+    return absl::InvalidArgumentError(
+        "Cannot bitcast datatypes that do not have a fixed byte size.");
+  }
+  int64_t in_bytes =
+      *hb.dtype().byte_size() * hb.shape().num_elements();
+  int64_t out_bytes = *dtype.byte_size() * shape.num_elements();
+  if (in_bytes != out_bytes) {
+    return absl::InvalidArgumentError("Total byte size mismatch");
+  }
+  return Value(HostBuffer(hb.base(), dtype, shape,
+                          std::make_shared<HostBuffer>(hb)));
+}
+
+inline absl::StatusOr<Value> Value::Slice(int64_t dim0_start,
+                                          int64_t dim0_limit) const {
+  if (!IsType<HostBuffer>()) {
+    return absl::InvalidArgumentError("Value is not a HostBuffer");
+  }
+  const HostBuffer& hb = Get<HostBuffer>();
+  absl::StatusOr<HostBuffer> sliced_hb =
+      hb.SliceAlongFirstDimension(dim0_start, dim0_limit);
+  if (!sliced_hb.ok()) {
+    return sliced_hb.status();
+  }
+  return Value(std::move(*sliced_hb));
 }
 
 }  // namespace neptune

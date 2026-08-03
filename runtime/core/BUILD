@@ -48,8 +48,12 @@ cc_library(
         "@neptune//runtime/interpreter:interpreter_users",
     ],
     deps = [
+        ":host_buffer",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@xla//xla/python/ifrt",
     ],
 )
 
