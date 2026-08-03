@@ -87,8 +87,7 @@ def jax_exported_to_shlo_fn(
   Returns:
     An Orbax Model `ShloFunction`.
   """
-  # Fallback to named shardings if HLO shardings are missing (JAX 0.4.31+)
-  has_named_shardings = getattr(exported, "_has_named_shardings", False)
+
   in_named_shardings = getattr(
       exported, "_in_named_shardings", (None,) * len(exported.in_avals)
   )
@@ -96,22 +95,19 @@ def jax_exported_to_shlo_fn(
       exported, "_out_named_shardings", (None,) * len(exported.out_avals)
   )
 
-  def _get_op_sharding(sd, nsd, aval):
-    if sd is None and has_named_shardings and nsd is not None:
+  def _get_op_sharding(nsd, aval):
+    sd = None
+    if nsd is not None:
       sd = nsd._to_xla_hlo_sharding(aval.ndim)
     return utils.hlo_sharding_to_op_sharding(sd)
 
   in_shardings_hlo = tuple([
-      _get_op_sharding(sd, nsd, aval)
-      for sd, nsd, aval in zip(
-          exported.in_shardings_hlo, in_named_shardings, exported.in_avals
-      )
+      _get_op_sharding(nsd, aval)
+      for nsd, aval in zip(in_named_shardings, exported.in_avals)
   ])
   out_shardings_hlo = tuple([
-      _get_op_sharding(sd, nsd, aval)
-      for sd, nsd, aval in zip(
-          exported.out_shardings_hlo, out_named_shardings, exported.out_avals
-      )
+      _get_op_sharding(nsd, aval)
+      for nsd, aval in zip(out_named_shardings, exported.out_avals)
   ])
   num_user_outputs = exported.out_tree.num_leaves
   out_avals = exported.out_avals[:num_user_outputs]
