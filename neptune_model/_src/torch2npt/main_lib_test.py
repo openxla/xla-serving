@@ -19,17 +19,27 @@ from absl.testing import absltest
 import jax
 import jax.numpy as jnp
 import numpy as np
-import torch
-from torch import nn
 
 from neptune_model._src.core import test_utils
 from neptune_model._src.jax2npt import main_lib as jax2npt_lib
 from neptune_model._src.torch2npt import main_lib
 
+# pylint: disable=g-import-not-at-top
+try:
+  # pytype: disable=import-error
+  import torch
+  from torch import nn
+  # pytype: enable=import-error
+except ImportError:
+  torch = None
+  nn = None
+# pylint: enable=g-import-not-at-top
+
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 os.environ["OMP_NUM_THREADS"] = "1"
 
 
+# pytype: disable=attribute-error
 class MainLibTest(test_utils.NptTestCase):
 
   def test_pt_model_against_jax(self):

@@ -16,11 +16,22 @@
 from typing import Any
 
 import jax
-import torch
-import torchax as tx
 
 from neptune_model._src.core import shlo_function
 from neptune_model._src.jax2npt import main_lib as jax2npt_lib
+
+# pylint: disable=g-import-not-at-top
+try:
+  # pytype: disable=import-error
+  import torch
+  import torchax as tx
+  # pytype: enable=import-error
+except ImportError:
+  raise ImportError(
+      "torch and torchax are required to convert PyTorch models to JAX"
+      " models."
+  )
+# pylint: enable=g-import-not-at-top
 
 
 def convert_to_jax(pytorch_model: torch.nn.Module) -> tuple[Any, Any]:
