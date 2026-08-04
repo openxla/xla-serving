@@ -29,7 +29,7 @@ class JaxModelTest(absltest.TestCase):
         params={'w': jnp.array(2.0)},
     )
     self.assertEqual(
-        model._apply_fn_bundle[jax_model.SERVING_DEFAULT_KEY], bundle
+        model._apply_fn_bundle[jax_model.DEFAULT_METHOD_KEY], bundle
     )
     self.assertEqual(model.params, {'w': jnp.array(2.0)})
     self.assertIsNone(model.jax_mesh)

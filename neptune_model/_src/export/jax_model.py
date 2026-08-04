@@ -15,14 +15,19 @@
 """A JAX model, consisting of an apply_fn and its parameters."""
 
 from collections.abc import Mapping, Sequence
+import pathlib
 
 import jax
 import jaxtyping
+import orbax.checkpoint as ocp
 
+from neptune_model._src import jax2npt
+from neptune_model._src.core import value
+from neptune_model._src.export import constants
+from neptune_model._src.export.constants import DEFAULT_METHOD_KEY
 from neptune_model._src.jax2npt.typing import ApplyFnBundle
 
-
-SERVING_DEFAULT_KEY = 'serving_default'
+DEFAULT_MODEL_NAME: str = 'jax_model'
 
 
 class JaxModel:
@@ -43,14 +48,16 @@ class JaxModel:
       apply_fn_bundle: ApplyFnBundle | Mapping[str, ApplyFnBundle],
       params: jaxtyping.PyTree | None = None,
       jax_mesh: jax.sharding.Mesh | None = None,
-      name: str = 'jax_model',
+      name: str = DEFAULT_MODEL_NAME,
   ):
     if isinstance(apply_fn_bundle, Mapping):
       self._apply_fn_bundle = apply_fn_bundle
     else:
-      self._apply_fn_bundle = {SERVING_DEFAULT_KEY: apply_fn_bundle}
+      self._apply_fn_bundle = {DEFAULT_METHOD_KEY: apply_fn_bundle}
     self._params = params
     self._jax_mesh = jax_mesh
+    if not name:
+      raise ValueError('JaxModel name must not be empty')
     self._name = name
 
   @property
@@ -58,8 +65,18 @@ class JaxModel:
     return self._name
 
   @property
+  def weights_name(self) -> str:
+    """The default weights name for the model checkpoint."""
+    return f'{self._name}_{constants.WEIGHTS_NAME}'
+
+  @property
   def params(self) -> jaxtyping.PyTree | None:
     return self._params
+
+  @property
+  def apply_fn_bundles(self) -> Mapping[str, ApplyFnBundle]:
+    """A mapping from method keys to ApplyFnBundles."""
+    return self._apply_fn_bundle
 
   def method_keys(self) -> Sequence[str]:
     return list(self._apply_fn_bundle.keys())
@@ -68,6 +85,37 @@ class JaxModel:
   def jax_mesh(self) -> jax.sharding.Mesh | None:
     return self._jax_mesh
 
-  @property
-  def apply_fn_bundles(self) -> Mapping[str, ApplyFnBundle]:
-    return self._apply_fn_bundle
+  def save_checkpoint(
+      self,
+      export_path: str,
+      checkpoint_path: str,
+      weights_name: str,
+  ) -> Mapping[str, value.ExternalValue]:
+    """Saves the JAX model parameters to an Orbax checkpoint.
+
+    Args:
+      export_path: The root directory where the Neptune model is being exported.
+      checkpoint_path: The relative subdirectory path within `export_path` where
+        the Orbax checkpoint should be saved.
+      weights_name: The manifest object key under which this checkpoint's
+        external value will be registered.
+
+    Returns:
+      A mapping from `weights_name` to the corresponding ExternalValue
+      object representing the saved checkpoint, or an empty dict if the model
+      has no parameters.
+    """
+    if self._params is None:
+      return {}
+    checkpointer = ocp.Checkpointer(ocp.StandardCheckpointHandler())
+    checkpointer.save(
+        pathlib.Path(export_path) / checkpoint_path,
+        self._params,
+        force=True,
+    )
+    return {
+        weights_name: jax2npt.convert_path_to_value(
+            checkpoint_path,
+            constants.ORBAX_CHECKPOINT_MIME_TYPE,
+        )
+    }

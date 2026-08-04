@@ -25,8 +25,7 @@ from neptune_model._src.core import test_utils
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import main_lib
 from neptune_model._src.export import serving_config
-from neptune_model._src.processors import processor as processor_lib
-from neptune_model._src.processors import tf_processor
+from neptune_model._src.export import tensorflow_model
 from neptune_model.protos import orchestration_pb2
 from neptune_model.protos import tf_concrete_function_handle_pb2
 
@@ -79,33 +78,45 @@ class MainLibOrchestrationTest(test_utils.NptTestCase):
     def model_fn(params, inputs):
       return inputs * params['w']
 
+    tf_proc_model = tensorflow_model.TensorflowModel(
+        name='tf_model',
+        tf_functions={
+            'preprocessing': pre_fn,
+            'postprocessing': post_fn,
+        },
+        trackable_resources=[var1, var2],
+    )
     model = jax_model.JaxModel(
         apply_fn_bundle=jax_model.ApplyFnBundle(
             apply_fn=model_fn,
+            input_polymorphic_shapes='b',
             jax_export_kwargs={'platforms': ['cpu']},
         ),
         params={'w': jnp.array(3.0, dtype=jnp.float32)},
+        name='jax_model',
     )
 
     cfg = serving_config.ServingConfig(
         serving_signature='serving_default',
         input_signature=jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.float32),
-        processing=processor_lib.SequentialProcessing(
-            preprocessors=[
-                tf_processor.TfProcessor('pre', pre_fn),
-            ],
-            postprocessors=[
-                tf_processor.TfProcessor('post', post_fn),
-            ],
-            options=processor_lib.ProcessingOptions(
-                tf_trackable_resources=[var1, var2],
-            ),
+        orchestration=serving_config.Orchestration(
+            model_calls=[
+                serving_config.ModelCall(
+                    model_name='tf_model', method_key='preprocessing'
+                ),
+                serving_config.ModelCall(
+                    model_name='jax_model', method_key='serving_default'
+                ),
+                serving_config.ModelCall(
+                    model_name='tf_model', method_key='postprocessing'
+                ),
+            ]
         ),
     )
 
     export_path = pathlib.Path(self.create_tempdir().full_path)
     main_lib.save(
-        model,
+        models=[tf_proc_model, model],
         export_path=str(export_path),
         serving_configs=[cfg],
     )
@@ -113,13 +124,17 @@ class MainLibOrchestrationTest(test_utils.NptTestCase):
     manifest_proto = persistence_lib.load(str(export_path))
     with open(export_path / 'orchestration.pb', 'rb') as f:
       pipelines_proto = orchestration_pb2.Pipelines.FromString(f.read())
-    with open(export_path / 'pre.pb', 'rb') as f:
+    with open(
+        export_path / 'serving_default_tf_model_preprocessing.pb', 'rb'
+    ) as f:
       tf_pre_processor_proto = (
           tf_concrete_function_handle_pb2.TfConcreteFunctionHandle.FromString(
               f.read()
           )
       )
-    with open(export_path / 'post.pb', 'rb') as f:
+    with open(
+        export_path / 'serving_default_tf_model_postprocessing.pb', 'rb'
+    ) as f:
       tf_post_processor_proto = (
           tf_concrete_function_handle_pb2.TfConcreteFunctionHandle.FromString(
               f.read()
@@ -139,20 +154,33 @@ class MainLibOrchestrationTest(test_utils.NptTestCase):
       )
 
     with self.subTest('check_pipelines_proto'):
-      self._assert_proto_equal_to_testdata(
-          pipelines_proto, 'model_with_tf_processors/pipelines.textproto'
+      pipeline = pipelines_proto.name_to_pipeline['serving_default']
+      self.assertLen(pipeline.components, 3)
+      self.assertEqual(
+          pipeline.components[0].function_name,
+          'serving_default_tf_model_preprocessing',
+      )
+      self.assertEqual(
+          pipeline.components[1].function_name,
+          'serving_default_jax_model_serving_default',
+      )
+      self.assertEqual(
+          pipeline.components[2].function_name,
+          'serving_default_tf_model_postprocessing',
       )
 
     with self.subTest('check_tf_pre_processor_proto'):
       self._assert_proto_equal_to_testdata(
           tf_pre_processor_proto,
           'model_with_tf_processors/preprocessor.textproto',
+          ignored_fields=['fn_name'],
       )
 
     with self.subTest('check_tf_post_processor_proto'):
       self._assert_proto_equal_to_testdata(
           tf_post_processor_proto,
           'model_with_tf_processors/postprocessor.textproto',
+          ignored_fields=['fn_name'],
       )
 
     with self.subTest('check_tf_saved_model_written'):
@@ -161,11 +189,15 @@ class MainLibOrchestrationTest(test_utils.NptTestCase):
       )
 
     with self.subTest('check_tf_functions_loaded'):
-      self.assertIn('pre', loaded_tf_model.signatures)
-      self.assertIn('post', loaded_tf_model.signatures)
+      self.assertIn(
+          'serving_default_tf_model_preprocessing', loaded_tf_model.signatures
+      )
+      self.assertIn(
+          'serving_default_tf_model_postprocessing', loaded_tf_model.signatures
+      )
 
     with self.subTest('check_tf_variables_loaded'):
-      var1_loaded, var2_loaded = loaded_tf_model.resources[0]
+      var1_loaded, var2_loaded = loaded_tf_model.resources
       # Check that variables var1 and var2 are present and have correct values
       self.assertEqual(var1_loaded.numpy(), 1.0)
       self.assertEqual(var2_loaded.numpy(), 2.0)
@@ -225,10 +257,12 @@ class MainLibOrchestrationTest(test_utils.NptTestCase):
     pipeline = pipelines_proto.name_to_pipeline['serving_default']
     self.assertLen(pipeline.components, 2)
     self.assertEqual(
-        pipeline.components[0].function_name, 'model1_serving_default'
+        pipeline.components[0].function_name,
+        'serving_default_model1_serving_default',
     )
     self.assertEqual(
-        pipeline.components[1].function_name, 'model2_serving_default'
+        pipeline.components[1].function_name,
+        'serving_default_model2_serving_default',
     )
 
   def test_duplicate_model_names(self):
@@ -281,6 +315,12 @@ class MainLibOrchestrationTest(test_utils.NptTestCase):
     def model_fn(params, inputs):
       return {'out': inputs['processed_input'] * params['w']}
 
+    tf_proc_model = tensorflow_model.TensorflowModel(
+        name='tf_model',
+        tf_functions={
+            'preprocessing': pre_fn,
+        },
+    )
     model = jax_model.JaxModel(
         apply_fn_bundle=jax_model.ApplyFnBundle(
             apply_fn=model_fn,
@@ -288,6 +328,7 @@ class MainLibOrchestrationTest(test_utils.NptTestCase):
             input_polymorphic_shapes={'processed_input': 'b, 1'},
         ),
         params={'w': jnp.array(2.0, dtype=jnp.float32)},
+        name='jax_model',
     )
 
     batch_options = orchestration_pb2.BatchOptions(
@@ -307,17 +348,22 @@ class MainLibOrchestrationTest(test_utils.NptTestCase):
             ),
             'dense_input': tf.TensorSpec(shape=(None, 1), dtype=tf.int32),
         },
-        processing=processor_lib.SequentialProcessing(
-            preprocessors=[
-                tf_processor.TfProcessor('pre', pre_fn),
-            ],
+        orchestration=serving_config.Orchestration(
+            model_calls=[
+                serving_config.ModelCall(
+                    model_name='tf_model', method_key='preprocessing'
+                ),
+                serving_config.ModelCall(
+                    model_name='jax_model', method_key='serving_default'
+                ),
+            ]
         ),
         batch_options=batch_options,
     )
 
     export_path = pathlib.Path(self.create_tempdir().full_path)
     main_lib.save(
-        model,
+        models=[tf_proc_model, model],
         export_path=str(export_path),
         serving_configs=[cfg],
     )

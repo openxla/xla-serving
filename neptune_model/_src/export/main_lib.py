@@ -37,15 +37,19 @@ from neptune_model._src.core import value
 from neptune_model._src.export import constants
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import serving_config
+from neptune_model._src.export import tensorflow_model
 from neptune_model._src.export import warmup
 from neptune_model._src.jax2npt import utils as jax2npt_utils
 from neptune_model._src.processors import jax_processor
 from neptune_model._src.processors import processor
 from neptune_model._src.processors import tf_processor
+from neptune_model._src.processors.tf_processor import save_tf_functions
 from neptune_model.protos import orchestration_pb2
 
-
-Model = jax_model.JaxModel
+Model = (
+    tensorflow_model.TensorflowModel
+    | jax_model.JaxModel
+)
 
 
 @dataclasses.dataclass
@@ -99,42 +103,56 @@ class PipelineNode:
 
 def _build_orchestration_pipeline_nodes(
     models: Sequence[Model],
+    serving_signature: str,
     orchestration: serving_config.Orchestration,
 ) -> Sequence[PipelineNode]:
   """Builds pipeline nodes based on orchestration."""
+  # TODO: Add support for graph based orchestration.
 
   pipeline_nodes = []
   for model_call in orchestration.model_calls:
-    model = None
     for m in models:
       if hasattr(m, 'name') and m.name == model_call.model_name:
         model = m
         break
-    if model is None:
+    else:
       raise ValueError(
           f'Model {model_call.model_name!r} not found in provided models'
       )
-
-    if isinstance(model, jax_model.JaxModel):
-      if model_call.method_key not in model.method_keys():
-        raise ValueError(
-            f'Method {model_call.method_key!r} not found in model'
-            f' {model.name!r}'
-        )
-      processor_inst = jax_processor.JaxProcessor(
-          model=model,
-          name=f'{model.name}_{model_call.method_key}',
-          method_key=model_call.method_key,
-          checkpoint_path=f'{constants.DEFAULT_CHECKPOINT_SUBDIR}/{model.name}',
-          weights_name=f'{model.name}_{constants.WEIGHTS_NAME}',
+    if model_call.method_key not in model.method_keys():
+      raise ValueError(
+          f'Method {model_call.method_key!r} not found in model {model.name!r}'
       )
-    else:
-      raise ValueError(f'Unknown model type: {type(model)}')
-    # TODO: Add support for graph based orchestration.
+
+    # Construct a unique processor name by combining the serving signature,
+    # model name, and method key (e.g., "serving_default_tf_model_preprocessing").
+    # This prevents identifier collisions when multiple serving configs call
+    # the same model methods, or when methods with identical names are used
+    # across different models.
+    processor_name = f'{serving_signature}_{model.name}_{model_call.method_key}'
+
+    match model:
+      case jax_model.JaxModel():
+        processor_inst = jax_processor.JaxProcessor(
+            name=processor_name,
+            apply_fn_bundle=model.apply_fn_bundles[model_call.method_key],
+            params=model.params,
+            weights_name=model.weights_name,
+            jax_mesh=model.jax_mesh,
+        )
+      case tensorflow_model.TensorflowModel():
+        fn = model.tf_functions[model_call.method_key]
+        processor_inst = tf_processor.TfProcessor(
+            name=processor_name,
+            fn=fn,
+        )
+      case _:
+        raise ValueError(f'Unknown model type: {type(model)}')
+
     pipeline_nodes.append(
         PipelineNode(
             processor=processor_inst,
-            role=getattr(model_call, 'role', orchestration_pb2.ROLE_MODEL),
+            role=model_call.role,
         )
     )
 
@@ -162,55 +180,34 @@ def _build_pipeline_nodes(
     ValueError: If a model/method is not found or batch options are invalid.
   """
   if cfg.orchestration:
-    return _build_orchestration_pipeline_nodes(models, cfg.orchestration)
+    return _build_orchestration_pipeline_nodes(
+        models, cfg.serving_signature, cfg.orchestration
+    )
 
-  jax_processor_inst = jax_processor.JaxProcessor(
-      model=models[0],
-      name=cfg.serving_signature,
-      method_key=cfg.method_key,
-      checkpoint_path=constants.DEFAULT_CHECKPOINT_SUBDIR,
-      weights_name=constants.WEIGHTS_NAME,
-  )
+  # Without an orchestration workflow, export defaults to the single
+  # provided JAX model.
+  model = models[0]
+  if not isinstance(model, jax_model.JaxModel):
+    raise ValueError(f'Expected JaxModel, got {type(model)}')
+  if len(model.apply_fn_bundles) > 1:
+    raise ValueError(
+        f'Model {model.name!r} has multiple apply functions. You must specify'
+        ' an orchestration workflow in ServingConfig to select which function'
+        ' to execute.'
+    )
 
-  model_node = PipelineNode(
-      processor=jax_processor_inst,
-      role=orchestration_pb2.ROLE_MODEL,
-  )
-
-  match cfg.processing:
-    case processor.SequentialProcessing() as sequential_processing:
-      pre_nodes = [
-          PipelineNode(p, orchestration_pb2.ROLE_PREPROCESSOR)
-          for p in sequential_processing.preprocessors
-      ]
-      post_nodes = [
-          PipelineNode(p, orchestration_pb2.ROLE_POSTPROCESSOR)
-          for p in sequential_processing.postprocessors
-      ]
-      if cfg.batch_options is not None:
-        if (
-            cfg.batch_options.batch_component
-            == orchestration_pb2.BatchOptions.PRE_PROCESSOR_AND_MODEL_FUNCTION
-            and not pre_nodes
-        ):
-          raise ValueError(
-              'Batch component is set to PRE_PROCESSOR_AND_MODEL_FUNCTION, but'
-              ' there are no preprocessors.'
-          )
-        if (
-            cfg.batch_options.batch_component
-            == orchestration_pb2.BatchOptions.MODEL_FUNCTION_AND_POST_PROCESSOR
-            and not post_nodes
-        ):
-          raise ValueError(
-              'Batch component is set to POST_PROCESSOR_AND_MODEL_FUNCTION, but'
-              ' there are no postprocessors.'
-          )
-      return [*pre_nodes, model_node, *post_nodes]
-    case None:
-      return [model_node]
-    case _:
-      raise ValueError(f'Unknown processing type: {type(cfg.processing)}')
+  return [
+      PipelineNode(
+          processor=jax_processor.JaxProcessor(
+              name=cfg.serving_signature,
+              apply_fn_bundle=next(iter(model.apply_fn_bundles.values())),
+              params=model.params,
+              weights_name=constants.WEIGHTS_NAME,
+              jax_mesh=model.jax_mesh,
+          ),
+          role=orchestration_pb2.ROLE_MODEL,
+      )
+  ]
 
 
 def _update_save_bundle_with_pipeline_node(
@@ -351,6 +348,15 @@ def _validate_save_params(
   if not models:
     raise ValueError('Must specify at least one model.')
 
+  tf_model_count = sum(
+      isinstance(m, tensorflow_model.TensorflowModel) for m in models
+  )
+  if tf_model_count > 1:
+    raise ValueError(
+        'Multiple TensorflowModels are not supported. Got:'
+        f' {tf_model_count} TensorflowModels.'
+    )
+
   model_names = [m.name for m in models if hasattr(m, 'name')]
   if len(set(model_names)) != len(model_names):
     raise ValueError(
@@ -368,11 +374,6 @@ def _validate_save_params(
     if not cfg.input_signature:
       raise ValueError(
           f'Serving config {cfg.serving_signature!r} must have input signature'
-      )
-    if cfg.orchestration and cfg.processing:
-      raise ValueError(
-          f'Serving config {cfg.serving_signature!r} cannot specify both'
-          ' orchestration and processing.'
       )
     if len(models) > 1 and cfg.orchestration is None:
       raise ValueError(
@@ -398,9 +399,6 @@ def save(
       warmup examples. Each example is a dictionary mapping input names to
       tensors, NumPy arrays, or any object convertible to a NumPy array.
   """
-  if models is None:
-    raise ValueError('Must specify models.')
-
   if not isinstance(models, Sequence):
     models = [models]
 
@@ -431,14 +429,18 @@ def save(
       ),
   }
   if save_bundle.tf_prepared_functions:
-    trackable_resources = [
-        cfg.processing.options.tf_trackable_resources
-        for cfg in serving_configs
-        if cfg.processing is not None
-        and cfg.processing.options.tf_trackable_resources is not None
-    ]
+    trackable_resources = []
+    for model_inst in models:
+      if (
+          isinstance(model_inst, tensorflow_model.TensorflowModel)
+          and model_inst.trackable_resources is not None
+      ):
+        if isinstance(model_inst.trackable_resources, (list, tuple)):
+          trackable_resources.extend(model_inst.trackable_resources)
+        else:
+          trackable_resources.append(model_inst.trackable_resources)
 
-    tf_supplemental = tf_processor.save_tf_functions(
+    tf_supplemental = save_tf_functions(
         export_path,
         save_bundle.tf_prepared_functions,
         trackable_resources=trackable_resources,
@@ -446,6 +448,23 @@ def save(
     supplementals.update(tf_supplemental)
 
   save_module = save_bundle.manifest_objects.copy()
+
+  is_single_model = len(models) == 1
+  for model_inst in models:
+    if isinstance(model_inst, jax_model.JaxModel):
+      if is_single_model:
+        ckpt_path = constants.DEFAULT_CHECKPOINT_SUBDIR
+        w_name = constants.WEIGHTS_NAME
+      else:
+        ckpt_path = f'{constants.DEFAULT_CHECKPOINT_SUBDIR}/{model_inst.name}'
+        w_name = model_inst.weights_name
+      save_module.update(
+          model_inst.save_checkpoint(
+              export_path,
+              checkpoint_path=ckpt_path,
+              weights_name=w_name,
+          )
+      )
 
   for on_persist_fn in save_bundle.on_persist_fns:
     on_persist_result = on_persist_fn(export_path)

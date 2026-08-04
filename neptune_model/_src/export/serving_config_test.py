@@ -17,7 +17,6 @@
 from absl.testing import absltest
 from absl.testing import parameterized
 from neptune_model._src.export import serving_config
-from neptune_model._src.processors import processor
 from neptune_model.protos import orchestration_pb2
 
 
@@ -336,15 +335,6 @@ class ServingConfigTest(parameterized.TestCase):
 
     with self.assertRaisesRegex(ValueError, error_regex):
       serving_config.ServingConfig(batch_options=batch_options)
-
-  def test_processing_and_orchestration_mutually_exclusive(self):
-    with self.assertRaisesRegex(
-        ValueError, "Cannot specify both processing and orchestration"
-    ):
-      serving_config.ServingConfig(
-          processing=processor.SequentialProcessing(),
-          orchestration=serving_config.Orchestration(model_calls=[]),
-      )
 
 
 if __name__ == "__main__":

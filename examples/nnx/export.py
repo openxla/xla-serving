@@ -58,8 +58,7 @@ def export_model(export_path: str):
     ckpt_params = checkpointer.restore(ckpt_path)
 
   main_lib.save(
-      export_path=export_path,
-      models=jax_model.JaxModel(
+      jax_model.JaxModel(
           apply_fn_bundle=jax_model.ApplyFnBundle(
               apply_fn=apply_fn,
               input_polymorphic_shapes={
@@ -72,6 +71,7 @@ def export_model(export_path: str):
           ),
           params=ckpt_params,
       ),
+      export_path=export_path,
       serving_configs=[
           serving_config.ServingConfig(
               serving_signature='serving_default',

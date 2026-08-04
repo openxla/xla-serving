@@ -26,8 +26,7 @@ from examples.nnx_with_tf_embeddings import model as model_lib
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import main_lib
 from neptune_model._src.export import serving_config
-from neptune_model._src.processors import processor
-from neptune_model._src.processors import tf_processor
+from neptune_model._src.export import tensorflow_model
 
 FLAGS = flags.FLAGS
 flags.DEFINE_integer(
@@ -81,32 +80,40 @@ def export_model(export_path: str):
     checkpointer.save(ckpt_path, model_params)
     model_params = checkpointer.restore(ckpt_path)
 
-  main_lib.save(
-      export_path=export_path,
-      models=jax_model.JaxModel(
-          apply_fn_bundle=jax_model.ApplyFnBundle(
-              apply_fn=apply_fn,
-              input_polymorphic_shapes={
-                  **input_polyshape,
-              },
-              jax_export_kwargs={'platforms': ['cpu', 'cuda']},
-          ),
-          params=model_params,
+  pre_model = tensorflow_model.TensorflowModel(
+      name='tf_model',
+      tf_functions={'preprocessing': embedding_layer},
+      trackable_resources=[embedding_layer],
+  )
+  jm = jax_model.JaxModel(
+      apply_fn_bundle=jax_model.ApplyFnBundle(
+          apply_fn=apply_fn,
+          input_polymorphic_shapes={
+              **input_polyshape,
+          },
+          jax_export_kwargs={'platforms': ['cpu', 'cuda']},
       ),
+      params=model_params,
+      name='jax_model',
+  )
+
+  main_lib.save(
+      [pre_model, jm],
+      export_path=export_path,
       serving_configs=[
           serving_config.ServingConfig(
               serving_signature='serving_default',
               input_signature=input_signature,
-              processing=processor.SequentialProcessing(
-                  preprocessors=[
-                      tf_processor.TfProcessor(
-                          name='embedding_layer',
-                          fn=embedding_layer,
-                      )
-                  ],
-                  options=processor.ProcessingOptions(
-                      tf_trackable_resources=[embedding_layer]
-                  ),
+              orchestration=serving_config.Orchestration(
+                  model_calls=[
+                      serving_config.ModelCall(
+                          model_name='tf_model',
+                          method_key='preprocessing',
+                      ),
+                      serving_config.ModelCall(
+                          model_name='jax_model', method_key='serving_default'
+                      ),
+                  ]
               ),
           )
       ],

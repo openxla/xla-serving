@@ -19,14 +19,9 @@
 __version__ = "0.0.10"
 
 
-from neptune_model import llm
 from neptune_model._src.export import serving_config
-from neptune_model._src.export.jax_model import ApplyFnBundle
 from neptune_model._src.export.jax_model import JaxModel
 from neptune_model._src.export.main_lib import save
 from neptune_model._src.export.serving_config import ServingConfig
-from neptune_model._src.processors.processor import (
-    ProcessingOptions,
-    SequentialProcessing,
-)
-from neptune_model._src.processors.tf_processor import TfProcessor
+from neptune_model._src.export.tensorflow_model import TensorflowModel
+from neptune_model._src.jax2npt.typing import ApplyFnBundle

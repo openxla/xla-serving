@@ -1,5 +1,6 @@
 # proto-file: third_party/neptune/protos/tf_concrete_function_handle.proto
 # proto-message: TfConcreteFunctionHandle
-fn_name: "post"
+fn_name: "post_serving_default"
 input_names: "y"
 output_names: "output_0"
+

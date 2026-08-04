@@ -41,7 +41,12 @@ class ExportTest(absltest.TestCase):
         os.path.isfile(os.path.join(export_path, 'orchestration.pb'))
     )
     self.assertTrue(
-        os.path.isdir(os.path.join(export_path, 'preprocessor_ckpt'))
+        os.path.isdir(
+            os.path.join(export_path, 'checkpoint', 'embedding_layer')
+        )
+    )
+    self.assertTrue(
+        os.path.isdir(os.path.join(export_path, 'checkpoint', 'jax_model'))
     )
 
     runner = _model_runner(export_path)
