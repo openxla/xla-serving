@@ -4,7 +4,7 @@ package_group(
     name = "internal",
     packages = [
         "//runtime/interpreter/...",
-        "//runtime/serving/google/streaming/...",
+        "//runtime/serving/...",
     ],
 )
 
@@ -288,11 +288,9 @@ cc_library(
     ],
     deps = [
         "@abseil-cpp//absl/base:nullability",
-        "@abseil-cpp//absl/container:flat_hash_map",
         "@neptune//protos:manifest_cc_proto",
         "@neptune//runtime/core:allocator",
         "@neptune//runtime/core:default_allocator",
-        "@neptune//runtime/core:host_buffer",
         "@neptune//runtime/core:stablehlo_optimizer",
         "@neptune//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",
         "@neptune//runtime/libs/ifrt/serving_core_selector",

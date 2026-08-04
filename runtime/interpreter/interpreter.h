@@ -163,14 +163,21 @@ class Interpreter {
     return create_options_.get();
   }
 
- private:
-  // TODO: Remove this peer class once JSV fully supports
-  // graph-based orchestration and tests can use the public API.
-  friend class InterpreterPeer;
+  const IfrtLoadedVariableRegistry& ifrt_loaded_variable_registry() const {
+    return ifrt_loaded_variable_registry_;
+  }
+  IfrtLoadedVariableRegistry& ifrt_loaded_variable_registry() {
+    return ifrt_loaded_variable_registry_;
+  }
 
   // Loads the model. This will load all the pipelines in the manifest unless
   // lazy loading is enabled.
   absl::Status Load();
+
+ private:
+  // TODO: Remove this peer class once JSV fully supports
+  // graph-based orchestration and tests can use the public API.
+  friend class InterpreterPeer;
 
   // Loads the graphs of all registered pipelines.
   absl::Status LoadGraphs();
