@@ -261,6 +261,7 @@ class BatchResourceBase : public ResourceBase {
   // Implementation of calling the process batch function.
   virtual void ProcessFuncBatchImpl(
       const BatchResourceBase::BatchTask& propagated_task,
+      std::vector<int32_t> batch_request_ids,
       absl::Span<const HostBuffer> inputs,
       std::vector<HostBuffer>* combined_outputs,
       std::function<void(const absl::Status&)> done) const = 0;
@@ -296,6 +297,7 @@ class BatchResourceBase : public ResourceBase {
   absl::Status ConcatInputBuffers(
       const BatchT& batch,
       absl::Span<const std::unique_ptr<BatchTask>> unbatched_tasks,
+      int padded_batch_size, int padding_amount,
       Kernel::ExecuteContext* context,
       std::vector<HostBuffer>* concatenated_buffers) const;
 

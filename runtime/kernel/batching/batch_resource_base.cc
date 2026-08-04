@@ -521,20 +521,13 @@ int BatchResourceBase::RoundToLowestAllowedBatchSize(
 absl::Status BatchResourceBase::ConcatInputBuffers(
     const BatchT& batch,
     absl::Span<const std::unique_ptr<BatchTask>> unbatched_tasks,
-    Kernel::ExecuteContext* context,
+    int padded_batch_size, int padding_amount, Kernel::ExecuteContext* context,
     std::vector<HostBuffer>* concatenated_buffers) const {
   if (batch.num_tasks() == 0) {
     return absl::InvalidArgumentError("Empty batch.");
   }
 
   const bool just_for_warmup = batch.task(0).forced_warmup_batch_size > 0;
-  int all_tasks_size = batch.size() + GetTotalTaskSize(unbatched_tasks);
-  const int padded_batch_size =
-      just_for_warmup ? batch.task(0).forced_warmup_batch_size
-                      : RoundToLowestAllowedBatchSize(
-                            all_tasks_size, IsLowPriorityBatch(batch));
-  const int padding_amount =
-      just_for_warmup ? padded_batch_size : padded_batch_size - all_tasks_size;
   tsl::profiler::TraceMe trace_me(
       [padded_batch_size, padding_amount,
        disable_padding = batcher_queue_options_.disable_padding]() {
@@ -594,12 +587,6 @@ absl::Status BatchResourceBase::ConcatInputBuffers(
     concatenated_buffers->push_back(concatenated_buffer);
   }
 
-  // Pad the step ids to the padded batch size with -1 if needed.
-  if (!context->run_context.request_ids.empty() &&
-      context->run_context.request_ids.size() <
-          static_cast<size_t>(padded_batch_size)) {
-    context->run_context.request_ids.resize(padded_batch_size, -1);
-  }
   RecordExecutedBatchSize(context->metadata.model_name,
                           context->metadata.model_version, padded_batch_size);
 
@@ -773,7 +760,6 @@ void BatchResourceBase::ProcessFuncBatch(
       batch_request_ids.push_back(req_id);
     }
   }
-  propagated_context->run_context.request_ids = std::move(batch_request_ids);
   // Regardless of the outcome, we need to propagate the status to the
   // individual tasks and signal that they are done. We use MakeCleanup() to
   // ensure that this happens no matter how we exit the method below.
@@ -807,11 +793,26 @@ void BatchResourceBase::ProcessFuncBatch(
     return;
   }
 
+  const int all_tasks_size = batch->size() + GetTotalTaskSize(unbatched_tasks);
+  const bool just_for_warmup = batch->task(0).forced_warmup_batch_size > 0;
+  const int padded_batch_size =
+      just_for_warmup ? batch->task(0).forced_warmup_batch_size
+                      : RoundToLowestAllowedBatchSize(
+                            all_tasks_size, IsLowPriorityBatch(*batch));
+  const int padding_amount =
+      just_for_warmup ? padded_batch_size : padded_batch_size - all_tasks_size;
+  processed_size = padded_batch_size;
+
+  // Pad the step ids to the padded batch size with -1 if needed.
+  if (!batch_request_ids.empty() &&
+      batch_request_ids.size() < static_cast<size_t>(padded_batch_size)) {
+    batch_request_ids.resize(padded_batch_size, -1);
+  }
+
   std::vector<HostBuffer> concatenated_buffers;
-  status = ConcatInputBuffers(*batch, unbatched_tasks, propagated_context,
+  status = ConcatInputBuffers(*batch, unbatched_tasks, padded_batch_size,
+                              padding_amount, propagated_context,
                               &concatenated_buffers);
-  processed_size =
-      RoundToLowestAllowedBatchSize(batch->size(), IsLowPriorityBatch(*batch));
   if (!status.ok()) {
     return;
   }
@@ -831,8 +832,8 @@ void BatchResourceBase::ProcessFuncBatch(
   // library runtime will handle it now.
   std::move(finally).Cancel();
 
-  ProcessFuncBatchImpl(propagated_task, args, &combined_outputs,
-                       [&](const absl::Status& run_status) {
+  ProcessFuncBatchImpl(propagated_task, std::move(batch_request_ids), args,
+                       &combined_outputs, [&](const absl::Status& run_status) {
                          absl::Status final_status;
                          absl::Cleanup run_finally = ([&]() {
                            // We do the cleanup here as an optimization, so that

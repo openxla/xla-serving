@@ -88,6 +88,7 @@ class JsvBatchResource : public BatchResourceBase {
 
   void ProcessFuncBatchImpl(
       const BatchResourceBase::BatchTask& propagated_task,
+      std::vector<int32_t> batch_request_ids,
       absl::Span<const HostBuffer> inputs,
       std::vector<HostBuffer>* combined_outputs,
       std::function<void(const absl::Status&)> done) const override;

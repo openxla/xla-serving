@@ -83,6 +83,7 @@ cc_library(
         "@neptune//runtime/core/batching:batch_scheduler",
         "@neptune//runtime/core/batching:shared_batch_scheduler",
         "@neptune//runtime/core/streaming:utils",
+        "@neptune//runtime/interpreter:context",
         "@neptune//runtime/interpreter:linear_graph_execute",
         "@neptune//runtime/kernel",
         "@neptune//runtime/kernel:kernel_builder_context",

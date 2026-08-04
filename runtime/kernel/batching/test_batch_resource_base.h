@@ -73,6 +73,7 @@ class TestBatchResourceBase : public BatchResourceBase {
   // Simple function that adds 1 to each element in the input buffer.
   void ProcessFuncBatchImpl(
       const BatchResourceBase::BatchTask& propagated_task,
+      std::vector<int32_t> batch_request_ids,
       absl::Span<const HostBuffer> inputs,
       std::vector<HostBuffer>* combined_outputs,
       std::function<void(const absl::Status&)> done) const override {
@@ -116,6 +117,7 @@ class TestFailedBatchResource : public BatchResourceBase {
  protected:
   void ProcessFuncBatchImpl(
       const BatchResourceBase::BatchTask& propagated_task,
+      std::vector<int32_t> batch_request_ids,
       absl::Span<const HostBuffer> inputs,
       std::vector<HostBuffer>* combined_outputs,
       std::function<void(const absl::Status&)> done) const override {
@@ -141,14 +143,15 @@ class TestJsvBatchResource : public JsvBatchResource {
  protected:
   void ProcessFuncBatchImpl(
       const BatchResourceBase::BatchTask& last_task,
+      std::vector<int32_t> batch_request_ids,
       absl::Span<const HostBuffer> inputs,
       std::vector<HostBuffer>* combined_outputs,
       std::function<void(const absl::Status&)> done) const override {
     for (const auto& input : inputs) {
       CHECK(allowed_batch_sizes_.contains(input.shape().dims()[0]));
     }
-    JsvBatchResource::ProcessFuncBatchImpl(last_task, inputs, combined_outputs,
-                                           done);
+    JsvBatchResource::ProcessFuncBatchImpl(last_task, std::move(batch_request_ids),
+                                           inputs, combined_outputs, done);
   }
 
  private:

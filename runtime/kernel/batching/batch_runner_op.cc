@@ -34,6 +34,7 @@
 #include "runtime/core/streaming/utils.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
 #include "runtime/core/value_utils.h"  // from @neptune
+#include "runtime/interpreter/context.h"  // from @neptune
 #include "runtime/interpreter/linear_graph_execute.h"  // from @neptune
 #include "runtime/kernel/batching/batch_resource_base.h"  // from @neptune
 #include "runtime/kernel/batching/warmup.h"  // from @neptune
@@ -54,6 +55,7 @@ namespace neptune {
 
 void JsvBatchResource::ProcessFuncBatchImpl(
     const BatchResourceBase::BatchTask& propagated_task,
+    std::vector<int32_t> batch_request_ids,
     absl::Span<const HostBuffer> inputs,
     std::vector<HostBuffer>* combined_outputs,
     std::function<void(const absl::Status&)> done) const {
@@ -88,8 +90,13 @@ void JsvBatchResource::ProcessFuncBatchImpl(
   // error because of the above error status.
   if (batched_graph_.empty()) return;
 
+  RunContext run_context = propagated_task.context->run_context;
+  if (!batch_request_ids.empty()) {
+    run_context.request_ids = std::move(batch_request_ids);
+  }
+
   outputs = ExecuteLinearGraph(
-      propagated_task.context->run_context, context.inputs, batched_graph_,
+      run_context, context.inputs, batched_graph_,
       context.metadata.model_name, context.metadata.model_version);
   if (!outputs.ok()) {
     return;
