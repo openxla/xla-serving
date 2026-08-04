@@ -16,6 +16,7 @@
 #define THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_OPTIONAL_FUNCTION_HANDLER_H_
 
 #include <memory>
+#include <vector>
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
@@ -32,7 +33,7 @@ class OptionalFunctionHandler {
  public:
   virtual ~OptionalFunctionHandler() = default;
 
-  // Handles the function by creating a kernel that can be inserted into the
+  // Handles the function by creating a sub-graph that can be inserted into the
   // current graph. `pre_data_conversion` and `post_data_conversion` is used to
   // determine whether to convert the input and output of the function to
   // HostBuffer.

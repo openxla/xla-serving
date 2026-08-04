@@ -227,12 +227,6 @@ class Interpreter {
   absl::StatusOr<KernelGraph> LoadGraph(
       const neptune_model_orchestration::Pipeline& pipeline);
 
-  // Loads host function (preprocessors, postprocessors, CPU SHLOs) and
-  // returns the loaded kernel runner op.
-  absl::StatusOr<std::unique_ptr<Kernel>> LoadOnHostFunction(
-      const neptune_model_orchestration::Component& component,
-      int component_index, int total_components, bool keyword_arguments_based);
-
   // Loads the graph from the given pipeline using the `components` from the
   // pipeline proto. If no components are provided in the pipeline proto, we
   // will create an auxiliary components from the legacy fields and load the
