@@ -61,6 +61,7 @@ struct BatchRunnerOpOptions {
   MixedPriorityBatchingPolicy mixed_priority_batching_policy =
       MixedPriorityBatchingPolicy::kLowPriorityPaddingWithMaxBatchSize;
   Allocator* allocator = DefaultAllocator::GetInstance();
+  std::vector<RaggedInputSpec> ragged_inputs;
 };
 
 // A batch implementation in JSV that take a list of kernels and run them in a
@@ -73,9 +74,11 @@ class JsvBatchResource : public BatchResourceBase {
           batcher,
       const BatchResourceBase::BatcherT::QueueOptions& batcher_queue_options,
       std::vector<int32_t> allowed_batch_sizes,
-      tsl::thread::ThreadPool* thread_pool)
+      tsl::thread::ThreadPool* thread_pool,
+      std::vector<RaggedInputSpec> ragged_inputs = {})
       : BatchResourceBase(std::move(batcher), batcher_queue_options,
-                          allowed_batch_sizes, thread_pool),
+                          allowed_batch_sizes, thread_pool,
+                          std::move(ragged_inputs)),
         batched_graph_(std::move(batched_graph)) {}
 
   const std::vector<std::unique_ptr<Kernel>>& batched_graph() const {

@@ -66,6 +66,7 @@
 #include "runtime/interpreter/optional_function_handler_factory.h"  // from @neptune
 #include "runtime/interpreter/run_options.h"  // from @neptune
 #include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
+#include "runtime/kernel/batching/batch_resource_base.h"  // from @neptune
 #include "runtime/kernel/batching/batch_runner_op.h"  // from @neptune
 #include "runtime/kernel/kernel.h"  // from @neptune
 #include "runtime/kernel/kernel_builder_constants.h"  // from @neptune
@@ -288,11 +289,12 @@ CreateAuxiliaryComponents(
 
 absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
     std::vector<std::unique_ptr<Kernel>> batched_kernels,
-    const BatchOptions& batch_options,
+    const neptune_model_orchestration::Pipeline& pipeline,
     const InterpreterCreateOptions* create_options,
     tsl::thread::ThreadPool* thread_pool) {
   LOG(INFO) << "Building the batch kernel.";
   bool has_streaming = false;
+  const BatchOptions& batch_options = pipeline.batch_options();
   for (const auto& kernel : batched_kernels) {
     if (kernel->has_streaming()) {
       has_streaming = true;
@@ -338,12 +340,27 @@ absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
       .batch_timeout_micros = batch_options.batch_timeout_micros(),
       .allowed_batch_sizes =
           std::vector<int32_t>{batch_options.allowed_batch_sizes().begin(),
-                                batch_options.allowed_batch_sizes().end()},
+                               batch_options.allowed_batch_sizes().end()},
       .enable_large_batch_splitting =
           !batch_options.disable_large_batch_splitting() && !has_streaming,
       .batch_padding_policy = std::move(batch_padding_policy_string),
       .mixed_priority_batching_policy = mixed_priority_batching_policy,
       .allocator = create_options->allocator,
+      .ragged_inputs =
+          [&]() {
+            std::vector<RaggedInputSpec> result;
+            if (pipeline.has_metadata_for_batching()) {
+              const auto& metadata = pipeline.metadata_for_batching();
+              result.reserve(metadata.ragged_inputs_size());
+              for (const auto& ragged_input : metadata.ragged_inputs()) {
+                result.push_back({
+                    .flat_values_index = ragged_input.flat_values_index(),
+                    .row_splits_index = ragged_input.row_splits_index(),
+                });
+              }
+            }
+            return result;
+          }(),
   };
   if (batch_options.has_low_priority_batch_options()) {
     const BatchOptions::LowPriorityBatchOptions& low_priority_batch_options =
@@ -1346,7 +1363,7 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
   } else {
     TF_ASSIGN_OR_RETURN(
         std::unique_ptr<Kernel> stablehlo_or_batch_runner_op,
-        BuildBatchKernel(std::move(batched_kernels), pipeline.batch_options(),
+        BuildBatchKernel(std::move(batched_kernels), pipeline,
                          create_options_.get(),
                          create_options_->computation_thread_pool));
     InsertKernels(std::move(preprocessors),

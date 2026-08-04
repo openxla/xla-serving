@@ -203,6 +203,7 @@ cc_library(
         "@neptune//runtime/kernel:kernel_builder_context",
         "@neptune//runtime/kernel:kernel_io_data_type",
         "@neptune//runtime/kernel/batching:batch_options_utils",
+        "@neptune//runtime/kernel/batching:batch_resource_base",
         "@neptune//runtime/kernel/batching:batch_runner_op",
         "@neptune//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",  # buildcleaner: keep
         "@tsl//tsl/platform:blocking_counter",

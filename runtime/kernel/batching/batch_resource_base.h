@@ -24,6 +24,8 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_set.h"  // from @abseil-cpp
+#include "absl/flags/declare.h"  // from @abseil-cpp
 #include "absl/functional/any_invocable.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
@@ -47,7 +49,16 @@
 #include "tsl/platform/context.h"  // from @tsl
 #include "tsl/platform/thread_annotations.h"  // from @tsl
 
+ABSL_DECLARE_FLAG(bool, jsv_support_batching_for_ragged_inputs);
+
 namespace neptune {
+
+struct RaggedInputSpec {
+  // Index of the flat_values tensor in the flat signature.
+  int flat_values_index;
+  // Index of the row_splits tensor in the flat signature.
+  int row_splits_index;
+};
 
 // Base class for resource that encapsulating the state and logic for batching
 // host buffers.
@@ -109,7 +120,13 @@ class BatchResourceBase : public ResourceBase {
 
     uint64_t start_time;
 
-    size_t size() const override { return inputs[0].shape().dims()[0]; }
+    size_t task_size = 0;
+    size_t size() const override {
+      if (task_size == 0 && !inputs.empty()) {
+        return inputs[0].shape().dims()[0];
+      }
+      return task_size;
+    }
 
     // Create a split task from this one. The caller needs to setup the inputs
     // of the new task
@@ -154,11 +171,13 @@ class BatchResourceBase : public ResourceBase {
   BatchResourceBase(std::shared_ptr<BatcherT> batcher,
                     const BatcherT::QueueOptions& batcher_queue_options,
                     std::vector<int32_t> allowed_batch_sizes,
-                    tsl::thread::ThreadPool* thread_pool)
+                    tsl::thread::ThreadPool* thread_pool,
+                    std::vector<RaggedInputSpec> ragged_inputs = {})
       : batcher_(std::move(batcher)),
         batcher_queue_options_(batcher_queue_options),
         allowed_batch_sizes_(std::move(allowed_batch_sizes)),
         allowed_batch_sizes_str_(absl::StrJoin(allowed_batch_sizes_, ",")),
+        ragged_inputs_(std::move(ragged_inputs)),
         thread_pool_(thread_pool) {}
 
   using CreateBatchTaskFn =
@@ -197,7 +216,8 @@ class BatchResourceBase : public ResourceBase {
       int32_t low_priority_max_enqueued_batches,
       const std::vector<int32_t>& low_priority_allowed_batch_sizes,
       MixedPriorityBatchingPolicy mixed_priority_batching_policy,
-      tsl::thread::ThreadPool* thread_pool, Allocator* allocator);
+      tsl::thread::ThreadPool* thread_pool, Allocator* allocator,
+      std::vector<RaggedInputSpec> ragged_inputs = {});
 
   // Splits 'input' of 'input_task_ptr' along the 0th dimension, into a list of
   // 'output_tasks'.
@@ -218,7 +238,7 @@ class BatchResourceBase : public ResourceBase {
       std::unique_ptr<BatchTask>* input_task_ptr, int open_batch_remaining_slot,
       int max_batch_size, tsl::thread::ThreadPool* thread_pool,
       std::vector<std::unique_ptr<BatchTask>>* output_tasks,
-      Allocator* allocator);
+      Allocator* allocator, std::vector<RaggedInputSpec> ragged_inputs = {});
 
   // Splits the batch costs to each task.
   //
@@ -345,6 +365,8 @@ class BatchResourceBase : public ResourceBase {
   // A concatenated string of <allowed_batch_sizes_>, separated by ",". This is
   // used to record batching parameter.
   std::string allowed_batch_sizes_str_;
+
+  std::vector<RaggedInputSpec> ragged_inputs_;
 
   tsl::thread::ThreadPool* thread_pool_;
 };
