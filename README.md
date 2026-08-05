@@ -303,3 +303,148 @@ bazel run //runtime/serving/gcp/server:neptune_serving_main -- \
   --orbax_grpc_server_platform <cpu|cuda|tpu> \
   --warmup_server=false
 ```
+
+## Neptune Model Export Migration Guide
+
+With the release of `TensorflowModel` and explicit orchestration pipelines, several APIs in `neptune_model` have been updated to support exporting multiple models (such as JAX models combined with TensorFlow preprocessing and postprocessing) and complex multi-stage pipelines.
+
+### Key Changes
+
+1. **Model Containers (`JaxModel` and `TensorflowModel`)**:
+   - `neptune_model.save()` accepts a sequence of user-level model containers (`Sequence[Model] | Model`).
+     - `JaxModel`: Encapsulates JAX functions and related shared variables (mesh, model parameters).
+     - `TensorflowModel`: Encapsulates TensorFlow functions and trackable resources. Currently, at most one `TensorflowModel` instance is supported per export bundle.
+   - When exporting multiple models, explicitly assign unique names to your model containers (e.g., `name='jax_model'`, `name='tf_model'`). If only a single model is exported, naming is optional as it will be assigned a default name.
+   - Pass a sequence of models `[model1, model2, ...]` to `neptune_model.save()`.
+
+2. **Explicit Orchestration (`ServingConfig.orchestration`)**:
+   - Fixed processing pipeline structures (`processor.SequentialProcessing` and `TfProcessor`) are replaced by explicit `ServingConfig.orchestration` configurations using `ModelCall` objects.
+   - Each `ModelCall` references a target model by `model_name` and specifies the function to execute via `method_key`.
+   - Specify pipeline execution order by defining `orchestration=serving_config.Orchestration(model_calls=[...])`. Note that you only need to specify `role=orchestration_pb2.ROLE_MODEL` for the on-device function (typically the JAX function to be run on device); setting roles for other `ModelCall` entries is optional.
+
+---
+
+### Step-by-Step Migration Journey (TF + JAX Example)
+
+Suppose you have an existing export script that uses JAX with TensorFlow preprocessing and postprocessing under the previous API:
+
+```python
+import neptune_model
+from neptune_model import processor
+from neptune_model import tf_processor
+
+neptune_model.save(
+    export_path=export_path,
+    models=neptune_model.JaxModel(
+        apply_fn_bundle=apply_fn_bundle,
+        params=model_params,
+    ),
+    serving_configs=[
+        neptune_model.ServingConfig(
+            serving_signature='serving_default',
+            input_signature=input_signature,
+            processing=processor.SequentialProcessing(
+                preprocessors=[
+                    tf_processor.TfProcessor(
+                        name='embedding_layer',
+                        fn=embedding_layer,
+                    )
+                ],
+                postprocessors=[
+                    tf_processor.TfProcessor(
+                        name='simple_postprocessor',
+                        fn=simple_postprocessor,
+                    )
+                ],
+                options=processor.ProcessingOptions(
+                    tf_trackable_resources=[embedding_table]
+                ),
+            ),
+        )
+    ],
+)
+```
+
+Follow these 4 steps to convert this script to the new API:
+
+1. **Consolidate TensorFlow Processors into a `TensorflowModel` Container**:
+   - Instead of creating individual `TfProcessor` objects inside `SequentialProcessing`, create a single `TensorflowModel` container holding your preprocessing and postprocessing functions.
+   - Bind any required trackable resources (such as embedding tables) directly to `trackable_resources`:
+     ```python
+     tf_proc_model = neptune_model.TensorflowModel(
+         name='tf_model',
+         tf_functions={
+             'preprocessing': embedding_layer,
+             'postprocessing': simple_postprocessor,
+         },
+         trackable_resources=[embedding_table],
+     )
+     ```
+
+2. **Assign a Unique Name to Your `JaxModel`**:
+   - When exporting multiple models in a pipeline, add a `name='jax_model'` parameter to your `JaxModel` definition so that pipeline steps can reference it by name (if exporting only a single model, naming is optional as it will use a default name).
+
+3. **Replace `SequentialProcessing` with Explicit `Orchestration`**:
+   - In your `ServingConfig`, remove `processing=processor.SequentialProcessing(...)`.
+   - Define `orchestration=neptune_model.serving_config.Orchestration(model_calls=[...])`, where each `ModelCall` references a model by `model_name`, specifies the function via `method_key`, and assigns `role=orchestration_pb2.ROLE_MODEL` (other role types are not required).
+
+4. **Pass the Sequence of Models to `save()`**:
+   - Update `neptune_model.save()` to take the list of model containers: `[tf_proc_model, jax_model]`.
+
+---
+
+### Converted Code (New API)
+
+After applying the steps above, the converted script using `TensorflowModel` and `Orchestration` is:
+
+```python
+import neptune_model
+from neptune_model.protos import orchestration_pb2
+
+# 1. Bundle TensorFlow pre/post-processing functions and trackable resources
+tf_proc_model = neptune_model.TensorflowModel(
+    name='tf_model',
+    tf_functions={
+        'preprocessing': embedding_layer,
+        'postprocessing': simple_postprocessor,
+    },
+    trackable_resources=[embedding_layer],
+)
+
+# 2. Define your JAX model with a unique name
+jm = neptune_model.JaxModel(
+    apply_fn_bundle=apply_fn_bundle,
+    params=model_params,
+    name='jax_model',
+)
+
+# 3. Pass all models as a sequence and explicitly define the orchestration pipeline
+neptune_model.save(
+    [tf_proc_model, jm],
+    export_path=export_path,
+    serving_configs=[
+        neptune_model.ServingConfig(
+            serving_signature='serving_default',
+            input_signature=input_signature,
+            orchestration=neptune_model.serving_config.Orchestration(
+                model_calls=[
+                    neptune_model.serving_config.ModelCall(
+                        model_name='tf_model',
+                        method_key='preprocessing',
+                    ),
+                    neptune_model.serving_config.ModelCall(
+                        model_name='jax_model',
+                        method_key='serving_default',
+                        role=orchestration_pb2.ROLE_MODEL,
+                    ),
+                    neptune_model.serving_config.ModelCall(
+                        model_name='tf_model',
+                        method_key='postprocessing',
+                    ),
+                ]
+            ),
+        )
+    ],
+)
+```
+
