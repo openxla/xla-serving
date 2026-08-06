@@ -21,6 +21,7 @@ from google.protobuf import text_format
 import jax
 from jax.experimental import mesh_utils
 from neptune_model._src.core import compile_options_util
+from neptune_model.protos.xla.hlo.transforms.simplifiers import memory_scheduler_pb2 as memory_scheduler_proto_pb2  # pylint: disable=g-direct-tensorflow-import
 
 
 class CompileOptionsUtilTest(parameterized.TestCase):
