@@ -94,16 +94,24 @@ struct TTypes {
       ConstMatrix;
 };
 
+// Physical memory kind for buffer storage.
+enum class BufferMemoryKind { kDevice = 0, kPinnedHost = 1 };
+
+// Transfer and zero-copy semantics for host buffers.
+enum class HostBufferSemantics { kDefaultCopy = 0, kImmutableZeroCopy = 1 };
+
 class BufferData {
  public:
   BufferData(void* base, xla::ifrt::DType dtype, xla::ifrt::Shape shape,
              std::optional<absl::InlinedVector<int64_t, 4>> byte_strides,
-             std::shared_ptr<void> owner = nullptr)
+             std::shared_ptr<void> owner = nullptr,
+             HostBufferSemantics semantics = HostBufferSemantics::kDefaultCopy)
       : base_(base),
         dtype_(dtype),
-        shape_(shape),
+        shape_(std::move(shape)),
         byte_strides_(std::move(byte_strides)),
-        owner_(owner) {}
+        owner_(std::move(owner)),
+        semantics_(semantics) {}
 
   void* base() const { return base_; }
   xla::ifrt::DType dtype() const { return dtype_; }
@@ -113,6 +121,12 @@ class BufferData {
   }
   std::shared_ptr<void> owner() const { return owner_; }
   int ref_count() const { return owner_.use_count(); }
+  HostBufferSemantics semantics() const { return semantics_; }
+  BufferMemoryKind memory_kind() const {
+    return semantics_ == HostBufferSemantics::kImmutableZeroCopy
+               ? BufferMemoryKind::kPinnedHost
+               : BufferMemoryKind::kDevice;
+  }
 
   std::string DebugString() const;
 
@@ -122,6 +136,7 @@ class BufferData {
   xla::ifrt::Shape shape_;
   std::optional<absl::InlinedVector<int64_t, 4>> byte_strides_;
   std::shared_ptr<void> owner_ = nullptr;
+  HostBufferSemantics semantics_ = HostBufferSemantics::kDefaultCopy;
 };
 
 // HostBuffer represents a shaped buffer in host memory for numeric or string
@@ -142,7 +157,31 @@ class HostBuffer {
                       Allocator* allocator = DefaultAllocator::GetInstance());
   HostBuffer(void* base, xla::ifrt::DType dtype, xla::ifrt::Shape shape,
              const std::optional<absl::InlinedVector<int64_t, 4>>& byte_strides,
-             std::shared_ptr<void> owner);
+             std::shared_ptr<void> owner,
+             HostBufferSemantics semantics = HostBufferSemantics::kDefaultCopy);
+
+  static HostBuffer MakeZeroCopyPinned(
+      void* base, xla::ifrt::DType dtype, xla::ifrt::Shape shape,
+      std::shared_ptr<void> owner = nullptr,
+      const std::optional<absl::InlinedVector<int64_t, 4>>& byte_strides =
+          std::nullopt) {
+    return HostBuffer(base, dtype, shape, byte_strides, std::move(owner),
+                      HostBufferSemantics::kImmutableZeroCopy);
+  }
+
+  HostBufferSemantics host_buffer_semantics() const {
+    if (!buffer_data_.has_value()) {
+      return HostBufferSemantics::kDefaultCopy;
+    }
+    return buffer_data_->semantics();
+  }
+
+  BufferMemoryKind memory_kind() const {
+    if (!buffer_data_.has_value()) {
+      return BufferMemoryKind::kDevice;
+    }
+    return buffer_data_->memory_kind();
+  }
 
   /// Returns a `string_view` mapping the current host buffer.
   ///

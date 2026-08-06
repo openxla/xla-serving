@@ -303,11 +303,20 @@ absl::StatusOr<ArgSpec> ConvertToArgSpec(
   if (type.has_layout()) {
     TF_ASSIGN_OR_RETURN(layout, xla::Layout::FromProto(type.layout()));
   }
+  std::optional<OutputPlacement> placement = std::nullopt;
+  if (type.has_placement()) {
+    if (type.placement() == neptune_model_type::DEVICE) {
+      placement = OutputPlacement::kDevice;
+    } else if (type.placement() == neptune_model_type::HOST) {
+      placement = OutputPlacement::kHost;
+    }
+  }
   return ArgSpec{
       .dtype = std::move(dtype),
       .shape = std::move(shape),
       .sharding = std::move(hlo_sharding),
       .layout = std::move(layout),
+      .placement = placement,
   };
 }
 

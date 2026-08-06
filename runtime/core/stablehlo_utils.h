@@ -37,6 +37,8 @@
 
 namespace neptune {
 
+enum class OutputPlacement { kHost = 0, kDevice = 1 };
+
 // Represents the shape of an input or output. Any dimension that is not set is
 // assumed to be dynamic. We just use the same type that we get out of the MLIR
 // library for this, it can be assumed to behave like a
@@ -48,10 +50,11 @@ struct ArgSpec {
   ArgShape shape;
   xla::HloSharding sharding;
   std::optional<xla::Layout> layout;
+  std::optional<OutputPlacement> placement = std::nullopt;
 
   bool operator==(const ArgSpec& other) const {
     return dtype == other.dtype && shape == other.shape &&
-           sharding == other.sharding;
+           sharding == other.sharding && placement == other.placement;
   }
 
   // Before c++ 20, the compiler is not smart enough to deduce the

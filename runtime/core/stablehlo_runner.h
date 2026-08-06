@@ -15,7 +15,6 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_STABLEHLO_RUNNER_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_STABLEHLO_RUNNER_H_
 
-#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -129,6 +128,7 @@ class StableHloRunner {
 
   struct ExecuteOptions {
     bool require_d2h = true;
+    std::vector<OutputPlacement> output_placements;
   };
 
   bool has_streaming() const { return loaded_stablehlo_->has_streaming(); }
@@ -279,10 +279,12 @@ class StableHloRunner {
         const CachedExecutableBundle& executable_bundle,
         absl::Span<const int> stablehlo_indices) const;
 
-    // Converts the outputs from `xla::ifrt::Array` to `HostBuffer`.
-    absl::StatusOr<std::vector<HostBuffer>> ConvertOutput(
+    // Converts the outputs from `xla::ifrt::Array` to `neptune::Value` according
+    // to `output_placements`.
+    absl::StatusOr<std::vector<neptune::Value>> ConvertOutput(
         absl::Span<const xla::ifrt::ArrayRef> stablehlo_outputs,
-        const CachedExecutableBundle& executable_bundle);
+        const CachedExecutableBundle& executable_bundle,
+        absl::Span<const OutputPlacement> output_placements);
 
    private:
     // Validates input data types and shapes against the model specification

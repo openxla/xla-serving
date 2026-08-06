@@ -30,7 +30,6 @@
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/base/optimization.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
-#include "absl/container/flat_hash_set.h"  // from @abseil-cpp
 #include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
@@ -343,21 +342,35 @@ StableHloRunner::DataConverter::ConvertInput(
   return ExecuteDefaultTransfer(inputs, shardings_span);
 }
 
-absl::StatusOr<std::vector<HostBuffer>>
+absl::StatusOr<std::vector<neptune::Value>>
 StableHloRunner::DataConverter::ConvertOutput(
     absl::Span<const xla::ifrt::ArrayRef> stablehlo_outputs,
-    const CachedExecutableBundle& executable_bundle) {
+    const CachedExecutableBundle& executable_bundle,
+    absl::Span<const OutputPlacement> output_placements) {
   tsl::profiler::TraceMe trace_me([&]() {
     return tsl::profiler::TraceMeEncode("TransferFromDeviceToHost", {});
   });
-  std::vector<tsl::Future<HostBuffer>> output_futures;
-  output_futures.reserve(stablehlo_outputs.size());
+  if (output_placements.size() != stablehlo_outputs.size()) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Mismatched output placements size (", output_placements.size(),
+        ") and outputs size (", stablehlo_outputs.size(), ")."));
+  }
+  std::vector<std::optional<tsl::Future<HostBuffer>>> output_futures(
+      stablehlo_outputs.size());
 
   TF_RET_CHECK(!device_list_->devices().empty())
       << "Device list cannot be empty";
   TF_ASSIGN_OR_RETURN(
       absl::Span<const xla::ifrt::ShardingRef> output_shardings,
       executable_bundle.GetOutputShardings(device_list_->devices()[0]->Id()));
+
+  TF_RET_CHECK(output_shardings.size() == stablehlo_outputs.size())
+      << "Output shardings count (" << output_shardings.size()
+      << ") does not match outputs count (" << stablehlo_outputs.size() << ")";
+  TF_RET_CHECK(executable_bundle.io_spec.outputs.size() ==
+               stablehlo_outputs.size())
+      << "IO spec outputs count (" << executable_bundle.io_spec.outputs.size()
+      << ") does not match outputs count (" << stablehlo_outputs.size() << ")";
 
   for (int i = 0; i < stablehlo_outputs.size(); ++i) {
     const xla::ifrt::ArrayRef& array_for_copy = stablehlo_outputs[i];
@@ -368,19 +381,29 @@ StableHloRunner::DataConverter::ConvertOutput(
           executable_bundle.io_spec.outputs[i].shape, i));
     }
 
-    // IFRT's return does not contain sufficient information; so we use
-    // sharding spec from metadata.
-    VLOG(2) << "Output sharding: " << array_for_copy->sharding();
-    output_futures.push_back(sharding_internal::MakeHostBufferFromArray(
-        *ifrt_client_, *array_for_copy, output_shardings[i], device_list_,
-        *thread_pool_));
+    if (output_placements[i] == OutputPlacement::kHost) {
+      // IFRT's return does not contain sufficient information; so we use
+      // sharding spec from metadata.
+      VLOG(2) << "Output sharding: " << array_for_copy->sharding();
+      output_futures[i] = sharding_internal::MakeHostBufferFromArray(
+          *ifrt_client_, *array_for_copy, output_shardings[i], device_list_,
+          *thread_pool_);
+    }
   }
 
-  std::vector<HostBuffer> converted_outputs;
+  std::vector<neptune::Value> converted_outputs;
   converted_outputs.reserve(stablehlo_outputs.size());
-  for (tsl::Future<HostBuffer>& output_future : output_futures) {
-    TF_ASSIGN_OR_RETURN(auto host_buffer, output_future.Await());
-    converted_outputs.push_back(std::move(host_buffer));
+  for (int i = 0; i < stablehlo_outputs.size(); ++i) {
+    if (output_placements[i] == OutputPlacement::kHost) {
+      TF_ASSIGN_OR_RETURN(auto host_buffer, output_futures[i]->Await());
+      converted_outputs.push_back(neptune::Value(std::move(host_buffer)));
+    } else {
+      converted_outputs.push_back(
+          neptune::Value(neptune::DeviceBuffer{.ifrt_client = ifrt_client_,
+                                       .ifrt_array = stablehlo_outputs[i],
+                                       .sharding = output_shardings[i],
+                                       .device_list = device_list_}));
+    }
   }
   return converted_outputs;
 }
@@ -1023,37 +1046,31 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
               : std::nullopt));
   TF_RETURN_IF_ERROR(execution_result.status.Await());
 
-  if (options.require_d2h) {
-    TF_ASSIGN_OR_RETURN(
-        std::vector<HostBuffer> host_outputs,
-        data_converter->ConvertOutput(absl::MakeSpan(execution_result.outputs),
-                                      *executable_bundle));
-    return neptune::internal::PackAsValues(std::move(host_outputs));
-  } else {
-    TF_RET_CHECK(!data_converter->device_list()->devices().empty())
-        << "Device list cannot be empty";
-    TF_ASSIGN_OR_RETURN(
-        absl::Span<const xla::ifrt::ShardingRef> output_shardings,
-        executable_bundle->GetOutputShardings(
-            data_converter->device_list()->devices()[0]->Id()));
-
-    std::vector<neptune::DeviceBuffer> device_outputs;
-    device_outputs.reserve(execution_result.outputs.size());
-    for (int i = 0; i < execution_result.outputs.size(); ++i) {
-      if (VLOG_IS_ON(2)) {
-        TF_RETURN_IF_ERROR(ValidateOutputArray(
-            *execution_result.outputs[i],
-            executable_bundle->io_spec.outputs[i].dtype,
-            executable_bundle->io_spec.outputs[i].shape, i));
-      }
-      device_outputs.push_back(neptune::DeviceBuffer{
-          .ifrt_client = ifrt_client_,
-          .ifrt_array = std::move(execution_result.outputs[i]),
-          .sharding = output_shardings[i],
-          .device_list = data_converter->device_list()});
+  std::vector<OutputPlacement> output_placements;
+  if (!options.output_placements.empty()) {
+    if (options.output_placements.size() != execution_result.outputs.size()) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Expected ", execution_result.outputs.size(),
+          " output placements, but got ", options.output_placements.size()));
     }
-    return neptune::internal::PackAsValues(std::move(device_outputs));
+    output_placements = options.output_placements;
+  } else {
+    output_placements.reserve(execution_result.outputs.size());
+    const OutputPlacement fallback_placement =
+        options.require_d2h ? OutputPlacement::kHost : OutputPlacement::kDevice;
+    for (size_t i = 0; i < execution_result.outputs.size(); ++i) {
+      if (i < executable_bundle->io_spec.outputs.size() &&
+          executable_bundle->io_spec.outputs[i].placement.has_value()) {
+        output_placements.push_back(
+            *executable_bundle->io_spec.outputs[i].placement);
+      } else {
+        output_placements.push_back(fallback_placement);
+      }
+    }
   }
+
+  return data_converter->ConvertOutput(absl::MakeSpan(execution_result.outputs),
+                                       *executable_bundle, output_placements);
 }
 
 absl::Status StableHloRunner::MarkFullyInitialized() {

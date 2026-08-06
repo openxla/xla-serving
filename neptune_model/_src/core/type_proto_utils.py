@@ -73,20 +73,6 @@ def to_shape_proto(
   return shape_proto
 
 
-def to_tensor_type_proto(
-    spec: shlo_type.ShloTensorSpec,
-) -> type_pb2.TensorType:
-  """Converts ShloTensorSpec to type_proto TensorType."""
-  tensor_type_proto = type_pb2.TensorType()
-  tensor_type_proto.shape.CopyFrom(to_shape_proto(spec.shape))
-  tensor_type_proto.dtype = to_dtype_proto(spec.dtype)
-  if spec.sharding:
-    tensor_type_proto.sharding.CopyFrom(spec.sharding)
-  if spec.layout:
-    tensor_type_proto.layout.CopyFrom(spec.layout)
-  return tensor_type_proto
-
-
 def to_type_proto(
     tree: jaxtyping.PyTree[shlo_type.ShloTensorSpec],
 ) -> type_pb2.Type:
@@ -137,6 +123,55 @@ def to_function_signature_proto(
   return signature
 
 
+_SHLO_PLACEMENT_TO_MANIFEST_PLACEMENT: dict[
+    shlo_type.OutputPlacement, type_pb2.OutputPlacement
+] = {
+    shlo_type.OutputPlacement.UNSPECIFIED: (
+        type_pb2.OutputPlacement.OUTPUT_PLACEMENT_UNSPECIFIED
+    ),
+    shlo_type.OutputPlacement.HOST: type_pb2.OutputPlacement.HOST,
+    shlo_type.OutputPlacement.DEVICE: type_pb2.OutputPlacement.DEVICE,
+}
+
+
+def to_placement_proto(
+    placement: shlo_type.OutputPlacement,
+) -> type_pb2.OutputPlacement:
+  """Converts Shlo Placement enum to manifest OutputPlacement proto enum."""
+  return _SHLO_PLACEMENT_TO_MANIFEST_PLACEMENT[placement]
+
+
+_MANIFEST_PLACEMENT_TO_SHLO_PLACEMENT = {
+    v: k for k, v in _SHLO_PLACEMENT_TO_MANIFEST_PLACEMENT.items()
+}
+
+
+def to_shlo_placement(
+    manifest_placement: type_pb2.OutputPlacement,
+) -> shlo_type.OutputPlacement:
+  """Converts manifest OutputPlacement proto enum to Shlo Placement enum."""
+  return _MANIFEST_PLACEMENT_TO_SHLO_PLACEMENT[manifest_placement]
+
+
+def to_tensor_type_proto(
+    spec: shlo_type.ShloTensorSpec,
+) -> type_pb2.TensorType:
+  """Converts ShloTensorSpec to type_proto TensorType."""
+  tensor_type_proto = type_pb2.TensorType()
+  tensor_type_proto.shape.CopyFrom(to_shape_proto(spec.shape))
+  tensor_type_proto.dtype = to_dtype_proto(spec.dtype)
+  if spec.sharding:
+    tensor_type_proto.sharding.CopyFrom(spec.sharding)
+  if spec.layout:
+    tensor_type_proto.layout.CopyFrom(spec.layout)
+  if (
+      spec.placement is not None
+      and spec.placement != shlo_type.OutputPlacement.UNSPECIFIED
+  ):
+    tensor_type_proto.placement = to_placement_proto(spec.placement)
+  return tensor_type_proto
+
+
 def _from_shape_proto(
     shape: type_pb2.Shape,
 ) -> shlo_type.ShloShape:
@@ -163,11 +198,19 @@ def _from_tensor_type_proto(
       if manifest_tensor_type.HasField("layout")
       else None
   )
+  placement = None
+  if (
+      manifest_tensor_type.HasField("placement")
+      and manifest_tensor_type.placement
+      != type_pb2.OutputPlacement.OUTPUT_PLACEMENT_UNSPECIFIED
+  ):
+    placement = to_shlo_placement(manifest_tensor_type.placement)
   return shlo_type.ShloTensorSpec(
       shape=_from_shape_proto(manifest_tensor_type.shape),
       dtype=to_shlo_dtype(manifest_tensor_type.dtype),
       sharding=sharding,
       layout=layout,
+      placement=placement,
   )
 
 

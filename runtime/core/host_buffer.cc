@@ -155,7 +155,7 @@ HostBuffer::HostBuffer(void* base, xla::ifrt::DType dtype,
   }
   buffer_data_.emplace(base, storage_dtype, shape,
                        CreateDefaultStrides(shape.dims(), storage_dtype),
-                       owner);
+                       std::move(owner));
 }
 
 HostBuffer::HostBuffer(const xla::ifrt::DType& dtype,
@@ -208,14 +208,15 @@ HostBuffer::HostBuffer(const xla::ifrt::DType& dtype,
 HostBuffer::HostBuffer(
     void* base, xla::ifrt::DType dtype, xla::ifrt::Shape shape,
     const std::optional<absl::InlinedVector<int64_t, 4>>& byte_strides,
-    std::shared_ptr<void> owner)
+    std::shared_ptr<void> owner, HostBufferSemantics semantics)
     : dtype_(dtype) {
   xla::ifrt::DType storage_dtype = dtype;
   if (dtype.kind() != xla::ifrt::DType::Kind::kString &&
       !dtype.byte_size().has_value()) {
     storage_dtype = xla::ifrt::DType(xla::ifrt::DType::Kind::kU8);
   }
-  buffer_data_.emplace(base, storage_dtype, shape, byte_strides, owner);
+  buffer_data_.emplace(base, storage_dtype, shape, byte_strides, owner,
+                       semantics);
 }
 
 int64_t HostBuffer::total_storage_bytes() const {

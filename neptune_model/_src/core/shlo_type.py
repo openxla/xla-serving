@@ -91,6 +91,12 @@ def shlo_dtype_to_np_dtype(dtype: ShloDType) -> np.dtype[Any]:
   return _SHLO_DTYPE_TO_NP_DTYPE[dtype]
 
 
+class OutputPlacement(enum.Enum):  # pylint: disable=missing-class-docstring
+  UNSPECIFIED = 0
+  HOST = 1
+  DEVICE = 2
+
+
 @dataclasses.dataclass
 class ShloTensorSpec:
   """A specification for the shape, dtype, sharding, and layout of a StableHLO tensor.
@@ -101,6 +107,7 @@ class ShloTensorSpec:
     sharding: The sharding of the tensor. None means unspecified sharding.
     layout: The layout of the tensor. None means the default layout is used.
     name: The name of the tensor.
+    placement: The placement of the output tensor. None means unspecified.
   """
 
   shape: ShloShape
@@ -108,3 +115,4 @@ class ShloTensorSpec:
   sharding: Sharding | None = None
   layout: Layout | None = None
   name: str | None = None
+  placement: OutputPlacement | None = None

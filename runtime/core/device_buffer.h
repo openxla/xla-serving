@@ -3,10 +3,13 @@
 
 #include <memory>
 
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "runtime/core/host_buffer.h"  // from @neptune
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
 
 namespace neptune {
 
@@ -26,6 +29,15 @@ struct DeviceBuffer {
   xla::ifrt::ShardingRef sharding;
   // The specific devices across which the array is distributed.
   xla::ifrt::DeviceListRef device_list;
+  // Physical memory placement kind.
+  BufferMemoryKind memory_kind = BufferMemoryKind::kDevice;
+
+  static absl::StatusOr<DeviceBuffer> MakeFromPinnedHost(
+      const std::shared_ptr<xla::ifrt::Client>& client,
+      const HostBuffer& host_buffer,
+      const xla::ifrt::DeviceListRef& device_list,
+      xla::ifrt::ShardingRef sharding,
+      const tsl::thread::ThreadPool& thread_pool);
 };
 
 }  // namespace neptune

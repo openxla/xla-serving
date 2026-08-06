@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import textwrap
+import typing
 
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -318,6 +319,66 @@ class ManifestTypeToShloTensorSpecPyTreeTest(test_utils.NptTestCase):
     )
 
     self.assertTreesEqual(shlo_tensor_spec_tree, expected_shlo_tensor_spec_tree)
+
+
+class OutputPlacementProtoTest(parameterized.TestCase):
+
+  def test_to_tensor_type_proto_with_placement(self):
+    spec = shlo_type.ShloTensorSpec(
+        shape=(4, 2),
+        dtype=shlo_type.ShloDType.f32,
+        placement=shlo_type.OutputPlacement.HOST,
+    )
+    tensor_type_proto = type_proto_utils.to_tensor_type_proto(spec)
+    self.assertEqual(tensor_type_proto.placement, type_pb2.OutputPlacement.HOST)
+
+  def test_from_tensor_type_proto_with_placement(self):
+    proto = text_format.Parse(
+        """
+        shape { shape_with_known_rank { dimension_sizes { size: 4 } } }
+        dtype: f32
+        placement: DEVICE
+        """,
+        type_pb2.TensorType(),
+    )
+    spec = type_proto_utils._from_tensor_type_proto(proto)
+    self.assertEqual(spec.placement, shlo_type.OutputPlacement.DEVICE)
+
+  @parameterized.parameters(
+      shlo_type.OutputPlacement.HOST,
+      shlo_type.OutputPlacement.DEVICE,
+      shlo_type.OutputPlacement.UNSPECIFIED,
+      None,
+  )
+  def test_true_binary_serdes_roundtrip_output_placement(self, placement):
+    spec = shlo_type.ShloTensorSpec(
+        shape=(2, 3),
+        dtype=shlo_type.ShloDType.i32,
+        placement=placement,
+    )
+    proto = type_proto_utils.to_tensor_type_proto(spec)
+    raw_bytes = proto.SerializeToString()
+    deserialized_proto = type_pb2.TensorType.FromString(raw_bytes)
+    recovered_spec = type_proto_utils._from_tensor_type_proto(
+        deserialized_proto
+    )
+    expected_placement = (
+        placement
+        if placement != shlo_type.OutputPlacement.UNSPECIFIED
+        else None
+    )
+    expected_spec = shlo_type.ShloTensorSpec(
+        shape=(2, 3),
+        dtype=shlo_type.ShloDType.i32,
+        placement=expected_placement,
+    )
+    self.assertEqual(recovered_spec, expected_spec)
+
+  def test_to_shlo_placement_invalid_enum_raises_key_error(self):
+    with self.assertRaises(KeyError):
+      type_proto_utils.to_shlo_placement(
+          typing.cast(type_pb2.OutputPlacement, 999)
+      )
 
 
 if __name__ == "__main__":

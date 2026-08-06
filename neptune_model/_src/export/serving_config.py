@@ -21,6 +21,7 @@ import itertools
 from absl import logging
 import jaxtyping
 
+from neptune_model._src.core import shlo_type
 from neptune_model._src.export.constants import DEFAULT_METHOD_KEY
 from neptune_model.protos import orchestration_pb2
 
@@ -76,13 +77,19 @@ class ServingConfig:
       model.
     orchestration: Optional workflow defining a sequence or dependency graph of
       model invocations.
+    output_placements: Optional placement configuration for output tensors.
   """
 
   serving_signature: str = "serving_default"
   # TODO: Evaluate if we need to make this a sequence of PyTrees.
-  input_signature: jaxtyping.PyTree = None
+  input_signature: jaxtyping.PyTree | None = None
   batch_options: orchestration_pb2.BatchOptions | None = None
   orchestration: Orchestration | None = None
+  output_placements: (
+      jaxtyping.PyTree[shlo_type.OutputPlacement]
+      | Sequence[shlo_type.OutputPlacement]
+      | None
+  ) = None
 
   def __post_init__(self):
     # TODO (b/534785167): Update batch config validation logic.

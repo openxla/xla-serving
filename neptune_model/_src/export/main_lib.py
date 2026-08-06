@@ -301,6 +301,30 @@ def _update_save_bundle(
   shlo_output_signature = jax2npt_utils.to_shlo_tensor_spec(
       pipeline_output_signature
   )
+  if cfg.output_placements is not None:
+
+    def _attach_placement(spec, placement):
+      if placement is not None and isinstance(spec, shlo_type.ShloTensorSpec):
+        return dataclasses.replace(spec, placement=placement)
+      return spec
+
+    if isinstance(cfg.output_placements, (list, tuple)):
+      output_leaves = jax.tree_util.tree_leaves(shlo_output_signature)
+      if len(cfg.output_placements) != len(output_leaves):
+        raise ValueError(
+            f'output_placements length ({len(cfg.output_placements)}) does not'
+            f' match output signature leaf count ({len(output_leaves)}).'
+        )
+      output_placements_tree = jax.tree_util.tree_unflatten(
+          jax.tree_util.tree_structure(shlo_output_signature),
+          cfg.output_placements,
+      )
+    else:
+      output_placements_tree = cfg.output_placements
+
+    shlo_output_signature = jax.tree_util.tree_map(
+        _attach_placement, shlo_output_signature, output_placements_tree
+    )
 
   pipeline_proto = save_bundle.pipelines.name_to_pipeline[cfg.serving_signature]
 
