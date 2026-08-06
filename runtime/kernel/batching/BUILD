@@ -138,3 +138,18 @@ cc_library(
         "@xla//xla/tsl/platform:criticality",
     ],
 )
+
+cc_library(
+    name = "ragged_utils",
+    srcs = ["ragged_utils.cc"],
+    hdrs = ["ragged_utils.h"],
+    deps = [
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/types:span",
+        "@neptune//runtime/core:allocator",
+        "@neptune//runtime/core:host_buffer",
+        "@xla//xla/python/ifrt",
+    ],
+)
