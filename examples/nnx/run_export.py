@@ -16,6 +16,7 @@
 
 from absl import app
 from absl import flags
+import jax.numpy as jnp
 from examples.nnx import export
 
 FLAGS = flags.FLAGS
@@ -23,12 +24,21 @@ flags.DEFINE_string(
     'export_path', None, 'Path to export model.'
 )
 flags.mark_flag_as_required('export_path')
+flags.DEFINE_enum(
+    'dtype', 'float32', ['float32', 'bfloat16'],
+    'Dtype for exported model parameters.'
+)
+
+_DTYPE_MAP = {
+    'float32': jnp.float32,
+    'bfloat16': jnp.bfloat16,
+}
 
 
 def main(argv):
   if len(argv) > 1:
     raise app.UsageError('Too many command-line arguments.')
-  export.export_model(FLAGS.export_path)
+  export.export_model(FLAGS.export_path, dtype=_DTYPE_MAP[FLAGS.dtype])
 
 
 if __name__ == '__main__':
