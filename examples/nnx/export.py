@@ -37,12 +37,18 @@ def export_model(export_path: str, dtype: jnp.dtype = jnp.float32):
 
   if dtype != jnp.float32:
     for _, module in nnx.iter_modules(model):
-      if isinstance(module, (nnx.Linear, nnx.LayerNorm)):
+      if isinstance(module, (nnx.Linear, nnx.LayerNorm, nnx.Embed)):
         module.dtype = dtype
 
   model_graph, model_params, model_rest_state = nnx.split(
       model, nnx.filterlib.Not(nnx.RngState), ...
   )
+
+  if dtype != jnp.float32:
+    model_params = jax.tree_util.tree_map(
+        lambda x: x.astype(dtype) if isinstance(x, jax.Array) and jnp.issubdtype(x.dtype, jnp.floating) else x,
+        model_params
+    )
 
   def apply_fn(params, inputs):
     inference_model = nnx.merge(
