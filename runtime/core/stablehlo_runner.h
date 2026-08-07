@@ -188,8 +188,11 @@ class StableHloRunner {
     // The offset of user input index in the main function of the MLIR module.
     // Unused weights are excluded.
     int input_offset;
-    // IOSpec from the StableHLO.
+    // IOSpec from the StableHLO before optimization (user-facing IO shapes).
+    StableHloIOSpec original_io_spec;
+    // IOSpec from the StableHLO after optimization (executable IO shapes).
     StableHloIOSpec io_spec;
+
     xla::ifrt::LoadedExecutableRef ifrt_executable;
 
     // The canonical program fingerprint of the `ifrt_executable` and the

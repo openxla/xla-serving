@@ -111,6 +111,8 @@ absl::Status AotStableHloRunner::PopulateAotExecutableCache(
 
     executable_bundle->io_spec.inputs = spec.inputs;
     executable_bundle->io_spec.outputs = spec.outputs;
+    executable_bundle->original_io_spec.inputs = spec.inputs;
+    executable_bundle->original_io_spec.outputs = spec.outputs;
     executable_bundle->ifrt_executable = std::move(options.executables[i]);
     executable_bundle->program_fingerprint_with_timestamp =
         GetProgramFingerprintWithTimestamp(executable_bundle->ifrt_executable,
@@ -122,7 +124,7 @@ absl::Status AotStableHloRunner::PopulateAotExecutableCache(
     for (int j = executable_bundle->input_offset;
          j < executable_bundle->io_spec.inputs.size(); ++j) {
       user_input_shapes.push_back(
-          ToIfrtShape(executable_bundle->io_spec.inputs[j].shape));
+          executable_bundle->io_spec.inputs[j].GetIfrtShape());
     }
 
     // IFRT requires an explicit device mapping when executing unbound

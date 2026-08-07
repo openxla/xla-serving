@@ -268,7 +268,6 @@ cc_library(
         "@xla//xla/pjrt/proto:compile_options_proto_cc",
         "@xla//xla/python:refine_polymorphic_shapes",
         "@xla//xla/python/ifrt",
-        "@xla//xla/python/pjrt_ifrt:xla_ifrt",
         "@xla//xla/service:computation_placer_hdr",
         "@xla//xla/tsl/concurrency:future",
         "@xla//xla/tsl/concurrency:ref_count",

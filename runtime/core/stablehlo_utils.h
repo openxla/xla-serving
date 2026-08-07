@@ -43,11 +43,24 @@ namespace neptune {
 // std::vector<std::optional<int64_t>>, where std::nullopt means dynamic.
 using ArgShape = sharding_internal::MlirShape;
 
+// Converts an `ArgShape` to `xla::ifrt::Shape` for the purposes of checkpoint
+// loading. The result will be fake if the shape is dynamic, so don't use this
+// function for anything else.
+xla::ifrt::Shape ToIfrtShape(const ArgShape& shape);
+
 struct ArgSpec {
   xla::ifrt::DType dtype;
   ArgShape shape;
+  std::optional<xla::ifrt::Shape> ifrt_shape;
   xla::HloSharding sharding;
   std::optional<xla::Layout> layout;
+
+  xla::ifrt::Shape GetIfrtShape() const {
+    if (ifrt_shape.has_value()) {
+      return *ifrt_shape;
+    }
+    return ToIfrtShape(shape);
+  }
 
   bool operator==(const ArgSpec& other) const {
     return dtype == other.dtype && shape == other.shape &&

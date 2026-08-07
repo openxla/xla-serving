@@ -137,8 +137,10 @@ absl::StatusOr<ArgSpec> BuildArgSpecFromArg(
   TF_ASSIGN_OR_RETURN(xla::HloSharding hlo_sharding,
                       xla::HloSharding::FromProto(sharding));
 
+  xla::ifrt::Shape ifrt_shape = ToIfrtShape(shape);
   return ArgSpec{.dtype = dtype,
                  .shape = std::move(shape),
+                 .ifrt_shape = std::move(ifrt_shape),
                  .sharding = std::move(hlo_sharding)};
 }
 
@@ -172,8 +174,10 @@ absl::StatusOr<ArgSpec> BuildArgSpecFromResult(
   TF_ASSIGN_OR_RETURN(xla::HloSharding hlo_sharding,
                       xla::HloSharding::FromProto(sharding));
 
+  xla::ifrt::Shape ifrt_shape = ToIfrtShape(shape);
   return ArgSpec{.dtype = dtype,
                  .shape = std::move(shape),
+                 .ifrt_shape = std::move(ifrt_shape),
                  .sharding = std::move(hlo_sharding)};
 }
 

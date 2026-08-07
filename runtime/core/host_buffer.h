@@ -218,6 +218,13 @@ class HostBuffer {
     return buffer_data_->ref_count();
   }
 
+  std::shared_ptr<void> owner() const {
+    if (buffer_data_.has_value()) {
+      return buffer_data_->owner();
+    }
+    return nullptr;
+  }
+
   std::string DebugString() const {
     if (buffer_data_) {
       return buffer_data_->DebugString();

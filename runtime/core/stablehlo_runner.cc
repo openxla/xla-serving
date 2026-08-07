@@ -181,18 +181,17 @@ absl::Status ValidateDeviceBufferInput(const xla::ifrt::Array& original_input,
 
 absl::Status ValidateOutputArray(const xla::ifrt::Array& array_for_copy,
                                  xla::ifrt::DType expected_dtype,
-                                 const ArgShape& expected_shape,
+                                 const xla::ifrt::Shape& expected_ifrt_shape,
                                  int output_index) {
   if (array_for_copy.dtype() != expected_dtype) {
     return absl::InternalError(absl::StrCat(
         "Output DType mismatch at index ", output_index, ". Expected ",
         expected_dtype, ", but got ", array_for_copy.dtype()));
   }
-  if (auto status = InputShapeEqual(expected_shape, array_for_copy.shape());
-      !status.ok()) {
-    return absl::InternalError(absl::StrCat("Output shape mismatch at index ",
-                                            output_index, ". ",
-                                            status.message()));
+  if (array_for_copy.shape() != expected_ifrt_shape) {
+    return absl::InternalError(absl::StrCat(
+        "Output shape mismatch at index ", output_index, ". Expected ",
+        expected_ifrt_shape, ", but got ", array_for_copy.shape()));
   }
   return absl::OkStatus();
 }
@@ -365,7 +364,7 @@ StableHloRunner::DataConverter::ConvertOutput(
     if (VLOG_IS_ON(2)) {
       TF_RETURN_IF_ERROR(ValidateOutputArray(
           *array_for_copy, executable_bundle.io_spec.outputs[i].dtype,
-          executable_bundle.io_spec.outputs[i].shape, i));
+          executable_bundle.io_spec.outputs[i].GetIfrtShape(), i));
     }
 
     // IFRT's return does not contain sufficient information; so we use
@@ -378,9 +377,23 @@ StableHloRunner::DataConverter::ConvertOutput(
 
   std::vector<HostBuffer> converted_outputs;
   converted_outputs.reserve(stablehlo_outputs.size());
-  for (tsl::Future<HostBuffer>& output_future : output_futures) {
-    TF_ASSIGN_OR_RETURN(auto host_buffer, output_future.Await());
-    converted_outputs.push_back(std::move(host_buffer));
+  for (int i = 0; i < output_futures.size(); ++i) {
+    TF_ASSIGN_OR_RETURN(auto host_buffer, output_futures[i].Await());
+    const xla::ifrt::Shape expected_ifrt_shape =
+        executable_bundle.original_io_spec.outputs[i].GetIfrtShape();
+    if (host_buffer.shape() != expected_ifrt_shape) {
+      if (host_buffer.shape().num_elements() !=
+          expected_ifrt_shape.num_elements()) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Output shape mismatch. Expected: ", expected_ifrt_shape,
+            ", but got: ", host_buffer.shape()));
+      }
+      HostBuffer reshaped_buffer(host_buffer.base(), host_buffer.dtype(),
+                                 expected_ifrt_shape, host_buffer.owner());
+      converted_outputs.push_back(std::move(reshaped_buffer));
+    } else {
+      converted_outputs.push_back(std::move(host_buffer));
+    }
   }
   return converted_outputs;
 }
@@ -557,6 +570,12 @@ StableHloRunner::CreateExecutableSynchronously(
                                          *streaming_host_callback_id_));
   }
 
+  TF_ASSIGN_OR_RETURN(
+      StableHloIOSpec original_io_spec,
+      GetStableHloIOSpec(*module_bundle->module, compile_options_.has_value()
+                                                     ? &compile_options_.value()
+                                                     : nullptr));
+
   if (optimizer_ != nullptr) {
     TF_RETURN_IF_ERROR(optimizer_->Optimize(args, module_bundle->module.get()));
   }
@@ -603,6 +622,7 @@ StableHloRunner::CreateExecutableSynchronously(
   executable_bundle->module_kept_var_indices =
       module_bundle->module_kept_var_indices;
   executable_bundle->input_offset = module_bundle->input_offset;
+  executable_bundle->original_io_spec = original_io_spec;
   executable_bundle->io_spec = io_spec;
 
   executable_bundle->ifrt_executable = std::move(ifrt_executable);
@@ -943,15 +963,16 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
       TF_RETURN_IF_ERROR(ValidateDeviceBufferInput(
           *original_input,
           executable_bundle->io_spec.inputs[idx_in_stablehlo_spec].dtype,
-          ToIfrtShape(
-              executable_bundle->io_spec.inputs[idx_in_stablehlo_spec].shape),
+          executable_bundle->io_spec.inputs[idx_in_stablehlo_spec]
+              .GetIfrtShape(),
           idx_in_stablehlo_spec));
       final_used_inputs[i] = std::move(original_input);
     } else if (original_input_value.IsType<HostBuffer>()) {
       auto& original_input = original_input_value.Get<HostBuffer>();
 
-      xla::ifrt::Shape target_shape = ToIfrtShape(
-          executable_bundle->io_spec.inputs[idx_in_stablehlo_spec].shape);
+      const xla::ifrt::Shape target_shape =
+          executable_bundle->io_spec.inputs[idx_in_stablehlo_spec]
+              .GetIfrtShape();
 
       if (original_input.shape() == target_shape) {
         // Shapes match, use the buffer directly.
@@ -960,7 +981,8 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
         // Shapes differ (e.g., due to optimization). Perform a zero-copy
         // reshape to match the model's expected signature.
         HostBuffer reshaped_buffer(original_input.base(),
-                                   original_input.dtype(), target_shape);
+                                   original_input.dtype(), target_shape,
+                                   original_input.owner());
         host_buffers_to_convert.push_back(std::move(reshaped_buffer));
       }
       host_buffers_stablehlo_indices.push_back(idx_in_stablehlo_spec);
@@ -1044,7 +1066,7 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
         TF_RETURN_IF_ERROR(ValidateOutputArray(
             *execution_result.outputs[i],
             executable_bundle->io_spec.outputs[i].dtype,
-            executable_bundle->io_spec.outputs[i].shape, i));
+            executable_bundle->io_spec.outputs[i].GetIfrtShape(), i));
       }
       device_outputs.push_back(neptune::DeviceBuffer{
           .ifrt_client = ifrt_client_,

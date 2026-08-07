@@ -53,6 +53,7 @@
 #include "xla/layout.h"  // from @xla
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
 #include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_dtype.h"  // from @xla
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
@@ -303,9 +304,11 @@ absl::StatusOr<ArgSpec> ConvertToArgSpec(
   if (type.has_layout()) {
     TF_ASSIGN_OR_RETURN(layout, xla::Layout::FromProto(type.layout()));
   }
+  xla::ifrt::Shape ifrt_shape = ToIfrtShape(shape);
   return ArgSpec{
       .dtype = std::move(dtype),
       .shape = std::move(shape),
+      .ifrt_shape = std::move(ifrt_shape),
       .sharding = std::move(hlo_sharding),
       .layout = std::move(layout),
   };
