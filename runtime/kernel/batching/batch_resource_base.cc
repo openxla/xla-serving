@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <iterator>
 #include <memory>
@@ -29,6 +30,7 @@
 #include "absl/cleanup/cleanup.h"  // from @abseil-cpp
 #include "absl/container/fixed_array.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
+#include "absl/flags/flag.h"  // from @abseil-cpp
 #include "absl/functional/any_invocable.h"  // from @abseil-cpp
 #include "absl/functional/bind_front.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
@@ -52,8 +54,10 @@
 #include "runtime/core/incremental_barrier.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
 #include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
+#include "runtime/kernel/batching/ragged_utils.h"  // from @neptune
 #include "runtime/kernel/batching/warmup.h"  // from @neptune
 #include "runtime/kernel/kernel.h"  // from @neptune
+#include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/lib/monitoring/counter.h"  // from @xla
 #include "xla/tsl/lib/monitoring/sampler.h"  // from @xla
@@ -73,6 +77,9 @@
 #include "tensorflow/core/common_runtime/request_cost_accessor.h"  // from @org_tensorflow
 #include "tsl/platform/context.h"  // from @tsl
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
+
+ABSL_FLAG(bool, jsv_support_batching_for_ragged_inputs, false,
+          "Whether to support composite types in batching.");
 
 namespace neptune {
 namespace {
@@ -229,6 +236,26 @@ int GetTotalTaskSize(
   }
   return tasks_size;
 }
+
+enum InputType { kDense, kRaggedFlatValues, kRaggedRowSplits };
+
+struct InputClassification {
+  InputType type;
+  const RaggedInputSpec* option = nullptr;
+};
+
+InputClassification ClassifyInput(
+    int index, const std::vector<RaggedInputSpec>& ragged_inputs) {
+  for (const auto& opt : ragged_inputs) {
+    if (opt.flat_values_index == index) {
+      return {kRaggedFlatValues, &opt};
+    }
+    if (opt.row_splits_index == index) {
+      return {kRaggedRowSplits, &opt};
+    }
+  }
+  return {kDense};
+}
 }  // namespace
 
 std::unique_ptr<BatchResourceBase::BatchTask>
@@ -316,6 +343,35 @@ absl::Status BatchResourceBase::RegisterInput(
   TF_ASSIGN_OR_RETURN(absl::Span<const Value> inputs_for_batch,
                       GetInputsToBatch(context));
   batch_components->inputs.reserve(inputs_for_batch.size());
+
+  // Only used to support batching for ragged inputs.
+  // Takes effect when
+  // `FLAGS_jsv_support_batching_for_ragged_inputs` is true.
+  int64_t batch_size = -1;
+  std::vector<InputClassification> input_classifications;
+  input_classifications.reserve(inputs_for_batch.size());
+  if (absl::GetFlag(FLAGS_jsv_support_batching_for_ragged_inputs)) {
+    for (int i = 0; i < inputs_for_batch.size(); ++i) {
+      InputClassification classification = ClassifyInput(i, ragged_inputs_);
+      input_classifications.push_back(classification);
+
+      const Value& value = inputs_for_batch[i];
+      if (!value.IsType<HostBuffer>()) continue;
+      const HostBuffer& host_buffer = value.Get<HostBuffer>();
+      if (host_buffer.shape().dims().empty()) continue;
+
+      if (batch_size == -1) {
+        if (classification.type == kRaggedRowSplits) {
+          // Row splits for ragged inputs.
+          batch_size = host_buffer.shape().dims()[0] - 1;
+        } else if (classification.type == kDense) {
+          // Dense input.
+          batch_size = host_buffer.shape().dims()[0];
+        }
+      }
+    }
+  }
+
   for (int i = 0; i < inputs_for_batch.size(); ++i) {
     const Value& value = inputs_for_batch[i];
     if (!value.IsType<HostBuffer>()) {
@@ -329,18 +385,53 @@ absl::Status BatchResourceBase::RegisterInput(
                        "dimension. Input at index ",
                        i, " has no dimensions."));
     }
-    if (inputs_for_batch.size() >= 2 &&
-        host_buffer.shape().dims()[0] !=
-            inputs_for_batch[0].Get<HostBuffer>().shape().dims()[0]) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "Batching input bufferss supplied in a given op invocation must "
-          "have equal 0th-dimension size. The first input has 0th-dimension "
-          "size ",
-          inputs_for_batch[0].Get<HostBuffer>().shape().dims()[0],
-          ", but the input at index ", i, " has 0th-dimension size ",
-          host_buffer.shape().dims()[0]));
+
+    if (absl::GetFlag(FLAGS_jsv_support_batching_for_ragged_inputs)) {
+      InputClassification classification = input_classifications[i];
+      if (classification.type == kRaggedRowSplits) {
+        if (batch_size != -1 &&
+            host_buffer.shape().dims()[0] != batch_size + 1) {
+          return absl::InvalidArgumentError(
+              absl::StrCat("row_splits input at index ", i, " must have size ",
+                           batch_size + 1, " (batch_size + 1), but got ",
+                           host_buffer.shape().dims()[0]));
+        }
+      } else if (classification.type == kRaggedFlatValues) {
+        // Values can have arbitrary size.
+      } else {
+        if (batch_size != -1 && host_buffer.shape().dims()[0] != batch_size) {
+          return absl::InvalidArgumentError(absl::StrCat(
+              "Dense input at index ", i, " must have size ", batch_size,
+              " (batch_size), but got ", host_buffer.shape().dims()[0]));
+        }
+      }
+    } else {
+      if (inputs_for_batch.size() >= 2 &&
+          host_buffer.shape().dims()[0] !=
+              inputs_for_batch[0].Get<HostBuffer>().shape().dims()[0]) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Batching input bufferss supplied in a given op invocation must "
+            "have equal 0th-dimension size. The first input has 0th-dimension "
+            "size ",
+            inputs_for_batch[0].Get<HostBuffer>().shape().dims()[0],
+            ", but the input at index ", i, " has 0th-dimension size ",
+            host_buffer.shape().dims()[0]));
+      }
     }
     batch_components->inputs.push_back(host_buffer);
+  }
+  if (absl::GetFlag(FLAGS_jsv_support_batching_for_ragged_inputs)) {
+    // For ragged inputs, we cannot determine the batch size based on the first
+    // dimension of the input buffers similar to Dense inputs. Thus, we use the
+    // inferred batch size above based on row splits size.
+    // For forced warmup batches, we set the task size to the input batch limit
+    // directly.
+    if (forced_warmup_batch_size > 0) {
+      batch_components->task_size =
+          batcher_queue_options_.input_batch_size_limit;
+    } else {
+      batch_components->task_size = batch_size != -1 ? batch_size : 0;
+    }
   }
 
   RecordInputBatchConfig(
@@ -416,7 +507,8 @@ BatchResourceBase::GetBatcherQueueOptions(
     int32_t low_priority_max_enqueued_batches,
     const std::vector<int32_t>& low_priority_allowed_batch_sizes,
     MixedPriorityBatchingPolicy mixed_priority_batching_policy,
-    tsl::thread::ThreadPool* thread_pool, Allocator* allocator) {
+    tsl::thread::ThreadPool* thread_pool, Allocator* allocator,
+    std::vector<RaggedInputSpec> ragged_inputs) {
   BatcherT::QueueOptions batcher_queue_options;
   batcher_queue_options.input_batch_size_limit = max_batch_size;
   batcher_queue_options.max_enqueued_batches = max_enqueued_batches;
@@ -452,14 +544,14 @@ BatchResourceBase::GetBatcherQueueOptions(
   batcher_queue_options.allocator = allocator;
   if (enable_large_batch_splitting) {
     batcher_queue_options.split_input_task_func =
-        [thread_pool = thread_pool, allocator = allocator](
+        [thread_pool = thread_pool, allocator = allocator, ragged_inputs](
             std::unique_ptr<BatchTask>* input_task,
             int open_batch_remaining_slot, int max_batch_size,
             std::vector<std::unique_ptr<BatchTask>>* output_tasks)
         -> absl::Status {
       return SplitInputTask(input_task, open_batch_remaining_slot,
                             max_batch_size, thread_pool, output_tasks,
-                            allocator);
+                            allocator, ragged_inputs);
     };
   }
   if (allowed_batch_sizes.empty()) {
@@ -545,6 +637,61 @@ absl::Status BatchResourceBase::ConcatInputBuffers(
   // `just_for_warmup` is true, the real data is not added. Otherwise, the real
   // data is added to the front of each `concatenated_buffer`.
   for (int i = 0; i < num_inputs; ++i) {
+    if (absl::GetFlag(FLAGS_jsv_support_batching_for_ragged_inputs)) {
+      auto classification = ClassifyInput(i, ragged_inputs_);
+      if (classification.type == kRaggedRowSplits) {
+        if (just_for_warmup) {
+          TF_ASSIGN_OR_RETURN(HostBuffer concatenated_buffer,
+                              CreateWarmupRowSplits(
+                                  batch.task(0).inputs.at(i), padded_batch_size,
+                                  batcher_queue_options_.allocator));
+          concatenated_buffers->push_back(concatenated_buffer);
+        } else {
+          std::vector<HostBuffer> tasks_splits;
+          tasks_splits.reserve(batch.num_tasks() + unbatched_tasks.size());
+          for (int task_idx = 0; task_idx < batch.num_tasks(); ++task_idx) {
+            tasks_splits.push_back(batch.task(task_idx).inputs.at(i));
+          }
+          for (int task_idx = 0; task_idx < unbatched_tasks.size();
+               ++task_idx) {
+            tasks_splits.push_back(unbatched_tasks[task_idx]->inputs.at(i));
+          }
+        TF_ASSIGN_OR_RETURN(HostBuffer concatenated_buffer,
+                            ConcatRowSplits(tasks_splits, padding_amount,
+                                            batcher_queue_options_.allocator));
+        concatenated_buffers->push_back(concatenated_buffer);
+        }
+        continue;
+      } else if (classification.type == kRaggedFlatValues) {
+        if (just_for_warmup) {
+          int splits_index = classification.option->row_splits_index;
+          TF_ASSIGN_OR_RETURN(
+              HostBuffer concatenated_buffer,
+              CreateWarmupFlatValues(batch.task(0).inputs.at(i),
+                                     batch.task(0).inputs.at(splits_index),
+                                     padded_batch_size, thread_pool_,
+                                     batcher_queue_options_.allocator));
+          concatenated_buffers->push_back(concatenated_buffer);
+        } else {
+          // Flat values can be concatenated together without any padding.
+          std::vector<HostBuffer> to_concatenate;
+          to_concatenate.reserve(batch.num_tasks() + unbatched_tasks.size());
+          for (int task_idx = 0; task_idx < batch.num_tasks(); ++task_idx) {
+            to_concatenate.push_back(batch.task(task_idx).inputs.at(i));
+          }
+          for (int task_idx = 0; unbatched_tasks.size() > task_idx;
+               ++task_idx) {
+            to_concatenate.push_back(unbatched_tasks[task_idx]->inputs.at(i));
+          }
+          TF_ASSIGN_OR_RETURN(HostBuffer concatenated_buffer,
+                              Concat(thread_pool_, to_concatenate,
+                                     batcher_queue_options_.allocator));
+          concatenated_buffers->push_back(concatenated_buffer);
+        }
+        continue;
+      }
+    }
+    // Dense inputs case.
     // Concatenate the tasks ith input buffers into a big output buffer.
     std::vector<HostBuffer> to_concatenate;
     if (just_for_warmup) {
@@ -896,8 +1043,8 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
 /*static*/ absl::Status BatchResourceBase::SplitInputTask(
     std::unique_ptr<BatchTask>* input_task_ptr, int open_batch_remaining_slot,
     int max_batch_size, tsl::thread::ThreadPool* thread_pool,
-    std::vector<std::unique_ptr<BatchTask>>* output_tasks,
-    Allocator* allocator) {
+    std::vector<std::unique_ptr<BatchTask>>* output_tasks, Allocator* allocator,
+    std::vector<RaggedInputSpec> ragged_inputs) {
   BatchTask& input_task = *(*input_task_ptr);
   const int64_t input_task_size = input_task.size();
   DCHECK_GT(input_task_size, 0);
@@ -997,6 +1144,7 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
         i, [output_addr = split_task_output, callback = std::move(callback)](
                absl::Status status) mutable { callback(); });
     subtask->output = split_task_output;
+    subtask->task_size = task_sizes[i];
     output_tasks->push_back(std::move(subtask));
   }
 
@@ -1005,32 +1153,87 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
   // Splits each input buffer according to `output_task_sizes`, and
   // initializes input of `output_tasks` with split results.
   for (int i = 0; i < num_input_buffers; ++i) {
-    const HostBuffer& input_buffer = input_task.inputs[i];
-
-    // TODO: `HostBuffer::SplitAlongFirstDimension` doesn't have
-    // parallel support. We should implement a split util that can support
-    // parallel split like `Concat`.
-    // Optional: Figure out the optimal implementation of Split, by using
-    // `HostBuffer::SplitAlongFirstDimension` and eliminating unnecessary memcpy
-    // as much as possible.
-    absl::StatusOr<std::vector<HostBuffer>> split_buffers =
-        input_buffer.SplitAlongFirstDimension(output_task_sizes, allocator);
-
-    if (!split_buffers.ok()) {
-      return absl::InternalError(absl::StrCat(
-          "When splitting input, HostBuffer split operation failed: ",
-          split_buffers.status().message()));
+    InputClassification classification;
+    if (absl::GetFlag(FLAGS_jsv_support_batching_for_ragged_inputs)) {
+      classification = ClassifyInput(i, ragged_inputs);
+    } else {
+      classification = {kDense};
     }
-    if (split_buffers->size() != output_task_sizes.size()) {
+
+    std::vector<HostBuffer> split_buffers;
+    split_buffers.reserve(num_batches);
+
+    if (classification.type == kDense) {
+      const HostBuffer& input_buffer = input_task.inputs[i];
+      absl::StatusOr<std::vector<HostBuffer>> split_res =
+          input_buffer.SplitAlongFirstDimension(output_task_sizes, allocator);
+      if (!split_res.ok()) {
+        return absl::InternalError(absl::StrCat(
+            "When splitting input, HostBuffer split operation failed: ",
+            split_res.status().message()));
+      }
+      split_buffers = std::move(*split_res);
+    } else if (classification.type == kRaggedRowSplits) {
+      const HostBuffer& original_splits = input_task.inputs[i];
+      int64_t current_logical_offset = 0;
+      for (int j = 0; j < num_batches; ++j) {
+        int64_t split_size = output_task_sizes[j];
+        absl::StatusOr<HostBuffer> sub_splits = CloneAndModifySplits(
+            original_splits, current_logical_offset,
+            current_logical_offset + split_size, allocator);
+        if (!sub_splits.ok()) {
+          return sub_splits.status();
+        }
+        split_buffers.push_back(std::move(*sub_splits));
+        current_logical_offset += split_size;
+      }
+    } else if (classification.type == kRaggedFlatValues) {
+      int splits_index = classification.option->row_splits_index;
+      const HostBuffer& original_splits = input_task.inputs[splits_index];
+      const HostBuffer& original_values = input_task.inputs[i];
+
+      int64_t current_logical_offset = 0;
+      std::vector<int64_t> val_sizes;
+      val_sizes.reserve(num_batches);
+      for (int j = 0; j < num_batches; ++j) {
+        int64_t split_size = output_task_sizes[j];
+
+        int64_t start_val_offset = 0;
+        int64_t end_val_offset = 0;
+
+        if (original_splits.dtype().kind() == xla::ifrt::DType::kS32) {
+          auto splits_flat = original_splits.flat<int32_t>();
+          start_val_offset = splits_flat(current_logical_offset);
+          end_val_offset = splits_flat(current_logical_offset + split_size);
+        } else if (original_splits.dtype().kind() == xla::ifrt::DType::kS64) {
+          auto splits_flat = original_splits.flat<int64_t>();
+          start_val_offset = splits_flat(current_logical_offset);
+          end_val_offset = splits_flat(current_logical_offset + split_size);
+        } else {
+          return absl::InvalidArgumentError("Unsupported splits dtype");
+        }
+        val_sizes.push_back(end_val_offset - start_val_offset);
+        current_logical_offset += split_size;
+      }
+
+      absl::StatusOr<std::vector<HostBuffer>> split_res =
+          original_values.SplitAlongFirstDimension(val_sizes, allocator);
+      if (!split_res.ok()) {
+        return split_res.status();
+      }
+      split_buffers = std::move(*split_res);
+    }
+
+    if (split_buffers.size() != output_task_sizes.size()) {
       return absl::InternalError(absl::StrCat(
           "When splitting input, HostBuffer split operation did not work as "
           "expected; got ",
-          split_buffers->size(), " splits; expected ",
+          split_buffers.size(), " splits; expected ",
           output_task_sizes.size()));
     }
     for (int j = 0; j < output_tasks->size(); ++j) {
       BatchTask& output_task = *((*output_tasks)[j]);
-      auto moved_buffer_iter = std::next(split_buffers->begin(), j);
+      auto moved_buffer_iter = std::next(split_buffers.begin(), j);
       std::move(moved_buffer_iter, moved_buffer_iter + 1,
                 std::back_inserter(output_task.inputs));
     }

@@ -201,11 +201,11 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateBatchRunnerOp(
           options.low_priority_max_enqueued_batches,
           options.low_priority_allowed_batch_sizes,
           options.mixed_priority_batching_policy, thread_pool,
-          options.allocator);
+          options.allocator, options.ragged_inputs);
 
-  tsl::core::RefCountPtr<JsvBatchResource> batch_resource(
-      new JsvBatchResource(std::move(kernels), batcher, queue_options,
-                           options.allowed_batch_sizes, thread_pool));
+  tsl::core::RefCountPtr<JsvBatchResource> batch_resource(new JsvBatchResource(
+      std::move(kernels), batcher, queue_options, options.allowed_batch_sizes,
+      thread_pool, options.ragged_inputs));
   std::unique_ptr<FlatSignature> input_signature;
 
   if (!options.input_signature.empty()) {

@@ -5,15 +5,18 @@ cc_library(
     srcs = ["batch_resource_base.cc"],
     hdrs = ["batch_resource_base.h"],
     visibility = [
-        "@neptune//runtime/kernel:__subpackages__",
+        "@neptune//runtime:__subpackages__",
     ],
     deps = [
         ":batch_options_utils",
+        ":ragged_utils",
         ":warmup",
         "@abseil-cpp//absl/base:no_destructor",
         "@abseil-cpp//absl/cleanup",
         "@abseil-cpp//absl/container:fixed_array",
         "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/container:flat_hash_set",
+        "@abseil-cpp//absl/flags:flag",
         "@abseil-cpp//absl/functional:any_invocable",
         "@abseil-cpp//absl/functional:bind_front",
         "@abseil-cpp//absl/log",
@@ -143,6 +146,9 @@ cc_library(
     name = "ragged_utils",
     srcs = ["ragged_utils.cc"],
     hdrs = ["ragged_utils.h"],
+    visibility = [
+        "@neptune//runtime/kernel:__subpackages__",
+    ],
     deps = [
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
