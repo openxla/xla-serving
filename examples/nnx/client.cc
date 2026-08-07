@@ -97,10 +97,7 @@ absl::StatusOr<neptune::serving::PredictResponse> RunPredict(
     shape->add_dims(kBatchSize);
     shape->add_dims(1);
 
-    std::vector<int32_t> data(kBatchSize, 0);
-    buffer_proto.set_raw_data(
-        std::string(reinterpret_cast<const char*>(data.data()),
-                    data.size() * sizeof(int32_t)));
+    buffer_proto.set_raw_data(std::string(kBatchSize * sizeof(int32_t), '\0'));
     (*inputs)[feature_name] = std::move(buffer_proto);
   }
   LOG(INFO) << "Successfully constructed PredictRequest with synthetic data.";
