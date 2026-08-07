@@ -17,6 +17,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <utility>
+#include <vector>
 
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
@@ -26,6 +28,7 @@
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
 
 namespace neptune {
 
@@ -138,6 +141,74 @@ absl::StatusOr<HostBuffer> CloneAndModifySplits(
     return absl::InvalidArgumentError("Unsupported splits dtype");
   }
   return new_splits;
+}
+
+absl::StatusOr<HostBuffer> CreateWarmupRowSplits(
+    const HostBuffer& splits_source, int warmup_batch_size,
+    Allocator* allocator) {
+  if (splits_source.shape().dims().empty() ||
+      splits_source.shape().dims()[0] < 2) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Cannot use a row_splits buffer with fewer than 2 elements for warmup "
+        "batching; got shape ",
+        splits_source.shape()));
+  }
+  HostBuffer first_row_splits;
+  if (splits_source.shape().dims()[0] == 2) {
+    first_row_splits = splits_source;
+  } else {
+    absl::StatusOr<HostBuffer> res =
+        splits_source.SliceAlongFirstDimension(0, 2, allocator);
+    if (!res.ok()) {
+      return res.status();
+    }
+    first_row_splits = std::move(*res);
+  }
+  std::vector<HostBuffer> tasks_splits;
+  tasks_splits.reserve(warmup_batch_size);
+  for (int j = 0; j < warmup_batch_size; ++j) {
+    tasks_splits.push_back(first_row_splits);
+  }
+  return ConcatRowSplits(tasks_splits, /*padding_amount=*/0, allocator);
+}
+
+absl::StatusOr<HostBuffer> CreateWarmupFlatValues(
+    const HostBuffer& values_source, const HostBuffer& splits_source,
+    int warmup_batch_size, tsl::thread::ThreadPool* thread_pool,
+    Allocator* allocator) {
+  if (splits_source.shape().dims().empty() ||
+      splits_source.shape().dims()[0] < 2) {
+    return absl::InvalidArgumentError(
+        "row_splits buffer must have at least 2 elements for warmup.");
+  }
+  int64_t num_values = 0;
+  if (splits_source.dtype().kind() == xla::ifrt::DType::kS32) {
+    auto splits_flat = splits_source.flat<int32_t>();
+    num_values = splits_flat(1) - splits_flat(0);
+  } else if (splits_source.dtype().kind() == xla::ifrt::DType::kS64) {
+    auto splits_flat = splits_source.flat<int64_t>();
+    num_values = splits_flat(1) - splits_flat(0);
+  } else {
+    return absl::InvalidArgumentError("Unsupported splits dtype");
+  }
+
+  HostBuffer first_row_values;
+  if (values_source.shape().dims()[0] == num_values) {
+    first_row_values = values_source;
+  } else {
+    absl::StatusOr<HostBuffer> res = values_source.SliceAlongFirstDimension(
+        0, num_values, allocator);
+    if (!res.ok()) {
+      return res.status();
+    }
+    first_row_values = std::move(*res);
+  }
+  std::vector<HostBuffer> to_concatenate;
+  to_concatenate.reserve(warmup_batch_size);
+  for (int j = 0; j < warmup_batch_size; ++j) {
+    to_concatenate.push_back(first_row_values);
+  }
+  return Concat(thread_pool, to_concatenate, allocator);
 }
 
 }  // namespace neptune

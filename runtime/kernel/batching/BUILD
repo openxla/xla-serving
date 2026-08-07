@@ -151,5 +151,6 @@ cc_library(
         "@neptune//runtime/core:allocator",
         "@neptune//runtime/core:host_buffer",
         "@xla//xla/python/ifrt",
+        "@xla//xla/tsl/platform:env",
     ],
 )

@@ -19,6 +19,7 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/allocator.h"  // from @neptune
 #include "runtime/core/host_buffer.h"  // from @neptune
+#include "xla/tsl/platform/threadpool.h"  // from @xla
 
 namespace neptune {
 
@@ -49,6 +50,33 @@ absl::StatusOr<HostBuffer> ConcatRowSplits(
 // 1 and the end index is 3, then the output splits will be [0, 1, 3].
 absl::StatusOr<HostBuffer> CloneAndModifySplits(
     const HostBuffer& original_splits, int start_idx, int end_idx,
+    Allocator* allocator);
+
+// Creates a warmup row splits buffer of size `warmup_batch_size + 1` by
+// slicing the first row of `splits_source` (the first two elements) and
+// replicating it `warmup_batch_size` times via concatenation.
+//
+// For example, if `splits_source` is [0, 2, 5] (and corresponding values
+// are [10, 20, 30, 40, 50])
+// splits [0, 2] corresponding to the first row which has 2 elements: [10, 20]
+// If `warmup_batch_size` is 4, then replicating row 0 four times results in
+// cumulative offsets [0, 2, 4, 6, 8].
+// Values are handled in the `CreateWarmupFlatValues` function.
+absl::StatusOr<HostBuffer> CreateWarmupRowSplits(
+    const HostBuffer& splits_source, int warmup_batch_size,
+    Allocator* allocator);
+
+// Creates a warmup flat values buffer by identifying the number of values in
+// row 0 from `splits_source`, slicing `values_source` to that row 0 size, and
+// replicating the slice `warmup_batch_size` times via concatenation.
+//
+// For example, if `splits_source` is [0, 2, 5] and `values_source` is
+// [10, 20, 30, 40, 50], row 0 contains the first 2 values [10, 20]. If
+// `warmup_batch_size` is 4, replicating row 0 three times results in
+// [10, 20, 10, 20, 10, 20, 10, 20].
+absl::StatusOr<HostBuffer> CreateWarmupFlatValues(
+    const HostBuffer& values_source, const HostBuffer& splits_source,
+    int warmup_batch_size, tsl::thread::ThreadPool* thread_pool,
     Allocator* allocator);
 
 }  // namespace neptune
