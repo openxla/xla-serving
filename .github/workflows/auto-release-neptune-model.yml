@@ -71,16 +71,6 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
 
       - name: Disable Android configuration
         run: |
@@ -109,7 +99,7 @@ jobs:
 
       - name: Install and Test the Built Wheel
         run: |
-          pip install .[tf,test]
+          pip install --pre .[test,tf,torch]
           pytest neptune_model/
 
       - name: Create GitHub Release
