@@ -196,9 +196,9 @@ absl::Status VerifyExecutableCompatibility(
     const neptune_model_manifest::CompiledExecutableBody& compiled_exec,
     xla::ifrt::DeviceListRef ifrt_device_list,
     xla::ifrt::Serialized* serialized_executable_version) {
-  // TODO: Standard PJRT backends currently do not track XLA
-  // executable versions. We gracefully skip version compatibility checks
-  // when the exporter yields an empty version string.
+  // An empty executable_version indicates that the exporter did not provide
+  // executable ABI version metadata (e.g., from backends where versioning is
+  // optional or unpopulated). Skip fast-path version compatibility checks.
   if (compiled_exec.executable_version().empty()) {
     LOG_FIRST_N(WARNING, 1)
         << "AOT executable_version is missing in the manifest. "
