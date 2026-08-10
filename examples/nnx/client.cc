@@ -87,18 +87,17 @@ absl::StatusOr<neptune::serving::PredictResponse> RunPredict(
   request.mutable_model_spec()->set_name(model_name);
 
   // Construct the prediction request with synthetic data.
+  constexpr int kBatchSize = 64;
   auto* inputs = request.mutable_inputs();
   for (int i = 1; i <= 4; ++i) {
     std::string feature_name = absl::StrCat("feature_", i);
     neptune::HostBufferProto buffer_proto;
     buffer_proto.mutable_dtype()->set_kind(xla::ifrt::DTypeProto::KIND_S32);
     auto* shape = buffer_proto.mutable_shape();
-    shape->add_dims(1);
+    shape->add_dims(kBatchSize);
     shape->add_dims(1);
 
-    int32_t zero = 0;
-    buffer_proto.set_raw_data(
-        std::string(reinterpret_cast<const char*>(&zero), sizeof(zero)));
+    buffer_proto.set_raw_data(std::string(kBatchSize * sizeof(int32_t), '\0'));
     (*inputs)[feature_name] = std::move(buffer_proto);
   }
   LOG(INFO) << "Successfully constructed PredictRequest with synthetic data.";

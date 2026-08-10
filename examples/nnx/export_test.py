@@ -17,6 +17,8 @@
 import os
 from absl import logging
 from absl.testing import absltest
+from absl.testing import parameterized
+import jax.numpy as jnp
 import numpy as np
 from examples.nnx import export
 
@@ -30,11 +32,15 @@ def _model_runner(model_path: str):
     return None
 
 
-class ExportTest(absltest.TestCase):
+class ExportTest(parameterized.TestCase):
 
-  def test_export_model(self):
+  @parameterized.named_parameters(
+      ('float32', jnp.float32),
+      ('bfloat16', jnp.bfloat16),
+  )
+  def test_export_model(self, dtype):
     export_path = self.create_tempdir().full_path
-    export.export_model(export_path)
+    export.export_model(export_path, dtype=dtype)
     self.assertTrue(os.path.exists(export_path))
     self.assertTrue(os.path.isdir(os.path.join(export_path, 'checkpoint')))
     self.assertTrue(
