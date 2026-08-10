@@ -34,7 +34,6 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "unsupported/Eigen/CXX11/Tensor"
-#include "llvm/include/llvm/Support/Casting.h"  // from @llvm-project
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "runtime/core/host_buffer_type_utils.h"  // from @neptune
 #include "runtime/core/sharding_utils_core.h"  // from @neptune
@@ -47,6 +46,7 @@
 #include "xla/python/ifrt/index.h"  // from @xla
 #include "xla/python/ifrt/index_domain.h"  // from @xla
 #include "xla/python/ifrt/memory.h"  // from @xla
+#include "xla/python/ifrt/rtti.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
 #include "xla/python/pjrt_ifrt/xla_sharding.h"  // from @xla
@@ -374,10 +374,11 @@ absl::StatusOr<tsl::Future<HostBuffer>> MakeHostBufferFromArrayHelper(
   bool is_replicated = false;
   bool is_single_device = false;
   if (const auto* hlo_sharding_ptr =
-          llvm::dyn_cast<const xla::ifrt::HloSharding>(ifrt_sharding.get())) {
+          xla::ifrt::dyn_cast<const xla::ifrt::HloSharding>(
+              ifrt_sharding.get())) {
     is_replicated = hlo_sharding_ptr->xla_hlo_sharding().IsReplicated();
     is_single_device = hlo_sharding_ptr->xla_hlo_sharding().IsSingleDevice();
-  } else if (llvm::isa<const xla::ifrt::SingleDeviceSharding>(
+  } else if (xla::ifrt::isa<const xla::ifrt::SingleDeviceSharding>(
                  ifrt_sharding.get())) {
     is_single_device = true;
   }
@@ -416,7 +417,7 @@ absl::StatusOr<tsl::Future<HostBuffer>> MakeHostBufferFromArrayHelper(
     if (disassembled_array.size() == 1) {
       target_device_index = 0;
     } else if (const auto* hlo_sharding =
-                   llvm::dyn_cast<const xla::ifrt::HloSharding>(
+                   xla::ifrt::dyn_cast<const xla::ifrt::HloSharding>(
                        ifrt_sharding.get())) {
       // Edge case: Multi-slice array. Safely locate the slice matching the
       // target device ID.
@@ -599,12 +600,13 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
     const tsl::thread::ThreadPool& thread_pool) {
   tsl::profiler::TraceMe trace_me("MakeArrayFromHostBuffer_DeviceList",
                                   /*level=*/3);
-  if (llvm::isa<const xla::ifrt::SingleDeviceSharding>(ifrt_sharding.get())) {
+  if (xla::ifrt::isa<const xla::ifrt::SingleDeviceSharding>(
+          ifrt_sharding.get())) {
     return CreateArrayFromHostBufferForSingleDevice(
         ifrt_client, input_host_buffer, ifrt_sharding->devices()->devices()[0]);
   }
   const xla::ifrt::HloSharding* ifrt_hlo_sharding =
-      llvm::dyn_cast<const xla::ifrt::HloSharding>(ifrt_sharding.get());
+      xla::ifrt::dyn_cast<const xla::ifrt::HloSharding>(ifrt_sharding.get());
   if (ifrt_hlo_sharding == nullptr) {
     return absl::InternalError(
         "Sharding must be an instance of xla::ifrt::HloSharding");

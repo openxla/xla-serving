@@ -104,7 +104,6 @@ cc_library(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/types:span",
         "@eigen_archive//:eigen3",
-        "@llvm-project//llvm:Support",
         "@tsl//tsl/profiler/lib:traceme",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/hlo/ir:hlo",
