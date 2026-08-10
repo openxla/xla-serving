@@ -1,0 +1,359 @@
+load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
+load("@rules_cc//cc:cc_shared_library.bzl", "cc_shared_library")
+load("@rules_python//python:defs.bzl", "py_library")
+load("@rules_python//python:packaging.bzl", "py_wheel")
+
+package(default_visibility = [":default_package_visibility"])
+
+package_group(
+    name = "default_package_visibility",
+    includes = [
+    ],
+    packages = [
+    ],
+)
+
+package_group(
+    name = "processor_internal",
+    packages = [
+        "//...",
+    ],
+)
+
+package_group(
+    name = "neptune_data_internal",
+    packages = [
+        "//...",
+    ],
+)
+
+cc_shared_library(
+    name = "neptune_data_core",
+    exports_filter = [
+        "//:__subpackages__",
+        "@abseil-cpp//:__subpackages__",
+        "@com_google_protobuf//:__subpackages__",
+        "@xla//:__subpackages__",
+        "@tsl//:__subpackages__",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//data/kernels/cpu_embedding:cpu_embedding_cc_proto",
+        "//data/kernels/cpu_embedding:cpu_embedding_lookup_transform",
+        "//data/kernels/cpu_embedding:cpu_embedding_resource",
+        "//data/kernels/cpu_embedding:cpu_embedding_serializer",
+        "//data/processor/cc/core:composite_processor",
+        "//data/processor/cc/core:transform",
+        "//data/processor/cc/core/graph:execution_graph",
+        "//data/processor/cc/core/graph:graph_executor",
+        "//data/processor/cc/core/graph:graph_validator",
+        "//data/resource_manager/cc:asset",
+        "//data/resource_manager/cc:resource",
+        "//data/resource_manager/cc:resource_manager",
+        "//runtime/core:host_buffer",
+        "@abseil-cpp//absl/base:fast_type_id",
+        "@abseil-cpp//absl/synchronization:synchronization",
+        "@com_google_protobuf//:wrappers_cc_proto",
+        "@xla//xla:literal",
+    ],
+)
+
+cc_shared_library(
+    name = "neptune_data_test_core",
+    testonly = 1,
+    dynamic_deps = [":neptune_data_core"],
+    exports_filter = [
+        "//:__subpackages__",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//data/processor/python/examples:add_from_resource_transform",
+        "//data/processor/python/examples:add_host_buffer_transform",
+        "//data/processor/python/examples:add_int_transform",
+        "//data/processor/python/examples:add_two_transform",
+        "//data/processor/python/examples:dummy_resource_transform",
+        "//data/processor/python/examples:int_resource",
+        "//data/processor/python/examples:make_dict_transform",
+        "//data/processor/python/examples:multiply_by_five_transform",
+        "//data/processor/python/examples:suffix_transform",
+        "//data/resource_manager/python/examples:another_concrete_resource",
+        "//data/resource_manager/python/examples:concrete_resource",
+        "//examples/composite_processor:add_int_from_resource_transform",
+        "//examples/composite_processor:add_two_input_buffers_transform",
+        "//examples/composite_processor:int_resource",
+    ],
+)
+
+genrule(
+    name = "stage_neptune_data_pkg",
+    srcs = [
+        ":neptune_data_core",
+        "@pybind11_abseil//pybind11_abseil:status.so",
+        "//data/ops:cpu_embedding.py",
+        "//data/kernels/cpu_embedding:cpu_embedding_module.py",
+        "//data/kernels/cpu_embedding:cpu_embedding_lookup_transform_pybind.so",
+        "//data/kernels/cpu_embedding:cpu_embedding_resource_pybind.so",
+        "//data/kernels/cpu_embedding:cpu_embedding_serializer_pybind.so",
+        "//data/kernels/cpu_embedding:cpu_embedding_py_pb2",
+        "//data/processor/python:composite_processor_pybind.so",
+        "//data/processor/proto:transform_config_py_pb2",
+        "//data/resource_manager/python:resource_manager.py",
+        "//data/resource_manager/python:resource_manager_pybind.so",
+        "//data/resource_manager/proto:resource_manager_py_pb2",
+    ],
+    outs = [
+        "neptune_data/__init__.py",
+        "neptune_data/libneptune_data_core.so",
+        "neptune_data/ops/__init__.py",
+        "neptune_data/ops/cpu_embedding.py",
+        "neptune_data/kernels/__init__.py",
+        "neptune_data/kernels/cpu_embedding/__init__.py",
+        "neptune_data/kernels/cpu_embedding/cpu_embedding_module.py",
+        "neptune_data/kernels/cpu_embedding/cpu_embedding_lookup_transform_pybind.so",
+        "neptune_data/kernels/cpu_embedding/cpu_embedding_resource_pybind.so",
+        "neptune_data/kernels/cpu_embedding/cpu_embedding_serializer_pybind.so",
+        "neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.py",
+        "neptune_data/processor/__init__.py",
+        "neptune_data/processor/python/__init__.py",
+        "neptune_data/processor/python/composite_processor_pybind.so",
+        "neptune_data/processor/proto/__init__.py",
+        "neptune_data/processor/proto/transform_config_pb2.py",
+        "neptune_data/resource_manager/__init__.py",
+        "neptune_data/resource_manager/python/__init__.py",
+        "neptune_data/resource_manager/python/resource_manager.py",
+        "neptune_data/resource_manager/python/resource_manager_pybind.so",
+        "neptune_data/resource_manager/proto/__init__.py",
+        "neptune_data/resource_manager/proto/resource_manager_pb2.py",
+        "neptune_data/pybind11_abseil/__init__.py",
+        "neptune_data/pybind11_abseil/status.so",
+    ],
+    cmd = """
+  mkdir -p $(@D)/neptune_data/ops
+  mkdir -p $(@D)/neptune_data/kernels/cpu_embedding
+  mkdir -p $(@D)/neptune_data/processor/python
+  mkdir -p $(@D)/neptune_data/processor/proto
+  mkdir -p $(@D)/neptune_data/resource_manager/python
+  mkdir -p $(@D)/neptune_data/resource_manager/proto
+  mkdir -p $(@D)/neptune_data/pybind11_abseil
+
+  touch $(@D)/neptune_data/__init__.py
+  touch $(@D)/neptune_data/ops/__init__.py
+  touch $(@D)/neptune_data/kernels/__init__.py
+  touch $(@D)/neptune_data/kernels/cpu_embedding/__init__.py
+  touch $(@D)/neptune_data/processor/__init__.py
+  touch $(@D)/neptune_data/processor/python/__init__.py
+  touch $(@D)/neptune_data/processor/proto/__init__.py
+  touch $(@D)/neptune_data/resource_manager/__init__.py
+  touch $(@D)/neptune_data/resource_manager/python/__init__.py
+  touch $(@D)/neptune_data/resource_manager/proto/__init__.py
+  touch $(@D)/neptune_data/pybind11_abseil/__init__.py
+
+  cp $(location :neptune_data_core) $(@D)/neptune_data/libneptune_data_core.so
+  cp $(location //data/ops:cpu_embedding.py) $(@D)/neptune_data/ops/cpu_embedding.py
+  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/ops/cpu_embedding.py
+  cp $(location //data/kernels/cpu_embedding:cpu_embedding_module.py) $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_module.py
+  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_module.py
+  cp $(location //data/kernels/cpu_embedding:cpu_embedding_lookup_transform_pybind.so) $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_lookup_transform_pybind.so
+  cp $(location //data/kernels/cpu_embedding:cpu_embedding_resource_pybind.so) $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_resource_pybind.so
+  cp $(location //data/kernels/cpu_embedding:cpu_embedding_serializer_pybind.so) $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_serializer_pybind.so
+  for f in $(locations //data/kernels/cpu_embedding:cpu_embedding_py_pb2); do
+    if [[ $$f == *cpu_embedding_pb2.py ]]; then
+      cp $$f $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.py
+      sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.py
+      sed -i 's/data\\.kernels\\.cpu_embedding/neptune_data\\.kernels\\.cpu_embedding/g' $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.py
+    fi
+  done
+  cp $(location //data/processor/python:composite_processor_pybind.so) $(@D)/neptune_data/processor/python/composite_processor_pybind.so
+  for f in $(locations //data/processor/proto:transform_config_py_pb2); do
+    if [[ $$f == *transform_config_pb2.py ]]; then
+      cp $$f $(@D)/neptune_data/processor/proto/transform_config_pb2.py
+      sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/processor/proto/transform_config_pb2.py
+      sed -i 's/data\\.processor\\.proto/neptune_data\\.processor\\.proto/g' $(@D)/neptune_data/processor/proto/transform_config_pb2.py
+    fi
+  done
+  cp $(location //data/resource_manager/python:resource_manager.py) $(@D)/neptune_data/resource_manager/python/resource_manager.py
+  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/resource_manager/python/resource_manager.py
+  cp $(location //data/resource_manager/python:resource_manager_pybind.so) $(@D)/neptune_data/resource_manager/python/resource_manager_pybind.so
+  for f in $(locations //data/resource_manager/proto:resource_manager_py_pb2); do
+    if [[ $$f == *resource_manager_pb2.py ]]; then
+      cp $$f $(@D)/neptune_data/resource_manager/proto/resource_manager_pb2.py
+      sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/resource_manager/proto/resource_manager_pb2.py
+      sed -i 's/data\\.resource_manager\\.proto/neptune_data\\.resource_manager\\.proto/g' $(@D)/neptune_data/resource_manager/proto/resource_manager_pb2.py
+    fi
+  done
+  cp $(location @pybind11_abseil//pybind11_abseil:status.so) $(@D)/neptune_data/pybind11_abseil/status.so
+  """,
+)
+
+py_library(
+    name = "neptune_data_pkg",
+    srcs = [
+        "neptune_data/__init__.py",
+        "neptune_data/kernels/__init__.py",
+        "neptune_data/kernels/cpu_embedding/__init__.py",
+        "neptune_data/kernels/cpu_embedding/cpu_embedding_module.py",
+        "neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.py",
+        "neptune_data/ops/__init__.py",
+        "neptune_data/ops/cpu_embedding.py",
+        "neptune_data/processor/__init__.py",
+        "neptune_data/processor/proto/__init__.py",
+        "neptune_data/processor/proto/transform_config_pb2.py",
+        "neptune_data/processor/python/__init__.py",
+        "neptune_data/pybind11_abseil/__init__.py",
+        "neptune_data/resource_manager/__init__.py",
+        "neptune_data/resource_manager/proto/__init__.py",
+        "neptune_data/resource_manager/proto/resource_manager_pb2.py",
+        "neptune_data/resource_manager/python/__init__.py",
+        "neptune_data/resource_manager/python/resource_manager.py",
+    ],
+    data = [
+        "neptune_data/kernels/cpu_embedding/cpu_embedding_lookup_transform_pybind.so",
+        "neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.pyi",
+        "neptune_data/kernels/cpu_embedding/cpu_embedding_resource_pybind.so",
+        "neptune_data/kernels/cpu_embedding/cpu_embedding_serializer_pybind.so",
+        "neptune_data/libneptune_data_core.so",
+        "neptune_data/processor/proto/transform_config_pb2.pyi",
+        "neptune_data/processor/python/composite_processor_pybind.so",
+        "neptune_data/pybind11_abseil/status.so",
+        "neptune_data/resource_manager/proto/resource_manager_pb2.pyi",
+        "neptune_data/resource_manager/python/resource_manager_pybind.so",
+    ],
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+)
+
+py_wheel(
+    name = "neptune_data",
+    abi = select({
+        "@rules_python//python/config_settings:is_python_3.11": "cp311",
+        "@rules_python//python/config_settings:is_python_3.12": "abi3",
+    }),
+    distribution = "neptune_data",
+    platform = select({
+        "//runtime/python:linux_x86_64": "manylinux_2_28_x86_64",
+        "//runtime/python:linux_aarch64": "manylinux_2_28_aarch64",
+    }),
+    python_tag = select({
+        "@rules_python//python/config_settings:is_python_3.11": "cp311",
+        "@rules_python//python/config_settings:is_python_3.12": "cp312",
+    }),
+    strip_path_prefixes = ["data"],
+    tags = ["manual"],
+    version = "0.0.1",
+    deps = [
+        ":neptune_data_pkg",
+        ":stage_neptune_data_pkg",
+    ],
+)
+
+genrule(
+    name = "stage_neptune_data_test_pkg",
+    testonly = 1,
+    srcs = [
+        ":neptune_data_test_core",
+        "//data/processor/python/examples:add_int_transform_pybind.so",
+        "//data/processor/python/examples:add_host_buffer_transform_pybind.so",
+        "//data/processor/python/examples:add_two_transform_pybind.so",
+        "//data/processor/python/examples:multiply_by_five_transform_pybind.so",
+        "//data/processor/python/examples:dummy_resource_transform_pybind.so",
+        "//data/processor/python/examples:suffix_transform_pybind.so",
+        "//data/processor/python/examples:add_from_resource_transform_pybind.so",
+        "//data/processor/python/examples:int_resource_pybind.so",
+        "//data/processor/python/examples:make_dict_transform_pybind.so",
+        "//examples/composite_processor:add_int_from_resource_transform_pybind.so",
+        "//examples/composite_processor:add_two_input_buffers_transform_pybind.so",
+        "//examples/composite_processor:int_resource_pybind.so",
+    ],
+    outs = [
+        "neptune_data_test/__init__.py",
+        "neptune_data_test/libneptune_data_test_core.so",
+        "neptune_data_test/processor/__init__.py",
+        "neptune_data_test/processor/python/__init__.py",
+        "neptune_data_test/processor/python/examples/__init__.py",
+        "neptune_data_test/processor/python/examples/add_int_transform_pybind.so",
+        "neptune_data_test/processor/python/examples/add_host_buffer_transform_pybind.so",
+        "neptune_data_test/processor/python/examples/add_two_transform_pybind.so",
+        "neptune_data_test/processor/python/examples/multiply_by_five_transform_pybind.so",
+        "neptune_data_test/processor/python/examples/dummy_resource_transform_pybind.so",
+        "neptune_data_test/processor/python/examples/suffix_transform_pybind.so",
+        "neptune_data_test/processor/python/examples/add_from_resource_transform_pybind.so",
+        "neptune_data_test/processor/python/examples/int_resource_pybind.so",
+        "neptune_data_test/processor/python/examples/make_dict_transform_pybind.so",
+        "neptune_data_test/examples/composite_processor/add_int_from_resource_transform_pybind.so",
+        "neptune_data_test/examples/composite_processor/add_two_input_buffers_transform_pybind.so",
+        "neptune_data_test/examples/composite_processor/int_resource_pybind.so",
+    ],
+    cmd = """
+  mkdir -p $(@D)/neptune_data_test/processor/python/examples
+  touch $(@D)/neptune_data_test/__init__.py
+  touch $(@D)/neptune_data_test/processor/__init__.py
+  touch $(@D)/neptune_data_test/processor/python/__init__.py
+  touch $(@D)/neptune_data_test/processor/python/examples/__init__.py
+  cp $(location :neptune_data_test_core) $(@D)/neptune_data_test/libneptune_data_test_core.so
+  cp $(location //data/processor/python/examples:add_int_transform_pybind.so) $(@D)/neptune_data_test/processor/python/examples/add_int_transform_pybind.so
+  cp $(location //data/processor/python/examples:add_host_buffer_transform_pybind.so) $(@D)/neptune_data_test/processor/python/examples/add_host_buffer_transform_pybind.so
+  cp $(location //data/processor/python/examples:add_two_transform_pybind.so) $(@D)/neptune_data_test/processor/python/examples/add_two_transform_pybind.so
+  cp $(location //data/processor/python/examples:multiply_by_five_transform_pybind.so) $(@D)/neptune_data_test/processor/python/examples/multiply_by_five_transform_pybind.so
+  cp $(location //data/processor/python/examples:dummy_resource_transform_pybind.so) $(@D)/neptune_data_test/processor/python/examples/dummy_resource_transform_pybind.so
+  cp $(location //data/processor/python/examples:suffix_transform_pybind.so) $(@D)/neptune_data_test/processor/python/examples/suffix_transform_pybind.so
+  cp $(location //data/processor/python/examples:add_from_resource_transform_pybind.so) $(@D)/neptune_data_test/processor/python/examples/add_from_resource_transform_pybind.so
+  cp $(location //data/processor/python/examples:int_resource_pybind.so) $(@D)/neptune_data_test/processor/python/examples/int_resource_pybind.so
+  cp $(location //data/processor/python/examples:make_dict_transform_pybind.so) $(@D)/neptune_data_test/processor/python/examples/make_dict_transform_pybind.so
+  cp $(location //examples/composite_processor:add_int_from_resource_transform_pybind.so) $(@D)/neptune_data_test/examples/composite_processor/add_int_from_resource_transform_pybind.so
+  cp $(location //examples/composite_processor:add_two_input_buffers_transform_pybind.so) $(@D)/neptune_data_test/examples/composite_processor/add_two_input_buffers_transform_pybind.so
+  cp $(location //examples/composite_processor:int_resource_pybind.so) $(@D)/neptune_data_test/examples/composite_processor/int_resource_pybind.so
+  """,
+)
+
+py_library(
+    name = "neptune_data_test_pkg",
+    testonly = 1,
+    srcs = [
+        "neptune_data_test/__init__.py",
+        "neptune_data_test/processor/__init__.py",
+        "neptune_data_test/processor/python/__init__.py",
+        "neptune_data_test/processor/python/examples/__init__.py",
+    ],
+    data = [
+        "neptune_data_test/examples/composite_processor/add_int_from_resource_transform_pybind.so",
+        "neptune_data_test/examples/composite_processor/add_two_input_buffers_transform_pybind.so",
+        "neptune_data_test/examples/composite_processor/int_resource_pybind.so",
+        "neptune_data_test/libneptune_data_test_core.so",
+        "neptune_data_test/processor/python/examples/add_from_resource_transform_pybind.so",
+        "neptune_data_test/processor/python/examples/add_host_buffer_transform_pybind.so",
+        "neptune_data_test/processor/python/examples/add_int_transform_pybind.so",
+        "neptune_data_test/processor/python/examples/add_two_transform_pybind.so",
+        "neptune_data_test/processor/python/examples/dummy_resource_transform_pybind.so",
+        "neptune_data_test/processor/python/examples/int_resource_pybind.so",
+        "neptune_data_test/processor/python/examples/make_dict_transform_pybind.so",
+        "neptune_data_test/processor/python/examples/multiply_by_five_transform_pybind.so",
+        "neptune_data_test/processor/python/examples/suffix_transform_pybind.so",
+    ],
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+)
+
+py_wheel(
+    name = "neptune_data_test",
+    testonly = 1,
+    abi = select({
+        "@rules_python//python/config_settings:is_python_3.11": "cp311",
+        "@rules_python//python/config_settings:is_python_3.12": "abi3",
+    }),
+    distribution = "neptune_data_test",
+    platform = select({
+        "//runtime/python:linux_x86_64": "manylinux_2_28_x86_64",
+        "//runtime/python:linux_aarch64": "manylinux_2_28_aarch64",
+    }),
+    python_tag = select({
+        "@rules_python//python/config_settings:is_python_3.11": "cp311",
+        "@rules_python//python/config_settings:is_python_3.12": "cp312",
+    }),
+    strip_path_prefixes = ["data"],
+    tags = ["manual"],
+    version = "0.0.1",
+    deps = [
+        ":neptune_data_test_pkg",
+        ":stage_neptune_data_test_pkg",
+    ],
+)

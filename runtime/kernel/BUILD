@@ -1,9 +1,11 @@
+load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package_group(
     name = "kernel_users",
     packages = [
         "//runtime/interpreter/...",
+        "//runtime/neptune_data/...",
         "//runtime/tensorflow/...",
     ],
 )
@@ -109,7 +111,6 @@ cc_library(
         ":kernel",
         ":kernel_builder_context",
         ":kernel_io_data_type",
-        "@com_google_protobuf//:protobuf",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/memory",
         "@abseil-cpp//absl/status",
@@ -117,6 +118,7 @@ cc_library(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
+        "@com_google_protobuf//:protobuf",
         "@neptune//runtime/core:device_buffer",
         "@neptune//runtime/core:flat_signature",
         "@neptune//runtime/core:host_buffer",

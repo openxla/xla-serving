@@ -1,3 +1,4 @@
+load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
 py_library(
@@ -7,7 +8,7 @@ py_library(
         "@neptune//:__subpackages__",
     ],
     deps = [
-        "//third_party/py/etils/epath",
+        "@neptune_pypi//etils_epath",
         "@neptune_pypi//jax",
         "@neptune_pypi//jaxtyping",
         "@neptune_pypi//orbax_checkpoint",

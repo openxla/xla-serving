@@ -1,0 +1,93 @@
+#include "data/processor/cc/core/graph/graph_validator.h"  // from @neptune
+
+#include <cstddef>
+
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "xla/tsl/platform/status_macros.h"
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "data/processor/cc/core/graph/execution_graph.h"  // from @neptune
+
+namespace neptune::data {
+namespace composite {
+namespace core {
+
+absl::Status GraphValidator::Validate(const ExecutionGraph& graph) {
+  if (graph.empty()) {
+    return absl::InvalidArgumentError("Unexpected empty graph");
+  }
+  RETURN_IF_ERROR(ValidateInternalEdges(graph));
+  RETURN_IF_ERROR(ValidateGraphOutputs(graph));
+  return absl::OkStatus();
+}
+
+absl::Status GraphValidator::ValidateInternalEdges(
+    const ExecutionGraph& graph) {
+  for (size_t i = 0; i < graph.size(); ++i) {
+    const auto& node = graph[i];
+    auto input_types = node.transform->InputTypes();
+    if (node.input_edges.size() != input_types.size()) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Node '", node.name, "' (index ", i, ") expects ", input_types.size(),
+          " inputs, but has ", node.input_edges.size(), " input edges."));
+    }
+
+    for (size_t j = 0; j < node.input_edges.size(); ++j) {
+      const auto& edge = node.input_edges[j];
+      if (edge.type == GraphEdge::SourceType::kNodeOutput) {
+        if (edge.source_index >= static_cast<int>(i) || edge.source_index < 0) {
+          return absl::InvalidArgumentError(absl::StrCat(
+              "Graph is not topologically sorted or has invalid edge: node '",
+              node.name, "' (index ", i, ") depends on node index ",
+              edge.source_index, " which is not a valid previous node."));
+        }
+        const auto& producer_node = graph[edge.source_index];
+        auto producer_outputs = producer_node.transform->OutputTypes();
+        if (edge.port_index >= producer_outputs.size() || edge.port_index < 0) {
+          return absl::InvalidArgumentError(
+              absl::StrCat("Invalid port index: node '", node.name, "' (index ",
+                           i, ") depends on output port ", edge.port_index,
+                           " of node '", producer_node.name, "' (index ",
+                           edge.source_index, "), but producer has only ",
+                           producer_outputs.size(), " outputs."));
+        }
+        // Validate type compatibility
+        if (input_types[j] != producer_outputs[edge.port_index]) {
+          return absl::InvalidArgumentError(absl::StrCat(
+              "Type mismatch: node '", node.name, "' (index ", i,
+              ") input port ", j, " expects ", input_types[j].DebugTypeName(),
+              ", but connects to output port ", edge.port_index, " of node '",
+              producer_node.name, "' (index ", edge.source_index,
+              ") which outputs ",
+              producer_outputs[edge.port_index].DebugTypeName(), "."));
+        }
+      }
+    }
+  }
+  return absl::OkStatus();
+}
+
+absl::Status GraphValidator::ValidateGraphOutputs(const ExecutionGraph& graph) {
+  for (size_t i = 0; i < graph.outputs().size(); ++i) {
+    const auto& edge = graph.outputs()[i];
+    if (edge.type == GraphEdge::SourceType::kNodeOutput) {
+      if (edge.source_index >= static_cast<int>(graph.size()) ||
+          edge.source_index < 0) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("Graph output ", i, " references invalid node index ",
+                         edge.source_index));
+      }
+      const auto& producer_node = graph[edge.source_index];
+      auto producer_outputs = producer_node.transform->OutputTypes();
+      if (edge.port_index >= producer_outputs.size() || edge.port_index < 0) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Graph output ", i, " references invalid port index ",
+            edge.port_index, " of node '", producer_node.name, "'"));
+      }
+    }
+  }
+  return absl::OkStatus();
+}
+
+}  // namespace core
+}  // namespace composite
+}  // namespace neptune::data

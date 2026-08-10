@@ -1,0 +1,16 @@
+edition = "2024";
+
+package neptune.data.composite.utils;
+
+option features.field_presence = IMPLICIT;
+
+message DefaultValue {
+  oneof value {
+    int32 int_value = 1;
+    int64 int64_value = 2;
+    float float_value = 3;
+    double double_value = 4;
+    string string_value = 5;
+    bool bool_value = 6;
+  }
+}

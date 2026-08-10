@@ -1,0 +1,76 @@
+#ifndef THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_API_TRANSFORM_CONTEXT_H_
+#define THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_API_TRANSFORM_CONTEXT_H_
+
+#include <cstdint>
+#include <utility>
+#include <variant>
+#include <vector>
+
+#include "absl/container/inlined_vector.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
+#include "data/processor/cc/api/value.h"  // from @neptune
+#include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
+
+namespace neptune::data {
+namespace composite {
+namespace api {
+
+struct ExecuteMetadata {
+  absl::string_view model_name;
+  int64_t model_version;
+  uint64_t trace_id;
+};
+
+struct HostBufferSpec {
+  xla::ifrt::DType dtype = xla::ifrt::DType(xla::ifrt::DType::Kind::kInvalid);
+  xla::ifrt::Shape shape = xla::ifrt::Shape({});
+};
+
+// Wrapper around HostBufferSpec to cleanly propagate shape validation. This
+// wrapper currently supports args and list args.
+class ShapeInferenceValue {
+ public:
+  using SpecList = std::vector<HostBufferSpec>;
+
+  ShapeInferenceValue() = default;
+  /* implicit */ ShapeInferenceValue(HostBufferSpec spec)
+      : data_(std::move(spec)) {}
+  /* implicit */ ShapeInferenceValue(SpecList list) : data_(std::move(list)) {}
+
+  bool IsSpec() const { return std::holds_alternative<HostBufferSpec>(data_); }
+  bool IsSpecList() const { return std::holds_alternative<SpecList>(data_); }
+
+  const HostBufferSpec& spec() const { return std::get<HostBufferSpec>(data_); }
+  const SpecList& spec_list() const { return std::get<SpecList>(data_); }
+
+ private:
+  std::variant<std::monostate, HostBufferSpec, SpecList> data_;
+};
+
+struct ShapeInferenceContext {
+  ExecuteMetadata metadata;
+  absl::Span<const ShapeInferenceValue> inputs;
+  absl::InlinedVector<ShapeInferenceValue, 4> outputs;
+};
+
+// The context of the transform execution. The transform takes the
+// inputs from the `context.inputs` and put the outputs to the
+// `context.outputs`.
+struct ExecuteContext {
+  // The metadata of the transform execution.
+  ExecuteMetadata metadata;
+  // The inputs to the transform.
+  absl::Span<const Value> inputs;
+  // The outputs of the transform.
+  // The execution harness will clear and reserve space automatically
+  // for the outputs based on the transform's OutputTypes.
+  absl::InlinedVector<Value, 4> outputs;
+};
+
+}  // namespace api
+}  // namespace composite
+}  // namespace neptune::data
+
+#endif  // THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_API_TRANSFORM_CONTEXT_H_

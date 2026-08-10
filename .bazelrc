@@ -77,4 +77,7 @@ common --repository_cache=~/.bazel_repository_cache
 build --cxxopt=-std=c++17
 build --cxxopt=-fsized-deallocation
 
+# Neptune Data.
+build --copt=-DPYBIND11_ABSEIL_STATUS_MODULE_PATH=neptune_data.pybind11_abseil.status
+
 

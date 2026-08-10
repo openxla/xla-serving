@@ -1,3 +1,4 @@
+load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package_group(
@@ -23,6 +24,7 @@ cc_library(
     name = "optional_function_handler",
     hdrs = ["optional_function_handler.h"],
     visibility = [
+        "@neptune//runtime/neptune_data:__subpackages__",
         "@neptune//runtime/tensorflow:__subpackages__",
     ],
     deps = [
@@ -41,6 +43,7 @@ cc_library(
     srcs = ["optional_function_handler_factory.cc"],
     hdrs = ["optional_function_handler_factory.h"],
     visibility = [
+        "@neptune//runtime/neptune_data:__subpackages__",
         "@neptune//runtime/tensorflow:__subpackages__",
     ],
     deps = [
@@ -79,12 +82,11 @@ cc_library(
         "@neptune//runtime/core:__subpackages__",
         "@neptune//runtime/data_loader:__subpackages__",
         "@neptune//runtime/kernel:__subpackages__",
+        "@neptune//runtime/neptune_data:__subpackages__",
         "@neptune//runtime/tensorflow:__subpackages__",
     ],
     deps = [
         ":orbax_type_utils",
-        "@com_google_protobuf//:protobuf",
-        "@com_google_protobuf//:protobuf_lite",
         "@abseil-cpp//absl/base:nullability",
         "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/log",
@@ -94,6 +96,8 @@ cc_library(
         "@abseil-cpp//absl/strings:str_format",
         "@abseil-cpp//absl/types:span",
         "@com_google_protobuf//:differencer",
+        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:protobuf_lite",
         "@neptune//protos:manifest_cc_proto",
         "@neptune//protos:orchestration_cc_proto",
         "@neptune//protos:type_cc_proto",
@@ -166,7 +170,6 @@ cc_library(
         ":optional_function_handler",
         ":optional_function_handler_factory",
         ":run_options",
-        "@com_google_protobuf//:protobuf_lite",
         "@abseil-cpp//absl/base:core_headers",
         "@abseil-cpp//absl/base:no_destructor",
         "@abseil-cpp//absl/base:nullability",
@@ -183,6 +186,7 @@ cc_library(
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/types:span",
+        "@com_google_protobuf//:protobuf_lite",
         "@neptune//protos:bundle_orchestration_cc_proto",
         "@neptune//protos:manifest_cc_proto",
         "@neptune//protos:orchestration_cc_proto",
@@ -286,6 +290,7 @@ cc_library(
     visibility = [
         ":internal",
         ":interpreter_users",
+        "@neptune//runtime/neptune_data:__subpackages__",
     ],
     deps = [
         "@abseil-cpp//absl/base:nullability",

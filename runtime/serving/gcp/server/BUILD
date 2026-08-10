@@ -1,10 +1,11 @@
 load("@aspect_bazel_lib//lib:tar.bzl", "tar")
+load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 # The following configuration is only for the public OSS version.
 # import oss_only_module
 load("@rules_oci//oci:defs.bzl", "oci_image", "oci_push")
-load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 config_setting(
     name = "enable_tf",

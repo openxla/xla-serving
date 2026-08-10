@@ -94,14 +94,14 @@ tsl::Future<> CancellableAsyncKernel::RunAsync(ExecuteContext& context) {
   tsl::Future<> future = RunAsyncInternal(context);
 
   return future.Map([&context, this, inputs_flattened,
-                      keep_alive = std::move(flat_inputs)]() -> absl::Status {
+                     keep_alive = std::move(flat_inputs)]() -> absl::Status {
     if (inputs_flattened) {
       context.inputs = absl::Span<const Value>();
     }
     if (inputs_flattened && output_signature_ != nullptr) {
-      auto map_or = output_signature_->UnflattenToMap(context.outputs);
-      if (!map_or.ok()) return map_or.status();
-      for (auto& [key, value] : *map_or) {
+      auto map = output_signature_->UnflattenToMap(context.outputs);
+      if (!map.ok()) return map.status();
+      for (auto& [key, value] : *map) {
         if (!context.named_values.insert({key, std::move(value)}).second) {
           return absl::InvalidArgumentError(
               absl::StrCat("Duplicate output key: ", key));

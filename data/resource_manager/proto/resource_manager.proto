@@ -1,0 +1,31 @@
+edition = "2024";
+
+package neptune.data;
+
+import option "google/protobuf/cpp_features.proto";
+
+option features.(pb.cpp).string_type = STRING;
+option features.utf8_validation = NONE;
+
+message AssetProto {
+  string name = 1;
+
+  // Users can provide a path to an asset or provide the content of the
+  // asset directly which can be useful for representing small constants.
+  oneof source {
+    string path = 2;
+    string content = 3;
+  }
+}
+
+message ResourceProto {
+  string name = 1;
+  repeated AssetProto assets = 2;
+  string class_name = 3;
+  string module_name = 4;
+  uint64 id = 5;
+}
+
+message ResourceManagerProto {
+  repeated ResourceProto resources = 1;
+}

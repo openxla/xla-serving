@@ -46,10 +46,13 @@ from neptune_model._src.processors import tf_processor
 from neptune_model._src.processors.tf_processor import save_tf_functions
 from neptune_model.protos import orchestration_pb2
 
-Model = (
-    tensorflow_model.TensorflowModel
-    | jax_model.JaxModel
-)
+try:
+  from neptune_model._src.processors import composite_processor
+  CompositeModel = composite_processor.CompositeProcessor
+except ImportError:
+  composite_processor = None
+  CompositeModel = None
+Model = Any
 
 
 @dataclasses.dataclass
@@ -146,6 +149,10 @@ def _build_orchestration_pipeline_nodes(
             name=processor_name,
             fn=fn,
         )
+      case _ if CompositeModel is not None and isinstance(
+          model, CompositeModel
+      ):
+        processor_inst = model
       case _:
         raise ValueError(f'Unknown model type: {type(model)}')
 

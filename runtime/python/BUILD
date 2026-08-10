@@ -1,7 +1,7 @@
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
-load("@rules_python//python:packaging.bzl", "py_wheel")
-load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
+load("@rules_python//python:packaging.bzl", "py_wheel")
 
 package_group(
     name = "friends",
@@ -35,6 +35,8 @@ pybind_extension(
         ":ifrt_client_factory",
         ":model_runner_linkopts",
         ":numpy_utils",
+        "//examples/composite_processor:composite_processor_example_support",
+        "//runtime/neptune_data:interpreter_composite_processor_support",
         "@abseil-cpp//absl/base:nullability",
         "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/flags:flag",

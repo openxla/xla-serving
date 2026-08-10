@@ -1,0 +1,35 @@
+edition = "2024";
+
+package neptune.data.composite.transforms.cpu_embedding;
+
+message CpuEmbeddingManifest {
+  message EmbeddingTable {
+    enum CombineMode {
+      COMBINE_MODE_UNSPECIFIED = 0;
+      SUM = 1;
+      MEAN = 2;
+      SQRT_N = 3;
+    }
+
+    string name = 1;
+    int64 vocab_size = 2;
+    int32 embedding_dim = 3;
+    CombineMode combine_mode = 5;
+  }
+
+  message FeatureSpec {
+    string name = 1;
+    string table = 2;
+    int32 max_sequence_length = 3;
+  }
+
+  repeated EmbeddingTable tables = 1;
+  repeated FeatureSpec feature_specs = 2;
+}
+
+message CpuEmbeddingLookupTransformConfig {
+  string feature = 1;
+  repeated string feature_names = 2;
+  bool dense_lookup = 3;
+  repeated string output_feature_names = 4;
+}

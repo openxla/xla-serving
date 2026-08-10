@@ -1,3 +1,4 @@
+load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 # Limit visibility to selected packages.
@@ -24,7 +25,6 @@ cc_library(
     deps = [
         ":tf_compatible_interpreter_create_options",
         ":tf_saved_model_runner",
-        "@com_google_protobuf//:protobuf_lite",
         "@abseil-cpp//absl/algorithm:container",
         "@abseil-cpp//absl/base",
         "@abseil-cpp//absl/log",
@@ -32,6 +32,7 @@ cc_library(
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings:string_view",
+        "@com_google_protobuf//:protobuf_lite",
         "@neptune//protos:manifest_cc_proto",
         "@neptune//protos:orchestration_cc_proto",
         "@neptune//protos:tf_concrete_function_handle_cc_proto",

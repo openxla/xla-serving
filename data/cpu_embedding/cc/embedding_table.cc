@@ -1,0 +1,82 @@
+#include "data/cpu_embedding/cc/embedding_table.h"  // from @neptune
+
+#include <cstdint>
+#include <memory>
+#include <utility>
+
+#include "data/cpu_embedding/cc/array.h"  // from @neptune
+#include "absl/memory/memory.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/str_format.h"  // from @abseil-cpp
+#include "absl/strings/str_join.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
+#include "Eigen/Core"
+
+namespace neptune::data::cpu_embedding {
+namespace {
+
+template <typename T>
+absl::StatusOr<Array> LookupImpl(absl::Span<const int64_t> ids,
+                                 const Array& data) {
+  const int64_t vocab_size = data.GetShape().dims[0];
+  const int64_t embedding_dim = data.GetShape().dims[1];
+  Array results(T(0), Shape({static_cast<int64_t>(ids.size()), embedding_dim}));
+  auto results_tensor = results.AsTensor<T, 2>();
+  auto table_tensor = data.AsTensor<const T, 2>();
+
+  for (int64_t i = 0; i < ids.size(); ++i) {
+    int64_t id = ids[i];
+    if (id < 0 || id >= vocab_size) {
+      return absl::InvalidArgumentError(absl::StrFormat(
+          "Embedding table has vocab size %d. Got id %d.", vocab_size, id));
+    }
+    results_tensor.chip(i, 0) = table_tensor.chip(id, 0);
+  }
+  return results;
+}
+
+}  // namespace
+
+absl::StatusOr<std::unique_ptr<EmbeddingTable>> EmbeddingTable::Create(
+    absl::string_view name, Array data, enum CombineMode combine_mode,
+    CustomCombinerFn custom_combiner) {
+  if (data.GetShape().dims.size() != 2) {
+    return absl::InvalidArgumentError(absl::StrFormat(
+        "Embedding table data must be a 2D array. Got shape: (%s)",
+        absl::StrJoin(data.GetShape().dims, ",")));
+  }
+  if (name.empty()) {
+    return absl::InvalidArgumentError("Embedding table name cannot be empty.");
+  }
+
+  return absl::WrapUnique(
+      new EmbeddingTable(name, std::move(data), combine_mode, custom_combiner));
+}
+
+absl::StatusOr<Array> EmbeddingTable::Lookup(
+    absl::Span<const int64_t> ids) const {
+  switch (data_.GetDType()) {
+    case DType::kBfloat16:
+      return LookupImpl<Eigen::bfloat16>(ids, data_);
+    case DType::kFloat32:
+      return LookupImpl<float>(ids, data_);
+    default:
+      return absl::InvalidArgumentError(
+          absl::StrFormat("Unsupported data type: %d", data_.GetDType()));
+  }
+}
+
+EmbeddingTable::EmbeddingTable(absl::string_view name, Array data,
+                               enum CombineMode combine_mode,
+                               CustomCombinerFn custom_combiner)
+    : name_(name),
+      data_(std::move(data)),
+      combine_mode_(combine_mode),
+      custom_combiner_(custom_combiner) {
+  vocab_size_ = data_.GetShape().dims[0];
+  embedding_dim_ = data_.GetShape().dims[1];
+}
+
+}  // namespace neptune::data::cpu_embedding

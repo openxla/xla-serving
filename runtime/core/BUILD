@@ -1,17 +1,11 @@
+load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 # Limit visibility to selected packages.
 package_group(
     name = "core_users",
     packages = [
-        "//runtime/core/google/...",
-        "//runtime/core/stablehlo_transforms/...",
-        "//runtime/data_loader/...",
-        "//runtime/interpreter/...",
-        "//runtime/kernel/...",
-        "//runtime/python/...",
-        "//runtime/serving/...",
-        "//runtime/tensorflow/...",
+        "//...",
     ],
 )
 
@@ -118,36 +112,6 @@ cc_library(
 )
 
 cc_library(
-    name = "sharding_utils_test_lib",
-    testonly = True,
-    srcs = ["sharding_utils_test.cc"],
-    visibility = ["@neptune//runtime/core/google:__subpackages__"],
-    deps = [
-        ":host_buffer",
-        ":host_buffer_matcher",
-        ":host_buffer_test_utils",
-        ":sharding_utils",
-        "@abseil-cpp//absl/status",
-        "@abseil-cpp//absl/status:status_matchers",
-        "@abseil-cpp//absl/status:statusor",
-        "@abseil-cpp//absl/strings",
-        "@abseil-cpp//absl/types:span",
-        "@googletest//:gtest_main",
-        "@tsl//tsl/platform:ml_dtypes",
-        "@xla//xla:xla_data_proto_cc",
-        "@xla//xla/hlo/ir:hlo",
-        "@xla//xla/python/ifrt",
-        "@xla//xla/python/ifrt:test_util",
-        "@xla//xla/python/pjrt_ifrt:xla_ifrt",
-        "@xla//xla/tsl/concurrency:ref_count",
-        "@xla//xla/tsl/lib/core:status_test_util",
-        "@xla//xla/tsl/platform:env",
-        "@xla//xla/tsl/platform:statusor",
-    ],
-    alwayslink = 1,
-)
-
-cc_library(
     name = "h2d_transfer_executor",
     hdrs = ["h2d_transfer_executor.h"],
     visibility = [":core_users"],
@@ -231,7 +195,6 @@ cc_library(
         ":stablehlo_utils",
         ":value",
         ":value_utils",
-        "@com_google_protobuf//:protobuf",
         "@abseil-cpp//absl/base",
         "@abseil-cpp//absl/base:core_headers",
         "@abseil-cpp//absl/base:nullability",
@@ -249,6 +212,7 @@ cc_library(
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/time",
         "@abseil-cpp//absl/types:span",
+        "@com_google_protobuf//:protobuf",
         "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:IR",
         "@neptune//runtime/core/streaming",
@@ -327,6 +291,38 @@ cc_library(
         "@tsl//tsl/platform:bfloat16",
         "@tsl//tsl/platform:tstring",
         "@xla//xla:util",
+        "@xla//xla/python/ifrt",
+    ],
+)
+
+cc_library(
+    name = "host_buffer_matcher",
+    testonly = True,
+    srcs = ["host_buffer_matcher.cc"],
+    hdrs = ["host_buffer_matcher.h"],
+    visibility = [":core_users"],
+    deps = [
+        ":host_buffer",
+        ":host_buffer_type_utils",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/types:span",
+        "@googletest//:gtest",
+        "@xla//xla/python/ifrt",
+    ],
+)
+
+cc_library(
+    name = "host_buffer_test_utils",
+    testonly = True,
+    hdrs = ["host_buffer_test_utils.h"],
+    visibility = [":core_users"],
+    deps = [
+        ":allocator",
+        ":default_allocator",
+        ":host_buffer",
+        ":host_buffer_type_utils",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/types:span",
         "@xla//xla/python/ifrt",
     ],
 )
@@ -493,13 +489,13 @@ cc_library(
     ],
     deps = [
         ":stablehlo_utils",
-        "@com_google_protobuf//:protobuf",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/memory",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/types:span",
+        "@com_google_protobuf//:protobuf",
         "@neptune//protos:manifest_cc_proto",
         "@neptune//runtime/interpreter:manifest_utils",
         "@xla//xla:xla_data_proto_cc",

@@ -4,6 +4,7 @@
 #   Neptune is a serving engine for serving generic ML workloads on GPUs and TPUs.
 #   See the README.md file for more details.
 
+load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_license//rules:license.bzl", "license")
 
 package(default_visibility = [":internal"])

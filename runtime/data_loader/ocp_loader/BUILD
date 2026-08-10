@@ -1,3 +1,4 @@
+load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(default_visibility = [
@@ -80,7 +81,6 @@ cc_library(
         ":common_types",
         ":shared",
         ":tensorstore_utils_cc",
-        "@com_google_protobuf//:protobuf_lite",
         "@abseil-cpp//absl/base:no_destructor",
         "@abseil-cpp//absl/cleanup",
         "@abseil-cpp//absl/status",
@@ -91,6 +91,7 @@ cc_library(
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/time",
         "@abseil-cpp//absl/types:span",
+        "@com_google_protobuf//:protobuf_lite",
         "@nlohmann_json//:json",
         "@tensorstore//tensorstore",
         "@tensorstore//tensorstore:array",

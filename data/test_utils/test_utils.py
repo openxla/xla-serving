@@ -1,0 +1,33 @@
+"""Test utils for Neptune data library."""
+
+import collections.abc
+
+from google.protobuf import json_format
+from google.protobuf import message
+
+MessageToDict = json_format.MessageToDict
+
+
+def assert_proto2_equal(
+    test_case,
+    actual: message.Message,
+    expected: message.Message,
+    ignore_repeated_fields_order: bool = False,
+):
+  """Asserts that two protos are equal."""
+
+  def _normalize(obj):
+    if isinstance(obj, collections.abc.Mapping):
+      return tuple(sorted((k, _normalize(v)) for k, v in obj.items()))
+    elif isinstance(obj, collections.abc.Iterable) and not isinstance(obj, str):
+      return tuple(sorted(_normalize(x) for x in obj))
+    else:
+      return obj
+
+  dict_actual = MessageToDict(actual, preserving_proto_field_name=True)
+  dict_expected = MessageToDict(expected, preserving_proto_field_name=True)
+
+  if ignore_repeated_fields_order:
+    test_case.assertEqual(_normalize(dict_actual), _normalize(dict_expected))
+  else:
+    test_case.assertEqual(dict_actual, dict_expected)
