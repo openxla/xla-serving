@@ -544,6 +544,39 @@ class ValidateSaveParamsTest(absltest.TestCase):
           ],
       )
 
+  def test_save_model_with_save_shlo_to_file(self):
+    """Tests that save() saves StableHLO to a separate file when requested."""
+    model = jax_model.JaxModel(
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=lambda params, inputs: {'out': inputs['x'] * params['w']},
+            jax_export_kwargs={'platforms': ['cpu']},
+        ),
+        params={'w': jnp.array([2.0], dtype=jnp.float32)},
+    )
+    cfg = serving_config.ServingConfig(
+        serving_signature='serving_default',
+        input_signature={
+            'x': jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.float32)
+        },
+    )
+    export_path = self.create_tempdir().full_path
+    main_lib.save(
+        model,
+        export_path=export_path,
+        serving_configs=[cfg],
+        save_shlo_to_file=True,
+    )
+
+    manifest_proto = persistence_lib.load(export_path)
+    fn = manifest_proto.objects['serving_default'].function
+    self.assertTrue(
+        fn.body.stable_hlo_body.stable_hlo.HasField('file_system_location')
+    )
+    shlo_file = (
+        fn.body.stable_hlo_body.stable_hlo.file_system_location.string_path
+    )
+    self.assertTrue(pathlib.Path(export_path, shlo_file).is_file())
+
 
 if __name__ == '__main__':
   absltest.main()

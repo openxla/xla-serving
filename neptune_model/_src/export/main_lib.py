@@ -460,6 +460,7 @@ def save(
     serving_configs: Sequence[serving_config.ServingConfig] = (),
     *,
     warmup_examples: Mapping[str, Sequence[Any]] | None = None,
+    save_shlo_to_file: bool = False,
 ) -> None:
   """Saves model(s) to neptune model format.
 
@@ -470,6 +471,8 @@ def save(
     warmup_examples: Optional mapping of serving signatures to a sequence of
       warmup examples. Each example is a dictionary mapping input names to
       tensors, NumPy arrays, or any object convertible to a NumPy array.
+    save_shlo_to_file: Optional. If true, save the SHLO in a separate file
+      instead of inlining it in the manifest.pb.
   """
   if not isinstance(models, Sequence):
     models = [models]
@@ -554,6 +557,7 @@ def save(
   save_options = persistence_lib.SaveOptions(
       version=2,
       supplementals=supplementals,
+      save_shlo_to_file=save_shlo_to_file,
   )
 
   persistence_lib.save(
