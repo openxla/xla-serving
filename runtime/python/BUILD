@@ -20,7 +20,6 @@ package(default_visibility = [
 cc_library(
     name = "model_runner_linkopts",
     linkopts = [
-        "-Wl,--icf=all",
         "-Wl,--gc-sections",
     ],
 )
