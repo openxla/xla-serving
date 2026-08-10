@@ -864,6 +864,9 @@ TEST(CompositeProcessorTest, IOStructureSerializeDeserialize) {
   GraphIOStructureProto io_structure;
   io_structure.mutable_input_structure()->mutable_leaf_value()->add_shape(42);
   io_structure.mutable_output_structure()->mutable_leaf_value()->add_shape(43);
+  io_structure.mutable_captured_structure()
+      ->mutable_leaf_value()
+      ->add_shape(44);
   graph.SetIOStructure(io_structure);
 
   ASSERT_OK_AND_ASSIGN(CompositeProcessor processor,
@@ -878,6 +881,7 @@ TEST(CompositeProcessorTest, IOStructureSerializeDeserialize) {
       deserialized_processor.graph().io_structure();
   EXPECT_EQ(deserialized_io.input_structure().leaf_value().shape(0), 42);
   EXPECT_EQ(deserialized_io.output_structure().leaf_value().shape(0), 43);
+  EXPECT_EQ(deserialized_io.captured_structure().leaf_value().shape(0), 44);
 }
 
 }  // namespace

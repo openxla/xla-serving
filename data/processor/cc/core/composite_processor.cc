@@ -117,7 +117,8 @@ absl::StatusOr<CompositeProcessorConfig> CompositeProcessor::ToProto() const {
   config.mutable_metadata()->set_version(kCompositeProcessorConfigVersion);
 
   if (graph_.io_structure().has_input_structure() ||
-      graph_.io_structure().has_output_structure()) {
+      graph_.io_structure().has_output_structure() ||
+      graph_.io_structure().has_captured_structure()) {
     *config.mutable_io_structure() = graph_.io_structure();
   }
 

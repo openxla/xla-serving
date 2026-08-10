@@ -56,6 +56,7 @@ message PyTreeProto {
 message GraphIOStructureProto {
   PyTreeProto input_structure = 1;
   PyTreeProto output_structure = 2;
+  PyTreeProto captured_structure = 3;
 }
 
 message CompositeProcessorMetadata {
