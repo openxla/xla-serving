@@ -62,6 +62,10 @@ absl::StatusOr<std::vector<Asset>> SerializeCpuEmbedding(
     table_file.write(reinterpret_cast<const char*>(span.data()),
                      span.size() * sizeof(float));
     table_file.close();
+    if (!table_file) {
+      return absl::InternalError(
+          absl::StrCat("Failed to write table file: ", table_path));
+    }
     assets.push_back(Asset{.name = name, .path = table_path});
   }
 
