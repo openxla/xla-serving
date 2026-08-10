@@ -98,10 +98,14 @@ class PipelineNode:
   Attributes:
     processor: The processor to execute.
     role: The role of the component in the pipeline.
+    input_keys: The keys of the input dict that the function expects.
+    output_keys: The keys of the output dict that the function produces.
   """
 
   processor: processor.Processor
   role: orchestration_pb2.Role
+  input_keys: Sequence[str] = dataclasses.field(default_factory=list)
+  output_keys: Sequence[str] = dataclasses.field(default_factory=list)
 
 
 def _build_orchestration_pipeline_nodes(
@@ -110,10 +114,10 @@ def _build_orchestration_pipeline_nodes(
     orchestration: serving_config.Orchestration,
 ) -> Sequence[PipelineNode]:
   """Builds pipeline nodes based on orchestration."""
-  # TODO: Add support for graph based orchestration.
+  ordered_model_calls = orchestration.ordered_model_calls
 
   pipeline_nodes = []
-  for model_call in orchestration.model_calls:
+  for model_call in ordered_model_calls:
     for m in models:
       if hasattr(m, 'name') and m.name == model_call.model_name:
         model = m
@@ -160,6 +164,8 @@ def _build_orchestration_pipeline_nodes(
         PipelineNode(
             processor=processor_inst,
             role=model_call.role,
+            input_keys=model_call.input_keys,
+            output_keys=model_call.output_keys,
         )
     )
 
@@ -222,6 +228,7 @@ def _update_save_bundle_with_pipeline_node(
     pipeline_node: PipelineNode,
     input_signature: jaxtyping.PyTree,
     save_bundle: NeptuneModelSaveBundle,
+    is_graph_based: bool = False,
 ) -> tuple[jaxtyping.PyTree, jaxtyping.PyTree]:
   """Processes the pipeline node.
 
@@ -230,6 +237,7 @@ def _update_save_bundle_with_pipeline_node(
     pipeline_node: The pipeline node to process.
     input_signature: The input signature of the pipeline node.
     save_bundle: The NeptuneModelSaveBundle to update.
+    is_graph_based: Whether the pipeline is graph based.
 
   Returns:
     A tuple (input_signature, output_signature), where
@@ -258,12 +266,27 @@ def _update_save_bundle_with_pipeline_node(
         prepared_processor.prepared_function
     )
 
+  component = orchestration_pb2.Component(
+      function_name=prepared_processor.name,
+      role=pipeline_node.role,
+      weights_name=prepared_processor.weights_name,
+  )
+  if is_graph_based:
+    shlo_input_sig = jax2npt_utils.to_shlo_tensor_spec(
+        prepared_processor.input_signature
+    )
+    shlo_output_sig = jax2npt_utils.to_shlo_tensor_spec(
+        prepared_processor.output_signature
+    )
+    component.named_signature.CopyFrom(
+        orchestration_proto_utils.to_named_signature_proto(
+            shlo_input_sig,
+            shlo_output_sig,
+        )
+    )
+
   save_bundle.pipelines.name_to_pipeline[serving_signature].components.append(
-      orchestration_pb2.Component(
-          function_name=prepared_processor.name,
-          role=pipeline_node.role,
-          weights_name=prepared_processor.weights_name,
-      )
+      component
   )
 
   return (
@@ -285,22 +308,63 @@ def _update_save_bundle(
     save_bundle: The NeptuneModelSaveBundle to update.
   """
 
+  is_graph_based = bool(cfg.orchestration and cfg.orchestration.graph_based)
   pipeline_input_signature: jaxtyping.PyTree | None = None
   pipeline_output_signature: jaxtyping.PyTree | None = None
-  input_signature: jaxtyping.PyTree = cfg.input_signature
 
-  for node in pipeline_nodes:
-    node_input_signature, node_output_signature = (
-        _update_save_bundle_with_pipeline_node(
-            cfg.serving_signature,
-            node,
-            input_signature,
-            save_bundle,
+  if is_graph_based:
+    assert isinstance(cfg.input_signature, Mapping)
+    available_tensor_specs = dict(cfg.input_signature)
+    pipeline_input_signature = cfg.input_signature
+
+    for node in pipeline_nodes:
+      for k in node.input_keys:
+        if k not in available_tensor_specs:
+          node_name = getattr(node.processor, 'name', str(node.processor))
+          raise ValueError(
+              f'Input key {k!r} for node {node_name!r}'
+              ' not found in available tensor specs:'
+              f' {list(available_tensor_specs.keys())}'
+          )
+      node_input_signature = {
+          k: available_tensor_specs[k] for k in node.input_keys
+      }
+
+      _, node_output_signature = _update_save_bundle_with_pipeline_node(
+          cfg.serving_signature,
+          node,
+          node_input_signature,
+          save_bundle,
+          is_graph_based=True,
+      )
+      if isinstance(node_output_signature, Mapping):
+        available_tensor_specs.update(node_output_signature)
+      elif node.output_keys and len(node.output_keys) == 1:
+        available_tensor_specs[node.output_keys[0]] = node_output_signature
+      else:
+        node_name = getattr(node.processor, 'name', str(node.processor))
+        raise ValueError(
+            f'Output signature of node {node_name!r} must be a Mapping in'
+            f' graph-based orchestration. Got: {type(node_output_signature)}'
         )
-    )
-    pipeline_input_signature = pipeline_input_signature or node_input_signature
-    pipeline_output_signature = node_output_signature
-    input_signature = node_output_signature
+      pipeline_output_signature = node_output_signature
+  else:
+    input_signature: jaxtyping.PyTree = cfg.input_signature
+    for node in pipeline_nodes:
+      node_input_signature, node_output_signature = (
+          _update_save_bundle_with_pipeline_node(
+              cfg.serving_signature,
+              node,
+              input_signature,
+              save_bundle,
+              is_graph_based=False,
+          )
+      )
+      pipeline_input_signature = (
+          pipeline_input_signature or node_input_signature
+      )
+      pipeline_output_signature = node_output_signature
+      input_signature = node_output_signature
 
   shlo_input_signature = jax2npt_utils.to_shlo_tensor_spec(
       pipeline_input_signature
@@ -310,6 +374,7 @@ def _update_save_bundle(
   )
 
   pipeline_proto = save_bundle.pipelines.name_to_pipeline[cfg.serving_signature]
+  pipeline_proto.keyword_arguments_based = is_graph_based
 
   pipeline_proto.signature.CopyFrom(
       type_proto_utils.to_function_signature_proto(

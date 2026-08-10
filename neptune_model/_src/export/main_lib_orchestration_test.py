@@ -389,6 +389,165 @@ class MainLibOrchestrationTest(test_utils.NptTestCase):
         pipeline.metadata_for_batching.ragged_inputs[0].row_splits_index, 2
     )
 
+  def test_save_model_with_graph_based_orchestration(self):
+    """Tests saving models with graph-based orchestration.
+
+    The orchestration structure (Variables <-> Functions):
+      Variables                     Functions
+      --------------------------------------------------
+      [x, y]           -----------> (TF Preprocessor)
+                                    |
+        [numeric_data] <------------+
+        |   [bias_data] <-----------+
+        |   |
+        +---|---------------------> (JAX Model)
+            |                       |
+            |   [model_output] <----+
+            |   |
+            +---+-----------------> (TF Postprocessor)
+                                    |
+                [post_output] <-----+
+    """
+
+    @tf.function
+    def pre_fn(inputs):
+      return {
+          'numeric_data': inputs['x'] + 1.0,
+          'bias_data': inputs['y'] * 2.0,
+      }
+
+    @tf.function
+    def post_fn(inputs):
+      return {
+          'post_output': inputs['bias_data'] + inputs['model_output'],
+      }
+
+    def model_fn(params, inputs):
+      return {'model_output': inputs['numeric_data'] * params['w']}
+
+    tf_proc_model = tensorflow_model.TensorflowModel(
+        name='tf_model',
+        tf_functions={
+            'preprocessing': pre_fn,
+            'postprocessing': post_fn,
+        },
+    )
+    model = jax_model.JaxModel(
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=model_fn,
+            input_polymorphic_shapes={'numeric_data': 'b, 2'},
+            jax_export_kwargs={'platforms': ['cpu']},
+        ),
+        params={'w': jnp.array(5.0, dtype=jnp.float32)},
+        name='jax_model',
+    )
+
+    # Supply model calls in reverse topological order to test automatic sorting
+    cfg = serving_config.ServingConfig(
+        serving_signature='graph_pipeline',
+        input_signature={
+            'x': tf.TensorSpec(shape=(1, 2), dtype=tf.float32, name='x'),
+            'y': tf.TensorSpec(shape=(1, 2), dtype=tf.float32, name='y'),
+        },
+        orchestration=serving_config.Orchestration(
+            model_calls=[
+                serving_config.ModelCall(
+                    model_name='tf_model',
+                    method_key='postprocessing',
+                    input_keys=['model_output', 'bias_data'],
+                    output_keys=['post_output'],
+                    role=orchestration_pb2.ROLE_POSTPROCESSOR,
+                ),
+                serving_config.ModelCall(
+                    model_name='jax_model',
+                    method_key='serving_default',
+                    input_keys=['numeric_data'],
+                    output_keys=['model_output'],
+                    role=orchestration_pb2.ROLE_MODEL,
+                ),
+                serving_config.ModelCall(
+                    model_name='tf_model',
+                    method_key='preprocessing',
+                    input_keys=['x', 'y'],
+                    output_keys=['numeric_data', 'bias_data'],
+                    role=orchestration_pb2.ROLE_PREPROCESSOR,
+                ),
+            ],
+            graph_based=True,
+        ),
+    )
+
+    export_path = pathlib.Path(self.create_tempdir().full_path)
+    main_lib.save(
+        models=[tf_proc_model, model],
+        export_path=str(export_path),
+        serving_configs=[cfg],
+    )
+
+    with open(export_path / 'orchestration.pb', 'rb') as f:
+      pipelines_proto = orchestration_pb2.Pipelines.FromString(f.read())
+
+    pipeline = pipelines_proto.name_to_pipeline['graph_pipeline']
+    self.assertTrue(pipeline.keyword_arguments_based)
+    self.assertLen(pipeline.components, 3)
+
+    # Verify topological order
+    self.assertEqual(
+        pipeline.components[0].function_name,
+        'graph_pipeline_tf_model_preprocessing',
+    )
+    self.assertEqual(
+        pipeline.components[0].role,
+        orchestration_pb2.ROLE_PREPROCESSOR,
+    )
+
+    self.assertEqual(
+        pipeline.components[1].function_name,
+        'graph_pipeline_jax_model_serving_default',
+    )
+    self.assertEqual(
+        pipeline.components[1].role,
+        orchestration_pb2.ROLE_MODEL,
+    )
+
+    self.assertEqual(
+        pipeline.components[2].function_name,
+        'graph_pipeline_tf_model_postprocessing',
+    )
+    self.assertEqual(
+        pipeline.components[2].role,
+        orchestration_pb2.ROLE_POSTPROCESSOR,
+    )
+
+    # Verify component named signatures
+    pre_sig = pipeline.components[0].named_signature
+    pre_inputs = [t.name for t in pre_sig.inputs.named_tensor_types]
+    pre_outputs = [t.name for t in pre_sig.outputs.named_tensor_types]
+    self.assertCountEqual(pre_inputs, ['x', 'y'])
+    self.assertCountEqual(pre_outputs, ['numeric_data', 'bias_data'])
+
+    jax_sig = pipeline.components[1].named_signature
+    jax_inputs = [t.name for t in jax_sig.inputs.named_tensor_types]
+    jax_outputs = [t.name for t in jax_sig.outputs.named_tensor_types]
+    self.assertEqual(jax_inputs, ['numeric_data'])
+    self.assertEqual(jax_outputs, ['model_output'])
+
+    post_sig = pipeline.components[2].named_signature
+    post_inputs = [t.name for t in post_sig.inputs.named_tensor_types]
+    post_outputs = [t.name for t in post_sig.outputs.named_tensor_types]
+    self.assertCountEqual(post_inputs, ['model_output', 'bias_data'])
+    self.assertEqual(post_outputs, ['post_output'])
+
+    # Verify pipeline level signature
+    pipeline_inputs = [
+        t.name for t in pipeline.named_signature.inputs.named_tensor_types
+    ]
+    pipeline_outputs = [
+        t.name for t in pipeline.named_signature.outputs.named_tensor_types
+    ]
+    self.assertCountEqual(pipeline_inputs, ['x', 'y'])
+    self.assertEqual(pipeline_outputs, ['post_output'])
+
 
 if __name__ == '__main__':
   absltest.main()

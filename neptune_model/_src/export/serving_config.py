@@ -14,7 +14,8 @@
 
 """Serving configuration for JAX models."""
 
-from collections.abc import Sequence
+import collections
+from collections.abc import Mapping, Sequence
 import dataclasses
 import itertools
 
@@ -49,6 +50,81 @@ class ModelCall:
   role: orchestration_pb2.Role | None = orchestration_pb2.ROLE_MODEL
 
 
+def topological_sort(
+    model_calls: Sequence[ModelCall],
+) -> Sequence[ModelCall]:
+  """Topologically sorts model calls based on input and output key dependencies.
+
+  Args:
+    model_calls: The sequence of ModelCall objects to sort.
+
+  Returns:
+    A sequence of ModelCall objects in topological execution order.
+
+  Raises:
+    ValueError: If any ModelCall is missing input_keys or output_keys.
+    ValueError: If an output key is produced by multiple ModelCalls.
+    ValueError: If there is a cycle in the dependency graph.
+  """
+  for call in model_calls:
+    if not call.input_keys:
+      raise ValueError(
+          f"ModelCall for model {call.model_name!r} and method"
+          f" {call.method_key!r} must have `input_keys` set when"
+          " `graph_based` is True."
+      )
+    if not call.output_keys:
+      raise ValueError(
+          f"ModelCall for model {call.model_name!r} and method"
+          f" {call.method_key!r} must have `output_keys` set when"
+          " `graph_based` is True."
+      )
+
+  output_name_to_producer_indices = collections.defaultdict(list)
+  for i, call in enumerate(model_calls):
+    for name in call.output_keys:
+      output_name_to_producer_indices[name].append(i)
+
+  for name, indices in output_name_to_producer_indices.items():
+    if len(indices) > 1:
+      producers = [
+          f"ModelCall(model_name={model_calls[i].model_name!r},"
+          f" method_key={model_calls[i].method_key!r})"
+          for i in indices
+      ]
+      raise ValueError(
+          f"Output key '{name}' is produced by multiple model calls:"
+          f" {producers}"
+      )
+
+  adj = collections.defaultdict(list)
+  in_degree = collections.defaultdict(int)
+  for i, call in enumerate(model_calls):
+    for name in call.input_keys:
+      if name in output_name_to_producer_indices:
+        for producer_idx in output_name_to_producer_indices[name]:
+          adj[producer_idx].append(i)
+          in_degree[i] += 1
+
+  queue = collections.deque(
+      [i for i in range(len(model_calls)) if in_degree[i] == 0]
+  )
+  sorted_calls: list[ModelCall] = []
+
+  while queue:
+    node_idx = queue.popleft()
+    sorted_calls.append(model_calls[node_idx])
+    for neighbor_idx in adj[node_idx]:
+      in_degree[neighbor_idx] -= 1
+      if in_degree[neighbor_idx] == 0:
+        queue.append(neighbor_idx)
+
+  if len(sorted_calls) != len(model_calls):
+    raise ValueError("Dependency graph has a cycle.")
+
+  return sorted_calls
+
+
 @dataclasses.dataclass(frozen=True)
 class Orchestration:
   """Defines an ordered or dependency-driven workflow of model invocations.
@@ -61,6 +137,28 @@ class Orchestration:
 
   model_calls: Sequence[ModelCall]
   graph_based: bool = False
+  _ordered_model_calls: Sequence[ModelCall] = dataclasses.field(
+      init=False, repr=False, compare=False
+  )
+
+  def __post_init__(self):
+    """Validates the orchestration configuration and caches execution order."""
+    if self.graph_based:
+      object.__setattr__(
+          self, "_ordered_model_calls", topological_sort(self.model_calls)
+      )
+    else:
+      object.__setattr__(self, "_ordered_model_calls", self.model_calls)
+
+  @property
+  def ordered_model_calls(self) -> Sequence[ModelCall]:
+    """Returns model calls in execution order.
+
+    If `graph_based` is True, returns model calls sorted topologically
+    based on data dependencies (input_keys and output_keys). Otherwise,
+    returns `model_calls` in sequential order.
+    """
+    return self._ordered_model_calls
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -86,7 +184,17 @@ class ServingConfig:
 
   def __post_init__(self):
     # TODO (b/534785167): Update batch config validation logic.
-    """Validates the batch options."""
+    """Validates the batch options and orchestration."""
+    if self.orchestration is not None and self.orchestration.graph_based:
+      if (
+          not isinstance(self.input_signature, Mapping)
+          or not self.input_signature
+      ):
+        raise ValueError(
+            "When `graph_based` is True, `input_signature` must be a Mapping"
+            " of input names to tensor specs and cannot be empty. Got:"
+            f" {self.input_signature}"
+        )
 
     if self.batch_options is None or self.batch_options.batch_component in (
         orchestration_pb2.BatchOptions.BATCH_COMPONENT_UNSPECIFIED,
