@@ -10,6 +10,7 @@ cc_library(
     name = "asset",
     srcs = ["asset.cc"],
     hdrs = ["asset.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         "@abseil-cpp//absl/status",
         "@xla//xla/tsl/platform:env",
@@ -19,7 +20,10 @@ cc_library(
 cc_test(
     name = "asset_test",
     srcs = ["asset_test.cc"],
-    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    defines = [
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS",
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS",
+    ],
     deps = [
         ":asset",
         "@abseil-cpp//absl/status",
@@ -35,6 +39,7 @@ cc_library(
     name = "asset_manager",
     srcs = ["asset_manager.cc"],
     hdrs = ["asset_manager.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         ":asset",
         "@abseil-cpp//absl/base:core_headers",
@@ -51,7 +56,10 @@ cc_library(
 cc_test(
     name = "asset_manager_test",
     srcs = ["asset_manager_test.cc"],
-    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    defines = [
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS",
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS",
+    ],
     deps = [
         ":asset",
         ":asset_manager",
@@ -69,6 +77,7 @@ cc_library(
         "resource.h",
         "resource_internal.h",
     ],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         ":asset",
         "@abseil-cpp//absl/base:core_headers",
@@ -89,7 +98,10 @@ cc_library(
 cc_test(
     name = "resource_test",
     srcs = ["resource_test.cc"],
-    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    defines = [
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS",
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS",
+    ],
     deps = [
         ":asset",
         ":resource",
@@ -104,6 +116,7 @@ cc_library(
     name = "resource_manager",
     srcs = ["resource_manager.cc"],
     hdrs = ["resource_manager.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         ":asset",
         ":resource",
@@ -123,7 +136,10 @@ cc_library(
 cc_test(
     name = "resource_manager_test",
     srcs = ["resource_manager_test.cc"],
-    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    defines = [
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS",
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS",
+    ],
     deps = [
         ":asset",
         ":resource",

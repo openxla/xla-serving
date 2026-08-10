@@ -7,6 +7,7 @@ package(default_visibility = ["@neptune//data:processor_internal"])
 cc_library(
     name = "execution_graph",
     hdrs = ["execution_graph.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
@@ -21,7 +22,10 @@ cc_library(
 cc_test(
     name = "execution_graph_test",
     srcs = ["execution_graph_test.cc"],
-    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    defines = [
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS",
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS",
+    ],
     deps = [
         ":execution_graph",
         "@abseil-cpp//absl/status",
@@ -41,6 +45,7 @@ cc_library(
     name = "graph_validator",
     srcs = ["graph_validator.cc"],
     hdrs = ["graph_validator.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         ":execution_graph",
         "@abseil-cpp//absl/status",
@@ -52,7 +57,10 @@ cc_library(
 cc_test(
     name = "graph_validator_test",
     srcs = ["graph_validator_test.cc"],
-    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    defines = [
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS",
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS",
+    ],
     deps = [
         ":execution_graph",
         ":graph_validator",
@@ -70,6 +78,7 @@ cc_library(
     name = "graph_executor",
     srcs = ["graph_executor.cc"],
     hdrs = ["graph_executor.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         ":execution_graph",
         "@abseil-cpp//absl/container:inlined_vector",
@@ -87,7 +96,10 @@ cc_library(
 cc_test(
     name = "graph_executor_test",
     srcs = ["graph_executor_test.cc"],
-    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    defines = [
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS",
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS",
+    ],
     deps = [
         ":execution_graph",
         ":graph_executor",

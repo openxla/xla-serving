@@ -10,6 +10,7 @@ package(default_visibility = ["@neptune//data:neptune_data_internal"])
 cc_library(
     name = "buffer_utils",
     hdrs = ["buffer_utils.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = ["@eigen_archive//:eigen3"],
 )
 
@@ -32,6 +33,7 @@ cc_library(
     name = "default_value_utils",
     srcs = ["default_value_utils.cc"],
     hdrs = ["default_value_utils.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         ":default_value_cc_proto",
         "@abseil-cpp//absl/status",
@@ -46,7 +48,10 @@ cc_library(
 cc_test(
     name = "default_value_utils_test",
     srcs = ["default_value_utils_test.cc"],
-    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    defines = [
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS",
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS",
+    ],
     deps = [
         ":default_value_cc_proto",
         ":default_value_utils",

@@ -8,6 +8,7 @@ cc_library(
     name = "proto_matchers",
     testonly = True,
     hdrs = ["proto_matchers.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         "@abseil-cpp//absl/strings:string_view",
         "@com_google_protobuf//:differencer",
@@ -20,6 +21,7 @@ cc_library(
     name = "status_macros",
     testonly = True,
     hdrs = ["status_macros.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         "@googletest//:gtest",
     ],

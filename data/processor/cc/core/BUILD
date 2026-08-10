@@ -8,6 +8,7 @@ cc_library(
     name = "composite_processor",
     srcs = ["composite_processor.cc"],
     hdrs = ["composite_processor.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         ":transform",
         "@abseil-cpp//absl/base:nullability",
@@ -34,7 +35,10 @@ cc_library(
 cc_test(
     name = "composite_processor_test",
     srcs = ["composite_processor_test.cc"],
-    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    defines = [
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS",
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS",
+    ],
     deps = [
         ":composite_processor",
         ":transform",
@@ -83,6 +87,7 @@ cc_library(
         "transform.h",
         "transform_registry.h",
     ],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         "@abseil-cpp//absl/base:core_headers",
         "@abseil-cpp//absl/base:no_destructor",
@@ -111,7 +116,10 @@ cc_library(
 cc_test(
     name = "transform_registry_test",
     srcs = ["transform_registry_test.cc"],
-    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    defines = [
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS",
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS",
+    ],
     deps = [
         ":transform",
         "@abseil-cpp//absl/base:no_destructor",
@@ -138,6 +146,7 @@ cc_library(
     name = "type_converter_registry",
     srcs = ["type_converter_registry.cc"],
     hdrs = ["type_converter_registry.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         "@abseil-cpp//absl/base:core_headers",
         "@abseil-cpp//absl/base:no_destructor",
@@ -155,7 +164,10 @@ cc_library(
 cc_test(
     name = "type_converter_registry_test",
     srcs = ["type_converter_registry_test.cc"],
-    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    defines = [
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS",
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS",
+    ],
     deps = [
         ":type_converter_registry",
         "@abseil-cpp//absl/status",

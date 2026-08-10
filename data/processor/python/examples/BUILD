@@ -10,6 +10,7 @@ cc_library(
     testonly = 1,
     srcs = ["add_int_transform.cc"],
     hdrs = ["add_int_transform.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
@@ -42,6 +43,7 @@ cc_library(
     testonly = 1,
     srcs = ["add_host_buffer_transform.cc"],
     hdrs = ["add_host_buffer_transform.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
@@ -72,6 +74,7 @@ cc_library(
     testonly = 1,
     srcs = ["add_two_transform.cc"],
     hdrs = ["add_two_transform.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
@@ -102,6 +105,7 @@ cc_library(
     testonly = 1,
     srcs = ["multiply_by_five_transform.cc"],
     hdrs = ["multiply_by_five_transform.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
@@ -132,6 +136,7 @@ cc_library(
     testonly = 1,
     srcs = ["dummy_resource_transform.cc"],
     hdrs = ["dummy_resource_transform.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         "@abseil-cpp//absl/base:core_headers",
         "@abseil-cpp//absl/status",
@@ -164,6 +169,7 @@ cc_library(
     testonly = 1,
     srcs = ["suffix_transform.cc"],
     hdrs = ["suffix_transform.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
@@ -198,6 +204,7 @@ cc_library(
         "add_from_resource_transform.h",
         "int_resource.h",
     ],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         ":int_resource",
         "@abseil-cpp//absl/memory",
@@ -228,6 +235,7 @@ cc_library(
     testonly = 1,
     srcs = ["int_resource.cc"],
     hdrs = ["int_resource.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/strings",
@@ -251,6 +259,7 @@ cc_library(
     testonly = 1,
     srcs = ["make_dict_transform.cc"],
     hdrs = ["make_dict_transform.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",

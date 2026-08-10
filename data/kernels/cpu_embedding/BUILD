@@ -12,6 +12,7 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "safe_int_utils",
     hdrs = ["safe_int_utils.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
 )
 
 py_library(
@@ -35,6 +36,7 @@ cc_library(
     name = "cpu_embedding_resource",
     srcs = ["cpu_embedding_resource.cc"],
     hdrs = ["cpu_embedding_resource.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         ":cpu_embedding_cc_proto",
         ":safe_int_utils",
@@ -59,7 +61,10 @@ cc_library(
 cc_test(
     name = "cpu_embedding_resource_test",
     srcs = ["cpu_embedding_resource_test.cc"],
-    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    defines = [
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS",
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS",
+    ],
     deps = [
         ":cpu_embedding_cc_proto",
         ":cpu_embedding_resource",
@@ -93,6 +98,7 @@ cc_library(
     name = "cpu_embedding_lookup_transform",
     srcs = ["cpu_embedding_lookup_transform.cc"],
     hdrs = ["cpu_embedding_lookup_transform.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         ":cpu_embedding_cc_proto",
         ":cpu_embedding_resource",
@@ -118,7 +124,10 @@ cc_library(
 cc_test(
     name = "cpu_embedding_lookup_transform_test",
     srcs = ["cpu_embedding_lookup_transform_test.cc"],
-    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    defines = [
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS",
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS",
+    ],
     deps = [
         ":cpu_embedding_lookup_transform",
         ":cpu_embedding_resource",
@@ -168,6 +177,7 @@ cc_library(
     name = "cpu_embedding_serializer",
     srcs = ["cpu_embedding_serializer.cc"],
     hdrs = ["cpu_embedding_serializer.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         ":cpu_embedding_cc_proto",
         ":cpu_embedding_resource",

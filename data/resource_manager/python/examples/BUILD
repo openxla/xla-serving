@@ -10,6 +10,7 @@ package(default_visibility = [
 cc_library(
     name = "concrete_resource",
     hdrs = ["concrete_resource.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         "@abseil-cpp//absl/status",
         "@neptune//data/resource_manager/cc:resource",
@@ -29,6 +30,7 @@ cc_library(
     name = "another_concrete_resource",
     srcs = ["another_concrete_resource.cc"],
     hdrs = ["another_concrete_resource.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         "@abseil-cpp//absl/status",
         "@neptune//data/resource_manager/cc:resource",
