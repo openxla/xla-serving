@@ -20,6 +20,7 @@ import functools
 import math
 from typing import Any
 
+from flax import nnx
 import jax
 import jax.numpy as jnp
 import jaxtyping
@@ -29,18 +30,21 @@ from neptune_model._src.llm import config as llm_config
 from neptune_model._src.llm import model_wrapper
 
 
+tpu_inference_utils: Any = None
+attention_metadata: Any = None
+tpu_inference_kv_cache: Any = None
+
 try:
-  # pytype: disable=import-error
-  from tpu_inference import utils as tpu_inference_utils
-  from tpu_inference.layers.common import attention_metadata
-  from tpu_inference.runner import kv_cache as tpu_inference_kv_cache
-  # pytype: enable=import-error
+  from tpu_inference import utils as _tpu_inference_utils
+  from tpu_inference.layers.common import attention_metadata as _attention_metadata
+  from tpu_inference.runner import kv_cache as _tpu_inference_kv_cache
+
+  tpu_inference_utils = _tpu_inference_utils
+  attention_metadata = _attention_metadata
+  tpu_inference_kv_cache = _tpu_inference_kv_cache
   _TPU_INFERENCE_AVAILABLE = True
   _TPU_INFERENCE_IMPORT_ERROR = None
 except ImportError as e:
-  tpu_inference_utils = None
-  attention_metadata = None
-  tpu_inference_kv_cache = None
   _TPU_INFERENCE_AVAILABLE = False
   _TPU_INFERENCE_IMPORT_ERROR = e
 
@@ -159,6 +163,71 @@ def _require_tpu_inference():
     ) from _TPU_INFERENCE_IMPORT_ERROR
 
 
+def _sanitize_model_fn(tpu_runner: Any) -> Any:
+  """Extracts the model step function safe for outer JIT compilation.
+
+  Background:
+    JAX forbids `compiler_options` on inner `@jax.jit` functions when invoked
+    inside an outer `@jax.jit` or `jax.export.export` context (e.g. Neptune's
+    `generate_fn`), raising:
+      `ValueError: compiler_options can only be passed to top-level jax.jit.`
+
+  Resolution Strategy:
+    1. VLLM / TorchAX models: `tpu_inference` provides `step_fn_no_options` or
+       `step_fun_impl` on the underlying `VllmModelWrapper` (see
+       `tpu_inference/models/vllm/vllm_model_wrapper.py`).
+    2. Flax NNX models: In
+       `tpu_inference/models/common/model_loader.py:run_model`, the forward
+       step is defined as:
+         `state = jax.tree_util.tree_unflatten(treedef, state_leaves)`
+         `model = nnx.merge(graphdef, state)`
+         `return model(*args)`
+       decorated with `@jax.jit(compiler_options=...)`. We execute this exact
+       same forward pass directly without the nested `@jax.jit` decorator.
+    3. Fallback: Return `tpu_runner.model_fn`.
+
+  Args:
+    tpu_runner: Concrete TPUModelRunner instance.
+
+  Returns:
+    Step function safe for invocation within outer JIT contexts.
+  """
+  # 1. Check for un-optioned step function exposed by VLLM / TorchAX wrappers.
+  # Reference:
+  # tpu_inference/models/vllm/vllm_model_wrapper.py (step_fn_no_options)
+  inner_wrapper = getattr(tpu_runner, "model", None)
+  if inner_wrapper is not None:
+    unoptioned_step_fn = getattr(
+        inner_wrapper, "step_fun_impl", None
+    ) or getattr(inner_wrapper, "step_fn_no_options", None)
+    if unoptioned_step_fn is not None:
+      return unoptioned_step_fn
+
+  # 2. For Flax NNX models, execute the model forward pass directly.
+  # Reference: tpu_inference/models/common/model_loader.py (run_model)
+  # `run_model` in model_loader.py executes `nnx.merge(graphdef, state)(*args)`
+  # inside a `@jax.jit(compiler_options=...)`. To avoid the nested JIT error in
+  # Neptune, we perform the exact same unflatten + merge without the decorator.
+  if hasattr(tpu_runner, "model") and hasattr(tpu_runner, "state"):
+    try:
+      graphdef, _ = nnx.split(tpu_runner.model)
+      state_treedef = jax.tree_util.tree_structure(tpu_runner.state)
+
+      def direct_flax_forward(state_leaves, *args, **kwargs):
+        kwargs.pop("shared_attention_metadata", None)
+        kwargs.pop("spec_step_idx", None)
+        state = jax.tree_util.tree_unflatten(state_treedef, state_leaves)
+        model = nnx.merge(graphdef, state)
+        return model(*args, **kwargs)
+
+      return direct_flax_forward
+    except Exception:  # pylint: disable=broad-exception-caught
+      pass
+
+  # 3. Default fallback.
+  return tpu_runner.model_fn
+
+
 class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
   """Adapts a TPUModelRunner from tpu-inference to the Neptune LLM framework."""
 
@@ -181,6 +250,7 @@ class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
     super().__init__(generation_config=generation_config)
 
     self.tpu_runner = tpu_runner
+    self._model_fn = _sanitize_model_fn(tpu_runner)
     self.max_seq_len = (
         generation_config.max_prompt_length
         + generation_config.max_output_tokens
@@ -327,7 +397,7 @@ class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
     )
 
     state_leaves = jax.tree_util.tree_leaves(params)
-    model_outputs = self.tpu_runner.model_fn(
+    model_outputs = self._model_fn(
         state_leaves,
         kv_caches,
         input_ids.ravel(),
@@ -454,7 +524,7 @@ class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
     )
 
     state_leaves = jax.tree_util.tree_leaves(params)
-    model_step_outputs = self.tpu_runner.model_fn(
+    model_step_outputs = self._model_fn(
         state_leaves,
         kv_caches,
         token_ids.ravel(),

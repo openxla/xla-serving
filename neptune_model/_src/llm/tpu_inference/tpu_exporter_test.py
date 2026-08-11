@@ -15,12 +15,11 @@
 """Tests for Neptune LLM TPU Inference Export integration."""
 
 # pylint: disable=g-import-not-at-top
-# pytype: disable=attribute-error
 
 import dataclasses
 import os
+from typing import Any
 import unittest
-from unittest import mock
 
 from absl import logging
 from absl.testing import absltest  # pylint: disable=g-import-not-at-top
@@ -43,45 +42,36 @@ try:
 
   patchers.inject_wildcard_mocks()
   patchers.patch_metadata_versions()
+  patchers.apply_single_process_patches()
 except ImportError:
   pass
 
-try:
-  from tpu_inference.distributed import jax_parallel_state
-  from tpu_inference.runner import tpu_runner
-  from vllm.engine import arg_utils as vllm_arg_utils
-  from vllm.model_executor.models import qwen2 as configuration_qwen2
-  from vllm.model_executor.models import registry as vllm_registry
+jax_parallel_state: Any = None
+tpu_runner: Any = None
+vllm_arg_utils: Any = None
+configuration_qwen2: Any = None
 
+try:
+  from tpu_inference.distributed import jax_parallel_state as _jax_parallel_state
+  from tpu_inference.runner import tpu_runner as _tpu_runner
+  from vllm.engine import arg_utils as _vllm_arg_utils
+  from vllm.model_executor.models import qwen2 as _configuration_qwen2
+
+  jax_parallel_state = _jax_parallel_state
+  tpu_runner = _tpu_runner
+  vllm_arg_utils = _vllm_arg_utils
+  configuration_qwen2 = _configuration_qwen2
   _TPU_INFERENCE_TEST_AVAILABLE = True
   _TPU_INFERENCE_TEST_IMPORT_ERROR = None
 except ImportError as e:
-  jax_parallel_state = None
-  tpu_runner = None
-  vllm_arg_utils = None
-  configuration_qwen2 = None
-  vllm_registry = None
   _TPU_INFERENCE_TEST_AVAILABLE = False
   _TPU_INFERENCE_TEST_IMPORT_ERROR = e
-
-
-def _mock_inspect_model_cls(architectures, model_config=None):
-  archs = (
-      architectures
-      if isinstance(architectures, (list, tuple))
-      else [architectures]
-  )
-  model_cls, arch = vllm_registry.ModelRegistry.resolve_model_cls(
-      archs, model_config
-  )
-  return vllm_registry._ModelInfo.from_model_cls(model_cls), arch
 
 
 class ExporterTest(absltest.TestCase):
 
   # TODO: Make sure we initialize this only once for all tests.
   _distributed_initialized = False
-  _patchers = []
 
   @classmethod
   def setUpClass(cls):
@@ -104,26 +94,6 @@ class ExporterTest(absltest.TestCase):
           "text_config",
           property(lambda self: self),
       )
-
-    # In hermetic Bazel embedded Python test binaries, sys.executable is None,
-    # which causes vLLM's subprocess-based inspect_model_cls to fail.
-    # We resolve the model class directly and construct real _ModelInfo
-    # in-process.
-    cls._patchers = [
-        mock.patch.object(
-            vllm_registry.ModelRegistry,
-            "inspect_model_cls",
-            side_effect=_mock_inspect_model_cls,
-        ),
-    ]
-    for patcher in cls._patchers:
-      patcher.start()
-
-  @classmethod
-  def tearDownClass(cls):
-    for patcher in cls._patchers:
-      patcher.stop()
-    super().tearDownClass()
 
   def _create_runner(self, load_format: str = "jax_dummy"):
     model_dir = os.path.join(
@@ -202,7 +172,7 @@ class ExporterTest(absltest.TestCase):
       inputs_jax = {
           "input_ids": jnp.array(pre_processed["input_ids"].numpy()),
       }
-      with runner.mesh:  # pytype: disable=attribute-error
+      with runner.mesh:
         # The exporter automatically plumbs the pad_token_id, but for the manual
         # path we must manually inject it into the GenerationConfig before
         # compile.
@@ -281,7 +251,7 @@ class ExporterTest(absltest.TestCase):
       inputs_jax = {
           "input_ids": jnp.array(pre_processed["input_ids"].numpy()),
       }
-      with runner.mesh:  # pytype: disable=attribute-error
+      with runner.mesh:
         # The exporter automatically plumbs the pad_token_id, but for the manual
         # path we must manually inject it into the GenerationConfig before
         # compile.
@@ -360,7 +330,7 @@ class ExporterTest(absltest.TestCase):
       inputs_jax = {
           "input_ids": jnp.array(pre_processed["input_ids"].numpy()),
       }
-      with runner.mesh:  # pytype: disable=attribute-error
+      with runner.mesh:
         # The exporter automatically plumbs the pad_token_id, but for the manual
         # path we must manually inject it into the GenerationConfig before
         # compile.
