@@ -18,6 +18,7 @@
 #include "data/kernels/cpu_embedding/cpu_embedding.pb.h"  // from @neptune
 #include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @neptune
 #include "data/processor/cc/api/registry.h"  // from @neptune
+#include "data/processor/cc/api/transform_context.h"  // from @neptune
 #include "data/processor/cc/core/transform.h"  // from @neptune
 #include "data/processor/proto/transform_config.pb.h"  // from @neptune
 #include "data/resource_manager/cc/resource.h"  // from @neptune
@@ -32,17 +33,21 @@ namespace {}  // namespace
 CpuEmbeddingLookupTransform::CpuEmbeddingLookupTransform(
     std::shared_ptr<CpuEmbeddingEngineResource> resource,
     std::vector<std::string> feature_names,
-    std::vector<std::string> output_feature_names, bool dense_lookup)
+    std::vector<std::string> output_feature_names, bool dense_lookup,
+    int64_t embedding_dim, std::vector<std::vector<int64_t>> output_shapes)
     : resource_(std::move(resource)),
       feature_names_(std::move(feature_names)),
       output_feature_names_(std::move(output_feature_names)),
-      dense_lookup_(dense_lookup) {}
+      dense_lookup_(dense_lookup),
+      embedding_dim_(embedding_dim),
+      output_shapes_(std::move(output_shapes)) {}
 
 absl::StatusOr<std::unique_ptr<CpuEmbeddingLookupTransform>>
 CpuEmbeddingLookupTransform::Create(
     std::shared_ptr<CpuEmbeddingEngineResource> resource,
     std::vector<std::string> feature_names, bool dense_lookup,
-    std::vector<std::string> output_feature_names) {
+    std::vector<std::string> output_feature_names, int64_t embedding_dim,
+    std::vector<std::vector<int64_t>> output_shapes) {
   if (resource == nullptr) {
     return absl::InvalidArgumentError(
         "CpuEmbeddingLookupTransform requires a non-null resource.");
@@ -50,6 +55,12 @@ CpuEmbeddingLookupTransform::Create(
   if (feature_names.empty()) {
     return absl::InvalidArgumentError(
         "CpuEmbeddingLookupTransform requires at least one feature name.");
+  }
+  if (!output_feature_names.empty() &&
+      output_feature_names.size() != feature_names.size()) {
+    return absl::InvalidArgumentError(
+        "CpuEmbeddingLookupTransform output_feature_names size must match "
+        "feature_names size if provided.");
   }
   absl::flat_hash_set<absl::string_view> unique_features;
   unique_features.reserve(feature_names.size());
@@ -86,7 +97,8 @@ CpuEmbeddingLookupTransform::Create(
   return std::unique_ptr<CpuEmbeddingLookupTransform>(
       new CpuEmbeddingLookupTransform(
           std::move(resource), std::move(feature_names),
-          std::move(output_feature_names), dense_lookup));
+          std::move(output_feature_names), dense_lookup, embedding_dim,
+          std::move(output_shapes)));
 }
 
 std::vector<std::shared_ptr<neptune::data::Resource>>
@@ -318,6 +330,47 @@ CpuEmbeddingLookupTransform::operator()(
   }
 
   return outputs;
+}
+
+absl::Status CpuEmbeddingLookupTransform::PropagateSignatureImpl(
+    api::ShapeInferenceContext& context) const {
+  if (context.inputs.empty() || !context.inputs[0].IsSpecList()) {
+    return absl::InvalidArgumentError(
+        "CpuEmbeddingLookupTransform expected a list of tensors as input for "
+        "IDs.");
+  }
+  const auto& ids_specs = context.inputs[0].spec_list();
+  std::vector<api::HostBufferSpec> output_specs;
+  output_specs.reserve(feature_names_.size());
+
+  constexpr int64_t kDynamicDimension = -1;
+  for (size_t i = 0; i < feature_names_.size(); ++i) {
+    std::vector<int64_t> output_dims;
+
+    if (i < output_shapes_.size() && !output_shapes_[i].empty()) {
+      for (int64_t d : output_shapes_[i]) {
+        output_dims.push_back(d < 0 ? kDynamicDimension : d);
+      }
+    } else {
+      int64_t embedding_dim = embedding_dim_;
+      output_dims.push_back(kDynamicDimension);
+
+      if (i < ids_specs.size()) {
+        absl::Span<const int64_t> id_dims = ids_specs[i].shape.dims();
+        if (id_dims.size() == 3 || (id_dims.size() == 2 && !dense_lookup_)) {
+          output_dims.push_back(id_dims[1]);
+        }
+      }
+      output_dims.push_back(embedding_dim);
+    }
+
+    output_specs.push_back(api::HostBufferSpec(
+        xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+        xla::ifrt::Shape(absl::MakeConstSpan(output_dims))));
+  }
+
+  context.outputs.push_back(api::ShapeInferenceValue(std::move(output_specs)));
+  return absl::OkStatus();
 }
 
 absl::StatusOr<TransformConfig> CpuEmbeddingLookupTransform::ToProto() const {

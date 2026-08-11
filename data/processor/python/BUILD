@@ -6,6 +6,11 @@ package(default_visibility = [
     "@neptune//:__subpackages__",
 ])
 
+py_library(
+    name = "transform",
+    srcs = ["transform.py"],
+)
+
 pybind_extension(
     name = "composite_processor_pybind",
     srcs = ["composite_processor_pybind.cc"],

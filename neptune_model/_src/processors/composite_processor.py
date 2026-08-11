@@ -34,6 +34,98 @@ from neptune_model._src.core import unstructured_data
 from neptune_model._src.processors import processor
 from neptune_model.protos import manifest_pb2
 
+
+def _tree_to_proto(tree: Any) -> transform_config_pb2.PyTreeProto:
+  proto = transform_config_pb2.PyTreeProto()
+  if tree is None:
+    proto.type = transform_config_pb2.PyTreeProto.NONE
+  elif isinstance(tree, dict):
+    proto.type = transform_config_pb2.PyTreeProto.DICT
+    for k, v in sorted(tree.items()):
+      proto.dict_keys.append(k)
+      proto.children.append(_tree_to_proto(v))
+  elif isinstance(tree, list):
+    proto.type = transform_config_pb2.PyTreeProto.LIST
+    for v in tree:
+      proto.children.append(_tree_to_proto(v))
+  elif isinstance(tree, tuple):
+    proto.type = transform_config_pb2.PyTreeProto.TUPLE
+    for v in tree:
+      proto.children.append(_tree_to_proto(v))
+  else:
+    proto.type = transform_config_pb2.PyTreeProto.LEAF
+    proto.leaf_value.shape.extend(tree.shape)
+    proto.leaf_value.dtype = (
+        str(tree.dtype.name)
+        if getattr(tree, "dtype", None)
+        else str(tree.dtype)
+    )
+  return proto
+
+
+def _proto_to_tree(proto: transform_config_pb2.PyTreeProto) -> Any:
+  if proto.type == transform_config_pb2.PyTreeProto.NONE:
+    return None
+  elif proto.type == transform_config_pb2.PyTreeProto.DICT:
+    return {
+        k: _proto_to_tree(c) for k, c in zip(proto.dict_keys, proto.children)
+    }
+  elif proto.type == transform_config_pb2.PyTreeProto.LIST:
+    return [_proto_to_tree(c) for c in proto.children]
+  elif proto.type == transform_config_pb2.PyTreeProto.TUPLE:
+    return tuple([_proto_to_tree(c) for c in proto.children])
+  elif proto.type == transform_config_pb2.PyTreeProto.LEAF:
+    return jax.ShapeDtypeStruct(
+        shape=tuple(proto.leaf_value.shape), dtype=proto.leaf_value.dtype
+    )
+  else:
+    raise ValueError(f"Unknown node type: {proto.type}")
+
+
+def _propagate_pybind_signature(
+    composite_processor: composite_processor_pybind.CompositeProcessor,
+    output_structure_proto: transform_config_pb2.PyTreeProto,
+    input_signature: jaxtyping.PyTree,
+) -> jaxtyping.PyTree:
+  flat_inputs, _ = jax.tree_util.tree_flatten(input_signature)
+  pybind_inputs = []
+  for leaf in flat_inputs:
+    if isinstance(leaf, (list, tuple)):
+      specs = [
+          composite_processor_pybind.HostBufferSpec(
+              item.dtype, list(item.shape)
+          )
+          for item in leaf
+      ]
+      pybind_inputs.append(
+          composite_processor_pybind.ShapeInferenceValue(specs)
+      )
+    else:
+      spec = composite_processor_pybind.HostBufferSpec(
+          leaf.dtype, list(leaf.shape)
+      )
+      pybind_inputs.append(composite_processor_pybind.ShapeInferenceValue(spec))
+
+  context = composite_processor_pybind.ShapeInferenceContext()
+  context.inputs = pybind_inputs
+  composite_processor.propagate_signature(context)
+
+  def _to_shape_dtype_struct(val):
+    if val.is_spec_list():
+      return [
+          jax.ShapeDtypeStruct(shape=spec.shape, dtype=spec.dtype)
+          for spec in val.spec_list()
+      ]
+    else:
+      spec = val.spec()
+      return jax.ShapeDtypeStruct(shape=spec.shape, dtype=spec.dtype)
+
+  flat_outputs = [_to_shape_dtype_struct(val) for val in context.outputs]
+  output_structure = _proto_to_tree(output_structure_proto)
+  _, output_treedef = jax.tree_util.tree_flatten(output_structure)
+  return jax.tree_util.tree_unflatten(output_treedef, flat_outputs)
+
+
 # //neptune/runtime/neptune_data/composite_processor_function_handler.h
 COMPOSITE_PROCESSOR_MIME_TYPE = (
     "application/protobuf; type=neptune.data.composite.CompositeProcessorConfig"
@@ -132,6 +224,7 @@ class CompositeProcessor:
     composite_processor = composite_processor_pybind.CompositeProcessor.create(
         graph
     )
+    self._composite_processor = composite_processor
     self._processor_config = composite_processor.to_proto()
     self._asset_map = assets2npt.AssetMap(self._name)
     for asset_path in asset_paths:
@@ -172,6 +265,30 @@ class CompositeProcessor:
               self._asset_map.assets[asset.path],
           )
 
+  @classmethod
+  def from_graph(
+      cls,
+      name: str,
+      graph: composite_processor_pybind.ExecutionGraph,
+      assets: dict[str, str],
+  ) -> "CompositeProcessor":
+    """Constructs a CompositeProcessor from an ExecutionGraph."""
+    instance = cls.__new__(cls)
+    instance._name = name
+    instance._transforms = None
+
+    pybind_processor = composite_processor_pybind.CompositeProcessor.create(
+        graph
+    )
+    instance._composite_processor = pybind_processor
+    instance._processor_config = pybind_processor.to_proto()
+    instance._asset_map = assets2npt.AssetMap(name)
+    for asset_path in assets.values():
+      instance._asset_map.add_asset(asset_path)
+
+    instance._rewrite_asset_paths()
+    return instance
+
   def prepare(
       self,
       input_signature: jaxtyping.PyTree,
@@ -180,21 +297,26 @@ class CompositeProcessor:
     """Prepares the processor for export."""
     del kwargs  # unused
 
-    jd_output_signature = self._get_output_signature(input_signature)
+    if self._transforms is None:
+      jd_output_signature = _propagate_pybind_signature(
+          self._composite_processor,
+          self._processor_config.io_structure.output_structure,
+          input_signature,
+      )
+    else:
+      jd_output_signature = self._get_output_signature(input_signature)
 
-    npt_input_signature = jax.tree.map(
-        lambda x: shlo_type.ShloTensorSpec(
-            shape=x.shape, dtype=_convert_jd_type_to_shlo_type(x.dtype)
-        ),
-        input_signature,
-    )
+    def _to_shlo_spec(x: Any) -> shlo_type.ShloTensorSpec:
+      shape = (
+          tuple(d if (d is not None and d >= 0) else None for d in x.shape)
+          if hasattr(x, "shape") and x.shape is not None
+          else None
+      )
+      dtype = _convert_jd_type_to_shlo_type(x.dtype)
+      return shlo_type.ShloTensorSpec(shape=shape, dtype=dtype)
 
-    npt_output_signature = jax.tree.map(
-        lambda x: shlo_type.ShloTensorSpec(
-            shape=x.shape, dtype=_convert_jd_type_to_shlo_type(x.dtype)
-        ),
-        jd_output_signature,
-    )
+    npt_input_signature = jax.tree.map(_to_shlo_spec, input_signature)
+    npt_output_signature = jax.tree.map(_to_shlo_spec, jd_output_signature)
 
     return PreparedCompositeProcessor(
         self._name,

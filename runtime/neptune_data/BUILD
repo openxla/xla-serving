@@ -68,5 +68,7 @@ cc_library(
     deps = [
         ":composite_processor_function_handler",
         "@neptune//data/kernels/cpu_embedding:cpu_embedding_lookup_transform",
+        "@neptune//data/kernels/cpu_embedding:pack_host_buffer_vector_transform",
+        "@neptune//data/kernels/cpu_embedding:unpack_host_buffer_vector_transform",
     ],
 )
