@@ -83,14 +83,14 @@ archive_override(
 bazel_dep(name = "xla")
 archive_override(
     module_name = "xla",
-    integrity = "sha256-+jH8g3xrlajtZVXb+WDd5qmggkakKzIetXs7BlITOOo=",
+    integrity = "sha256-UpKIT3NlatWWU3WkHSH3h2GCne5z2Xj6QdCegHPaK/o=",
     patch_strip = 1,
     patches = [
         "//third_party/xla:xla_bzlmod_llvm.patch",
         "//third_party/xla:xla_python_3_12.patch",
     ],
-    strip_prefix = "xla-9c310ed8151d1e32bbf0ba8b3f777c51e9058ba5",
-    urls = ["https://github.com/openxla/xla/archive/9c310ed8151d1e32bbf0ba8b3f777c51e9058ba5.tar.gz"],
+    strip_prefix = "xla-7c3dd1936addd297d7c6fa46f6183986fc4160c3",
+    urls = ["https://github.com/openxla/xla/archive/7c3dd1936addd297d7c6fa46f6183986fc4160c3.tar.gz"],
 )
 
 xla_third_party = use_extension("@xla//third_party/extensions:third_party.bzl", "third_party_ext")
@@ -108,13 +108,13 @@ override_repo(
 bazel_dep(name = "tensorflow", repo_name = "org_tensorflow")
 archive_override(
     module_name = "tensorflow",
-    integrity = "sha256-5uFoE0Qj8L6QBA19GHpdY1d91TrCfohrwuGmOvXlTjE=",
+    integrity = "sha256-IJv1DfwWkZi0pDqkXRZ0sAJRF309BYxlVxfKT6L8K1A=",
     patch_strip = 1,
     patches = [
         "//third_party/tensorflow:where_op_gpu.patch",
     ],
-    strip_prefix = "tensorflow-2298c918f03a3b127d4f548a303ea509f74a9bd7",
-    urls = ["https://github.com/tensorflow/tensorflow/archive/2298c918f03a3b127d4f548a303ea509f74a9bd7.zip"],
+    strip_prefix = "tensorflow-bf9294b7ddba0380f22c85cfb87310f586747059",
+    urls = ["https://github.com/tensorflow/tensorflow/archive/bf9294b7ddba0380f22c85cfb87310f586747059.zip"],
 )
 
 tf_third_party = use_extension("@org_tensorflow//third_party/extensions:third_party.bzl", "third_party_ext")
