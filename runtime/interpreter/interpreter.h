@@ -227,15 +227,10 @@ class Interpreter {
   absl::StatusOr<KernelGraph> LoadGraph(
       const neptune_model_orchestration::Pipeline& pipeline);
 
-  // Loads the graph from the given pipeline using the `components` from the
-  // pipeline proto. If no components are provided in the pipeline proto, we
-  // will create an auxiliary components from the legacy fields and load the
-  // graph based on the auxiliary components.
+  // Loads the graph from the given pipeline using the components from the
+  // pipeline proto.
   absl::StatusOr<KernelGraph> LoadGraphFromComponentProto(
-      const neptune_model_orchestration::Pipeline& pipeline,
-      const google::protobuf::RepeatedPtrField<
-          neptune_model_orchestration::Component>* absl_nullable
-          auxiliary_components = nullptr);
+      const neptune_model_orchestration::Pipeline& pipeline);
 
   // Loads a StableHloRunnerOp kernel based on the model function name and
   // weights name.

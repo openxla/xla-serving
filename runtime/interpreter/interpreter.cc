@@ -260,17 +260,17 @@ absl::StatusOr<std::string> GetKeyFromProcessorMimeType(
       "routing.");
 }
 
-google::protobuf::RepeatedPtrField<neptune_model_orchestration::Component>
-CreateAuxiliaryComponents(
-    const neptune_model_orchestration::Pipeline& pipeline) {
-  google::protobuf::RepeatedPtrField<neptune_model_orchestration::Component> components;
+void CreateAuxiliaryComponents(
+    neptune_model_orchestration::Pipeline& pipeline) {
   for (const auto& pre_processor_name : pipeline.pre_processor_names()) {
-    neptune_model_orchestration::Component* component = components.Add();
+    neptune_model_orchestration::Component* component =
+        pipeline.add_components();
     component->set_function_name(pre_processor_name);
     component->set_role(neptune_model_orchestration::ROLE_PREPROCESSOR);
   }
   for (const auto& model_function : pipeline.model_functions()) {
-    neptune_model_orchestration::Component* component = components.Add();
+    neptune_model_orchestration::Component* component =
+        pipeline.add_components();
     component->set_function_name(model_function.model_function_name());
     component->set_role(neptune_model_orchestration::ROLE_MODEL);
     if (model_function.has_weights_name()) {
@@ -278,11 +278,11 @@ CreateAuxiliaryComponents(
     }
   }
   for (const auto& post_processor_name : pipeline.post_processor_names()) {
-    neptune_model_orchestration::Component* component = components.Add();
+    neptune_model_orchestration::Component* component =
+        pipeline.add_components();
     component->set_function_name(post_processor_name);
     component->set_role(neptune_model_orchestration::ROLE_POSTPROCESSOR);
   }
-  return components;
 }
 
 // Build a BatchKernel from a list of kernels to be batched.
@@ -423,11 +423,11 @@ struct BatchingConfig {
 };
 
 BatchingConfig GetBatchingConfig(
-    const InterpreterCreateOptions& create_options,
+    bool enable_batching,
     const neptune_model_orchestration::Pipeline& pipeline) {
   BatchOptions::BatchComponent batch_component =
       BatchOptions::BATCH_COMPONENT_UNSPECIFIED;
-  if (create_options.enable_batching && pipeline.has_batch_options()) {
+  if (enable_batching && pipeline.has_batch_options()) {
     const BatchOptions& batch_options = pipeline.batch_options();
     LOG(INFO) << "Batch options: " << batch_options;
     batch_component = batch_options.batch_component();
@@ -445,6 +445,47 @@ BatchingConfig GetBatchingConfig(
       batch_component == BatchOptions::MODEL_FUNCTION_AND_POST_PROCESSOR ||
       batch_component == BatchOptions::WHOLE_PIPELINE;
   return {batch_preprocessing, batch_model, batch_postprocessing};
+}
+
+// Normalizes the pipeline in place.
+// 1. If the pipeline relies on legacy fields (e.g., pre_processor_names), it
+//    populates the `components` field using them via CreateAuxiliaryComponents.
+// 2. Returns an error if the pipeline has no components even after attempts to
+//    normalize.
+// 3. Sets the `use_batching` flag for each component based on its role and the
+//    batching configuration.
+absl::Status NormalizePipeline(neptune_model_orchestration::Pipeline& pipeline,
+                       bool enable_batching) {
+  if (pipeline.components().empty()) {
+    CreateAuxiliaryComponents(pipeline);
+  }
+
+  if (pipeline.components().empty()) {
+    return absl::InvalidArgumentError(
+        "Pipeline does not contain any component.");
+  }
+
+  BatchingConfig batching_config = GetBatchingConfig(enable_batching, pipeline);
+  for (auto& component : *pipeline.mutable_components()) {
+    bool use_batching = false;
+    switch (component.role()) {
+      case neptune_model_orchestration::ROLE_PREPROCESSOR:
+        use_batching = batching_config.batch_preprocessing;
+        break;
+      case neptune_model_orchestration::ROLE_MODEL:
+        use_batching = batching_config.batch_model;
+        break;
+      case neptune_model_orchestration::ROLE_POSTPROCESSOR:
+        use_batching = batching_config.batch_postprocessing;
+        break;
+      default:
+        break;
+    }
+    if (use_batching) {
+      component.set_use_batching(true);
+    }
+  }
+  return absl::OkStatus();
 }
 
 // Inserts kernels to the graph.
@@ -911,7 +952,8 @@ absl::Status Interpreter::Load() {
   }
   LOG(INFO) << "Found " << pipelines.name_to_pipeline_size()
             << " pipelines from Orbax model.";
-  for (const auto& [pipeline_name, pipeline] : pipelines.name_to_pipeline()) {
+  for (auto& [pipeline_name, pipeline] :
+       *pipelines.mutable_name_to_pipeline()) {
     auto [it_graph_bundle, inserted] =
         graph_bundles_.try_emplace(pipeline_name);
     if (!inserted) {
@@ -923,12 +965,14 @@ absl::Status Interpreter::Load() {
     LOG(INFO) << "Loading signature from pipeline: " << pipeline_name;
     TF_ASSIGN_OR_RETURN(FunctionFlatSignature signature,
                         LoadPipelineSignature(pipeline));
+    TF_RETURN_IF_ERROR(
+        NormalizePipeline(pipeline, create_options_->enable_batching));
     it_graph_bundle->second = std::make_unique<GraphBundle>(
-        pipeline_name, pipeline, std::move(signature));
+        pipeline_name, std::move(pipeline), std::move(signature));
     GraphBundle& graph_bundle = *it_graph_bundle->second;
     graph_bundle.pipeline_name = pipeline_name;
     graph_bundle.keyword_arguments_execution =
-        pipeline.keyword_arguments_based();
+        graph_bundle.pipeline.keyword_arguments_based();
   }
   if (create_options_->lazy_loading_pipelines) {
     return absl::OkStatus();
@@ -1229,20 +1273,16 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadModelRunnerOp(
 }
 
 absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
-    const neptune_model_orchestration::Pipeline& pipeline,
-    const google::protobuf::RepeatedPtrField<
-        neptune_model_orchestration::Component>* absl_nullable
-        auxiliary_components) {
-  if (auxiliary_components == nullptr && pipeline.components().empty()) {
+    const neptune_model_orchestration::Pipeline& pipeline) {
+  if (pipeline.components().empty()) {
     return absl::InvalidArgumentError(
         "Pipeline does not contain any component.");
   }
   const google::protobuf::RepeatedPtrField<neptune_model_orchestration::Component>&
-      components = auxiliary_components != nullptr ? *auxiliary_components
-                                                   : pipeline.components();
+      components = pipeline.components();
 
   BatchingConfig batching_config =
-      GetBatchingConfig(*create_options_, pipeline);
+      GetBatchingConfig(create_options_->enable_batching, pipeline);
 
   bool keyword_arguments_based = pipeline.keyword_arguments_based();
 
@@ -1308,16 +1348,23 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
       TF_ASSIGN_OR_RETURN(std::string key, GetKeyFromProcessorMimeType(*func));
       TF_ASSIGN_OR_RETURN(OptionalFunctionHandler * handler,
                           optional_function_handler_router_.GetHandler(key));
-
+      // By default, processor kernels convert inputs and outputs to/from
+      // HostBuffer.
+      // For an unbatched first component, we skip HostBuffer -> Tensor
+      // conversion so clients can pass native framework tensors directly. For
+      // batched first component, we perform the conversion as a BatchKernel
+      // will always takes HostBuffers as inputs.
       bool pre_data_conversion = true;
-      if (component_index == 0 &&
-          component.role() == neptune_model_orchestration::ROLE_PREPROCESSOR) {
-        pre_data_conversion = batching_config.batch_preprocessing;
+      if (component_index == 0) {
+        pre_data_conversion = component.use_batching();
       }
+      // For an unbatched last component, we skip Tensor -> HostBuffer
+      // conversion so the pipeline returns native framework tensors directly to
+      // clients. For batched last component, we perform the conversion as a
+      // BatchKernel will always produce HostBuffers as outputs.
       bool post_data_conversion = true;
-      if (component_index == components.size() - 1 &&
-          component.role() == neptune_model_orchestration::ROLE_POSTPROCESSOR) {
-        post_data_conversion = batching_config.batch_postprocessing;
+      if (component_index == components.size() - 1) {
+        post_data_conversion = component.use_batching();
       }
       TF_ASSIGN_OR_RETURN(
           std::unique_ptr<Kernel> kernel,
@@ -1390,40 +1437,7 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
 // components.
 absl::StatusOr<KernelGraph> Interpreter::LoadGraph(
     const neptune_model_orchestration::Pipeline& pipeline) {
-  google::protobuf::RepeatedPtrField<neptune_model_orchestration::Component> components;
-  if (!pipeline.components().empty()) {
-    components = pipeline.components();
-  } else {
-    // If there are no components in the pipeline, create them from legacy
-    // fields and then call LoadGraphFromComponentProto.
-    components = CreateAuxiliaryComponents(pipeline);
-  }
-
-  // Mapping the legacy BatchComponent proto to the new Component.use_batching
-  // flags so that we can have a unified way to handle batching.
-  BatchingConfig batching_config =
-      GetBatchingConfig(*create_options_, pipeline);
-  for (auto& component : components) {
-    bool use_batching = false;
-    switch (component.role()) {
-      case neptune_model_orchestration::ROLE_PREPROCESSOR:
-        use_batching = batching_config.batch_preprocessing;
-        break;
-      case neptune_model_orchestration::ROLE_MODEL:
-        use_batching = batching_config.batch_model;
-        break;
-      case neptune_model_orchestration::ROLE_POSTPROCESSOR:
-        use_batching = batching_config.batch_postprocessing;
-        break;
-      default:
-        break;
-    }
-    if (use_batching) {
-      component.set_use_batching(true);
-    }
-  }
-
-  return LoadGraphFromComponentProto(pipeline, &components);
+  return LoadGraphFromComponentProto(pipeline);
 }
 
 absl::StatusOr<std::vector<Value>> Interpreter::ConvertToVectorInputs(
@@ -1714,33 +1728,19 @@ absl::StatusOr<KernelIODataType> Interpreter::GetModelInputDataType(
   // the first kernel, we just infer the data type.
   const neptune_model_orchestration::Pipeline& pipeline =
       graph_bundle->pipeline;
-
-  absl::string_view pre_processor_name;
-  for (const auto& component : pipeline.components()) {
-    if (component.role() == neptune_model_orchestration::ROLE_PREPROCESSOR) {
-      pre_processor_name = component.function_name();
-      break;
-    }
+  const auto first_pipeline_component = pipeline.components().begin();
+  if (first_pipeline_component->role() ==
+      neptune_model_orchestration::ROLE_MODEL) {
+    return KernelIODataType::kHostBuffer;
   }
-  if (pre_processor_name.empty()) {
-    // Fall back to the legacy field.
-    if (!pipeline.pre_processor_names().empty()) {
-      pre_processor_name = pipeline.pre_processor_names(0);
-    } else {
-      return KernelIODataType::kHostBuffer;
-    }
-  }
-
-  bool pre_processor_in_batching =
-      create_options_->enable_batching && pipeline.has_batch_options() &&
-      (pipeline.batch_options().batch_component() ==
-           BatchOptions::WHOLE_PIPELINE ||
-       pipeline.batch_options().batch_component() ==
-           BatchOptions::PRE_PROCESSOR_AND_MODEL_FUNCTION);
+  const std::string& first_component_name =
+      first_pipeline_component->function_name();
 
   TF_ASSIGN_OR_RETURN(
       const neptune_model_manifest::Function* func,
-      GetFunctionByObjectName(manifest_objects_, pre_processor_name));
+      GetFunctionByObjectName(manifest_objects_, first_component_name));
+  // If the first pipeline component has a StableHLO body, the corresponding
+  // kernel will take HostBuffer as input.
   if (func->body().has_stable_hlo_body()) {
     return KernelIODataType::kHostBuffer;
   }
@@ -1748,8 +1748,8 @@ absl::StatusOr<KernelIODataType> Interpreter::GetModelInputDataType(
   TF_ASSIGN_OR_RETURN(std::string key, GetKeyFromProcessorMimeType(*func));
   TF_ASSIGN_OR_RETURN(OptionalFunctionHandler * handler,
                       optional_function_handler_router_.GetHandler(key));
-
-  return handler->GetInputDataType(pre_processor_in_batching);
+  bool pre_data_conversion = first_pipeline_component->use_batching();
+  return handler->GetInputDataType(pre_data_conversion);
 }
 
 absl::StatusOr<KernelIODataType> Interpreter::GetModelOutputDataType(
@@ -1761,32 +1761,17 @@ absl::StatusOr<KernelIODataType> Interpreter::GetModelOutputDataType(
   // the last kernel, we just infer the data type.
   const neptune_model_orchestration::Pipeline& pipeline =
       graph_bundle->pipeline;
-  absl::string_view post_processor_name;
-  for (auto it = pipeline.components().rbegin();
-       it != pipeline.components().rend(); ++it) {
-    if (it->role() == neptune_model_orchestration::ROLE_POSTPROCESSOR) {
-      post_processor_name = it->function_name();
-      break;
-    }
+  const auto last_pipeline_component = pipeline.components().rbegin();
+  if (last_pipeline_component->role() ==
+      neptune_model_orchestration::ROLE_MODEL) {
+    return KernelIODataType::kHostBuffer;
   }
-  if (post_processor_name.empty()) {
-    if (pipeline.post_processor_names().empty()) {
-      return KernelIODataType::kHostBuffer;
-    }
-    post_processor_name =
-        pipeline.post_processor_names(pipeline.post_processor_names_size() - 1);
-  }
-
-  bool post_processor_in_batching =
-      create_options_->enable_batching && pipeline.has_batch_options() &&
-      (pipeline.batch_options().batch_component() ==
-           BatchOptions::WHOLE_PIPELINE ||
-       pipeline.batch_options().batch_component() ==
-           BatchOptions::MODEL_FUNCTION_AND_POST_PROCESSOR);
-
+  // If the last pipeline component has a StableHLO body, the corresponding
+  // kernel will return HostBuffer.
   TF_ASSIGN_OR_RETURN(
       const neptune_model_manifest::Function* func,
-      GetFunctionByObjectName(manifest_objects_, post_processor_name));
+      GetFunctionByObjectName(manifest_objects_,
+                              last_pipeline_component->function_name()));
   if (func->body().has_stable_hlo_body()) {
     return KernelIODataType::kHostBuffer;
   }
@@ -1794,8 +1779,9 @@ absl::StatusOr<KernelIODataType> Interpreter::GetModelOutputDataType(
   TF_ASSIGN_OR_RETURN(std::string key, GetKeyFromProcessorMimeType(*func));
   TF_ASSIGN_OR_RETURN(OptionalFunctionHandler * handler,
                       optional_function_handler_router_.GetHandler(key));
+  bool post_data_conversion = last_pipeline_component->use_batching();
 
-  return handler->GetOutputDataType(post_processor_in_batching);
+  return handler->GetOutputDataType(post_data_conversion);
 }
 
 absl::Status Interpreter::MarkFullyInitialized() {
