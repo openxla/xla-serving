@@ -40,6 +40,7 @@ cc_binary(
     name = "neptune_serving_main_gpu",
     srcs = ["main.cc"],
     linkopts = ["-Wl,--allow-multiple-definition"],
+    tags = ["manual"],
     deps = [
         ":jsv_callback_grpc_server_gpu",
     ] + NEPTUNE_SERVING_MAIN_COMMON_DEPS,
@@ -49,6 +50,7 @@ cc_binary(
     name = "neptune_serving_main_tpu",
     srcs = ["main.cc"],
     linkopts = ["-Wl,--allow-multiple-definition"],
+    tags = ["manual"],
     deps = [
         ":jsv_callback_grpc_server_tpu",
     ] + NEPTUNE_SERVING_MAIN_COMMON_DEPS,
@@ -60,6 +62,7 @@ cc_binary(
 tar(
     name = "neptune_serving",
     srcs = [":neptune_serving_main_cpu"],
+    tags = ["manual"],
 )
 
 # 3. Define the Image
@@ -67,6 +70,7 @@ oci_image(
     name = "neptune_serving_image",
     base = "@distroless_cc",
     entrypoint = ["/runtime/serving/gcp/server/neptune_serving_main_cpu"],
+    tags = ["manual"],
     tars = [":neptune_serving"],
 )
 
@@ -76,12 +80,14 @@ oci_push(
     name = "neptune_serving_pusher",
     image = ":neptune_serving_image",
     repository = "gcr.io/neptune-serving-engine/cpu-jax-only",
+    tags = ["manual"],
 )
 
 # Package the GPU binary in tar layer.
 tar(
     name = "neptune_serving_gpu",
     srcs = [":neptune_serving_main_gpu"],
+    tags = ["manual"],
 )
 
 # Define the GPU Image
@@ -89,6 +95,7 @@ oci_image(
     name = "neptune_serving_image_gpu",
     base = "@cuda_base",
     entrypoint = ["/runtime/serving/gcp/server/neptune_serving_main_gpu"],
+    tags = ["manual"],
     tars = [":neptune_serving_gpu"],
 )
 
@@ -97,12 +104,14 @@ oci_push(
     name = "neptune_serving_pusher_gpu",
     image = ":neptune_serving_image_gpu",
     repository = "gcr.io/neptune-serving-engine/gpu-jax",
+    tags = ["manual"],
 )
 
 # Package the TPU binary in tar layer.
 tar(
     name = "neptune_serving_tpu",
     srcs = [":neptune_serving_main_tpu"],
+    tags = ["manual"],
 )
 
 # Define the TPU Image
@@ -110,6 +119,7 @@ oci_image(
     name = "neptune_serving_image_tpu",
     base = "@distroless_cc",
     entrypoint = ["/runtime/serving/gcp/server/neptune_serving_main_tpu"],
+    tags = ["manual"],
     tars = [":neptune_serving_tpu"],
 )
 
@@ -118,6 +128,7 @@ oci_push(
     name = "neptune_serving_pusher_tpu",
     image = ":neptune_serving_image_tpu",
     repository = "gcr.io/neptune-serving-engine/tpu-jax",
+    tags = ["manual"],
 )
 
 cc_library(
@@ -203,6 +214,7 @@ cc_library(
 cc_library(
     name = "ifrt_client_creator_gpu",
     srcs = ["ifrt_client_creator_gpu.cc"],
+    tags = ["manual"],
     deps = [
         ":ifrt_client_creator_hdr",
         "@abseil-cpp//absl/status",
@@ -220,6 +232,7 @@ cc_library(
 cc_library(
     name = "ifrt_client_creator_tpu",
     srcs = ["ifrt_client_creator_tpu.cc"],
+    tags = ["manual"],
     deps = [
         ":ifrt_client_creator_hdr",
         "@abseil-cpp//absl/status",
@@ -258,6 +271,7 @@ cc_library(
         ":enable_tf": ["ENABLE_TF=1"],
         "//conditions:default": [],
     }),
+    tags = ["manual"],
     deps = JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS + [
         ":ifrt_client_creator_gpu",
         ":ifrt_client_creator_hdr",
@@ -278,6 +292,7 @@ cc_library(
         ":enable_tf": ["ENABLE_TF=1"],
         "//conditions:default": [],
     }),
+    tags = ["manual"],
     deps = JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS + [
         ":ifrt_client_creator_hdr",
         ":ifrt_client_creator_tpu",

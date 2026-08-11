@@ -1,5 +1,6 @@
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 # Limit visibility to selected packages.
 package_group(
@@ -47,6 +48,16 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "value_test",
+    srcs = ["value_test.cc"],
+    deps = [
+        ":value",
+        "@abseil-cpp//absl/strings:string_view",
+        "@googletest//:gtest_main",
+    ],
+)
+
 cc_library(
     name = "type",
     hdrs = ["type.h"],
@@ -54,6 +65,28 @@ cc_library(
     deps = [
         ":value",
         "@abseil-cpp//absl/container:btree",
+    ],
+)
+
+cc_library(
+    name = "value_matcher",
+    testonly = True,
+    srcs = [],
+    hdrs = ["value_matcher.h"],
+    visibility = [":core_users"],
+    deps = [
+        ":value",
+        "@googletest//:gtest",
+    ],
+)
+
+cc_test(
+    name = "value_matcher_test",
+    srcs = ["value_matcher_test.cc"],
+    deps = [
+        ":value",
+        ":value_matcher",
+        "@googletest//:gtest_main",
     ],
 )
 
