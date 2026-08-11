@@ -27,6 +27,11 @@ Example:
 import re
 import sys
 
+_OP_NAMING_EXCEPTIONS = {
+    'matmul': 'matmul',
+    'squareddifference': 'squared_difference',
+}
+
 
 # Remove C/C++ comments to prevent braces inside them from confusing the
 # parser.
@@ -212,7 +217,10 @@ def generate_pyi(output_file, registrations, all_code):
 
     write('# Auto-generated Pybind11 stub file')
     write('from typing import Any, overload, Sequence')
-    write('from data.processor.python import composite_processor_pybind')
+    write(
+        'from data.processor.python import'
+        ' composite_processor_pybind'
+    )
     write('')
 
     seen_pyi_names = set()
@@ -225,7 +233,23 @@ def generate_pyi(output_file, registrations, all_code):
       cls_block = re.search(
           rf'class\s+{short_cls}\s*[:{{](.*?)}};', all_code, re.DOTALL
       )
-      target_code = cls_block.group(1) if cls_block else all_code
+      if not cls_block:
+        if re.search(
+            rf'(?:ND|JD)_DECLARE_BINARY_(?:OP|TRANSFORM)\s*\(\s*{short_cls}',
+            all_code,
+        ):
+          target_code = (
+              'Create() operator()(::jsv::HostBuffer a, ::jsv::HostBuffer b)'
+          )
+        elif re.search(
+            rf'(?:ND|JD)_DECLARE_UNARY_(?:OP|TRANSFORM)\s*\(\s*{short_cls}',
+            all_code,
+        ):
+          target_code = 'Create() operator()(::jsv::HostBuffer a)'
+        else:
+          target_code = all_code
+      else:
+        target_code = cls_block.group(1)
 
       init_params = '*args: Any, **kwargs: Any'
       exec_params = '*args: Any, **kwargs: Any'
@@ -259,7 +283,10 @@ def generate_pyi(output_file, registrations, all_code):
       write(f'class {py_name}(composite_processor_pybind.TransformBase):')
       write(f'  def __init__({init_params}) -> None: ...')
       write('  @overload')
-      write('  def execute(self, context: composite_processor_pybind.ExecuteContext) -> None: ...')
+      write(
+          '  def execute(self, context:'
+          ' composite_processor_pybind.ExecuteContext) -> None: ...'
+      )
       write('  @overload')
       write(f'  def execute({exec_params}) -> {ret_py_type}: ...')
 
@@ -281,12 +308,14 @@ def main():
   # 3. { (generic open brace)
   # 4. } (generic close brace)
   # 5. ND_REGISTER_TRANSFORM(Type, "Name")
+  # 6. ND_REGISTER_BINARY_OP(Type, ...) or ND_REGISTER_UNARY_OP(Type, ...)
   token_re = re.compile(
       r'(?P<str>"([^"\\]|\\.)*")|'
       r'(?P<ns>namespace\s+(?P<ns_name>[a-zA-Z_][a-zA-Z0-9_:]*)\s*\{)|'
       r'(?P<lcb>\{)|'
       r'(?P<rcb>\})|'
-      r'(?P<reg>(?:ND|JD)_REGISTER_TRANSFORM\s*\(\s*(?P<type>[^,]+)\s*,\s*"(?P<name>[^"]+)"\s*\))'
+      r'(?P<reg>(?:ND|JD)_REGISTER_TRANSFORM\s*\(\s*(?P<type>[^,]+)\s*,\s*"(?P<name>[^"]+)"\s*\))|'
+      r'(?P<reg_op>(?:ND|JD)_REGISTER_(?:BINARY|UNARY)_(?:OP|TRANSFORM)\s*\(\s*(?P<op_type>[a-zA-Z0-9_:]+))'
   )
 
   all_code = ''
@@ -327,6 +356,28 @@ def main():
                 f' {type_name} in {src}'
             )
             registrations[type_name] = py_name
+          elif match.group('reg_op'):
+            type_name = match.group('op_type').strip()
+            if type_name in ('ClassName', 'type'):
+              continue
+            py_name = type_name.split('::')[-1]
+
+            # Fully qualify the C++ type name if relative
+            if not type_name.startswith('::'):
+              if '::' in type_name:
+                type_name = '::' + type_name
+              else:
+                prefix = ''
+                for ns in namespace_stack:
+                  if ns is not None:
+                    prefix += ns + '::'
+                type_name = '::' + prefix + type_name
+
+            assert type_name not in registrations, (
+                'generate_pybind.py: Warning: Duplicate registration for'
+                f' {type_name} in {src}'
+            )
+            registrations[type_name] = py_name
     except Exception as e:  # pylint: disable=broad-exception-caught
       print(
           f'generate_pybind.py: Warning: Failed to parse {src}: {e}',
@@ -343,8 +394,14 @@ def main():
       out.write(s + '\n')
 
     write('// Auto-generated Pybind11 registration file')
-    write('#include "data/processor/cc/core/transform_registry.h"')
-    write('#include "data/processor/python/transform_pybind.h"')
+    write(
+        '#include'
+        ' "data/processor/cc/core/transform_registry.h"'
+    )
+    write(
+        '#include'
+        ' "data/processor/python/transform_pybind.h"'
+    )
     write('#include "include/pybind11/pybind11.h"')
     write('#include "pybind11_abseil/status_casters.h"')
     write('#include "pybind11_protobuf/native_proto_caster.h"')
@@ -360,7 +417,10 @@ def main():
     write('    py::google::ImportStatusModule();')
     write('  } catch (py::error_already_set& e) {')
     write('    if (e.matches(PyExc_ModuleNotFoundError)) {')
-    write('      // Fallback for isolated bazel tests where package redefinitions might not')
+    write(
+        '      // Fallback for isolated bazel tests where package redefinitions'
+        ' might not'
+    )
     write('      // be accessible due to a hermetic build.')
     write('      py::module_::import("pybind11_abseil.status");')
     write('    } else {')
@@ -369,12 +429,20 @@ def main():
     write('  }')
     write('  pybind11_protobuf::ImportNativeProtoCasters();')
     write('  try {')
-    write('    py::module::import("neptune_data.processor.python.composite_processor_pybind");')
+    write(
+        '    py::module::import("neptune_data.processor.python.composite_processor_pybind");'
+    )
     write('  } catch (py::error_already_set& e) {')
     write('    try {')
-    write('      py::module::import("data.processor.python.composite_processor_pybind");')
+    write(
+        '     '
+        ' py::module::import("data.processor.python.composite_processor_pybind");'
+    )
     write('    } catch (const py::error_already_set& e2) {')
-    write('      throw std::runtime_error("Failed to import both neptune_data and data. Original error: " + std::string(e.what()));')
+    write(
+        '      throw std::runtime_error("Failed to import both neptune_data and'
+        ' data. Original error: " + std::string(e.what()));'
+    )
     write('    }')
     write('  }')
     py_name_to_types = {}
@@ -386,11 +454,13 @@ def main():
     for py_name, type_list in py_name_to_types.items():
       if len(type_list) > 1:
         write(
-            f'  ::neptune::data::composite::RegisterDynamicPybindTransformExt<{type_list[0]}>(m, "{py_name}");'
+            f'  ::neptune::data::composite::RegisterDynamicPybindTransformExt<{type_list[0]}>(m,'
+            f' "{py_name}");'
         )
       else:
         write(
-            f'  ::neptune::data::composite::RegisterPybindTransformExt<{type_list[0]}>(m, "{py_name}");'
+            f'  ::neptune::data::composite::RegisterPybindTransformExt<{type_list[0]}>(m,'
+            f' "{py_name}");'
         )
     write('}')
 
