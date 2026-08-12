@@ -16,7 +16,12 @@
 
 # TODO: Add exports.
 
-__version__ = "0.0.10"
+import importlib.metadata
+
+try:
+  __version__ = importlib.metadata.version("neptune-model")
+except importlib.metadata.PackageNotFoundError:
+  __version__ = "unknown"
 
 
 from neptune_model._src.export import serving_config

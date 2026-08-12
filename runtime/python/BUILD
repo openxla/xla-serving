@@ -2,6 +2,7 @@ load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("@rules_python//python:packaging.bzl", "py_wheel")
+load("//:version.bzl", "VERSION")
 
 package_group(
     name = "friends",
@@ -122,7 +123,7 @@ py_wheel(
         "@rules_python//python/config_settings:is_python_3.12": "cp312",
     }),
     strip_path_prefixes = ["runtime/python"],
-    version = "0.0.1",
+    version = VERSION,
     deps = [
         ":neptune_model_runner_pkg",
         ":stage_neptune_model_runner_pkg",

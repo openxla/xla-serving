@@ -28,14 +28,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Detect Version in __init__.py
+      - name: Detect Version in version.bzl
         id: version_check
-        working-directory: ./neptune_model
         run: |
-          VERSION=$(python -c "import re; print(re.search(r'''__version__\s*=\s*['\"]([^'\"]+)['\"]''', open('__init__.py').read()).group(1))")
+          VERSION=$(python3 -c "import re; print(re.search(r'''VERSION\s*=\s*['\"]([^'\"]+)['\"]''', open('version.bzl').read()).group(1))")
           echo "Found version: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-
 
       - name: Check if Release Already Exists
         id: release_check
@@ -55,31 +53,31 @@ jobs:
   # ==========================================
   build-and-publish:
     name: Build and Publish
-    runs-on: ubuntu-latest
+    runs-on: linux-x86-n2-16
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
     # 1. Wait for Job 1 to finish
     needs: check-version
     # 2. ONLY run this entire job if Job 1 found a new version
     if: needs.check-version.outputs.is_new == 'true'
 
     steps:
-      # We have to checkout again because this Job runs on a brand new server!
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv and Set up Python
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
-
-      - name: Disable Android configuration
+      - name: Create virtual environment
         run: |
-          # 1. Clear the variables
-          echo "ANDROID_HOME=" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=" >> $GITHUB_ENV
-          # 2. Nuke the empty ghost folders so Bazel gives up searching
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /usr/lib/android-sdk
+          uv venv --clear --python 3.12
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
+
+      - name: Install Bazelisk
+        uses: bazel-contrib/setup-bazel@0.19.0
 
       - name: Cache Bazel Build
         uses: actions/cache@v4
@@ -91,23 +89,57 @@ jobs:
 
       - name: Install Python Build Dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install build setuptools wheel grpcio-tools
+          uv pip install build setuptools wheel grpcio-tools
+
+      - name: Test and Build neptune_data and neptune_model_runner wheels
+        run: |
+          bazel test -c opt //data/... \
+            --@rules_python//python/config_settings:python_version=3.12 \
+            --ui_event_filters=-info,-stdout,-stderr \
+            --noshow_progress
+          bazel build -c opt //data:neptune_data //data:neptune_data_test //runtime/python:neptune_model_runner \
+            --@rules_python//python/config_settings:python_version=3.12 \
+            --ui_event_filters=-info,-stdout,-stderr \
+            --noshow_progress
+
+      - name: Install neptune_data, neptune_data_test, and neptune_model_runner wheels
+        run: |
+          uv pip install bazel-bin/data/neptune_data*.whl bazel-bin/runtime/python/neptune_model_runner*.whl
 
       - name: Build the Neptune Model Wheel
-        run: python -m build --wheel
-
-      - name: Install and Test the Built Wheel
         run: |
-          pip install --pre .[test,tf,torch]
+          uv build --wheel
+
+      - name: Install the Built Wheel
+        run: uv pip install ./dist/*.whl
+
+      - name: Verify Package Import
+        run: |
+          cd /tmp
+          python -c "
+          import neptune_model
+          print('✅ Successfully imported neptune_model!')
+          print(f'📦 Version: {neptune_model.__version__}')
+
+          from neptune_model_runner import model_runner
+          print('✅ Successfully imported neptune_model_runner!')
+          "
+
+      - name: Install Test Dependencies and Run Pytest
+        run: |
+          uv pip install ".[test,tf,torch]"
+          uv pip uninstall triton
           pytest neptune_model/
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Notice how we pull the version number from Job 1's outputs!
           VERSION="v${{ needs.check-version.outputs.version }}"
-          gh release create "$VERSION" dist/*.whl \
-            --title "Neptune Model $VERSION" \
-            --notes "Automated release for version $VERSION"
+          git config --global --add safe.directory /__w/neptune/neptune
+          gh release create "$VERSION" \
+            dist/*.whl \
+            bazel-bin/data/neptune_data*.whl \
+            bazel-bin/runtime/python/neptune_model_runner*.whl \
+            --title "Neptune $VERSION" \
+            --generate-notes
