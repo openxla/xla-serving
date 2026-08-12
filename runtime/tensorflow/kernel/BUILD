@@ -26,8 +26,12 @@ cc_library(
     visibility = [":kernel_users"],
     deps = [
         ":builtin_tensorflow_kernel",
+        "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/strings",
         "@neptune//runtime/kernel",
+        "@org_tensorflow//tensorflow/core/platform:env",
+        "@org_tensorflow//tensorflow/core/platform:path",
     ],
     alwayslink = 1,
 )

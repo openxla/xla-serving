@@ -75,6 +75,7 @@ llm = [
     'keras-hub',
     'transformers',
     'tensorflow>=2.15.0',
+    'tensorflow-text>=2.15.0',
     'tf_keras',
     'pytest',
 ]

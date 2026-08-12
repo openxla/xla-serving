@@ -16,7 +16,9 @@
 
 import json
 from typing import Any
+from absl import logging
 import keras_hub
+from keras_hub.src.tokenizers import byte_pair_tokenizer
 import tensorflow as tf
 import transformers
 
@@ -148,31 +150,90 @@ class KerasHubTokenizerTF:
     formatted_merges = [" ".join(pair) for pair in merges]
 
     hf_class_name = real_tokenizer.__class__.__name__
-    print(f"Detected Hugging Face tokenizer class: {hf_class_name}")
+    logging.info("Detected Hugging Face tokenizer class: %s", hf_class_name)
     tokenizer_cls = _resolve_tokenizer_class(hf_class_name, model_name_or_path)
-    print(f"Selected Keras Hub tokenizer class: {tokenizer_cls.__name__}")
+    logging.info(
+        "Selected Keras Hub tokenizer class: %s", tokenizer_cls.__name__
+    )
 
     self.tokenizer = tokenizer_cls(
         vocabulary=vocab,
         merges=formatted_merges,
     )
     # Warmup / build all tokenizer tables so StaticHashTables are constructed
-    _ = self.tokenizer(tf.constant(["test"]))
     _ = self.tokenizer.detokenize(tf.constant([[1, 2]], dtype=tf.int32))
-    # Replace cache.id2value MutableHashTable with a StaticHashTable so it is
-    # saved into GraphDef assets instead of requiring checkpoint variables.
-    if hasattr(self.tokenizer, "cache") and hasattr(
-        self.tokenizer.cache, "id2value"
+
+  def _tokenize(self, text_input: tf.Tensor) -> tf.RaggedTensor:
+    """Tokenizes text input statelessly without mutable cache resources.
+
+    Adapted from KerasHub's `BytePairTokenizer._tokenize_tf` (see
+    `third_party/py/keras_hub/src/tokenizers/byte_pair_tokenizer.py:712-770`).
+    Upstream `BytePairTokenizer` uses an internal `BytePairTokenizerCache`
+    backed by `tf.lookup.experimental.MutableHashTable`. In SavedModel export
+    and serving, this mutable cache creates untracked resource capture errors
+    at runtime.
+
+    We bypass the cache and run the BPE merge pipeline directly using
+    KerasHub's static lookup tables (`byte2unicode`, `token_to_id_map`,
+    `merge_ranks`) via `_bpe_merge_tf` and `split_strings_for_bpe`. For
+    non-BPE tokenizers, this delegates to `self.tokenizer(text_input)`.
+
+    Args:
+      text_input: Input string tensor of rank 0 or 1.
+
+    Returns:
+      RaggedTensor containing token IDs or string tokens.
+    """
+    tokenizer = self.tokenizer
+    # Fallback to generic tokenizer if BPE-specific attributes are not found.
+    if not hasattr(tokenizer, "_bpe_merge_tf") or not hasattr(
+        tokenizer, "token_to_id_map"
     ):
-      table = tf.lookup.StaticHashTable(
-          tf.lookup.KeyValueTensorInitializer(
-              tf.constant([0], dtype=tf.int64),
-              tf.constant(["__dummy__"], dtype=tf.string),
-          ),
-          default_value="",
+      return self.tokenizer(text_input)
+
+    if getattr(tokenizer, "add_prefix_space", False):
+      text_input = tf.strings.join([" ", text_input])
+
+    text_input = tf.convert_to_tensor(text_input)
+    unbatched = text_input.shape.rank == 0
+    if unbatched:
+      text_input = tf.expand_dims(text_input, 0)
+    if text_input.shape.rank is not None and text_input.shape.rank > 1:
+      raise ValueError(
+          "`tokenize()` inputs should be a string, list of strings, or "
+          f"string tensor with rank < 2. Received: {text_input}"
       )
-      table.insert = lambda keys, values: None
-      self.tokenizer.cache.id2value = table
+
+    unsplittable_tokens = getattr(tokenizer, "unsplittable_tokens", None)
+    raw_tokens = byte_pair_tokenizer.split_strings_for_bpe(
+        text_input, unsplittable_tokens
+    )
+    token_row_splits = raw_tokens.row_splits
+    flat_tokens = raw_tokens.flat_values
+
+    split_bytes = tf.strings.bytes_split(flat_tokens)
+    split_unicode = tokenizer.byte2unicode.lookup(split_bytes)
+    # Access KerasHub's stateless BPE merge implementation.
+    merged_words = tokenizer._bpe_merge_tf(split_unicode)  # pylint: disable=protected-access
+    tokenized_words = tf.strings.reduce_join(
+        merged_words, axis=1, separator=" "
+    )
+
+    tokens = tf.strings.split(tokenized_words, sep=" ")
+    if getattr(tokenizer, "compute_dtype", None) != tf.string:
+      tokens = tokenizer.token_to_id_map.lookup(tokens)
+
+    tokens = tf.RaggedTensor.from_row_splits(
+        tokens.flat_values,
+        tf.gather(tokens.row_splits, token_row_splits),
+    )
+    if getattr(tokenizer, "sequence_length", None):
+      output_shape = tokens.shape.as_list()
+      output_shape[-1] = tokenizer.sequence_length
+      tokens = tokens.to_tensor(shape=output_shape)
+    if unbatched:
+      tokens = tf.squeeze(tokens, 0)
+    return tokens
 
   def pre_process_fn(
       self, inputs: dict[str, tf.Tensor]
@@ -187,18 +248,24 @@ class KerasHubTokenizerTF:
     """
     text_input = inputs["text_input"]
 
-    ragged_tokens = self.tokenizer(text_input)
-    if not isinstance(ragged_tokens, tf.RaggedTensor):
-      ragged_tokens = tf.ragged.constant(ragged_tokens, dtype=tf.int32)
+    ragged_tokens = self._tokenize(text_input)
+    if isinstance(ragged_tokens, tf.RaggedTensor):
+      input_ids = ragged_tokens.to_tensor(default_value=self.pad_token_id)
+    else:
+      input_ids = tf.convert_to_tensor(ragged_tokens)
 
-    input_ids = ragged_tokens.to_tensor(default_value=self.pad_token_id)
+    unbatched = text_input.shape.rank == 0
+    if unbatched and input_ids.shape.rank == 1:
+      input_ids = tf.expand_dims(input_ids, 0)
 
     # Pad/slice input_ids to exactly max_seq_len
     paddings = [[0, 0], [0, self.max_seq_len]]
     padded = tf.pad(input_ids, paddings, constant_values=self.pad_token_id)
     input_ids_fixed = tf.slice(padded, [0, 0], [-1, self.max_seq_len])
 
-    if text_input.shape[0] is not None:
+    if unbatched:
+      input_ids_fixed = tf.squeeze(input_ids_fixed, 0)
+    elif text_input.shape[0] is not None:
       input_ids_fixed.set_shape([text_input.shape[0], self.max_seq_len])
 
     return {
@@ -238,19 +305,17 @@ class KerasHubTokenizerTF:
     return {"text_output": text_output}
 
   def get_trackable_resources(self) -> list[Any]:
-    """Returns trackable resources for Keras Hub tokenizer."""
+    """Returns static lookup tables for SavedModel export, omitting self.cache."""
     resources = []
     t = self.tokenizer
-    if hasattr(t, "token_to_id_map"):
+    if hasattr(t, "token_to_id_map") and t.token_to_id_map is not None:
       resources.append(t.token_to_id_map)
-    if hasattr(t, "id_to_token_map"):
+    if hasattr(t, "id_to_token_map") and t.id_to_token_map is not None:
       resources.append(t.id_to_token_map)
-    if hasattr(t, "unicode2byte"):
+    if hasattr(t, "unicode2byte") and t.unicode2byte is not None:
       resources.append(t.unicode2byte)
-    if hasattr(t, "byte2unicode"):
+    if hasattr(t, "byte2unicode") and t.byte2unicode is not None:
       resources.append(t.byte2unicode)
-    if hasattr(t, "merge_ranks"):
+    if hasattr(t, "merge_ranks") and t.merge_ranks is not None:
       resources.append(t.merge_ranks)
-    if hasattr(t, "cache"):
-      resources.append(t.cache)
     return resources

@@ -88,6 +88,28 @@ class ProcessorsTest(absltest.TestCase):
         postprocess_result_3d["text_output"][0, 0].numpy(), b"ab" * 16
     )
 
+  def test_tokenize_scalar_and_batched(self):
+    model_path = os.path.join(
+        os.path.dirname(__file__),
+        "../testdata/qwen_dummy",
+    )
+    tokenizer = processors.KerasHubTokenizerTF(
+        model_name_or_path=model_path,
+        max_seq_len=16,
+    )
+    # Test scalar input
+    scalar_res = tokenizer.pre_process_fn({"text_input": tf.constant("ab")})
+    self.assertEqual(scalar_res["input_ids"].shape, (16,))
+    self.assertEqual(scalar_res["input_ids"][0].numpy(), 4)
+
+    # Test batched input
+    batched_res = tokenizer.pre_process_fn(
+        {"text_input": tf.constant(["ab", "a"])}
+    )
+    self.assertEqual(batched_res["input_ids"].shape, (2, 16))
+    self.assertEqual(batched_res["input_ids"][0, 0].numpy(), 4)
+    self.assertEqual(batched_res["input_ids"][1, 0].numpy(), 1)
+
 
 if __name__ == "__main__":
   absltest.main()
