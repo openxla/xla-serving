@@ -182,6 +182,44 @@ class CompositeProcessorTest(absltest.TestCase):
           ["a", "b", "c", "d", "e", "f"], [4, 2]
       )
 
+  def test_host_buffer_bytes_array(self):
+    hb = composite_processor_pybind.HostBuffer.create_bytes_array(
+        [b"a", b"b", b"c", b"d", b"e", b"f"], [2, 3]
+    )
+    self.assertEqual(hb.shape, (2, 3))
+    self.assertEqual(
+        hb.to_bytes_array(),
+        [[b"a", b"b", b"c"], [b"d", b"e", b"f"]],
+    )
+
+    hb = composite_processor_pybind.HostBuffer.create_bytes_array(
+        [b"a", b"b", b"c", b"d", b"e", b"f"], [2, 3, 1]
+    )
+    self.assertEqual(hb.shape, (2, 3, 1))
+    self.assertEqual(
+        hb.to_bytes_array(),
+        [[[b"a"], [b"b"], [b"c"]], [[b"d"], [b"e"], [b"f"]]],
+    )
+
+    hb = composite_processor_pybind.HostBuffer.create_bytes_array(
+        [b"a", b"b", b"c"]
+    )
+    self.assertEqual(hb.shape, (3,))
+    self.assertEqual(hb.to_bytes_array(), [b"a", b"b", b"c"])
+
+    raw_bytes = b"hello\x00world\xff\xfe"
+    hb_bin = composite_processor_pybind.HostBuffer.create_bytes_array(
+        [raw_bytes], []
+    )
+    self.assertEqual(hb_bin.to_bytes(), raw_bytes)
+
+    with self.assertRaisesRegex(
+        ValueError, "Shape does not match the number of elements"
+    ):
+      composite_processor_pybind.HostBuffer.create_bytes_array(
+          [b"a", b"b", b"c", b"d", b"e", b"f"], [4, 2]
+      )
+
   def test_host_buffer_type_conversions_validation(self):
     hb_int64 = composite_processor_pybind.HostBuffer.create_int64(42)
     self.assertEqual(hb_int64.to_int64(), 42)
@@ -197,6 +235,14 @@ class CompositeProcessorTest(absltest.TestCase):
         ValueError, "HostBuffer is not of expected type"
     ):
       hb_int64.to_string_array()
+    with self.assertRaisesRegex(
+        ValueError, "HostBuffer is not of expected type"
+    ):
+      hb_int64.to_bytes()
+    with self.assertRaisesRegex(
+        ValueError, "HostBuffer is not of expected type"
+    ):
+      hb_int64.to_bytes_array()
 
     hb_str = composite_processor_pybind.HostBuffer.create_string("hello")
     self.assertEqual(hb_str.to_string(), "hello")
