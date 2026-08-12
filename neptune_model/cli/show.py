@@ -105,10 +105,12 @@ def show(
     details: Annotated[
         List[str],
         typer.Option(
+            '--details',
+            '-d',
             help=(
                 'Show the detailed information about an object or a'
                 ' supplemental'
-            )
+            ),
         ),
     ] = [],
     verbose: Annotated[

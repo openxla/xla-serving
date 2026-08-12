@@ -22,6 +22,7 @@ import typer
 from neptune_model.cli import show
 from neptune_model.protos import manifest_pb2
 from neptune_model.protos import type_pb2
+from typer.testing import CliRunner
 
 
 class ShowTest(absltest.TestCase):
@@ -44,6 +45,14 @@ class ShowTest(absltest.TestCase):
         fg=typer.colors.RED,
         err=True,
     )
+
+  def test_show_details_short_flag(self):
+    app = typer.Typer()
+    app.command()(show.show)
+    runner = CliRunner()
+    result = runner.invoke(app, ['/nonexistent/path', '-d', 'serving_default'])
+    self.assertIn('Failed to load Neptune model', result.output)
+    self.assertEqual(result.exit_code, 1)
 
 
 if __name__ == '__main__':
