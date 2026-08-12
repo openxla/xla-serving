@@ -381,6 +381,8 @@ absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
                              batch_runner_op_options, thread_pool);
 }
 
+// TODO: Merge this function with
+// GetStableHloFunctionsByObjectName in manifest_utils.cc.
 absl::StatusOr<const neptune_model_manifest::Function*> GetFunctionByObjectName(
     const absl::flat_hash_map<std::string,
                               const neptune_model_manifest::TopLevelObject*>&
@@ -486,27 +488,6 @@ absl::Status NormalizePipeline(neptune_model_orchestration::Pipeline& pipeline,
     }
   }
   return absl::OkStatus();
-}
-
-// Inserts kernels to the graph.
-void InsertKernels(std::vector<KernelSubGraph> pre_processor_sub_graphs,
-                   std::unique_ptr<Kernel> stablehlo_or_batch_runner_op,
-                   std::vector<KernelSubGraph> post_processor_sub_graphs,
-                   std::vector<std::unique_ptr<Kernel>>& graph) {
-  for (auto& sub_graph : pre_processor_sub_graphs) {
-    graph.insert(graph.end(), std::make_move_iterator(sub_graph.begin()),
-                 std::make_move_iterator(sub_graph.end()));
-  }
-
-  if (stablehlo_or_batch_runner_op != nullptr) {
-    graph.push_back(std::move(stablehlo_or_batch_runner_op));
-  }
-
-  for (auto& post_processor_sub_graph : post_processor_sub_graphs) {
-    graph.insert(graph.end(),
-                 std::make_move_iterator(post_processor_sub_graph.begin()),
-                 std::make_move_iterator(post_processor_sub_graph.end()));
-  }
 }
 // Check the connection between kernels in the graph. If kernel `b` follows
 // kernel `a` in the graph, then
@@ -871,6 +852,43 @@ absl::StatusOr<BucketAotData> LoadAotExecutableForBucket(
   return BucketAotData{std::move(*executable_ref), std::move(spec)};
 }
 
+struct BatchIndices {
+  int start;
+  int end;
+};
+
+// Finds the start and end indices of consecutive batched components in a
+// pipeline. Returns an error if batched components are non-consecutive.
+absl::StatusOr<std::optional<BatchIndices>> FindBatchIndices(
+    const google::protobuf::RepeatedPtrField<neptune_model_orchestration::Component>&
+        components) {
+  std::optional<BatchIndices> indices;
+  bool batch_completed = false;
+  for (int i = 0; i < components.size(); ++i) {
+    const auto& component = components[i];
+    if (component.use_batching()) {
+      // If we already completed a batch segment and find another batched
+      // component, it means they are non-consecutive.
+      if (batch_completed) {
+        return absl::InvalidArgumentError(
+            "Non-consecutive batched components are not supported.");
+      }
+      // Mark the start of the batched segment if not already set.
+      if (!indices.has_value()) {
+        indices = BatchIndices{.start = i, .end = i};
+      } else {
+        indices->end = i;
+      }
+    } else {
+      // If we are on a non-batched component but have started a batch segment,
+      // mark it as completed.
+      if (indices.has_value()) {
+        batch_completed = true;
+      }
+    }
+  }
+  return indices;
+}
 }  // namespace
 
 absl::StatusOr<std::unique_ptr<Interpreter>> Interpreter::Create(
@@ -1272,150 +1290,126 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadModelRunnerOp(
                                named_outputs, create_options_->platform_name);
 }
 
+absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadOnHostFunction(
+    const neptune_model_orchestration::Component& component,
+    int component_index, int total_components, bool keyword_arguments_based) {
+  LOG(INFO) << "Adding function: " << component.function_name();
+  TF_ASSIGN_OR_RETURN(
+      const neptune_model_manifest::Function* func,
+      GetFunctionByObjectName(manifest_objects_, component.function_name()));
+
+  NamedSignature named_signature = keyword_arguments_based
+                                       ? GetNamedSignatureOfComponent(component)
+                                       : NamedSignature{};
+
+  if (func->body().has_stable_hlo_body()) {
+    if (!ShouldShloRunOnHost({func}, create_options_->platform_name)) {
+      std::string error_msg =
+          absl::StrCat("StableHLO function ", component.function_name(),
+                       " is not supported to run on host.");
+      return absl::InvalidArgumentError(error_msg);
+    }
+    return LoadStableHloRunnerOp(
+        component.function_name(), component.weights_name(),
+        named_signature.inputs, named_signature.outputs,
+        /*platform_name=*/"cpu");
+  } else {
+    // Handle non-StableHLO functions.
+    TF_ASSIGN_OR_RETURN(std::string key, GetKeyFromProcessorMimeType(*func));
+    TF_ASSIGN_OR_RETURN(OptionalFunctionHandler * handler,
+                        optional_function_handler_router_.GetHandler(key));
+
+    // By default, processor kernels convert inputs and outputs to/from
+    // HostBuffer.
+    // For an unbatched first component, we skip HostBuffer -> Tensor conversion
+    // so clients can pass native framework tensors directly.
+    bool pre_data_conversion = true;
+    if (component_index == 0) {
+      pre_data_conversion = component.use_batching();
+    }
+    // For an unbatched last component , we skip Tensor -> HostBuffer conversion
+    // so the pipeline returns native framework tensors directly to clients.
+    bool post_data_conversion = true;
+    if (component_index == total_components - 1) {
+      post_data_conversion = component.use_batching();
+    }
+
+    return handler->HandleFunction(create_options_->model_path, *func,
+                                   *create_options_, pre_data_conversion,
+                                   post_data_conversion, named_signature.inputs,
+                                   named_signature.outputs);
+  }
+}
+
+
 absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
     const neptune_model_orchestration::Pipeline& pipeline) {
   if (pipeline.components().empty()) {
     return absl::InvalidArgumentError(
         "Pipeline does not contain any component.");
   }
+
   const google::protobuf::RepeatedPtrField<neptune_model_orchestration::Component>&
       components = pipeline.components();
 
-  BatchingConfig batching_config =
-      GetBatchingConfig(create_options_->enable_batching, pipeline);
-
   bool keyword_arguments_based = pipeline.keyword_arguments_based();
 
-  KernelGraph graph;
-  std::vector<std::unique_ptr<Kernel>> batched_kernels;
-  std::vector<KernelSubGraph> preprocessors;
-  preprocessors.reserve(components.size());
-  std::vector<KernelSubGraph> postprocessors;
-  postprocessors.reserve(components.size());
-  std::unique_ptr<Kernel> stablehlo_runner_op;
+  // Trace the batch indices of the components in the pipeline.
+  TF_ASSIGN_OR_RETURN(std::optional<BatchIndices> batch_indices,
+                      FindBatchIndices(components));
 
-  // Explicitly start loading the stablehlo runner op first to accelerate the
-  // loading process.
-  for (const auto& component : components) {
-    // TODO: use the nmed_signature to initialize the flat
-    // signatures for the kernel runner op.
-    NamedSignature named_signature =
-        keyword_arguments_based ? GetNamedSignatureOfComponent(component)
-                                : NamedSignature{};
+  std::vector<std::unique_ptr<Kernel>> loaded_kernels(components.size());
+  // Explicitly start loading the on-device stablehlo runner op first to
+  // accelerate the loading process.
+  for (int component_idx = 0; component_idx < components.size();
+       ++component_idx) {
+    const auto& component = components[component_idx];
     if (component.role() == neptune_model_orchestration::ROLE_MODEL) {
-      if (stablehlo_runner_op != nullptr) {
-        return absl::InvalidArgumentError(
-            "A pipeline can only support one JAX function.");
-      }
-
-      TF_ASSIGN_OR_RETURN(stablehlo_runner_op,
+      NamedSignature named_signature =
+          keyword_arguments_based ? GetNamedSignatureOfComponent(component)
+                                  : NamedSignature{};
+      TF_ASSIGN_OR_RETURN(loaded_kernels[component_idx],
                           LoadModelRunnerOp(component, named_signature.inputs,
                                             named_signature.outputs));
     }
   }
-  // Load data processors.
-  int component_index = -1;
-  for (const auto& component : components) {
-    component_index++;
-    if (component.role() == neptune_model_orchestration::ROLE_MODEL) {
-      // The stablehlo runner op has been loaded explicitly at the beginning.
-      // Skip it here.
-      continue;
-    }
-    TF_ASSIGN_OR_RETURN(
-        const neptune_model_manifest::Function* func,
-        GetFunctionByObjectName(manifest_objects_, component.function_name()));
-    LOG(INFO) << "Adding function: " << component.function_name();
-    NamedSignature named_signature =
-        keyword_arguments_based ? GetNamedSignatureOfComponent(component)
-                                : NamedSignature{};
-    std::vector<std::unique_ptr<Kernel>> sub_graph;
-    if (func->body().has_stable_hlo_body()) {
-      if (!ShouldShloRunOnHost({func}, create_options_->platform_name)) {
-        std::string error_msg =
-            absl::StrCat("StableHLO function ", component.function_name(),
-                         " is not supported to run on host.");
-        return absl::InvalidArgumentError(error_msg);
-      }
+
+  // Load host functions (processors, CPU SHLOs).
+  int total_components = components.size();
+  for (int component_idx = 0; component_idx < total_components;
+       ++component_idx) {
+    const auto& component = components[component_idx];
+
+    if (component.role() != neptune_model_orchestration::ROLE_MODEL) {
       TF_ASSIGN_OR_RETURN(
-          std::unique_ptr<Kernel> host_shlo_kernel,
-          LoadStableHloRunnerOp(component.function_name(),
-                                component.weights_name(),
-                                named_signature.inputs, named_signature.outputs,
-                                /*platform_name=*/"cpu"));
-      sub_graph.push_back(std::move(host_shlo_kernel));
+          loaded_kernels[component_idx],
+          LoadOnHostFunction(component, component_idx, total_components,
+                             keyword_arguments_based));
+    }
+  }
+
+  // Assemble final pipeline.
+  KernelGraph graph;
+  int component_idx = 0;
+  while (component_idx < total_components) {
+    if (batch_indices.has_value() && component_idx == batch_indices->start) {
+      std::vector<std::unique_ptr<Kernel>> batch_segment;
+      batch_segment.reserve(batch_indices->end - batch_indices->start + 1);
+      for (int j = batch_indices->start; j <= batch_indices->end; ++j) {
+        batch_segment.push_back(std::move(loaded_kernels[j]));
+      }
+
+      TF_ASSIGN_OR_RETURN(
+          std::unique_ptr<Kernel> batched_kernel,
+          BuildBatchKernel(std::move(batch_segment), pipeline,
+                           create_options_.get(),
+                           create_options_->computation_thread_pool));
+      graph.push_back(std::move(batched_kernel));
+      component_idx = batch_indices->end;  // Skip batched components
     } else {
-      TF_ASSIGN_OR_RETURN(std::string key, GetKeyFromProcessorMimeType(*func));
-      TF_ASSIGN_OR_RETURN(OptionalFunctionHandler * handler,
-                          optional_function_handler_router_.GetHandler(key));
-      // By default, processor kernels convert inputs and outputs to/from
-      // HostBuffer.
-      // For an unbatched first component, we skip HostBuffer -> Tensor
-      // conversion so clients can pass native framework tensors directly. For
-      // batched first component, we perform the conversion as a BatchKernel
-      // will always takes HostBuffers as inputs.
-      bool pre_data_conversion = true;
-      if (component_index == 0) {
-        pre_data_conversion = component.use_batching();
-      }
-      // For an unbatched last component, we skip Tensor -> HostBuffer
-      // conversion so the pipeline returns native framework tensors directly to
-      // clients. For batched last component, we perform the conversion as a
-      // BatchKernel will always produce HostBuffers as outputs.
-      bool post_data_conversion = true;
-      if (component_index == components.size() - 1) {
-        post_data_conversion = component.use_batching();
-      }
-      TF_ASSIGN_OR_RETURN(
-          std::unique_ptr<Kernel> kernel,
-          handler->HandleFunction(
-              create_options_->model_path, *func, *create_options_,
-              pre_data_conversion, post_data_conversion, named_signature.inputs,
-              named_signature.outputs));
-      sub_graph.push_back(std::move(kernel));
+      graph.push_back(std::move(loaded_kernels[component_idx]));
     }
-    if (component.role() == neptune_model_orchestration::ROLE_PREPROCESSOR) {
-      preprocessors.push_back(std::move(sub_graph));
-    } else if (component.role() ==
-               neptune_model_orchestration::ROLE_POSTPROCESSOR) {
-      postprocessors.push_back(std::move(sub_graph));
-    }
-  }
-  if (batching_config.batch_preprocessing) {
-    for (auto& sub_graph : preprocessors) {
-      batched_kernels.insert(batched_kernels.end(),
-                             std::make_move_iterator(sub_graph.begin()),
-                             std::make_move_iterator(sub_graph.end()));
-    }
-    preprocessors.clear();
-  }
-  // Add stablehlo_runner_op to batched_kernels only if it was successfully
-  // created (non-null), avoiding inserting null kernel pointers into the graph
-  // for pipelines without a model component.
-  if (batching_config.batch_model && stablehlo_runner_op != nullptr) {
-    batched_kernels.push_back(std::move(stablehlo_runner_op));
-    stablehlo_runner_op.reset();
-  }
-  if (batching_config.batch_postprocessing) {
-    for (auto& sub_graph : postprocessors) {
-      batched_kernels.insert(batched_kernels.end(),
-                             std::make_move_iterator(sub_graph.begin()),
-                             std::make_move_iterator(sub_graph.end()));
-    }
-    postprocessors.clear();
-  }
-  if (batched_kernels.empty()) {
-    InsertKernels(std::move(preprocessors), std::move(stablehlo_runner_op),
-                  std::move(postprocessors), graph);
-  } else {
-    TF_ASSIGN_OR_RETURN(
-        std::unique_ptr<Kernel> stablehlo_or_batch_runner_op,
-        BuildBatchKernel(std::move(batched_kernels), pipeline,
-                         create_options_.get(),
-                         create_options_->computation_thread_pool));
-    InsertKernels(std::move(preprocessors),
-                  std::move(stablehlo_or_batch_runner_op),
-                  std::move(postprocessors), graph);
+    ++component_idx;
   }
 
   if (graph.empty()) {
