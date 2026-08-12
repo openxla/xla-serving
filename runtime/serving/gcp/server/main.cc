@@ -70,7 +70,13 @@ ABSL_FLAG(bool, warmup_server, false,
           "neptune::serving::PredictionLog containing PredictRequests. This file "
           "can be generated automatically during model export by passing "
           "`warmup_examples` to `neptune_model.save()`. See "
-          "https://github.com/AI-Hypercomputer/neptune/blob/main/README.md#server-warmup-on-startup for details.");
+          "https://github.com/AI-Hypercomputer/neptune/blob/main/"
+          "README.md#server-warmup-on-startup for details.");
+ABSL_FLAG(int, max_receive_message_size,
+          16 * 1024 * 1024,  // 16 MiB, up from default 4 MiB
+          "Maximum size of a received message.");
+ABSL_FLAG(int, max_send_message_size, -1,  // Unlimited, matches gRPC default
+          "Maximum size of a send message.");
 
 void RunServer() {
   std::string server_address = absl::StrCat("[::]:", absl::GetFlag(FLAGS_port));
@@ -104,6 +110,9 @@ void RunServer() {
                                             use_insecure_grpc_credentials);
   TF_CHECK_OK(creds.status());
 
+  builder.SetMaxReceiveMessageSize(
+      absl::GetFlag(FLAGS_max_receive_message_size));
+  builder.SetMaxSendMessageSize(absl::GetFlag(FLAGS_max_send_message_size));
   builder.AddListeningPort(server_address, *creds);
   builder.RegisterService(service_or.value().get());
   std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
