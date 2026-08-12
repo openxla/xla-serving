@@ -1,11 +1,10 @@
+#include "data/cpu_embedding/python/array_caster.h"  // from @neptune
 #include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @neptune
 #include "data/kernels/cpu_embedding/cpu_embedding_serializer.h"  // from @neptune
-#include "data/cpu_embedding/python/array_caster.h"  // from @neptune
 #include "include/pybind11/pybind11.h"  // from @pybind11_bazel
 #include "include/pybind11/stl.h"  // from @pybind11_bazel
 #include "pybind11_abseil/absl_casters.h"  // from @pybind11_abseil
 #include "pybind11_abseil/status_casters.h"  // from @pybind11_abseil
-#include "pybind11_protobuf/native_proto_caster.h"  // from @pybind11_protobuf
 
 namespace py = pybind11;
 
@@ -21,8 +20,6 @@ PYBIND11_MODULE(cpu_embedding_serializer_pybind, m) {
       throw;
     }
   }
-
-  pybind11_protobuf::ImportNativeProtoCasters();
 
   m.def("serialize", &::neptune::data::composite::SerializeCpuEmbedding);
   m.attr("MANIFEST_ASSET_NAME") =

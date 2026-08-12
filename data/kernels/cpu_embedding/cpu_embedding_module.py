@@ -17,6 +17,7 @@
 import tempfile
 from typing import Any, Sequence
 
+from google.protobuf import text_format
 import jax
 import jaxtyping
 import numpy as np
@@ -116,7 +117,7 @@ class CpuEmbeddingResource:
     # This automatically writes manifest and table files to temp_dir,
     # returning Asset list!
     self._assets = cpu_embedding_serializer_pybind.serialize(
-        self._temp_dir.name, table_data, manifest
+        self._temp_dir.name, table_data, text_format.MessageToString(manifest)
     )
 
     # Instantiate C++ Resource

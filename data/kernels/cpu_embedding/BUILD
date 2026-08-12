@@ -20,10 +20,11 @@ py_library(
     srcs = ["cpu_embedding_module.py"],
     visibility = ["//visibility:public"],
     deps = [
-        "@neptune//data/kernels/cpu_embedding:cpu_embedding_lookup_transform_pybind",
-        "@neptune//data/kernels/cpu_embedding:cpu_embedding_py_pb2",
-        "@neptune//data/kernels/cpu_embedding:cpu_embedding_resource_pybind",
-        "@neptune//data/kernels/cpu_embedding:cpu_embedding_serializer_pybind",
+        ":cpu_embedding_lookup_transform_pybind",
+        ":cpu_embedding_py_pb2",
+        ":cpu_embedding_resource_pybind",
+        ":cpu_embedding_serializer_pybind",
+        "@com_google_protobuf//:protobuf",
         "@neptune//data/processor/python:composite_processor_pybind",
         "@neptune//data/resource_manager/python:resource_manager",
         "@neptune_pypi//jax",
@@ -179,7 +180,6 @@ cc_library(
     hdrs = ["cpu_embedding_serializer.h"],
     defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
-        ":cpu_embedding_cc_proto",
         ":cpu_embedding_resource",
         "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/status",
@@ -204,6 +204,5 @@ pybind_extension(
         "@neptune//data/cpu_embedding/python:array_caster",
         "@pybind11_abseil//pybind11_abseil:absl_casters",
         "@pybind11_abseil//pybind11_abseil:status_casters",
-        "@pybind11_protobuf//pybind11_protobuf:native_proto_caster",
     ],
 )

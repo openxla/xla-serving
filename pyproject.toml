@@ -50,7 +50,7 @@ npt-llm-export = 'neptune_model._src.llm.cli:run'
 
 # TODO: Figure out why composite_processor_test.py is failing on GitHub only.
 [tool.pytest.ini_options]
-addopts = "--ignore=neptune_model/protos --ignore=data --ignore=neptune_model/_src/llm --ignore=neptune_model/_src/processors/composite_processor_test.py"
+addopts = "--ignore=neptune_model/protos --ignore=data --ignore=neptune_model/_src/llm"
 
 [project.optional-dependencies]
 

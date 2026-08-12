@@ -12,9 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from absl import app
+"""pytest configuration for neptune."""
+
+from typing import Any
+from absl import flags
+
+
+def pytest_configure(config: Any) -> None:
+  del config
+  flags.FLAGS.mark_as_parsed()
+
 
 try:
-  app.run(lambda argv: None)
-except SystemExit:
+  flags.FLAGS.mark_as_parsed()
+except Exception:  # pylint: disable=broad-except
   pass
