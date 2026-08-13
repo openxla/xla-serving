@@ -21,6 +21,7 @@ cc_library(
     name = "model_runner_linkopts",
     linkopts = [
         "-Wl,--gc-sections",
+        "-Wl,--icf=all",
     ],
 )
 

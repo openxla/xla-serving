@@ -3,6 +3,7 @@ common --incompatible_disallow_empty_glob=false
 
 common --incompatible_enable_cc_toolchain_resolution
 common --repo_env USE_HERMETIC_CC_TOOLCHAIN=1
+common --repo_env SYSROOT_DIST=linux_glibc_2_35
 
 common --define=PREFIX=/usr
 common --define=LIBDIR=$(PREFIX)/lib
@@ -73,8 +74,7 @@ common --repository_cache=~/.bazel_repository_cache
 
 # Required by Abseil and Tensorstore to prevent compilation errors
 # (e.g. InstantiateRawHashMap not found) and ensure correct ABI compatibility.
-# TODO: update to c++20
-build --cxxopt=-std=c++17
+build --cxxopt=-std=c++20
 build --cxxopt=-fsized-deallocation
 
 # Neptune Data.
