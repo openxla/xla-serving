@@ -95,6 +95,7 @@ pybind_library(
         "@abseil-cpp//absl/types:span",
         "@neptune//data/processor/cc/api:transform_context",
         "@neptune//data/processor/cc/api:type_info",
+        "@neptune//data/processor/cc/api:value",
         "@neptune//data/processor/cc/core:transform",
         "@neptune//data/processor/proto:transform_config_cc_proto",
         "@pybind11_abseil//pybind11_abseil:absl_casters",

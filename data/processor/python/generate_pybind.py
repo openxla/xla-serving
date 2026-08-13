@@ -201,7 +201,12 @@ def generate_pyi(output_file, registrations, all_code):
     write('from data.processor.python import composite_processor_pybind')
     write('')
 
+    seen_pyi_names = set()
     for type_name, py_name in registrations.items():
+      if py_name in seen_pyi_names:
+        continue
+      seen_pyi_names.add(py_name)
+
       short_cls = type_name.split('::')[-1]
       cls_block = re.search(
           rf'class\s+{short_cls}\s*[:{{](.*?)}};', all_code, re.DOTALL
@@ -358,8 +363,21 @@ def main():
     write('      throw std::runtime_error("Failed to import both neptune_data and data. Original error: " + std::string(e.what()));')
     write('    }')
     write('  }')
+    py_name_to_types = {}
     for type_name, py_name in registrations.items():
-      write(f'  ::neptune::data::composite::RegisterPybindTransformExt<{type_name}>(m, "{py_name}");')
+      if py_name not in py_name_to_types:
+        py_name_to_types[py_name] = []
+      py_name_to_types[py_name].append(type_name)
+
+    for py_name, type_list in py_name_to_types.items():
+      if len(type_list) > 1:
+        write(
+            f'  ::neptune::data::composite::RegisterDynamicPybindTransformExt<{type_list[0]}>(m, "{py_name}");'
+        )
+      else:
+        write(
+            f'  ::neptune::data::composite::RegisterPybindTransformExt<{type_list[0]}>(m, "{py_name}");'
+        )
     write('}')
 
 
