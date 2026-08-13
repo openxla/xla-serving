@@ -113,6 +113,10 @@ void LogPredictResponse(const neptune::serving::PredictResponse& response,
                << "final logits to float32 in the apply_fn).";
     return;
   }
+  if (raw.empty()) {
+    LOG(ERROR) << "Logits raw_data is empty.";
+    return;
+  }
   if (raw.size() % sizeof(float) != 0) {
     LOG(ERROR) << "Logits raw_data size (" << raw.size()
                << ") is not a multiple of sizeof(float).";
