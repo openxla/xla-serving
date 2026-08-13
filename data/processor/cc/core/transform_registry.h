@@ -50,30 +50,17 @@ std::vector<api::TypeInfo> GetTypeInfos() {
   return {api::CreateTypeInfo<std::decay_t<Args>>()...};
 }
 
-namespace internal {
-template <typename F, typename Tuple, std::size_t... I>
-auto InvokeHelper(F&& f, absl::Span<const api::Value> args,
-                  std::index_sequence<I...>) {
-  return std::invoke(
-      std::forward<F>(f),
-      args[I].template Get<std::decay_t<std::tuple_element_t<I, Tuple>>>()...);
-}
-}  // namespace internal
-
 template <typename F, typename Tuple>
 auto Invoke(F&& f, absl::Span<const api::Value> args) {
-  return internal::InvokeHelper<F, Tuple>(
-      std::forward<F>(f), args,
-      std::make_index_sequence<std::tuple_size_v<Tuple>>{});
+  auto invoke = [&]<std::size_t... I>(std::index_sequence<I...>) {
+    return std::invoke(
+        std::forward<F>(f),
+        args[I].Get<std::decay_t<std::tuple_element_t<I, Tuple>>>()...);
+  };
+  return invoke(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
 namespace internal {
-template <typename T, typename = void>
-struct HasOperator : std::false_type {};
-
-template <typename T>
-struct HasOperator<T, std::void_t<decltype(&T::operator())>> : std::true_type {
-};
 
 template <typename T>
 struct ExtractStatusOr {
@@ -96,15 +83,6 @@ struct ExtractStatusOr<absl::StatusOr<T>> {
   static constexpr bool is_status_or = true;
 };
 
-template <typename ReturnType, typename... Args, std::size_t... I>
-auto InvokeFactoryHelper(ReturnType (*factory)(Args...),
-                         absl::Span<const api::Value> args,
-                         std::index_sequence<I...>) {
-  auto result = factory(std::move(
-      const_cast<api::Value&>(args[I]).template Get<std::decay_t<Args>>())...);
-  CHECK_OK(result);
-  return *std::move(result);
-}
 }  // namespace internal
 
 template <typename ReturnType, typename... Args>
@@ -280,7 +258,7 @@ class TransformRegistrar {
     SetFactory(&T::Create);
     // TODO: Remove the requires and make it a compile time error
     // to not specify the `operator()`.
-    if constexpr (internal::HasOperator<T>::value) {
+    if constexpr (requires { &T::operator(); }) {
       SetExecutor(&T::operator());
     }
   }
@@ -314,10 +292,8 @@ class TransformRegistrar {
                                   api::ExecuteContext& ctx) -> absl::Status {
       auto bound_f = [&]() {
         if constexpr (std::is_member_function_pointer_v<Func>) {
-          return [func, obj = static_cast<typename Traits::class_type*>(base)](
-                     auto&&... args) {
-            return (obj->*func)(std::forward<decltype(args)>(args)...);
-          };
+          return std::bind_front(
+              func, static_cast<typename Traits::class_type*>(base));
         } else {
           return func;
         }
@@ -370,17 +346,26 @@ class TransformRegistrar {
   // method -> `SetFactory(&T::Create)`.
   template <typename ReturnType, typename... Args>
   TransformRegistrar& SetFactory(ReturnType (*factory)(Args...)) {
-    static_assert(internal::ExtractStatusOr<ReturnType>::is_status_or,
-                  "Transform class must implement a static 'Create' method. "
-                  "E.g., static absl::StatusOr<std::unique_ptr<TransformBase>> "
-                  "Create(...)");
+    static_assert(
+        requires(ReturnType r) {
+          r.status();
+          *std::move(r);
+        },
+        "Transform class must implement a static 'Create' method. "
+        "E.g., static absl::StatusOr<std::unique_ptr<TransformBase>> "
+        "Create(...)");
     auto wrapper = [factory](absl::Span<const api::Value> args)
         -> std::unique_ptr<TransformBase> {
       CHECK_EQ(args.size(), sizeof...(Args))
           << "Expected " << sizeof...(Args) << " arguments, but got "
           << args.size();
-      return internal::InvokeFactoryHelper(factory, args,
-                                           std::index_sequence_for<Args...>{});
+      auto invoke = [&, args]<std::size_t... I>(std::index_sequence<I...>) {
+        auto result = factory(std::move(
+            const_cast<api::Value&>(args[I]).Get<std::decay_t<Args>>())...);
+        CHECK_OK(result);
+        return *std::move(result);
+      };
+      return invoke(std::index_sequence_for<Args...>{});
     };
     CHECK_OK(TransformRegistry::Instance().RegisterTransformFactory(
         name_, std::move(wrapper)));

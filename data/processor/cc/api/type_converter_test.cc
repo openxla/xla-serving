@@ -19,7 +19,7 @@ struct TestStruct {
 class IntToTestStructConverter : public TypeConverter<int, TestStruct> {
  public:
   absl::StatusOr<TestStruct> Convert(const int& input) const override {
-    return TestStruct{input};
+    return TestStruct(input);
   }
 };
 

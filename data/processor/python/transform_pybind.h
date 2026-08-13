@@ -5,7 +5,6 @@
 #include <mutex>
 #include <stdexcept>
 #include <string>
-#include <type_traits>
 #include <vector>
 
 #include "absl/status/status.h"  // from @abseil-cpp
@@ -27,19 +26,6 @@ namespace neptune::data {
 namespace composite {
 namespace pybind_internal {
 
-template <typename T>
-struct IsStatusOr : std::false_type {};
-
-template <typename T>
-struct IsStatusOr<absl::StatusOr<T>> : std::true_type {};
-
-template <typename T, typename = void>
-struct HasOperator : std::false_type {};
-
-template <typename T>
-struct HasOperator<T, std::void_t<decltype(&T::operator())>> : std::true_type {
-};
-
 // This is very similar to `SetFactoryInternal` from TransformRegistry.
 // However, this version has dependencies on pybind11 and is only used for
 // Transforms where the user has explicitly added a `transform_pybind_library`
@@ -49,8 +35,11 @@ struct HasOperator<T, std::void_t<decltype(&T::operator())>> : std::true_type {
 template <typename T, typename ReturnType, typename... Args>
 void SetFactoryInternal(pybind11::module& m, const std::string& name,
                         ReturnType (*factory)(Args...)) {
-  static_assert(IsStatusOr<ReturnType>::value,
-                "Create method must return an absl::StatusOr");
+  static_assert(
+      requires(ReturnType r) {
+        r.status();
+        *std::move(r);
+      }, "Create method must return an absl::StatusOr");
   auto cls = pybind11::classh<T, neptune::data::composite::TransformBase>(
       m, name.c_str());
   cls.def(pybind11::init([factory](Args... args) {
@@ -72,7 +61,7 @@ void SetFactoryInternal(pybind11::module& m, const std::string& name,
       },
       "Internal api: Execute the transform with an explicitly provided "
       "api::ExecuteContext.");
-  if constexpr (HasOperator<T>::value) {
+  if constexpr (requires { &T::operator(); }) {
     cls.def("execute", &T::operator(), "Execute the transform directly.");
   }
 }
