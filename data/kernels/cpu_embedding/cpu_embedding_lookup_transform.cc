@@ -364,9 +364,9 @@ absl::Status CpuEmbeddingLookupTransform::PropagateSignatureImpl(
       output_dims.push_back(embedding_dim);
     }
 
-    output_specs.push_back(api::HostBufferSpec(
+    output_specs.push_back(api::HostBufferSpec{
         xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
-        xla::ifrt::Shape(absl::MakeConstSpan(output_dims))));
+        xla::ifrt::Shape(absl::MakeConstSpan(output_dims))});
   }
 
   context.outputs.push_back(api::ShapeInferenceValue(std::move(output_specs)));
