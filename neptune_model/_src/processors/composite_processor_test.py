@@ -22,6 +22,7 @@ import numpy as np
 
 from neptune_data.ops import cpu_embedding
 from neptune_data.processor.proto import transform_config_pb2
+from neptune_data.processor.python import composite_processor_pybind
 from neptune_data_test.processor.python.examples import add_from_resource_transform_pybind
 from neptune_data_test.processor.python.examples import add_int_transform_pybind
 from neptune_data_test.processor.python.examples import int_resource_pybind
@@ -261,6 +262,52 @@ class CompositeProcessorTest(parameterized.TestCase):
     self.assertTrue(dest_table.exists())
 
     resource.close()
+
+  def test_from_graph_dynamic_shape_propagation(self):
+    graph = composite_processor_pybind.ExecutionGraph()
+    t_add = add_int_transform_pybind.AddIntTransform()
+    idx = graph.add_node(
+        "my_add",
+        t_add,
+        [
+            composite_processor_pybind.GraphEdge.graph_input(0),
+            composite_processor_pybind.GraphEdge.graph_input(1),
+        ],
+    )
+    graph.set_outputs(
+        [composite_processor_pybind.GraphEdge.node_output(idx, 0)]
+    )
+
+    input_structure = {
+        "a": jax.ShapeDtypeStruct((), jnp.int32),
+        "b": jax.ShapeDtypeStruct((), jnp.int32),
+    }
+    output_structure = {"out": jax.ShapeDtypeStruct((), jnp.int32)}
+    struct = transform_config_pb2.GraphIOStructureProto()
+    struct.input_structure.CopyFrom(
+        composite_processor._tree_to_proto(input_structure)
+    )
+    struct.output_structure.CopyFrom(
+        composite_processor._tree_to_proto(output_structure)
+    )
+    graph.io_structure = struct
+
+    proc_from_graph = composite_processor.CompositeProcessor.from_graph(
+        "from_graph_proc", graph, assets={}
+    )
+
+    # Call prepare with dynamic runtime batch size of (64, 2)
+    dynamic_input_sig = {
+        "a": jax.ShapeDtypeStruct(shape=(64, 2), dtype=jnp.int32),
+        "b": jax.ShapeDtypeStruct(shape=(64, 2), dtype=jnp.int32),
+    }
+    prepared = proc_from_graph.prepare(dynamic_input_sig)
+
+    # Verify output signature dynamically calculated (64, 2) instead of static proto shape ()
+    self.assertEqual(prepared.output_signature["out"].shape, (64, 2))
+    self.assertEqual(
+        prepared.output_signature["out"].dtype, shlo_type.ShloDType.i32
+    )
 
 
 if __name__ == "__main__":

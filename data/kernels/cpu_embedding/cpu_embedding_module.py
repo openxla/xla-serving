@@ -113,6 +113,9 @@ class CpuEmbeddingResource:
             table_data[feature.table].shape[1]
         )
 
+    first_table_data = next(iter(table_data.values()))
+    self._embedding_dim = first_table_data.shape[1]
+
     # Call C++ Serialization helper!
     # This automatically writes manifest and table files to temp_dir,
     # returning Asset list!
@@ -141,6 +144,10 @@ class CpuEmbeddingResource:
   @property
   def assets(self) -> Sequence[resource_manager.Asset]:
     return self._assets
+
+  @property
+  def embedding_dim(self) -> int:
+    return self._embedding_dim
 
   def export_assets(self) -> dict[str, str]:
     assets_dict = {}
@@ -197,6 +204,7 @@ class CpuEmbeddingModule:
       output_feature_names: str | Sequence[str] | None = None,
       output_shapes: Sequence[int] | Sequence[Sequence[int]] | None = None,
       dense_lookup: bool = False,
+      embedding_dim: int | None = None,
       # For backwards compatibility with keyword arguments:
       feature_name: str | None = None,
       output_feature_name: str | None = None,
@@ -204,9 +212,13 @@ class CpuEmbeddingModule:
   ):
     super().__init__()
     self._resource_wrapper = resource
+
     resolved_features = feature_names or feature_name
     resolved_outputs = output_feature_names or output_feature_name
     resolved_shapes = output_shapes or output_shape
+    resolved_embedding_dim = (
+        embedding_dim if embedding_dim is not None else resource.embedding_dim
+    )
 
     if resolved_features is None:
       raise ValueError("Must provide feature_names or feature_name.")
@@ -233,11 +245,11 @@ class CpuEmbeddingModule:
       if not resolved_shapes:
         self._output_shapes = [[]]
       elif isinstance(resolved_shapes[0], int):
-        self._output_shapes = [list(resolved_shapes)]
+        self._output_shapes = [list(resolved_shapes)]  # pytype: disable=wrong-arg-types
       else:
-        self._output_shapes = [list(s) for s in resolved_shapes]  # pyrefly: ignore[bad-argument-type]
+        self._output_shapes = [list(s) for s in resolved_shapes]  # pytype: disable=wrong-arg-types
     else:
-      self._output_shapes = [list(s) for s in resolved_shapes]  # pyrefly: ignore[bad-argument-type]
+      self._output_shapes = [list(s) for s in resolved_shapes]  # pytype: disable=wrong-arg-types
 
     # Assert sequence lengths are equal
     if len(self._feature_names) != len(self._output_feature_names) or len(
@@ -256,6 +268,11 @@ class CpuEmbeddingModule:
             self._feature_names,
             dense_lookup,
             self._output_feature_names,
+            resolved_embedding_dim,
+            [
+                [d if d is not None else -1 for d in shape]
+                for shape in self._output_shapes
+            ],
         )
     )
 

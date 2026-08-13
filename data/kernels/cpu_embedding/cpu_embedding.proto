@@ -32,4 +32,13 @@ message CpuEmbeddingLookupTransformConfig {
   repeated string feature_names = 2;
   bool dense_lookup = 3;
   repeated string output_feature_names = 4;
+  int32 embedding_dim = 5;
+}
+
+message PackHostBufferVectorArgs {
+  int32 input_count = 1;
+}
+
+message UnpackHostBufferVectorArgs {
+  int32 output_count = 1;
 }

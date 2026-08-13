@@ -136,8 +136,6 @@ absl::StatusOr<CompositeProcessorConfig> CompositeProcessor::ToProto() const {
       RETURN_IF_ERROR(SerializeEdges(edge, *edge_proto));
     }
 
-    *config.add_transforms() = *std::move(transform_config);
-
     for (const auto& resource : node.transform->GetAllResources()) {
       // Validate that the current state of resources match that of the resource
       // manager.
@@ -153,6 +151,8 @@ absl::StatusOr<CompositeProcessorConfig> CompositeProcessor::ToProto() const {
         return status;
       }
     }
+
+    *config.add_transforms() = *std::move(transform_config);
   }
 
   // Serialize graph outputs

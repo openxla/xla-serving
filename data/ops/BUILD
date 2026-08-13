@@ -25,3 +25,13 @@ py_test(
         "@neptune_pypi//numpy",
     ],
 )
+
+py_library(
+    name = "packing",
+    srcs = ["packing.py"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@neptune//data/kernels/cpu_embedding:pack_host_buffer_vector_module",
+        "@neptune//data/kernels/cpu_embedding:unpack_host_buffer_vector_module",
+    ],
+)

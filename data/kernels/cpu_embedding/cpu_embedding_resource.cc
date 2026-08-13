@@ -125,6 +125,7 @@ absl::Status LoadCpuEmbeddingEngine(
     }
     RETURN_IF_ERROR(engine->AddLocalTable(std::string(table_config.name()),
                                           std::move(table_status).value()));
+    table_to_dim[table_config.name()] = table_config.embedding_dim();
   }
 
   for (const auto& feature : manifest_proto.feature_specs()) {
