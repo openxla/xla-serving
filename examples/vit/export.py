@@ -18,15 +18,11 @@ Importing this module (via ``examples.vit``) sets ``KERAS_BACKEND=jax``
 before keras is loaded; see ``examples/vit/__init__.py``.
 """
 
-import os
-import tempfile
-
 import jax
 import jax.numpy as jnp
 import keras
 import keras_hub
 import numpy as np
-from orbax import checkpoint as ocp
 
 from neptune_model._src.export import jax_model
 from neptune_model._src.export import main_lib
@@ -89,12 +85,6 @@ def export_model(
         ),
     }
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-      ckpt_path = os.path.join(tmpdir, 'ckpt')
-      checkpointer = ocp.Checkpointer(ocp.StandardCheckpointHandler())
-      checkpointer.save(ckpt_path, params)
-      ckpt_params = checkpointer.restore(ckpt_path)
-
     # Match the preprocessing range in preprocess_image.py ([-1, 1]) so warmup
     # traces the graph against in-distribution activations.
     warmup_image = np.random.uniform(
@@ -111,7 +101,7 @@ def export_model(
                 },
                 jax_export_kwargs={'platforms': ['cpu', 'tpu']},
             ),
-            params=ckpt_params,
+            params=params,
         ),
         serving_configs=[
             serving_config.ServingConfig(
