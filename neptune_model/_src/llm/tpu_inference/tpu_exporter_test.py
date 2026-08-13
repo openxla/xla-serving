@@ -18,9 +18,11 @@
 
 import dataclasses
 import os
+import sys
 from typing import Any
 import unittest
 
+from absl import flags as absl_flags
 from absl import logging
 from absl.testing import absltest  # pylint: disable=g-import-not-at-top
 import jax
@@ -76,6 +78,8 @@ class ExporterTest(absltest.TestCase):
   @classmethod
   def setUpClass(cls):
     super().setUpClass()
+    if not absl_flags.FLAGS.is_parsed():
+      absl_flags.FLAGS(sys.argv[:1])
     if not _TPU_INFERENCE_TEST_AVAILABLE:
       raise absltest.SkipTest(
           "tpu_inference/vllm dependencies are not available. Detailed"
@@ -95,11 +99,18 @@ class ExporterTest(absltest.TestCase):
           property(lambda self: self),
       )
 
-  def _create_runner(self, load_format: str = "jax_dummy"):
-    model_dir = os.path.join(
-        os.path.dirname(__file__),
-        "../testdata/qwen_dummy",
-    )
+  def _create_runner(
+      self,
+      load_format: str = "jax_dummy",
+      model_name: str | None = None,
+  ):
+    if model_name is None:
+      model_dir = os.path.join(
+          os.path.dirname(__file__),
+          "../testdata/qwen_dummy",
+      )
+    else:
+      model_dir = model_name
 
     engine_args = vllm_arg_utils.EngineArgs(
         model=model_dir,
@@ -373,7 +384,10 @@ class ExporterTest(absltest.TestCase):
   def test_export_beam_search_with_real_weights(self):
     """Heavy weight generation and text quality verification with real weights."""
     model_name = "Qwen/Qwen3-0.6B"
-    runner = self._create_runner(load_format="safetensors")
+    runner = self._create_runner(
+        load_format="safetensors",
+        model_name=model_name,
+    )
     export_dir = self.create_tempdir().full_path
     beam_width = 4
 
@@ -401,7 +415,46 @@ class ExporterTest(absltest.TestCase):
     )
     self.assertTrue(os.path.exists(export_dir))
 
-    # 2. Run E2E ModelRunner inference with real weights
+    # 2. Test manual pre_process -> model_fn -> post_process pipeline
+    prompt_text = "The most unexpected thing happened when I opened the door,"
+    tokenizer = tokenizers_processors.KerasHubTokenizerTF(
+        model_name_or_path=tokenizer_config.model_name_or_path,
+        max_seq_len=generation_config.max_prompt_length,
+    )
+    model_wrapper = tpu_wrapper.TPUInferenceWrapper(
+        tpu_runner=runner,
+        generation_config=generation_config,
+    )
+    pre_processed = tokenizer.pre_process_fn(
+        {"text_input": tf.constant([prompt_text])}
+    )
+    inputs_jax = {
+        "input_ids": jnp.array(pre_processed["input_ids"].numpy()),
+    }
+    with runner.mesh:
+      model_wrapper.generation_config = dataclasses.replace(
+          model_wrapper.generation_config,
+          pad_token_id=tokenizer.pad_token_id,
+      )
+      model_fn = model_wrapper.compile_generation_loop()
+      jit_model_fn = jax.jit(model_fn)
+      jax_outputs = jit_model_fn(runner.state, inputs_jax)
+
+    post_processed = tokenizer.post_process_fn(
+        {"token_ids": tf.constant(np.array(jax_outputs["token_ids"]))}
+    )
+    manual_output = [
+        val.decode("utf-8") if isinstance(val, bytes) else str(val)
+        for val in post_processed["text_output"].numpy()[0]
+    ]
+    print("=" * 40)
+    print("TPU Real-Weight Beam Search Output text:")
+    for idx, val in enumerate(manual_output):
+      print(f"Beam {idx}: {val}")
+    print("=" * 40)
+    self.assertLen(manual_output, beam_width)
+
+    # 3. Run E2E ModelRunner inference with real weights
 
 
 if __name__ == "__main__":
