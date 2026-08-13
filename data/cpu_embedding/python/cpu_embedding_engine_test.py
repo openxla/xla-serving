@@ -20,6 +20,58 @@ class CpuEmbeddingEngineTest(absltest.TestCase):
         table.lookup([0, 2]), np.array([[1.0, 2.0], [5.0, 6.0]])
     )
 
+  def test_quantized_embedding_table(self):
+    q_data = np.array(
+        [[10, 20, 5, 10], [0, 1, 0, -1], [4, 6, 2, 4]], dtype=np.int8
+    )
+    scales = np.array([[0.1, 0.2], [1.0, 2.0], [0.5, 0.5]], dtype=np.float32)
+    offsets = np.array([[0.0, 0.0], [-1.0, 1.0], [0.0, -0.5]], dtype=np.float32)
+
+    table = cpu_embedding_engine_pybind.create_quantized_embedding_table(
+        name="qtable",
+        data=q_data,
+        scales=scales,
+        offsets=offsets,
+        block_size=2,
+        combine_mode="sum",
+    )
+    self.assertEqual(table.name, "qtable")
+    self.assertEqual(table.vocab_size, 3)
+    self.assertEqual(table.embedding_dim, 4)
+    self.assertTrue(table.is_quantized)
+    self.assertEqual(table.block_size, 2)
+
+    expected_lookup = np.array(
+        [[1.0, 2.0, 1.0, 2.0], [-1.0, 0.0, 1.0, -1.0]], dtype=np.float32
+    )
+    np.testing.assert_allclose(table.lookup([0, 1]), expected_lookup, rtol=1e-5)
+
+  def test_symmetric_quantized_embedding_table(self):
+    q_data = np.array(
+        [[10, 20, 5, 10], [0, 1, 0, -1], [4, 6, 2, 4]], dtype=np.int8
+    )
+    scales = np.array([[0.1, 0.2], [1.0, 2.0], [0.5, 0.5]], dtype=np.float32)
+    offsets = np.array([], dtype=np.float32)
+
+    table = cpu_embedding_engine_pybind.create_quantized_embedding_table(
+        name="qtable",
+        data=q_data,
+        scales=scales,
+        offsets=offsets,
+        block_size=2,
+        combine_mode="sum",
+    )
+    self.assertEqual(table.name, "qtable")
+    self.assertEqual(table.vocab_size, 3)
+    self.assertEqual(table.embedding_dim, 4)
+    self.assertTrue(table.is_quantized)
+    self.assertEqual(table.block_size, 2)
+
+    expected_lookup = np.array(
+        [[1.0, 2.0, 1.0, 2.0], [0.0, 1.0, 0.0, -2.0]], dtype=np.float32
+    )
+    np.testing.assert_allclose(table.lookup([0, 1]), expected_lookup, rtol=1e-5)
+
   def test_feature_batch_csr_input(self):
     feature_batch = cpu_embedding_engine_pybind.create_feature_batch_csr_input(
         name="feature_batch",

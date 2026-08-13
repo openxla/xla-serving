@@ -15,6 +15,7 @@ message CpuEmbeddingManifest {
     int64 vocab_size = 2;
     int32 embedding_dim = 3;
     CombineMode combine_mode = 5;
+    bool is_quantized = 6;
   }
 
   message FeatureSpec {
@@ -25,6 +26,8 @@ message CpuEmbeddingManifest {
 
   repeated EmbeddingTable tables = 1;
   repeated FeatureSpec feature_specs = 2;
+  int32 max_cpu_slots = 3;
+  int32 block_size = 4;
 }
 
 message CpuEmbeddingLookupTransformConfig {
@@ -32,4 +35,13 @@ message CpuEmbeddingLookupTransformConfig {
   repeated string feature_names = 2;
   bool dense_lookup = 3;
   repeated string output_feature_names = 4;
+  int32 embedding_dim = 5;
+}
+
+message PackHostBufferVectorArgs {
+  int32 input_count = 1;
+}
+
+message UnpackHostBufferVectorArgs {
+  int32 output_count = 1;
 }

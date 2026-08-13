@@ -6,6 +6,11 @@ package(default_visibility = [
     "@neptune//:__subpackages__",
 ])
 
+py_library(
+    name = "transform",
+    srcs = ["transform.py"],
+)
+
 pybind_extension(
     name = "composite_processor_pybind",
     srcs = ["composite_processor_pybind.cc"],
@@ -115,4 +120,21 @@ py_test(
         "generate_pybind_test.py",
     ],
     deps = ["@absl_py//absl/testing:absltest"],
+)
+
+py_library(
+    name = "quantize_utils",
+    srcs = ["quantize_utils.py"],
+    deps = [
+        "@neptune_pypi//numpy",
+    ],
+)
+
+py_test(
+    name = "quantize_utils_test",
+    srcs = ["quantize_utils_test.py"],
+    deps = [
+        ":quantize_utils",
+        "@neptune_pypi//numpy",
+    ],
 )

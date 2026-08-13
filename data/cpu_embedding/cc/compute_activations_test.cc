@@ -238,5 +238,104 @@ struct TypeNamer {
 INSTANTIATE_TYPED_TEST_SUITE_P(test, ComputeActivationsTest, MyTypes,
                                TypeNamer);
 
+TEST(QuantizedActivationsTest, SumCombine) {
+  std::vector<int8_t> q_data = {10, 20, 5, 10, 0, 1, 0, -1, 4, 6, 2, 4};
+  Array data_array(absl::MakeConstSpan(q_data), Shape({3, 4}));
+
+  std::vector<float> scales = {0.1f, 0.2f, 1.0f, 2.0f, 0.5f, 0.5f};
+  Array scales_array(absl::MakeConstSpan(scales), Shape({3, 2}));
+
+  std::vector<float> offsets = {0.0f, 0.0f, -1.0f, 1.0f, 0.0f, -0.5f};
+  Array offsets_array(absl::MakeConstSpan(offsets), Shape({3, 2}));
+
+  ASSERT_OK_AND_ASSIGN(
+      auto embedding_table,
+      EmbeddingTable::CreateQuantized(
+          "table", data_array, scales_array, offsets_array,
+          /*block_size=*/2, EmbeddingTable::CombineMode::kSum));
+
+  std::vector<int32_t> row_splits = {0, 2, 3};
+  std::vector<int64_t> embedding_ids = {0, 1, 2};
+  ASSERT_OK_AND_ASSIGN(
+      FeatureBatchCsrInput feature_batch,
+      FeatureBatchCsrInput::Create("feature", embedding_ids, row_splits, {}));
+
+  ASSERT_OK_AND_ASSIGN(Array result, ComputeEmbeddingActivations(
+                                         feature_batch, *embedding_table));
+
+  EXPECT_EQ(result.GetDType(), DType::kFloat32);
+  EXPECT_THAT(result.ShapeSpan(), ElementsAre(2, 4));
+  EXPECT_THAT(result.AsSpan<float>(),
+              Pointwise(Approx(1e-5f),
+                        {0.0f, 2.0f, 2.0f, 1.0f, 2.0f, 3.0f, 0.5f, 1.5f}));
+}
+
+TEST(QuantizedActivationsTest, SequenceAssembly) {
+  std::vector<int8_t> q_data = {10, 20, 5, 10, 0, 1, 0, -1, 4, 6, 2, 4};
+  Array data_array(absl::MakeConstSpan(q_data), Shape({3, 4}));
+
+  std::vector<float> scales = {0.1f, 0.2f, 1.0f, 2.0f, 0.5f, 0.5f};
+  Array scales_array(absl::MakeConstSpan(scales), Shape({3, 2}));
+
+  std::vector<float> offsets = {0.0f, 0.0f, -1.0f, 1.0f, 0.0f, -0.5f};
+  Array offsets_array(absl::MakeConstSpan(offsets), Shape({3, 2}));
+
+  ASSERT_OK_AND_ASSIGN(
+      auto embedding_table,
+      EmbeddingTable::CreateQuantized(
+          "table", data_array, scales_array, offsets_array,
+          /*block_size=*/2, EmbeddingTable::CombineMode::kSum));
+
+  std::vector<int32_t> row_splits = {0, 2, 3};
+  std::vector<int64_t> embedding_ids = {0, 2, 1};
+  ASSERT_OK_AND_ASSIGN(
+      FeatureBatchCsrInput feature_batch,
+      FeatureBatchCsrInput::Create("feature", embedding_ids, row_splits, {}));
+
+  constexpr int64_t kMaxSequenceLength = 3;
+  ASSERT_OK_AND_ASSIGN(Array result,
+                       LookupEmbeddingSequence(feature_batch, *embedding_table,
+                                               kMaxSequenceLength));
+
+  EXPECT_EQ(result.GetDType(), DType::kFloat32);
+  EXPECT_THAT(result.ShapeSpan(), ElementsAre(2, kMaxSequenceLength, 4));
+  EXPECT_THAT(result.AsSpan<float>(),
+              Pointwise(Approx(1e-5f),
+                        {1.0f, 2.0f, 1.0f, 2.0f, 2.0f,  3.0f, 0.5f, 1.5f,
+                         0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 1.0f, -1.0f,
+                         0.0f, 0.0f, 0.0f, 0.0f, 0.0f,  0.0f, 0.0f, 0.0f}));
+}
+
+TEST(QuantizedActivationsTest, SymmetricQuantizedSumCombine) {
+  std::vector<int8_t> q_data = {10, 20, 5, 10, 0, 1, 0, -1, 4, 6, 2, 4};
+  Array data_array(absl::MakeConstSpan(q_data), Shape({3, 4}));
+
+  std::vector<float> scales = {0.1f, 0.2f, 1.0f, 2.0f, 0.5f, 0.5f};
+  Array scales_array(absl::MakeConstSpan(scales), Shape({3, 2}));
+
+  Array offsets_array;
+
+  ASSERT_OK_AND_ASSIGN(
+      auto embedding_table,
+      EmbeddingTable::CreateQuantized(
+          "table", data_array, scales_array, offsets_array,
+          /*block_size=*/2, EmbeddingTable::CombineMode::kSum));
+
+  std::vector<int32_t> row_splits = {0, 2, 3};
+  std::vector<int64_t> embedding_ids = {0, 1, 2};
+  ASSERT_OK_AND_ASSIGN(
+      FeatureBatchCsrInput feature_batch,
+      FeatureBatchCsrInput::Create("feature", embedding_ids, row_splits, {}));
+
+  ASSERT_OK_AND_ASSIGN(Array result, ComputeEmbeddingActivations(
+                                         feature_batch, *embedding_table));
+
+  EXPECT_EQ(result.GetDType(), DType::kFloat32);
+  EXPECT_THAT(result.ShapeSpan(), ElementsAre(2, 4));
+  EXPECT_THAT(result.AsSpan<float>(),
+              Pointwise(Approx(1e-5f),
+                        {1.0f, 3.0f, 1.0f, 0.0f, 2.0f, 3.0f, 1.0f, 2.0f}));
+}
+
 }  // namespace
 }  // namespace neptune::data::cpu_embedding

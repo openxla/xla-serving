@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <type_traits>
 
 #include "absl/status/status.h"  // from @abseil-cpp
@@ -19,7 +20,11 @@
 namespace neptune::data::cpu_embedding {
 namespace {
 
-template <typename T>
+constexpr int64_t kSimdBlockWidthSSE = 16;
+constexpr int64_t kSimdBlockWidthAVX2 = 32;
+constexpr int64_t kSimdBlockWidthAVX512 = 64;
+
+template <typename T, int Dim = Eigen::Dynamic>
 absl::Status AssembleCombinedEmbeddings(
     absl::Span<const int64_t> embedding_ids,
     absl::Span<const int32_t> row_pointers, absl::Span<const float> weights,
@@ -30,12 +35,30 @@ absl::Status AssembleCombinedEmbeddings(
   const int64_t vocab_size = embedding_table.VocabSize();
   const size_t num_samples = row_pointers.size() - 1;
 
+  auto get_row_vec = [&](const T* ptr) {
+    if constexpr (Dim == Eigen::Dynamic) {
+      return Eigen::Map<const Eigen::Matrix<T, 1, Eigen::Dynamic>>(ptr, dim);
+    } else {
+      return Eigen::Map<const Eigen::Matrix<T, 1, Dim>>(ptr);
+    }
+  };
+
+  auto get_act_vec = [&](T* ptr) {
+    if constexpr (Dim == Eigen::Dynamic) {
+      return Eigen::Map<Eigen::Matrix<T, 1, Eigen::Dynamic>>(ptr, dim);
+    } else {
+      return Eigen::Map<Eigen::Matrix<T, 1, Dim>>(ptr);
+    }
+  };
+
   for (size_t sample_num = 0; sample_num < num_samples; ++sample_num) {
     const size_t sample_start = row_pointers[sample_num];
     const size_t sample_size =
         row_pointers[sample_num + 1] - row_pointers[sample_num];
+    T* act_ptr = activations_tensor.data() + sample_num * dim;
 
     if (sample_size == 0) {
+      get_act_vec(act_ptr).setZero();
       continue;
     }
 
@@ -44,7 +67,11 @@ absl::Status AssembleCombinedEmbeddings(
     absl::Span<const float> sample_weights =
         weights.empty() ? weights : weights.subspan(sample_start, sample_size);
 
-    T* act_ptr = activations_tensor.data() + sample_num * dim;
+    Eigen::Matrix<T, 1, Dim> accumulator;
+    if constexpr (Dim == Eigen::Dynamic) {
+      accumulator.resize(dim);
+    }
+    accumulator.setZero();
 
     // 1. Bounds check scan
     for (size_t emb_idx = 0; emb_idx < sample_size; ++emb_idx) {
@@ -61,10 +88,7 @@ absl::Status AssembleCombinedEmbeddings(
     if (sample_weights.empty()) {
       for (size_t emb_idx = 0; emb_idx < sample_size; ++emb_idx) {
         const T* row_ptr = table_data + sample_ids[emb_idx] * dim;
-        Eigen::Map<const Eigen::Matrix<T, 1, Eigen::Dynamic>> row_vec(row_ptr,
-                                                                      dim);
-        Eigen::Map<Eigen::Matrix<T, 1, Eigen::Dynamic>> act_vec(act_ptr, dim);
-        act_vec += row_vec;
+        accumulator += get_row_vec(row_ptr);
       }
 
       float scale = 1.0f;
@@ -79,18 +103,14 @@ absl::Status AssembleCombinedEmbeddings(
           break;
       }
       if (scale != 1.0f) {
-        Eigen::Map<Eigen::Matrix<T, 1, Eigen::Dynamic>> act_vec(act_ptr, dim);
-        act_vec *= T(scale);
+        accumulator *= T(scale);
       }
     } else {
       float sum_weights = 0.0f;
       for (size_t emb_idx = 0; emb_idx < sample_size; ++emb_idx) {
         const T* row_ptr = table_data + sample_ids[emb_idx] * dim;
         float w = sample_weights[emb_idx];
-        Eigen::Map<const Eigen::Matrix<T, 1, Eigen::Dynamic>> row_vec(row_ptr,
-                                                                      dim);
-        Eigen::Map<Eigen::Matrix<T, 1, Eigen::Dynamic>> act_vec(act_ptr, dim);
-        act_vec += T(w) * row_vec;
+        accumulator += T(w) * get_row_vec(row_ptr);
 
         switch (embedding_table.GetCombineMode()) {
           case EmbeddingTable::CombineMode::kSum:
@@ -116,12 +136,43 @@ absl::Status AssembleCombinedEmbeddings(
           break;
       }
       if (scale != 1.0f) {
-        Eigen::Map<Eigen::Matrix<T, 1, Eigen::Dynamic>> act_vec(act_ptr, dim);
-        act_vec *= T(scale);
+        accumulator *= T(scale);
       }
     }
+    get_act_vec(act_ptr) = accumulator;
   }
   return absl::OkStatus();
+}
+
+template <typename T>
+absl::Status DispatchAssemble(absl::Span<const int64_t> embedding_ids,
+                              absl::Span<const int32_t> row_pointers,
+                              absl::Span<const float> weights,
+                              const EmbeddingTable& embedding_table,
+                              Array::TensorMap<T, 2> activations_tensor) {
+  const int64_t dim = embedding_table.EmbeddingDim();
+  switch (dim) {
+    case 16:
+      return AssembleCombinedEmbeddings<T, 16>(embedding_ids, row_pointers,
+                                               weights, embedding_table,
+                                               activations_tensor);
+    case 32:
+      return AssembleCombinedEmbeddings<T, 32>(embedding_ids, row_pointers,
+                                               weights, embedding_table,
+                                               activations_tensor);
+    case 64:
+      return AssembleCombinedEmbeddings<T, 64>(embedding_ids, row_pointers,
+                                               weights, embedding_table,
+                                               activations_tensor);
+    case 128:
+      return AssembleCombinedEmbeddings<T, 128>(embedding_ids, row_pointers,
+                                                weights, embedding_table,
+                                                activations_tensor);
+    default:
+      return AssembleCombinedEmbeddings<T, Eigen::Dynamic>(
+          embedding_ids, row_pointers, weights, embedding_table,
+          activations_tensor);
+  }
 }
 
 template <typename T>
@@ -163,11 +214,246 @@ absl::StatusOr<Array> AssembleSequenceEmbeddings(
   return activations;
 }
 
+template <typename T, int Dim = Eigen::Dynamic>
+void AssembleCombinedEmbeddingsQuantized(
+    absl::Span<const int64_t> embedding_ids,
+    absl::Span<const int32_t> row_pointers, absl::Span<const float> weights,
+    const EmbeddingTable& embedding_table,
+    Array::TensorMap<T, 2> activations_tensor) {
+  const int8_t* table_data = embedding_table.AsTensor<int8_t>().data();
+  const float* scales_data =
+      embedding_table.Scales().AsTensor<float, 2>().data();
+  const bool has_offsets =
+      embedding_table.Offsets().GetShape().NumElements() != 0;
+  const float* offsets_data =
+      has_offsets ? embedding_table.Offsets().AsTensor<float, 2>().data()
+                  : nullptr;
+  const int64_t dim = embedding_table.EmbeddingDim();
+  const int64_t block_size = embedding_table.BlockSize();
+  const size_t num_samples = row_pointers.size() - 1;
+
+  for (size_t sample_num = 0; sample_num < num_samples; ++sample_num) {
+    const size_t sample_start = row_pointers[sample_num];
+    const size_t sample_size =
+        row_pointers[sample_num + 1] - row_pointers[sample_num];
+    T* act_ptr = activations_tensor.data() + sample_num * dim;
+
+    auto get_act_vec = [&](T* ptr) {
+      if constexpr (Dim == Eigen::Dynamic) {
+        return Eigen::Map<Eigen::Matrix<T, 1, Eigen::Dynamic>>(ptr, dim);
+      } else {
+        return Eigen::Map<Eigen::Matrix<T, 1, Dim>>(ptr);
+      }
+    };
+
+    if (sample_size == 0) {
+      get_act_vec(act_ptr).setZero();
+      continue;
+    }
+
+    absl::Span<const int64_t> sample_ids =
+        embedding_ids.subspan(sample_start, sample_size);
+    absl::Span<const float> sample_weights =
+        weights.empty() ? weights : weights.subspan(sample_start, sample_size);
+
+    Eigen::Matrix<float, 1, Dim> accumulator;
+    if constexpr (Dim == Eigen::Dynamic) {
+      accumulator.resize(dim);
+    }
+    accumulator.setZero();
+
+    for (size_t emb_idx = 0; emb_idx < sample_size; ++emb_idx) {
+      int64_t id = sample_ids[emb_idx];
+      const int8_t* row_ptr = table_data + id * dim;
+      const float* row_scales = scales_data + id * (dim / block_size);
+      const float* row_offsets = offsets_data == nullptr
+                                     ? nullptr
+                                     : offsets_data + id * (dim / block_size);
+      float w = sample_weights.empty() ? 1.0f : sample_weights[emb_idx];
+
+      const int64_t num_blocks = dim / block_size;
+      for (int64_t block_idx = 0; block_idx < num_blocks; ++block_idx) {
+        const float scale = row_scales[block_idx];
+        const float offset =
+            row_offsets == nullptr ? 0.0f : row_offsets[block_idx];
+        const int8_t* block_ptr = row_ptr + block_idx * block_size;
+
+        const float w_scale = w * scale;
+        const float w_offset = w * offset;
+
+        if (block_size == kSimdBlockWidthAVX2) {
+          Eigen::Map<const Eigen::Array<int8_t, 1, kSimdBlockWidthAVX2>>
+              q_block(block_ptr);
+          accumulator
+              .template segment<kSimdBlockWidthAVX2>(block_idx *
+                                                     kSimdBlockWidthAVX2)
+              .array() += q_block.template cast<float>() * w_scale + w_offset;
+        } else if (block_size == kSimdBlockWidthSSE) {
+          Eigen::Map<const Eigen::Array<int8_t, 1, kSimdBlockWidthSSE>> q_block(
+              block_ptr);
+          accumulator
+              .template segment<kSimdBlockWidthSSE>(block_idx *
+                                                    kSimdBlockWidthSSE)
+              .array() += q_block.template cast<float>() * w_scale + w_offset;
+        } else if (block_size == kSimdBlockWidthAVX512) {
+          Eigen::Map<const Eigen::Array<int8_t, 1, kSimdBlockWidthAVX512>>
+              q_block(block_ptr);
+          accumulator
+              .template segment<kSimdBlockWidthAVX512>(block_idx *
+                                                       kSimdBlockWidthAVX512)
+              .array() += q_block.template cast<float>() * w_scale + w_offset;
+        } else {
+          Eigen::Map<const Eigen::Array<int8_t, 1, Eigen::Dynamic>> q_block(
+              block_ptr, block_size);
+          accumulator.segment(block_idx * block_size, block_size).array() +=
+              q_block.template cast<float>() * w_scale + w_offset;
+        }
+      }
+    }
+
+    float scale = 1.0f;
+    if (sample_weights.empty()) {
+      switch (embedding_table.GetCombineMode()) {
+        case EmbeddingTable::CombineMode::kSum:
+          break;
+        case EmbeddingTable::CombineMode::kMean:
+          scale = 1.0f / sample_size;
+          break;
+        case EmbeddingTable::CombineMode::kSqrtN:
+          scale = 1.0f / std::sqrt(static_cast<float>(sample_size));
+          break;
+      }
+    } else {
+      float sum_weights = 0.0f;
+      for (size_t emb_idx = 0; emb_idx < sample_size; ++emb_idx) {
+        float w = sample_weights[emb_idx];
+        switch (embedding_table.GetCombineMode()) {
+          case EmbeddingTable::CombineMode::kSum:
+            break;
+          case EmbeddingTable::CombineMode::kMean:
+            sum_weights += w;
+            break;
+          case EmbeddingTable::CombineMode::kSqrtN:
+            sum_weights += w * w;
+            break;
+        }
+      }
+      switch (embedding_table.GetCombineMode()) {
+        case EmbeddingTable::CombineMode::kSum:
+          break;
+        case EmbeddingTable::CombineMode::kMean:
+          scale = 1.0f / sum_weights;
+          break;
+        case EmbeddingTable::CombineMode::kSqrtN:
+          scale = 1.0f / std::sqrt(sum_weights);
+          break;
+      }
+    }
+
+    if (scale != 1.0f) {
+      accumulator *= scale;
+    }
+    get_act_vec(act_ptr) = accumulator.template cast<T>();
+  }
+}
+
+template <typename T>
+void DispatchAssembleQuantized(absl::Span<const int64_t> embedding_ids,
+                               absl::Span<const int32_t> row_pointers,
+                               absl::Span<const float> weights,
+                               const EmbeddingTable& embedding_table,
+                               Array::TensorMap<T, 2> activations_tensor) {
+  const int64_t dim = embedding_table.EmbeddingDim();
+  switch (dim) {
+    case 16:
+      AssembleCombinedEmbeddingsQuantized<T, 16>(embedding_ids, row_pointers,
+                                                 weights, embedding_table,
+                                                 activations_tensor);
+      break;
+    case 32:
+      AssembleCombinedEmbeddingsQuantized<T, 32>(embedding_ids, row_pointers,
+                                                 weights, embedding_table,
+                                                 activations_tensor);
+      break;
+    case 64:
+      AssembleCombinedEmbeddingsQuantized<T, 64>(embedding_ids, row_pointers,
+                                                 weights, embedding_table,
+                                                 activations_tensor);
+      break;
+    case 128:
+      AssembleCombinedEmbeddingsQuantized<T, 128>(embedding_ids, row_pointers,
+                                                  weights, embedding_table,
+                                                  activations_tensor);
+      break;
+    default:
+      AssembleCombinedEmbeddingsQuantized<T, Eigen::Dynamic>(
+          embedding_ids, row_pointers, weights, embedding_table,
+          activations_tensor);
+      break;
+  }
+}
+
+template <typename T>
+Array AssembleSequenceEmbeddingsQuantized(
+    const FeatureBatchCsrInput& feature_batch,
+    const EmbeddingTable& embedding_table, const int64_t max_sequence_length) {
+  Array activations(
+      T(0), Shape({static_cast<int64_t>(feature_batch.NumSamples()),
+                   max_sequence_length, embedding_table.EmbeddingDim()}));
+
+  auto q_table_tensor = embedding_table.AsTensor<int8_t>();
+  auto scales_tensor = embedding_table.Scales().AsTensor<float, 2>();
+  const bool has_offsets =
+      embedding_table.Offsets().GetShape().NumElements() != 0;
+  std::optional<Array::TensorMap<float, 2>> offsets_tensor;
+  if (has_offsets) {
+    offsets_tensor = embedding_table.Offsets().AsTensor<float, 2>();
+  }
+  auto activations_tensor = activations.AsTensor<T, 3>();
+
+  const int64_t dim = embedding_table.EmbeddingDim();
+  const int64_t block_size = embedding_table.BlockSize();
+
+  for (size_t sample_num = 0; sample_num < feature_batch.NumSamples();
+       ++sample_num) {
+    absl::Span<const int64_t> emb_ids = feature_batch.GetSampleIds(sample_num);
+    size_t num_sample_ids =
+        std::min(emb_ids.size(), static_cast<size_t>(max_sequence_length));
+
+    for (size_t emb_idx = 0; emb_idx < num_sample_ids; ++emb_idx) {
+      int64_t id = emb_ids[emb_idx];
+      const int64_t num_blocks = dim / block_size;
+      for (int64_t block_idx = 0; block_idx < num_blocks; ++block_idx) {
+        const float scale = scales_tensor(id, block_idx);
+        const float offset =
+            has_offsets ? (*offsets_tensor)(id, block_idx) : 0.0f;
+        const int8_t* block_ptr = &q_table_tensor(id, block_idx * block_size);
+        for (int64_t k = 0; k < block_size; ++k) {
+          activations_tensor(sample_num, emb_idx, block_idx * block_size + k) =
+              T(static_cast<float>(block_ptr[k]) * scale + offset);
+        }
+      }
+    }
+  }
+  return activations;
+}
+
 }  // namespace
 
 absl::StatusOr<Array> ComputeEmbeddingActivations(
     const FeatureBatchCsrInput& feature_batch,
     const EmbeddingTable& embedding_table) {
+  if (embedding_table.IsQuantized()) {
+    Array activations(0.f,
+                      Shape({static_cast<int64_t>(feature_batch.NumSamples()),
+                             embedding_table.EmbeddingDim()}));
+    DispatchAssembleQuantized<float>(feature_batch.EmbeddingIds(),
+                                     feature_batch.RowPointers(),
+                                     feature_batch.Weights(), embedding_table,
+                                     activations.AsTensor<float, 2>());
+    return activations;
+  }
+
   if (embedding_table.GetCustomCombiner() != nullptr) {
     // TODO: Support flexible / generic datatypes in
     // CustomCombiner.
@@ -194,7 +480,7 @@ absl::StatusOr<Array> ComputeEmbeddingActivations(
       Array activations(0.f,
                         Shape({static_cast<int64_t>(feature_batch.NumSamples()),
                                embedding_table.EmbeddingDim()}));
-      RETURN_IF_ERROR(AssembleCombinedEmbeddings<float>(
+      RETURN_IF_ERROR(DispatchAssemble<float>(
           feature_batch.EmbeddingIds(), feature_batch.RowPointers(),
           feature_batch.Weights(), embedding_table,
           activations.AsTensor<float, 2>()));
@@ -204,7 +490,7 @@ absl::StatusOr<Array> ComputeEmbeddingActivations(
       Array activations(Eigen::bfloat16(0),
                         Shape({static_cast<int64_t>(feature_batch.NumSamples()),
                                embedding_table.EmbeddingDim()}));
-      RETURN_IF_ERROR(AssembleCombinedEmbeddings<Eigen::bfloat16>(
+      RETURN_IF_ERROR(DispatchAssemble<Eigen::bfloat16>(
           feature_batch.EmbeddingIds(), feature_batch.RowPointers(),
           feature_batch.Weights(), embedding_table,
           activations.AsTensor<Eigen::bfloat16, 2>()));
@@ -222,6 +508,18 @@ absl::Status ComputeEmbeddingActivations(
     absl::Span<const int32_t> row_pointers, absl::Span<const float> weights,
     const EmbeddingTable& embedding_table, absl::Span<T> buffer) {
   const size_t num_samples = row_pointers.size() - 1;
+  if (embedding_table.IsQuantized()) {
+    if (buffer.size() != num_samples * embedding_table.EmbeddingDim()) {
+      return absl::InvalidArgumentError(absl::StrFormat(
+          "Buffer size (%d) does not match the expected size (%d * %d)",
+          buffer.size(), num_samples, embedding_table.EmbeddingDim()));
+    }
+    Array::TensorMap<T, 2> activations_tensor(buffer.data(), num_samples,
+                                              embedding_table.EmbeddingDim());
+    DispatchAssembleQuantized<T>(embedding_ids, row_pointers, weights,
+                                 embedding_table, activations_tensor);
+    return absl::OkStatus();
+  }
   if (buffer.size() != num_samples * embedding_table.EmbeddingDim()) {
     return absl::InvalidArgumentError(absl::StrFormat(
         "Buffer size (%d) does not match the expected size (%d * %d)",
@@ -244,8 +542,8 @@ absl::Status ComputeEmbeddingActivations(
 
   Array::TensorMap<T, 2> activations_tensor(buffer.data(), num_samples,
                                             embedding_table.EmbeddingDim());
-  return AssembleCombinedEmbeddings<T>(embedding_ids, row_pointers, weights,
-                                       embedding_table, activations_tensor);
+  return DispatchAssemble<T>(embedding_ids, row_pointers, weights,
+                             embedding_table, activations_tensor);
 }
 
 template absl::Status ComputeEmbeddingActivations<float>(
@@ -261,6 +559,10 @@ template absl::Status ComputeEmbeddingActivations<Eigen::bfloat16>(
 absl::StatusOr<Array> LookupEmbeddingSequence(
     const FeatureBatchCsrInput& feature_batch,
     const EmbeddingTable& embedding_table, int64_t max_sequence_length) {
+  if (embedding_table.IsQuantized()) {
+    return AssembleSequenceEmbeddingsQuantized<float>(
+        feature_batch, embedding_table, max_sequence_length);
+  }
   if (max_sequence_length < 0) {
     return absl::InvalidArgumentError(
         absl::StrFormat("max_sequence_length must be non-negative, but got %d",

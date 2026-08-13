@@ -10,6 +10,7 @@ Example:
 ```
 """
 
+import os
 import re
 import sys
 
@@ -243,6 +244,7 @@ def generate_pyi(output_file, registrations, all_code):
       write('  def execute(self, context: composite_processor_pybind.ExecuteContext) -> None: ...')
       write('  @overload')
       write(f'  def execute({exec_params}) -> {ret_py_type}: ...')
+      write(f'  def __call__({exec_params}) -> {ret_py_type}: ...')
 
 
 def main():

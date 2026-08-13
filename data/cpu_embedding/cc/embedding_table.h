@@ -35,6 +35,10 @@ class EmbeddingTable {
       CombineMode combine_mode = CombineMode::kSum,
       CustomCombinerFn custom_combiner = nullptr);
 
+  static absl::StatusOr<std::unique_ptr<EmbeddingTable>> CreateQuantized(
+      absl::string_view name, Array data, Array scales, Array offsets,
+      int64_t block_size, CombineMode combine_mode = CombineMode::kSum);
+
   EmbeddingTable() = default;
 
   // Not copyable.
@@ -65,16 +69,27 @@ class EmbeddingTable {
 
   CustomCombinerFn GetCustomCombiner() const { return custom_combiner_; }
 
+  bool IsQuantized() const { return is_quantized_; }
+  int64_t BlockSize() const { return block_size_; }
+  const Array& Scales() const { return scales_; }
+  const Array& Offsets() const { return offsets_; }
+
  private:
   // Private constructor. Use Create() instead.
   EmbeddingTable(absl::string_view name, Array data,
                  enum CombineMode combine_mode,
-                 CustomCombinerFn custom_combiner);
+                 CustomCombinerFn custom_combiner, bool is_quantized,
+                 int64_t block_size, Array scales, Array offsets);
 
   std::string name_;
   Array data_;
   enum CombineMode combine_mode_ = CombineMode::kSum;
   CustomCombinerFn custom_combiner_ = nullptr;
+
+  bool is_quantized_ = false;
+  int64_t block_size_ = 32;
+  Array scales_;
+  Array offsets_;
 
   // Cached for convenience.
   int64_t vocab_size_;

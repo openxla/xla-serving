@@ -26,6 +26,7 @@ py_library(
         ":cpu_embedding_serializer_pybind",
         "@com_google_protobuf//:protobuf",
         "@neptune//data/processor/python:composite_processor_pybind",
+        "@neptune//data/processor/python:quantize_utils",
         "@neptune//data/resource_manager/python:resource_manager",
         "@neptune_pypi//jax",
         "@neptune_pypi//jaxtyping",
@@ -47,6 +48,7 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/strings:string_view",
+        "@com_google_protobuf//:protobuf",
         "@neptune//data/cpu_embedding/cc:array",
         "@neptune//data/cpu_embedding/cc:cpu_embedding_engine",
         "@neptune//data/cpu_embedding/cc:embedding_table",
@@ -186,6 +188,7 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/types:span",
+        "@com_google_protobuf//:protobuf",
         "@neptune//data/cpu_embedding/cc:array",
         "@neptune//data/resource_manager/cc:asset",
         "@xla//xla/tsl/platform:env",
@@ -204,5 +207,96 @@ pybind_extension(
         "@neptune//data/cpu_embedding/python:array_caster",
         "@pybind11_abseil//pybind11_abseil:absl_casters",
         "@pybind11_abseil//pybind11_abseil:status_casters",
+    ],
+)
+
+cc_library(
+    name = "pack_host_buffer_vector_transform",
+    srcs = ["pack_host_buffer_vector_transform.cc"],
+    hdrs = ["pack_host_buffer_vector_transform.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
+    deps = [
+        ":cpu_embedding_cc_proto",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/types:span",
+        "@com_google_protobuf//:any_cc_proto",
+        "@neptune//data/processor/cc/api:registry",
+        "@neptune//data/processor/cc/api:transform_context",
+        "@neptune//data/processor/cc/api:type_info",
+        "@neptune//data/processor/cc/core:transform",
+        "@neptune//data/processor/proto:transform_config_cc_proto",
+        "@neptune//data/resource_manager/cc:resource",
+        "@neptune//runtime/core:host_buffer",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "unpack_host_buffer_vector_transform",
+    srcs = ["unpack_host_buffer_vector_transform.cc"],
+    hdrs = ["unpack_host_buffer_vector_transform.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
+    deps = [
+        ":cpu_embedding_cc_proto",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/types:span",
+        "@com_google_protobuf//:any_cc_proto",
+        "@neptune//data/processor/cc/api:registry",
+        "@neptune//data/processor/cc/api:transform_context",
+        "@neptune//data/processor/cc/api:type_info",
+        "@neptune//data/processor/cc/core:transform",
+        "@neptune//data/processor/proto:transform_config_cc_proto",
+        "@neptune//data/resource_manager/cc:resource",
+        "@neptune//runtime/core:host_buffer",
+    ],
+    alwayslink = 1,
+)
+
+transform_pybind_library(
+    name = "pack_host_buffer_vector_transform_pybind",
+    srcs = ["pack_host_buffer_vector_transform.cc"],
+    hdrs = ["pack_host_buffer_vector_transform.h"],
+    dynamic_deps = ["@neptune//data:neptune_data_core"],
+    generate_wrappers = False,
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../.."],
+    deps = [
+        ":pack_host_buffer_vector_transform",
+    ],
+)
+
+transform_pybind_library(
+    name = "unpack_host_buffer_vector_transform_pybind",
+    srcs = ["unpack_host_buffer_vector_transform.cc"],
+    hdrs = ["unpack_host_buffer_vector_transform.h"],
+    dynamic_deps = ["@neptune//data:neptune_data_core"],
+    generate_wrappers = False,
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../.."],
+    deps = [
+        ":unpack_host_buffer_vector_transform",
+    ],
+)
+
+py_library(
+    name = "pack_host_buffer_vector_module",
+    srcs = ["pack_host_buffer_vector_module.py"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":pack_host_buffer_vector_transform_pybind",
+        "@neptune//data/processor/python:composite_processor_pybind",
+        "@neptune//data/processor/python:transform",
+    ],
+)
+
+py_library(
+    name = "unpack_host_buffer_vector_module",
+    srcs = ["unpack_host_buffer_vector_module.py"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":unpack_host_buffer_vector_transform_pybind",
+        "@neptune//data/processor/python:transform",
+        "@neptune_pypi//jax",
     ],
 )

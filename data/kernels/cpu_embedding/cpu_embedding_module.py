@@ -27,6 +27,7 @@ from data.kernels.cpu_embedding import cpu_embedding_pb2
 from data.kernels.cpu_embedding import cpu_embedding_resource_pybind
 from data.kernels.cpu_embedding import cpu_embedding_serializer_pybind
 from data.processor.python import composite_processor_pybind
+from data.processor.python import quantize_utils
 from data.resource_manager.python import resource_manager
 
 MANIFEST_ASSET_NAME = cpu_embedding_serializer_pybind.MANIFEST_ASSET_NAME
@@ -72,11 +73,19 @@ class CpuEmbeddingResource:
       table_data: dict[str, np.ndarray],
       combine_modes: dict[str, str],
       feature_specs: Sequence[dict[str, Any]],
+      max_cpu_slots: int = 8,
+      block_size: int = 64,
+      quantized: bool = False,
+      symmetric: bool = False,
   ) -> None:
     self._temp_dir = tempfile.TemporaryDirectory(prefix="jce_resource_")
 
     # Create Manifest Proto
     manifest = cpu_embedding_pb2.CpuEmbeddingManifest()
+    manifest.max_cpu_slots = max_cpu_slots
+    manifest.block_size = block_size
+
+    serialized_tables = {}
 
     for table_name, data in table_data.items():
       if "/" in table_name or "\\" in table_name or ".." in table_name:
@@ -87,6 +96,7 @@ class CpuEmbeddingResource:
       table.name = table_name
       table.vocab_size = data.shape[0]
       table.embedding_dim = data.shape[1]
+      table.is_quantized = quantized
 
       mode = combine_modes.get(table_name, "MEAN")
       combine_mode_enum = (
@@ -101,6 +111,17 @@ class CpuEmbeddingResource:
       else:
         raise ValueError(f"Unknown combine mode: {mode}")
 
+      if quantized:
+        q_data, scales, offsets = quantize_utils.block_quantize(
+            data, block_size, symmetric
+        )
+        serialized_tables[table_name] = q_data
+        serialized_tables[table_name + ".scales"] = scales
+        if not symmetric:
+          serialized_tables[table_name + ".offsets"] = offsets
+      else:
+        serialized_tables[table_name] = data
+
     self._embedding_dims: dict[str, int] = {}
     for spec_dict in feature_specs:
       feature = manifest.feature_specs.add()
@@ -113,11 +134,16 @@ class CpuEmbeddingResource:
             table_data[feature.table].shape[1]
         )
 
+    first_table_data = next(iter(table_data.values()))
+    self._embedding_dim = first_table_data.shape[1]
+
     # Call C++ Serialization helper!
     # This automatically writes manifest and table files to temp_dir,
     # returning Asset list!
     self._assets = cpu_embedding_serializer_pybind.serialize(
-        self._temp_dir.name, table_data, text_format.MessageToString(manifest)
+        self._temp_dir.name,
+        serialized_tables,
+        text_format.MessageToString(manifest),
     )
 
     # Instantiate C++ Resource
@@ -141,6 +167,10 @@ class CpuEmbeddingResource:
   @property
   def assets(self) -> Sequence[resource_manager.Asset]:
     return self._assets
+
+  @property
+  def embedding_dim(self) -> int:
+    return self._embedding_dim
 
   def export_assets(self) -> dict[str, str]:
     assets_dict = {}
@@ -197,6 +227,7 @@ class CpuEmbeddingModule:
       output_feature_names: str | Sequence[str] | None = None,
       output_shapes: Sequence[int] | Sequence[Sequence[int]] | None = None,
       dense_lookup: bool = False,
+      embedding_dim: int | None = None,
       # For backwards compatibility with keyword arguments:
       feature_name: str | None = None,
       output_feature_name: str | None = None,
@@ -204,9 +235,13 @@ class CpuEmbeddingModule:
   ):
     super().__init__()
     self._resource_wrapper = resource
+
     resolved_features = feature_names or feature_name
     resolved_outputs = output_feature_names or output_feature_name
     resolved_shapes = output_shapes or output_shape
+    resolved_embedding_dim = (
+        embedding_dim if embedding_dim is not None else resource.embedding_dim
+    )
 
     if resolved_features is None:
       raise ValueError("Must provide feature_names or feature_name.")
@@ -233,11 +268,11 @@ class CpuEmbeddingModule:
       if not resolved_shapes:
         self._output_shapes = [[]]
       elif isinstance(resolved_shapes[0], int):
-        self._output_shapes = [list(resolved_shapes)]
+        self._output_shapes = [list(resolved_shapes)]  # pytype: disable=wrong-arg-types
       else:
-        self._output_shapes = [list(s) for s in resolved_shapes]  # pyrefly: ignore[bad-argument-type]
+        self._output_shapes = [list(s) for s in resolved_shapes]  # pytype: disable=wrong-arg-types
     else:
-      self._output_shapes = [list(s) for s in resolved_shapes]  # pyrefly: ignore[bad-argument-type]
+      self._output_shapes = [list(s) for s in resolved_shapes]  # pytype: disable=wrong-arg-types
 
     # Assert sequence lengths are equal
     if len(self._feature_names) != len(self._output_feature_names) or len(
@@ -256,6 +291,11 @@ class CpuEmbeddingModule:
             self._feature_names,
             dense_lookup,
             self._output_feature_names,
+            resolved_embedding_dim,
+            [
+                [d if d is not None else -1 for d in shape]
+                for shape in self._output_shapes
+            ],
         )
     )
 

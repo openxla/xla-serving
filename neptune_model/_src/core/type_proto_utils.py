@@ -67,7 +67,7 @@ def to_shape_proto(
     for dim in shape:
       dim: shlo_type.ShloDimSize
       ds_proto = type_pb2.DimensionSize()
-      if dim is not None:
+      if dim is not None and dim >= 0:
         ds_proto.size = dim
       shape_proto.shape_with_known_rank.dimension_sizes.append(ds_proto)
   return shape_proto

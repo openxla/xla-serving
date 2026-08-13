@@ -13,6 +13,7 @@ cc_library(
     defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
         "@xla//xla/tsl/platform:env",
     ],
 )

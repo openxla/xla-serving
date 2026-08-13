@@ -191,6 +191,7 @@ class DLRMDCNV2(nn.Module):
 
 def create_feature_specs(
     vocab_sizes: List[int],
+    embedding_size: int = 128,
 ) -> tuple[
     Mapping[str, tf.tpu.experimental.embedding.TableConfig],
     Mapping[str, tf.tpu.experimental.embedding.FeatureConfig],
@@ -203,7 +204,7 @@ def create_feature_specs(
     feature_name = f"{i}"
     table_config = tf.tpu.experimental.embedding.TableConfig(
         vocabulary_size=vocab_size,
-        dim=_EMBEDDING_SIZE,
+        dim=embedding_size,
         name=table_name,
         combiner="sum",
         optimizer=None,
@@ -217,15 +218,15 @@ def create_feature_specs(
   return table_configs, feature_configs
 
 
-def build_model() -> (
-    tuple[tf.tpu.experimental.embedding.TPUEmbeddingForServing, nn.Module]
-):
+def build_model(
+    embedding_size: int = 128,
+) -> tuple[tf.tpu.experimental.embedding.TPUEmbeddingForServing, nn.Module]:
   """Build the recommender model with two towers and a prediction layer."""
-  _, feature_configs = create_feature_specs(VOCAB_SIZES)
+  _, feature_configs = create_feature_specs(VOCAB_SIZES, embedding_size)
   model = DLRMDCNV2(
       global_batch_size=_BATCH_SIZE,
-      embedding_size=_EMBEDDING_SIZE,
-      bottom_mlp_dims=[512, 256, 128],
+      embedding_size=embedding_size,
+      bottom_mlp_dims=[512, 256, embedding_size],
       dcn_layers=3,
       projection_dim=512,
   )

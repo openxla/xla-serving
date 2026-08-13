@@ -82,10 +82,10 @@ def get_synthetic_batch(batch_size, valency=None, vocab_sizes=None):
   return data
 
 
-def export_model(export_path: str):
+def export_model(export_path: str, embedding_size: int = 128):
   """Exports the DLRM recommender model using Neptune."""
 
-  embedding_layer, model = model_lib.build_model()
+  embedding_layer, model = model_lib.build_model(embedding_size)
   synthetic_batch_1 = get_synthetic_batch(
       batch_size=1,
       valency=model_lib.VALENCY,
@@ -96,11 +96,23 @@ def export_model(export_path: str):
       valency=model_lib.VALENCY,
       vocab_sizes=model_lib.VOCAB_SIZES,
   )
+  synthetic_batch_512 = get_synthetic_batch(
+      batch_size=512,
+      valency=model_lib.VALENCY,
+      vocab_sizes=model_lib.VOCAB_SIZES,
+  )
+  synthetic_batch_4096 = get_synthetic_batch(
+      batch_size=4096,
+      valency=model_lib.VALENCY,
+      vocab_sizes=model_lib.VOCAB_SIZES,
+  )
   logging.info('synthetic_batch: %s', synthetic_batch_1)
   warmup_examples = {
       'serving_default': [
           synthetic_batch_1,
           synthetic_batch_64,
+          synthetic_batch_512,
+          synthetic_batch_4096,
       ]
   }
 
@@ -187,7 +199,7 @@ def export_model(export_path: str):
           input_polymorphic_shapes=input_polyshape,
           jax_export_kwargs={'platforms': ['cpu', 'cuda']},
           input_polymorphic_shape_symbol_values={
-              'b': [1, 64],
+              'b': [1, 64, 512, 4096],
           },
       ),
       params=model_params,

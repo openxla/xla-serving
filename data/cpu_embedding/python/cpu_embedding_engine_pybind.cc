@@ -46,6 +46,8 @@ PYBIND11_MODULE(cpu_embedding_engine_pybind, m) {
       .value("BFLOAT16", cpu_embedding::DType::kBfloat16)
       .value("INT32", cpu_embedding::DType::kInt32)
       .value("INT64", cpu_embedding::DType::kInt64)
+      .value("INT8", cpu_embedding::DType::kInt8)
+
       .export_values();
 
   // Bind Array as a class so metadata is accessible, but use the type_caster
@@ -92,9 +94,42 @@ PYBIND11_MODULE(cpu_embedding_engine_pybind, m) {
       },
       py::arg("name"), py::arg("data"), py::arg("combine_mode") = "sum");
 
+  m.def(
+      "create_quantized_embedding_table",
+      [](std::string name, cpu_embedding::Array data,
+         cpu_embedding::Array scales, cpu_embedding::Array offsets,
+         int64_t block_size, std::string combine_mode = "sum")
+          -> absl::StatusOr<
+              std::shared_ptr<const cpu_embedding::EmbeddingTable>> {
+        enum cpu_embedding::EmbeddingTable::CombineMode combine_mode_enum;
+        if (combine_mode == "sum") {
+          combine_mode_enum = cpu_embedding::EmbeddingTable::CombineMode::kSum;
+        } else if (combine_mode == "mean") {
+          combine_mode_enum = cpu_embedding::EmbeddingTable::CombineMode::kMean;
+        } else if (combine_mode == "sqrtn") {
+          combine_mode_enum =
+              cpu_embedding::EmbeddingTable::CombineMode::kSqrtN;
+        } else {
+          return absl::InvalidArgumentError(
+              absl::StrCat("Invalid combine mode: ", combine_mode));
+        }
+        return cpu_embedding::EmbeddingTable::CreateQuantized(
+            name, std::move(data), std::move(scales), std::move(offsets),
+            block_size, combine_mode_enum);
+      },
+      py::arg("name"), py::arg("data"), py::arg("scales"), py::arg("offsets"),
+      py::arg("block_size"), py::arg("combine_mode") = "sum");
+
   py::classh<cpu_embedding::EmbeddingTable>(m, "EmbeddingTable")
       .def_property_readonly("name", &cpu_embedding::EmbeddingTable::Name)
       .def_property_readonly("dtype", &cpu_embedding::EmbeddingTable::GetDType)
+      .def_property_readonly("is_quantized",
+                             &cpu_embedding::EmbeddingTable::IsQuantized)
+      .def_property_readonly("block_size",
+                             &cpu_embedding::EmbeddingTable::BlockSize)
+      .def_property_readonly("scales", &cpu_embedding::EmbeddingTable::Scales)
+      .def_property_readonly("offsets", &cpu_embedding::EmbeddingTable::Offsets)
+
       .def_property_readonly("vocab_size",
                              &cpu_embedding::EmbeddingTable::VocabSize)
       .def_property_readonly("embedding_dim",

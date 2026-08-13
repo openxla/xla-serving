@@ -348,6 +348,48 @@ class CpuEmbeddingModuleTest(absltest.TestCase):
 
     resource.close()
 
+  def test_quantized_resource_and_module_execution(self):
+    table_data = {
+        "table1": np.array(
+            [[1.0, 2.0, 3.0, 4.0], [-1.0, 0.0, 1.0, 2.0]], dtype=np.float32
+        )
+    }
+    combine_modes = {"table1": "SUM"}
+    feature_specs = [{
+        "name": "table1",
+        "table_name": "table1",
+    }]
+
+    resource = cpu_embedding.CpuEmbeddingResource(
+        table_data,
+        combine_modes,
+        feature_specs,
+        block_size=2,
+        quantized=True,
+        symmetric=False,
+    )
+
+    self.assertLen(resource.assets, 4)
+    names = {asset.name for asset in resource.assets}
+    self.assertEqual(
+        names,
+        {
+            cpu_embedding_serializer_pybind.MANIFEST_ASSET_NAME,
+            "table1",
+            "table1.scales",
+            "table1.offsets",
+        },
+    )
+
+    module = cpu_embedding.CpuEmbeddingModule(
+        resource,
+        feature_names=["table1"],
+        output_feature_names=["table1_out"],
+        output_shapes=[[1, 4]],
+    )
+
+    resource.close()
+
   def test_path_traversal_blocked(self):
     table_data = {"../bad_table": np.array([[1.0]], dtype=np.float32)}
     combine_modes = {"../bad_table": "MEAN"}

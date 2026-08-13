@@ -27,6 +27,7 @@ class CpuEmbeddingEngine final {
  public:
   struct Options {
     int max_cpu_slots = 8;
+    size_t block_size = 64;
   };
 
   CpuEmbeddingEngine();

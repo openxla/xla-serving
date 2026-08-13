@@ -25,6 +25,7 @@ enum class DType {
   kBfloat16 = 2,
   kInt32 = 3,
   kInt64 = 4,
+  kInt8 = 5,
 };
 
 inline int64_t ByteWidth(DType dtype) {
@@ -36,6 +37,8 @@ inline int64_t ByteWidth(DType dtype) {
       return 2;
     case DType::kInt64:
       return 8;
+    case DType::kInt8:
+      return 1;
     default:
       return 0;
   }
@@ -77,6 +80,11 @@ struct NativeToDType<int32_t> {
 template <>
 struct NativeToDType<int64_t> {
   static constexpr DType kDType = DType::kInt64;
+};
+
+template <>
+struct NativeToDType<int8_t> {
+  static constexpr DType kDType = DType::kInt8;
 };
 
 class Array {

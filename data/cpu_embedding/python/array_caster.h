@@ -66,6 +66,10 @@ inline Array ArrayFromNumpy(py::handle src) {
     dtype = cpu_embedding::DType::kInt32;
   } else if (buf.format == py::format_descriptor<int64_t>::format()) {
     dtype = cpu_embedding::DType::kInt64;
+  } else if (buf.format == py::format_descriptor<int8_t>::format() ||
+             buf.format == "b") {
+    dtype = cpu_embedding::DType::kInt8;
+
   } else {
     throw py::value_error("Unsupported numpy dtype for Array");
   }
@@ -90,6 +94,10 @@ inline py::array ArrayToNumpy(const Array& self) {
     case cpu_embedding::DType::kInt64:
       format = py::format_descriptor<int64_t>::format();
       itemsize = sizeof(int64_t);
+      break;
+    case cpu_embedding::DType::kInt8:
+      format = py::format_descriptor<int8_t>::format();
+      itemsize = sizeof(int8_t);
       break;
     default:
       throw py::value_error("Unsupported DType for ArrayToNumpy()");

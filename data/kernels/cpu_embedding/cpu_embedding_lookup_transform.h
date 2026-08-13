@@ -26,7 +26,9 @@ class CpuEmbeddingLookupTransform : public TransformBase {
   static absl::StatusOr<std::unique_ptr<CpuEmbeddingLookupTransform>> Create(
       std::shared_ptr<CpuEmbeddingEngineResource> resource,
       std::vector<std::string> feature_names, bool dense_lookup = false,
-      std::vector<std::string> output_feature_names = {});
+      std::vector<std::string> output_feature_names = {},
+      int64_t embedding_dim = 128,
+      std::vector<std::vector<int64_t>> output_shapes = {});
 
   std::vector<std::shared_ptr<neptune::data::Resource>> GetAllResources()
       const override;
@@ -35,6 +37,9 @@ class CpuEmbeddingLookupTransform : public TransformBase {
       std::vector<neptune::HostBuffer> ids,
       std::vector<neptune::HostBuffer> row_pointers,
       std::vector<neptune::HostBuffer> weights);
+
+  absl::Status PropagateSignatureImpl(
+      api::ShapeInferenceContext& context) const override;
 
   absl::StatusOr<TransformConfig> ToProto() const override;
 
@@ -46,12 +51,15 @@ class CpuEmbeddingLookupTransform : public TransformBase {
   CpuEmbeddingLookupTransform(
       std::shared_ptr<CpuEmbeddingEngineResource> resource,
       std::vector<std::string> feature_names,
-      std::vector<std::string> output_feature_names, bool dense_lookup);
+      std::vector<std::string> output_feature_names, bool dense_lookup,
+      int64_t embedding_dim, std::vector<std::vector<int64_t>> output_shapes);
 
   std::shared_ptr<CpuEmbeddingEngineResource> resource_;
   std::vector<std::string> feature_names_;
   std::vector<std::string> output_feature_names_;
   bool dense_lookup_ = false;
+  int64_t embedding_dim_ = 128;
+  std::vector<std::vector<int64_t>> output_shapes_;
 };
 
 }  // namespace composite
