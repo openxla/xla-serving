@@ -46,11 +46,13 @@ def export_model(
   Args:
     export_path: Directory to write the exported model to.
     dtype: Model compute dtype. One of 'fp32' or 'bf16'. 'bf16' uses the Keras
-      `mixed_bfloat16` policy; inputs remain fp32.
+      mixed_bfloat16 policy; inputs remain fp32.
     preset: keras_hub preset name or local path to load into
-      `ViTImageClassifier.from_preset`. Defaults to the public
-      `vit_base_patch16_224_imagenet` preset.
+      ViTImageClassifier.from_preset. Defaults to the public
+      vit_base_patch16_224_imagenet preset.
   """
+  if dtype not in ('fp32', 'bf16'):
+    raise ValueError(f"Unsupported dtype: {dtype}. Expected 'fp32' or 'bf16'.")
 
   # Keras mixed_precision is a process-global policy. Snapshot the caller's
   # policy and restore it in `finally` so repeated calls with different dtypes
