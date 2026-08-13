@@ -254,6 +254,10 @@ int main(int argc, char* argv[]) {
   std::string image_file = absl::GetFlag(FLAGS_image_file);
   int32_t num_requests = absl::GetFlag(FLAGS_num_requests);
   int32_t warmup_requests = absl::GetFlag(FLAGS_warmup_requests);
+  if (batch_size < 1) {
+    LOG(ERROR) << "--batch_size must be >= 1, got " << batch_size;
+    return 1;
+  }
   if (num_requests < 1) {
     LOG(ERROR) << "--num_requests must be >= 1, got " << num_requests;
     return 1;
