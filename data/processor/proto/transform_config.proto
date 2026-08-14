@@ -20,6 +20,12 @@ message EdgeProto {
   google.protobuf.Any constant_value = 4;
 }
 
+enum DeviceProto {
+  DEVICE_UNSPECIFIED = 0;
+  DEVICE_CPU = 1;
+  DEVICE_GPU = 2;
+}
+
 message TransformConfig {
   // Optional user provided name to identify the transform in a graph holding
   // multiple transforms.
@@ -30,6 +36,7 @@ message TransformConfig {
   google.protobuf.Any detail = 3;
   repeated uint64 resource_ids = 4;
   repeated EdgeProto input_edges = 5;
+  DeviceProto device = 6;
 }
 
 

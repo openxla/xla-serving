@@ -17,6 +17,14 @@
 
 namespace neptune::data {
 namespace composite {
+namespace core {
+
+// Forward declarations.
+class TransformRegistry;
+class DynamicDispatchTransform;
+
+}  // namespace core
+
 
 // TransformBase is the type-erased base class for all transforms.
 //
@@ -33,11 +41,6 @@ namespace composite {
 //
 // See third_party/neptune/data/processor/python/examples/ for
 // examples.
-
-namespace core {
-class TransformRegistry;
-}  // namespace core
-
 class TransformBase {
  public:
   virtual ~TransformBase() = default;
@@ -53,7 +56,10 @@ class TransformBase {
   virtual absl::Status Execute(api::ExecuteContext& context);
 
   // Propagates shape and dtype signature from inputs to outputs.
-  absl::Status PropagateSignature(api::ShapeInferenceContext& context) const;
+  // Users should not implement this directly and should only implement
+  // `PropagateSignatureImpl`.
+  virtual absl::Status PropagateSignature(
+      api::ShapeInferenceContext& context) const;
 
   // Returns the types of the inputs to the transform.
   virtual absl::Span<const api::TypeInfo> InputTypes() const;
@@ -105,17 +111,19 @@ class TransformBase {
   virtual absl::Status PropagateSignatureImpl(
       api::ShapeInferenceContext& context) const;
 
- private:
-  std::string default_debug_string_;
-
   void SetDefaultDebugString(absl::string_view debug_string) {
     default_debug_string_ = std::string(debug_string);
   }
 
+ private:
+  std::string default_debug_string_;
+
   friend class core::TransformRegistry;
+  friend class core::DynamicDispatchTransform;
 };
 
 }  // namespace composite
+
 }  // namespace neptune::data
 
 #endif  // THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_TRANSFORM_H_

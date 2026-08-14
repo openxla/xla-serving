@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <typeindex>
 #include <utility>
 #include <vector>
 
@@ -100,9 +101,11 @@ bool RegisterExpectedResourcesTransform(const char* name) {
   };
 
   CHECK_OK(TransformRegistry::Instance().RegisterTransformFactory(
-      name, std::move(factory)));
+      name, std::type_index(typeid(ExpectedResourcesTransform<ExpectedIds...>)),
+      std::move(factory)));
   CHECK_OK(TransformRegistry::Instance().RegisterTransformDeserializer(
-      name, std::move(deserializer)));
+      name, std::type_index(typeid(ExpectedResourcesTransform<ExpectedIds...>)),
+      std::move(deserializer)));
   return true;
 }
 
@@ -864,9 +867,8 @@ TEST(CompositeProcessorTest, IOStructureSerializeDeserialize) {
   GraphIOStructureProto io_structure;
   io_structure.mutable_input_structure()->mutable_leaf_value()->add_shape(42);
   io_structure.mutable_output_structure()->mutable_leaf_value()->add_shape(43);
-  io_structure.mutable_captured_structure()
-      ->mutable_leaf_value()
-      ->add_shape(44);
+  io_structure.mutable_captured_structure()->mutable_leaf_value()->add_shape(
+      44);
   graph.SetIOStructure(io_structure);
 
   ASSERT_OK_AND_ASSIGN(CompositeProcessor processor,
@@ -882,6 +884,313 @@ TEST(CompositeProcessorTest, IOStructureSerializeDeserialize) {
   EXPECT_EQ(deserialized_io.input_structure().leaf_value().shape(0), 42);
   EXPECT_EQ(deserialized_io.output_structure().leaf_value().shape(0), 43);
   EXPECT_EQ(deserialized_io.captured_structure().leaf_value().shape(0), 44);
+}
+
+template <typename T>
+class MultiKernelMathTransform : public TransformBase {
+ public:
+  static absl::StatusOr<std::unique_ptr<MultiKernelMathTransform<T>>> Create() {
+    return std::make_unique<MultiKernelMathTransform<T>>();
+  }
+
+  absl::StatusOr<neptune::HostBuffer> operator()(neptune::HostBuffer in) {
+    neptune::HostBuffer out(in.dtype(), in.shape());
+    const T* in_data = static_cast<const T*>(in.base());
+    T* out_data = static_cast<T*>(out.base());
+    for (size_t i = 0; i < out.shape().num_elements(); ++i) {
+      out_data[i] = in_data[i] + static_cast<T>(10);
+    }
+    return out;
+  }
+
+  absl::StatusOr<TransformConfig> ToProto() const override {
+    TransformConfig config;
+    config.set_op_name("MultiKernelMathTransform");
+    return config;
+  }
+
+ protected:
+  absl::Status PropagateSignatureImpl(
+      api::ShapeInferenceContext& context) const override {
+    if (context.inputs.size() != 1 || !context.inputs[0].IsSpec()) {
+      return absl::InvalidArgumentError("Expected 1 tensor spec input");
+    }
+    context.outputs.push_back(context.inputs[0]);
+    return absl::OkStatus();
+  }
+};
+
+ND_REGISTER_TRANSFORM(MultiKernelMathTransform<int32_t>,
+                      "MultiKernelMathTransform")
+    .SetDeserializer(
+        [](const TransformConfig&,
+           absl::Span<const std::shared_ptr<neptune::data::Resource>>)
+            -> absl::StatusOr<std::unique_ptr<TransformBase>> {
+          return MultiKernelMathTransform<int32_t>::Create();
+        })
+    .SetInputConstraints({{.allowed_dtypes = {xla::ifrt::DType::kS32}}});
+
+ND_REGISTER_TRANSFORM(MultiKernelMathTransform<float>,
+                      "MultiKernelMathTransform")
+    .SetDeserializer(
+        [](const TransformConfig&,
+           absl::Span<const std::shared_ptr<neptune::data::Resource>>)
+            -> absl::StatusOr<std::unique_ptr<TransformBase>> {
+          return MultiKernelMathTransform<float>::Create();
+        })
+    .SetInputConstraints({{.allowed_dtypes = {xla::ifrt::DType::kF32}}});
+
+TEST(CompositeProcessorTest, DynamicDispatchDeserializationAndExecution) {
+  // Build a graph containing the multi-kernel transform.
+  ExecutionGraph graph;
+  ASSERT_OK_AND_ASSIGN(
+      auto transform,
+      DynamicDispatchTransform::Create("MultiKernelMathTransform"));
+  int node_idx = graph.AddNode("multi_math_node", std::move(transform),
+                               {GraphEdge::GraphInput(0).value()});
+  graph.SetOutputs({GraphEdge::NodeOutput(node_idx, 0).value()});
+
+  ASSERT_OK_AND_ASSIGN(CompositeProcessor processor,
+                       CompositeProcessor::Create(std::move(graph)));
+
+  // Verify we can run the graph before serialization.
+  {
+    neptune::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+                       xla::ifrt::Shape({2}));
+    int32_t* data = static_cast<int32_t*>(hb.base());
+    data[0] = 1;
+    data[1] = 2;
+
+    std::vector<api::ShapeInferenceValue> sig_inputs = {
+        api::HostBufferSpec{hb.dtype(), hb.shape()}};
+    api::ShapeInferenceContext sig_ctx;
+    sig_ctx.inputs = sig_inputs;
+    ASSERT_OK(processor.PropagateSignature(sig_ctx));
+    ASSERT_EQ(sig_ctx.outputs.size(), 1);
+    EXPECT_EQ(sig_ctx.outputs[0].spec().dtype, hb.dtype());
+
+    std::vector<api::Value> exec_inputs = {api::Value(hb)};
+    api::ExecuteContext exec_ctx;
+    exec_ctx.inputs = exec_inputs;
+    ASSERT_OK(processor.Process(exec_ctx));
+    ASSERT_EQ(exec_ctx.outputs.size(), 1);
+    const auto& out_hb = exec_ctx.outputs[0].Get<neptune::HostBuffer>();
+    const int32_t* out_data = static_cast<const int32_t*>(out_hb.base());
+    EXPECT_EQ(out_data[0], 11);
+    EXPECT_EQ(out_data[1], 12);
+  }
+
+  // Serialize the graph to a proto.
+  ASSERT_OK_AND_ASSIGN(CompositeProcessorConfig config, processor.ToProto());
+
+  // Deserialize from proto - should instantiate a DynamicDispatchTransform
+  ASSERT_OK_AND_ASSIGN(CompositeProcessor deserialized_s32,
+                       CompositeProcessor::FromProto(config));
+
+  // Verify dispatch to int32 kernel.
+  {
+    neptune::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+                       xla::ifrt::Shape({2}));
+    int32_t* data = static_cast<int32_t*>(hb.base());
+    data[0] = 1;
+    data[1] = 2;
+
+    std::vector<api::ShapeInferenceValue> sig_inputs = {
+        api::HostBufferSpec{hb.dtype(), hb.shape()}};
+    api::ShapeInferenceContext sig_ctx;
+    sig_ctx.inputs = sig_inputs;
+    ASSERT_OK(deserialized_s32.PropagateSignature(sig_ctx));
+    ASSERT_EQ(sig_ctx.outputs.size(), 1);
+    EXPECT_EQ(sig_ctx.outputs[0].spec().dtype, hb.dtype());
+
+    std::vector<api::Value> exec_inputs = {api::Value(hb)};
+    api::ExecuteContext exec_ctx;
+    exec_ctx.inputs = exec_inputs;
+    ASSERT_OK(deserialized_s32.Process(exec_ctx));
+    ASSERT_EQ(exec_ctx.outputs.size(), 1);
+    const auto& out_hb = exec_ctx.outputs[0].Get<neptune::HostBuffer>();
+    const int32_t* out_data = static_cast<const int32_t*>(out_hb.base());
+    EXPECT_EQ(out_data[0], 11);
+    EXPECT_EQ(out_data[1], 12);
+  }
+
+  // Verify dispatch to float32 kernel.
+  ASSERT_OK_AND_ASSIGN(CompositeProcessor deserialized_f32,
+                       CompositeProcessor::FromProto(config));
+  {
+    neptune::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+                       xla::ifrt::Shape({2}));
+    float* data = static_cast<float*>(hb.base());
+    data[0] = 1.5f;
+    data[1] = 2.5f;
+
+    std::vector<api::ShapeInferenceValue> sig_inputs = {
+        api::HostBufferSpec{hb.dtype(), hb.shape()}};
+    api::ShapeInferenceContext sig_ctx;
+    sig_ctx.inputs = sig_inputs;
+    ASSERT_OK(deserialized_f32.PropagateSignature(sig_ctx));
+    ASSERT_EQ(sig_ctx.outputs.size(), 1);
+    EXPECT_EQ(sig_ctx.outputs[0].spec().dtype, hb.dtype());
+
+    std::vector<api::Value> exec_inputs = {api::Value(hb)};
+    api::ExecuteContext exec_ctx;
+    exec_ctx.inputs = exec_inputs;
+    ASSERT_OK(deserialized_f32.Process(exec_ctx));
+    ASSERT_EQ(exec_ctx.outputs.size(), 1);
+    const auto& out_hb = exec_ctx.outputs[0].Get<neptune::HostBuffer>();
+    const float* out_data = static_cast<const float*>(out_hb.base());
+    EXPECT_EQ(out_data[0], 11.5f);
+    EXPECT_EQ(out_data[1], 12.5f);
+  }
+}
+
+template <typename T>
+class MultiKernelMathGpuTransform : public TransformBase {
+ public:
+  static absl::StatusOr<std::unique_ptr<MultiKernelMathGpuTransform<T>>>
+  Create() {
+    return std::make_unique<MultiKernelMathGpuTransform<T>>();
+  }
+
+  absl::StatusOr<neptune::HostBuffer> operator()(neptune::HostBuffer in) {
+    neptune::HostBuffer out(in.dtype(), in.shape());
+    const T* in_data = static_cast<const T*>(in.base());
+    T* out_data = static_cast<T*>(out.base());
+    for (size_t i = 0; i < out.shape().num_elements(); ++i) {
+      // GPU kernel adds 100 to differentiate from CPU kernel which adds 10.
+      out_data[i] = in_data[i] + static_cast<T>(100);
+    }
+    return out;
+  }
+
+  absl::StatusOr<TransformConfig> ToProto() const override {
+    TransformConfig config;
+    config.set_op_name("MultiKernelMathTransform");
+    return config;
+  }
+
+ protected:
+  absl::Status PropagateSignatureImpl(
+      api::ShapeInferenceContext& context) const override {
+    if (context.inputs.size() != 1 || !context.inputs[0].IsSpec()) {
+      return absl::InvalidArgumentError("Expected 1 tensor spec input");
+    }
+    context.outputs.push_back(context.inputs[0]);
+    return absl::OkStatus();
+  }
+};
+
+ND_REGISTER_TRANSFORM(MultiKernelMathGpuTransform<float>,
+                      "MultiKernelMathTransform")
+    .SetDevice(Device::kGpu)
+    .SetDeserializer(
+        [](const TransformConfig&,
+           absl::Span<const std::shared_ptr<neptune::data::Resource>>)
+            -> absl::StatusOr<std::unique_ptr<TransformBase>> {
+          return MultiKernelMathGpuTransform<float>::Create();
+        })
+    .SetInputConstraints({{.allowed_dtypes = {xla::ifrt::DType::kF32}}});
+
+TEST(CompositeProcessorTest, GpuDynamicDispatchExecution) {
+  ExecutionGraph graph;
+  // Node 0: GPU dynamic dispatch transform
+  ASSERT_OK_AND_ASSIGN(
+      auto gpu_transform,
+      DynamicDispatchTransform::Create("MultiKernelMathTransform",
+                                       /*args=*/{}, Device::kGpu));
+  int gpu_node = graph.AddNode("gpu_math_node", std::move(gpu_transform),
+                               {GraphEdge::GraphInput(0).value()});
+
+  // Node 1: CPU dynamic dispatch transform
+  ASSERT_OK_AND_ASSIGN(
+      auto cpu_transform,
+      DynamicDispatchTransform::Create("MultiKernelMathTransform",
+                                       /*args=*/{}, Device::kCpu));
+  int cpu_node = graph.AddNode("cpu_math_node", std::move(cpu_transform),
+                               {GraphEdge::GraphInput(0).value()});
+
+  graph.SetOutputs({GraphEdge::NodeOutput(gpu_node, 0).value(),
+                    GraphEdge::NodeOutput(cpu_node, 0).value()});
+
+  ASSERT_OK_AND_ASSIGN(CompositeProcessor processor,
+                       CompositeProcessor::Create(std::move(graph)));
+
+  neptune::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+                     xla::ifrt::Shape({2}));
+  float* data = static_cast<float*>(hb.base());
+  data[0] = 1.5f;
+  data[1] = 2.5f;
+
+  // Propagate signature across both GPU and CPU nodes
+  std::vector<api::ShapeInferenceValue> sig_inputs = {
+      api::HostBufferSpec{hb.dtype(), hb.shape()}};
+  api::ShapeInferenceContext sig_ctx;
+  sig_ctx.inputs = sig_inputs;
+  ASSERT_OK(processor.PropagateSignature(sig_ctx));
+  ASSERT_EQ(sig_ctx.outputs.size(), 2);
+  EXPECT_EQ(sig_ctx.outputs[0].spec().dtype, hb.dtype());
+  EXPECT_EQ(sig_ctx.outputs[1].spec().dtype, hb.dtype());
+
+  // Execute graph
+  std::vector<api::Value> exec_inputs = {api::Value(hb)};
+  api::ExecuteContext exec_ctx;
+  exec_ctx.inputs = exec_inputs;
+  ASSERT_OK(processor.Process(exec_ctx));
+  ASSERT_EQ(exec_ctx.outputs.size(), 2);
+
+  // GPU node output: input + 100
+  const auto& gpu_out_hb = exec_ctx.outputs[0].Get<neptune::HostBuffer>();
+  const float* gpu_out_data = static_cast<const float*>(gpu_out_hb.base());
+  EXPECT_EQ(gpu_out_data[0], 101.5f);
+  EXPECT_EQ(gpu_out_data[1], 102.5f);
+
+  // CPU node output: input + 10
+  const auto& cpu_out_hb = exec_ctx.outputs[1].Get<neptune::HostBuffer>();
+  const float* cpu_out_data = static_cast<const float*>(cpu_out_hb.base());
+  EXPECT_EQ(cpu_out_data[0], 11.5f);
+  EXPECT_EQ(cpu_out_data[1], 12.5f);
+
+  // Verify proto serialization and deserialization preserves GPU & CPU device
+  // assignment automatically across serialization boundaries without
+  // programmatic assignment.
+  ASSERT_OK_AND_ASSIGN(CompositeProcessorConfig proto_config,
+                       processor.ToProto());
+  ASSERT_EQ(proto_config.transforms_size(), 2);
+  EXPECT_EQ(proto_config.transforms(0).device(), DeviceProto::DEVICE_GPU);
+  EXPECT_EQ(proto_config.transforms(1).device(), DeviceProto::DEVICE_CPU);
+
+  // Deserialize without any programmatic device assignment
+  ASSERT_OK_AND_ASSIGN(CompositeProcessor deserialized_proc,
+                       CompositeProcessor::FromProto(proto_config));
+
+  // Propagate signature on deserialized processor
+  std::vector<api::ShapeInferenceValue> des_sig_inputs = {
+      api::HostBufferSpec{hb.dtype(), hb.shape()}};
+  api::ShapeInferenceContext des_sig_ctx;
+  des_sig_ctx.inputs = des_sig_inputs;
+  ASSERT_OK(deserialized_proc.PropagateSignature(des_sig_ctx));
+  ASSERT_EQ(des_sig_ctx.outputs.size(), 2);
+
+  // Execute deserialized processor
+  std::vector<api::Value> des_exec_inputs = {api::Value(hb)};
+  api::ExecuteContext des_exec_ctx;
+  des_exec_ctx.inputs = des_exec_inputs;
+  ASSERT_OK(deserialized_proc.Process(des_exec_ctx));
+  ASSERT_EQ(des_exec_ctx.outputs.size(), 2);
+
+  // Verify GPU node output from deserialized processor: input + 100
+  const auto& des_gpu_out_hb = des_exec_ctx.outputs[0].Get<neptune::HostBuffer>();
+  const float* des_gpu_out_data =
+      static_cast<const float*>(des_gpu_out_hb.base());
+  EXPECT_EQ(des_gpu_out_data[0], 101.5f);
+  EXPECT_EQ(des_gpu_out_data[1], 102.5f);
+
+  // Verify CPU node output from deserialized processor: input + 10
+  const auto& des_cpu_out_hb = des_exec_ctx.outputs[1].Get<neptune::HostBuffer>();
+  const float* des_cpu_out_data =
+      static_cast<const float*>(des_cpu_out_hb.base());
+  EXPECT_EQ(des_cpu_out_data[0], 11.5f);
+  EXPECT_EQ(des_cpu_out_data[1], 12.5f);
 }
 
 }  // namespace

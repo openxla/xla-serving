@@ -1,7 +1,11 @@
 #include "data/processor/cc/core/transform_registry.h"  // from @neptune
 
+#include <cstdint>
 #include <memory>
 #include <string>
+#include <thread>
+#include <type_traits>
+#include <typeindex>
 #include <utility>
 #include <vector>
 
@@ -63,6 +67,7 @@ class AppendFooTransform : public TransformBase {
   }
 };
 
+template <int Tag = 0>
 class MacroRegisteredTransform : public TransformBase {
  public:
   static absl::StatusOr<std::unique_ptr<MacroRegisteredTransform>> Create() {
@@ -86,7 +91,7 @@ TEST_F(TransformRegistryTest, RegisterAndCreate) {
 
   ASSERT_TRUE(registry_
                   .RegisterTransformFactory(
-                      name,
+                      name, std::type_index(typeid(AppendFooTransform)),
                       [](const std::vector<api::Value>&) {
                         return std::make_unique<AppendFooTransform>();
                       })
@@ -108,14 +113,15 @@ TEST_F(TransformRegistryTest, DuplicateRegistrationCallsFail) {
 
   ASSERT_TRUE(registry_
                   .RegisterTransformFactory(
-                      name,
+                      name, std::type_index(typeid(AppendFooTransform)),
                       [](const std::vector<api::Value>&) {
                         return std::make_unique<AppendFooTransform>();
                       })
                   .ok());
 
   auto status2 = registry_.RegisterTransformFactory(
-      name, [](absl::Span<const api::Value>) {
+      name, std::type_index(typeid(AppendFooTransform)),
+      [](absl::Span<const api::Value>) {
         return std::make_unique<AppendFooTransform>();
       });
   ASSERT_FALSE(status2.ok());
@@ -139,7 +145,7 @@ TEST_F(TransformRegistryTest, DeserializeTransformNotFound) {
               absl_testing::StatusIs(absl::StatusCode::kNotFound));
 }
 
-ND_REGISTER_TRANSFORM(MacroRegisteredTransform, "MacroRegisteredTransform");
+ND_REGISTER_TRANSFORM(MacroRegisteredTransform<0>, "MacroRegisteredTransform");
 TEST(TransformRegistryMacroTest, RegisterAndCreate) {
   ASSERT_OK_AND_ASSIGN(auto transform,
                        TransformRegistry::Instance().CreateTransform(
@@ -147,13 +153,13 @@ TEST(TransformRegistryMacroTest, RegisterAndCreate) {
   EXPECT_NE(transform, nullptr);
 }
 
-ND_REGISTER_TRANSFORM(MacroRegisteredTransform,
+ND_REGISTER_TRANSFORM(MacroRegisteredTransform<1>,
                       "MacroRegisteredWithDeserializerTransform")
     .SetDeserializer(
         [](const TransformConfig& config,
            absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
-          return std::make_unique<MacroRegisteredTransform>();
+          return std::make_unique<MacroRegisteredTransform<1>>();
         });
 TEST(TransformRegistryMacroTest, RegisterAndCreateWithDeserializer) {
   TransformConfig config;
@@ -441,6 +447,221 @@ TEST(TransformBaseTest, PropagateSignature) {
     EXPECT_FALSE(status.ok());
     EXPECT_EQ(status.code(), absl::StatusCode::kInvalidArgument);
     EXPECT_THAT(status.message(), testing::HasSubstr("unsupported dtype: F32"));
+  }
+}
+
+template <typename T>
+class MultiKernelTransform : public TransformBase {
+ public:
+  static absl::StatusOr<std::unique_ptr<MultiKernelTransform<T>>> Create() {
+    return std::make_unique<MultiKernelTransform<T>>();
+  }
+
+  absl::StatusOr<neptune::HostBuffer> operator()(neptune::HostBuffer a) { return a; }
+
+  absl::StatusOr<TransformConfig> ToProto() const override {
+    TransformConfig config;
+    config.set_op_name("MultiKernelTransform");
+    return config;
+  }
+
+  absl::string_view DebugString() const override {
+    if constexpr (std::is_same_v<T, int32_t>) {
+      return "MultiKernelTransform(INT32)";
+    }
+    if constexpr (std::is_same_v<T, float>) {
+      return "MultiKernelTransform(FLOAT32)";
+    }
+    return "MultiKernelTransform";
+  }
+};
+
+ND_REGISTER_TRANSFORM(MultiKernelTransform<int32_t>, "MultiKernelTransform")
+    .SetInputConstraints({{.allowed_dtypes = {xla::ifrt::DType::kS32}}});
+
+ND_REGISTER_TRANSFORM(MultiKernelTransform<float>, "MultiKernelTransform")
+    .SetInputConstraints({{.allowed_dtypes = {xla::ifrt::DType::kF32}}});
+
+TEST(MultiKernelTest, MultiKernelConstraintRegistration) {
+  // Test finding S32 holder
+  {
+    neptune::HostBuffer hb_s32(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+                           xla::ifrt::Shape({2, 2}));
+    std::vector<api::Value> inputs = {api::Value(hb_s32)};
+    auto holder = TransformRegistry::Instance().FindMatchingHolder(
+        "MultiKernelTransform", inputs);
+    ASSERT_OK(holder);
+    EXPECT_OK((*holder)->ValidateInputs(inputs));
+  }
+
+  // Test finding F32 holder
+  {
+    neptune::HostBuffer hb_f32(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+                           xla::ifrt::Shape({2, 2}));
+    std::vector<api::Value> inputs = {api::Value(hb_f32)};
+    auto holder = TransformRegistry::Instance().FindMatchingHolder(
+        "MultiKernelTransform", inputs);
+    ASSERT_OK(holder);
+    EXPECT_OK((*holder)->ValidateInputs(inputs));
+  }
+
+  // Test with unsupported dtype
+  {
+    neptune::HostBuffer hb_u32(xla::ifrt::DType(xla::ifrt::DType::Kind::kU32),
+                           xla::ifrt::Shape({2, 2}));
+    std::vector<api::Value> inputs = {api::Value(hb_u32)};
+    auto holder = TransformRegistry::Instance().FindMatchingHolder(
+        "MultiKernelTransform", inputs);
+    EXPECT_FALSE(holder.ok());
+  }
+}
+
+TEST(MultiKernelTest, DebugString) {
+  MultiKernelTransform<int32_t> t_s32;
+  EXPECT_EQ(t_s32.DebugString(), "MultiKernelTransform(INT32)");
+
+  MultiKernelTransform<float> t_f32;
+  EXPECT_EQ(t_f32.DebugString(), "MultiKernelTransform(FLOAT32)");
+}
+
+class CpuDeviceTransform : public TransformBase {
+ public:
+  static absl::StatusOr<std::unique_ptr<CpuDeviceTransform>> Create() {
+    return std::make_unique<CpuDeviceTransform>();
+  }
+  absl::StatusOr<neptune::HostBuffer> operator()(neptune::HostBuffer a) { return a; }
+  absl::StatusOr<TransformConfig> ToProto() const override {
+    TransformConfig config;
+    config.set_op_name("DeviceTransform");
+    return config;
+  }
+};
+
+class GpuDeviceTransform : public TransformBase {
+ public:
+  static absl::StatusOr<std::unique_ptr<GpuDeviceTransform>> Create() {
+    return std::make_unique<GpuDeviceTransform>();
+  }
+  absl::StatusOr<neptune::HostBuffer> operator()(neptune::HostBuffer a) { return a; }
+  absl::StatusOr<TransformConfig> ToProto() const override {
+    TransformConfig config;
+    config.set_op_name("DeviceTransform");
+    return config;
+  }
+};
+
+class GpuDeviceTransform2 : public TransformBase {
+ public:
+  static absl::StatusOr<std::unique_ptr<GpuDeviceTransform2>> Create() {
+    return std::make_unique<GpuDeviceTransform2>();
+  }
+  absl::StatusOr<neptune::HostBuffer> operator()(neptune::HostBuffer a) { return a; }
+  absl::StatusOr<TransformConfig> ToProto() const override {
+    TransformConfig config;
+    config.set_op_name("DeviceTransform");
+    return config;
+  }
+};
+
+// Register CPU kernel (default device should be CPU)
+ND_REGISTER_TRANSFORM(CpuDeviceTransform, "DeviceTransform")
+    .SetInputConstraints({{.allowed_dtypes = {xla::ifrt::DType::kS32}}});
+
+// Register GPU kernel explicitly with SetDevice
+ND_REGISTER_TRANSFORM(GpuDeviceTransform, "DeviceTransform")
+    .SetDevice(Device::kGpu)
+    .SetInputConstraints({{.allowed_dtypes = {xla::ifrt::DType::kS32}}});
+
+TEST(DeviceRegistryTest, MultiDeviceKernelRegistrationAndDispatch) {
+  neptune::HostBuffer hb_s32(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+                         xla::ifrt::Shape({2, 2}));
+  std::vector<api::Value> inputs = {api::Value(hb_s32)};
+
+  // CPU kernel lookup (default device = CPU)
+  {
+    auto holder = TransformRegistry::Instance().FindMatchingHolder(
+        "DeviceTransform", inputs, Device::kCpu);
+    ASSERT_OK(holder);
+    EXPECT_EQ((*holder)->device(), Device::kCpu);
+  }
+
+  // GPU kernel lookup
+  {
+    auto holder = TransformRegistry::Instance().FindMatchingHolder(
+        "DeviceTransform", inputs, Device::kGpu);
+    ASSERT_OK(holder);
+    EXPECT_EQ((*holder)->device(), Device::kGpu);
+  }
+}
+
+TEST(DynamicDispatchTransformTest, CreateSuccessAndFailure) {
+  // Successful creation for existing op
+  ASSERT_OK_AND_ASSIGN(
+      auto transform, DynamicDispatchTransform::Create("MultiKernelTransform"));
+  EXPECT_NE(transform, nullptr);
+
+  // Failure when op is not found
+  auto not_found = DynamicDispatchTransform::Create("NonExistentMultiKernelOp");
+  EXPECT_FALSE(not_found.ok());
+  EXPECT_EQ(not_found.status().code(), absl::StatusCode::kNotFound);
+}
+
+TEST(DynamicDispatchTransformTest, DebugString) {
+  // Test with S32
+  {
+    ASSERT_OK_AND_ASSIGN(auto transform, DynamicDispatchTransform::Create(
+                                             "MultiKernelTransform"));
+    api::ExecuteContext context;
+    neptune::HostBuffer hb_s32(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+                           xla::ifrt::Shape({2, 2}));
+    std::vector<api::Value> inputs = {api::Value(hb_s32)};
+    context.inputs = inputs;
+    EXPECT_OK(transform->Execute(context));
+    EXPECT_EQ(transform->DebugString(), "MultiKernelTransform(INT32)");
+  }
+
+  // Test with F32
+  {
+    ASSERT_OK_AND_ASSIGN(auto transform, DynamicDispatchTransform::Create(
+                                             "MultiKernelTransform"));
+    api::ExecuteContext context;
+    neptune::HostBuffer hb_f32(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+                           xla::ifrt::Shape({2, 2}));
+    std::vector<api::Value> inputs = {api::Value(hb_f32)};
+    context.inputs = inputs;
+    EXPECT_OK(transform->Execute(context));
+    EXPECT_EQ(transform->DebugString(), "MultiKernelTransform(FLOAT32)");
+  }
+}
+
+TEST(DynamicDispatchTransformTest, ConcurrentAccessAndInitialization) {
+  ASSERT_OK_AND_ASSIGN(
+      auto transform, DynamicDispatchTransform::Create("MultiKernelTransform"));
+
+  constexpr int kNumThreads = 8;
+  constexpr int kIterations = 100;
+  std::vector<std::thread> threads;
+  threads.reserve(kNumThreads);
+
+  for (int i = 0; i < kNumThreads; ++i) {
+    threads.emplace_back([&transform]() {
+      for (int iter = 0; iter < kIterations; ++iter) {
+        api::ExecuteContext context;
+        neptune::HostBuffer hb_s32(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+                               xla::ifrt::Shape({2, 2}));
+        std::vector<api::Value> inputs = {api::Value(hb_s32)};
+        context.inputs = inputs;
+        EXPECT_OK(transform->Execute(context));
+        EXPECT_EQ(transform->DebugString(), "MultiKernelTransform(INT32)");
+        EXPECT_FALSE(transform->InputTypes().empty());
+        EXPECT_FALSE(transform->OutputTypes().empty());
+        EXPECT_OK(transform->ToProto().status());
+      }
+    });
+  }
+
+  for (auto& t : threads) {
+    t.join();
   }
 }
 

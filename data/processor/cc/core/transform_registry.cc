@@ -10,6 +10,7 @@
 
 #include "absl/base/no_destructor.h"  // from @abseil-cpp
 #include "absl/base/nullability.h"  // from @abseil-cpp
+#include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "xla/tsl/platform/status_macros.h"
@@ -38,9 +39,11 @@ TransformRegistry& TransformRegistry::Instance() {
 }
 
 absl::Status TransformRegistry::RegisterTransformFactory(
-    absl::string_view name, TransformFactoryHolder::TransformFactory factory) {
+    absl::string_view name, std::type_index type_index,
+    TransformFactoryHolder::TransformFactory factory) {
   absl::MutexLock lock(transform_registry_mu_);
-  std::unique_ptr<TransformFactoryHolder>& existing_creator = library_[name];
+  std::unique_ptr<TransformFactoryHolder>& existing_creator =
+      type_to_holder_[type_index];
   if (existing_creator != nullptr) {
     return absl::AlreadyExistsError(
         absl::StrFormat("A Transform factory is already registered for key: "
@@ -49,17 +52,19 @@ absl::Status TransformRegistry::RegisterTransformFactory(
   }
   existing_creator =
       std::make_unique<TransformFactoryHolder>(std::move(factory));
+  library_[std::string(name)].push_back(existing_creator.get());
   return absl::OkStatus();
 }
 
 absl::StatusOr<std::unique_ptr<TransformBase>>
 TransformRegistry::CreateTransform(absl::string_view name,
-                                   const std::vector<api::Value>& args) {
+                                   const std::vector<api::Value>& args,
+                                   Device device) {
   TransformFactoryHolder* holder = nullptr;
   {
     absl::MutexLock lock(transform_registry_mu_);
     auto it = library_.find(name);
-    if (it == library_.end()) {
+    if (it == library_.end() || it->second.empty()) {
       return absl::NotFoundError(absl::StrFormat(
           "Transform '%s' not found. Please ensure the relevant transform "
           "library has been linked, and the transform factory "
@@ -67,7 +72,17 @@ TransformRegistry::CreateTransform(absl::string_view name,
           "RegisterGlobalTransformFactory.",
           name));
     }
-    holder = it->second.get();
+    // Multiple holders: wrap in DynamicDispatchTransform
+    if (it->second.size() > 1) {
+      return DynamicDispatchTransform::Create(std::string(name), args, device);
+    }
+    holder = it->second[0];
+  }
+
+  if (holder->device() != device) {
+    return absl::NotFoundError(
+        absl::StrFormat("No kernel registered for '%s' on device %s.", name,
+                        device == Device::kGpu ? "GPU" : "CPU"));
   }
   auto transform = holder->CreateTransform(args);
   if (transform != nullptr) {
@@ -84,7 +99,7 @@ TransformRegistry::DeserializeTransform(
   {
     absl::MutexLock lock(transform_registry_mu_);
     auto it = library_.find(config.op_name());
-    if (it == library_.end()) {
+    if (it == library_.end() || it->second.empty()) {
       return absl::NotFoundError(absl::StrFormat(
           "Transform deserializer for '%s' not found. Please ensure the "
           "relevant transform library has been linked, and the transform "
@@ -92,8 +107,18 @@ TransformRegistry::DeserializeTransform(
           "RegisterTransformDeserializer.",
           config.op_name()));
     }
-    holder = it->second.get();
+    // Multiple holders: wrap in DynamicDispatchTransform
+    if (it->second.size() > 1) {
+      std::vector<std::shared_ptr<neptune::data::Resource>> res_vec(
+          resources.begin(), resources.end());
+      Device device = FromDeviceProto(config.device());
+      return DynamicDispatchTransform::Create(config, std::move(res_vec),
+                                              device);
+    }
+    holder = it->second[0];
   }
+
+  // Exactly 1 holder: deserialize directly.
   ASSIGN_OR_RETURN(auto transform,
                    holder->DeserializeTransform(config, resources));
   if (transform != nullptr) {
@@ -103,11 +128,11 @@ TransformRegistry::DeserializeTransform(
 }
 
 absl::Status TransformRegistry::RegisterTransformDeserializer(
-    absl::string_view name,
+    absl::string_view name, std::type_index type_index,
     TransformFactoryHolder::TransformDeserializer deserializer) {
   absl::MutexLock lock(transform_registry_mu_);
-  auto it = library_.find(name);
-  if (it == library_.end()) {
+  auto it = type_to_holder_.find(type_index);
+  if (it == type_to_holder_.end()) {
     return absl::NotFoundError(absl::StrFormat(
         "Transform factory for '%s' not found. Please ensure the relevant "
         "transform library has been linked, and the transform factory "
@@ -126,12 +151,13 @@ absl::Status TransformRegistry::RegisterTransformDeserializer(
 }
 
 absl::Status TransformRegistry::RegisterTransformExecutor(
-    absl::string_view name, std::vector<api::TypeInfo> input_types,
+    absl::string_view name, std::type_index type_index,
+    std::vector<api::TypeInfo> input_types,
     std::vector<api::TypeInfo> output_types,
     TransformFactoryHolder::ExecutorFunc executor) {
   absl::MutexLock lock(transform_registry_mu_);
-  auto it = library_.find(name);
-  if (it == library_.end()) {
+  auto it = type_to_holder_.find(type_index);
+  if (it == type_to_holder_.end()) {
     return absl::NotFoundError(absl::StrFormat(
         "Transform factory for '%s' not found. Please ensure the relevant "
         "transform library has been linked, and the transform factory "
@@ -147,32 +173,38 @@ absl::Status TransformRegistry::RegisterTransformExecutor(
   return absl::OkStatus();
 }
 
-void TransformRegistry::RegisterTransformType(absl::string_view name,
-                                              std::type_index type_index) {
-  absl::MutexLock lock(transform_registry_mu_);
-  type_to_name_[type_index] = std::string(name);
-}
-
 absl::StatusOr<const TransformFactoryHolder* absl_nonnull>
 TransformRegistry::GetTransformFactoryHolder(std::type_index type_index) {
   absl::MutexLock lock(transform_registry_mu_);
-  auto name_it = type_to_name_.find(type_index);
-  if (name_it == type_to_name_.end()) {
-    return absl::NotFoundError(
-        absl::StrFormat("Transform '%s' not found. Please ensure the relevant "
-                        "transform library has been linked, and the transform "
-                        "has been registered by calling ND_REGISTER_TRANSFORM.",
-                        type_index.name()));
+  auto it = type_to_holder_.find(type_index);
+  if (it != type_to_holder_.end()) {
+    return it->second.get();
   }
-  auto it = library_.find(name_it->second);
-  if (it == library_.end()) {
+  return absl::NotFoundError(
+      absl::StrFormat("Transform '%s' not found. Please ensure the relevant "
+                      "transform library has been linked, and the transform "
+                      "has been registered by calling ND_REGISTER_TRANSFORM.",
+                      type_index.name()));
+}
+
+absl::StatusOr<const TransformFactoryHolder* absl_nonnull>
+TransformRegistry::GetAnyTransformFactoryHolder(absl::string_view name,
+                                                Device device) const {
+  absl::MutexLock lock(transform_registry_mu_);
+  auto it = library_.find(name);
+  if (it == library_.end() || it->second.empty()) {
     return absl::NotFoundError(
-        absl::StrFormat("Transform '%s' not found. Please ensure the relevant "
-                        "transform library has been linked, and the transform "
-                        "has been registered by calling ND_REGISTER_TRANSFORM.",
-                        name_it->second));
+        absl::StrFormat("Transform '%s' not found.", name));
   }
-  return it->second.get();
+  for (TransformFactoryHolder* holder : it->second) {
+    if (holder->device() == device) {
+      return holder;
+    }
+  }
+  return absl::NotFoundError(
+      absl::StrFormat("No kernel registered for '%s' on device %s.", name,
+                      device == Device::kGpu ? "GPU" : "CPU"));
+  return it->second[0];
 }
 
 absl::Status TransformFactoryHolder::Execute(TransformBase* base,
@@ -321,15 +353,146 @@ absl::Status TransformFactoryHolder::ValidateInputs(
 }
 
 absl::Status TransformRegistry::SetInputConstraints(
-    absl::string_view name, std::vector<InputConstraint> constraints) {
+    absl::string_view name, std::type_index type_index,
+    std::vector<InputConstraint> constraints) {
   absl::MutexLock lock(transform_registry_mu_);
-  auto it = library_.find(name);
-  if (it == library_.end()) {
+  auto it = type_to_holder_.find(type_index);
+  if (it == type_to_holder_.end()) {
     return absl::NotFoundError(
         absl::StrFormat("Transform factory for '%s' not found.", name));
   }
+
   it->second->SetInputConstraints(std::move(constraints));
   return absl::OkStatus();
+}
+
+absl::Status TransformRegistry::SetDevice(absl::string_view name,
+                                          std::type_index type_index,
+                                          Device device) {
+  absl::MutexLock lock(transform_registry_mu_);
+  auto it = type_to_holder_.find(type_index);
+  if (it == type_to_holder_.end()) {
+    return absl::NotFoundError(
+        absl::StrFormat("Transform factory for type '%s' under '%s' not found.",
+                        type_index.name(), name));
+  }
+  it->second->SetDevice(device);
+  return absl::OkStatus();
+}
+
+template <typename V>
+absl::StatusOr<const TransformFactoryHolder* absl_nonnull>
+FindMatchingHolderImpl(
+    const absl::flat_hash_map<std::string,
+                              std::vector<TransformFactoryHolder*>>& library,
+    absl::string_view name, absl::Span<const V> inputs, Device device) {
+  auto it = library.find(name);
+  if (it == library.end() || it->second.empty()) {
+    return absl::NotFoundError(
+        absl::StrFormat("Transform '%s' not found.", name));
+  }
+  std::vector<TransformFactoryHolder*> matching_device_holders;
+  for (TransformFactoryHolder* holder : it->second) {
+    if (holder->device() == device) {
+      matching_device_holders.push_back(holder);
+    }
+  }
+  if (matching_device_holders.empty()) {
+    return absl::NotFoundError(
+        absl::StrFormat("No kernel registered for '%s' on device %s.", name,
+                        device == Device::kGpu ? "GPU" : "CPU"));
+  }
+  if (matching_device_holders.size() == 1) {
+    return matching_device_holders[0];
+  }
+  for (TransformFactoryHolder* holder : matching_device_holders) {
+    if (holder->ValidateInputs(inputs).ok()) {
+      return holder;
+    }
+  }
+  return absl::NotFoundError(absl::StrFormat(
+      "No matching kernel found for '%s' on device %s with the provided "
+      "inputs.",
+      name, device == Device::kGpu ? "GPU" : "CPU"));
+}
+
+absl::StatusOr<const TransformFactoryHolder* absl_nonnull>
+TransformRegistry::FindMatchingHolder(absl::string_view name,
+                                      absl::Span<const api::Value> inputs,
+                                      Device device) const {
+  absl::MutexLock lock(
+      const_cast<TransformRegistry*>(this)->transform_registry_mu_);
+  return FindMatchingHolderImpl(library_, name, inputs, device);
+}
+
+absl::StatusOr<const TransformFactoryHolder* absl_nonnull>
+TransformRegistry::FindMatchingHolder(
+    absl::string_view name, absl::Span<const api::ShapeInferenceValue> inputs,
+    Device device) const {
+  absl::MutexLock lock(
+      const_cast<TransformRegistry*>(this)->transform_registry_mu_);
+  return FindMatchingHolderImpl(library_, name, inputs, device);
+}
+
+// The kernel is resolved in the first call to PropagateSignature or Execute.
+// Subsequent calls have to be done with the same type. Users will receive a
+// msg indicating input validation failed if this transform is re-used with
+// different input types.
+absl::Status DynamicDispatchTransform::Execute(api::ExecuteContext& context) {
+  ASSIGN_OR_RETURN(auto kernel, GetOrCreateKernel(context.inputs));
+  return kernel->Execute(context);
+}
+
+absl::Status DynamicDispatchTransform::PropagateSignature(
+    api::ShapeInferenceContext& context) const {
+  ASSIGN_OR_RETURN(auto kernel, GetOrCreateKernel(context.inputs));
+  return kernel->PropagateSignature(context);
+}
+
+absl::StatusOr<TransformConfig> DynamicDispatchTransform::ToProto() const {
+  TransformConfig config;
+  if (config_.has_value()) {
+    config = *config_;
+  } else {
+    absl::MutexLock lock(active_kernel_mu_);
+    if (active_kernel_ != nullptr) {
+      ASSIGN_OR_RETURN(config, active_kernel_->ToProto());
+    } else {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Cannot serialize transform: ", op_name_,
+          " before resolving it to a specific kernel. Please ensure "
+          "the op has been traced or executed."));
+    }
+  }
+  config.set_op_name(op_name_);
+  config.set_device(ToDeviceProto(device_));
+  return config;
+}
+
+absl::Span<const api::TypeInfo> DynamicDispatchTransform::InputTypes() const {
+  {
+    absl::MutexLock lock(active_kernel_mu_);
+    if (active_kernel_ != nullptr) {
+      return active_kernel_->InputTypes();
+    }
+  }
+  auto holder = TransformRegistry::Instance().GetAnyTransformFactoryHolder(
+      op_name_, device_);
+  if (holder.ok()) return (*holder)->InputTypes();
+  return {};
+}
+
+absl::Span<const api::TypeInfo> DynamicDispatchTransform::OutputTypes() const {
+  {
+    absl::MutexLock lock(active_kernel_mu_);
+    if (active_kernel_ != nullptr) {
+      return active_kernel_->OutputTypes();
+    }
+  }
+  auto holder = TransformRegistry::Instance().GetAnyTransformFactoryHolder(
+      op_name_, device_);
+  if (holder.ok()) return (*holder)->OutputTypes();
+  return {};
 }
 
 }  // namespace core
