@@ -479,6 +479,7 @@ cc_library(
 cc_library(
     name = "host_buffer_type_utils",
     hdrs = ["host_buffer_type_utils.h"],
+    visibility = [":core_users"],
     deps = [
         "@tsl//tsl/platform:bfloat16",
         "@tsl//tsl/platform:ml_dtypes",
