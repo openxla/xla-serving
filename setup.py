@@ -207,15 +207,15 @@ class GenerateProtosAndBuild(build_py):
     super().run()
 
 
-with (ROOT_DIR / PACKAGE_NAME / "__init__.py").open("r", encoding="utf-8") as f:
+with (ROOT_DIR / "version.bzl").open("r", encoding="utf-8") as f:
   version_match = re.search(
-      r"^__version__\s*=\s*['\"]([^'\"]+)['\"]", f.read(), re.MULTILINE
+      r"^VERSION\s*=\s*['\"]([^'\"]+)['\"]", f.read(), re.MULTILINE
   )
   if version_match:
     __version__ = version_match.group(1)
   else:
     __version__ = "unknown"
-    sys.exit("Unable to find __version__ string in __init__.py")
+    sys.exit("Unable to find VERSION string in version.bzl")
 
 setup(
     version=__version__,

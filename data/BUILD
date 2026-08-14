@@ -1,5 +1,20 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_shared_library.bzl", "cc_shared_library")
+load("//:version.bzl", "VERSION")
 load("@rules_python//python:defs.bzl", "py_library")
 load("@rules_python//python:packaging.bzl", "py_wheel")
 
@@ -239,7 +254,7 @@ py_wheel(
     }),
     strip_path_prefixes = ["data"],
     tags = ["manual"],
-    version = "0.0.1",
+    version = VERSION,
     deps = [
         ":neptune_data_pkg",
         ":stage_neptune_data_pkg",
@@ -351,7 +366,7 @@ py_wheel(
     }),
     strip_path_prefixes = ["data"],
     tags = ["manual"],
-    version = "0.0.1",
+    version = VERSION,
     deps = [
         ":neptune_data_test_pkg",
         ":stage_neptune_data_test_pkg",
