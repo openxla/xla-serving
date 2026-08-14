@@ -284,3 +284,37 @@ transform_pybind_library(
     linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
     deps = [":make_dict_transform"],
 )
+
+cc_library(
+    name = "multi_kernel_math_transform",
+    testonly = 1,
+    srcs = ["multi_kernel_math_transform.cc"],
+    hdrs = ["multi_kernel_math_transform.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
+    deps = [
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/types:span",
+        "@neptune//data/processor/cc/api:registry",
+        "@neptune//data/processor/cc/api:transform_context",
+        "@neptune//data/processor/cc/core:transform",
+        "@neptune//data/processor/proto:transform_config_cc_proto",
+        "@neptune//data/resource_manager/cc:resource",
+        "@neptune//runtime/core:host_buffer",
+        "@neptune//runtime/core:host_buffer_type_utils",
+        "@xla//xla/python/ifrt",
+    ],
+    alwayslink = 1,
+)
+
+transform_pybind_library(
+    name = "multi_kernel_math_transform_pybind",
+    testonly = 1,
+    srcs = ["multi_kernel_math_transform.cc"],
+    hdrs = ["multi_kernel_math_transform.h"],
+    dynamic_deps = ["@neptune//data:neptune_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    deps = [":multi_kernel_math_transform"],
+)

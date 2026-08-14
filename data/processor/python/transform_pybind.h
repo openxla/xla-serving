@@ -5,6 +5,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/status/status.h"  // from @abseil-cpp
@@ -13,7 +14,9 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "data/processor/cc/api/transform_context.h"  // from @neptune
 #include "data/processor/cc/api/type_info.h"  // from @neptune
+#include "data/processor/cc/api/value.h"  // from @neptune
 #include "data/processor/cc/core/transform.h"  // from @neptune
+#include "data/processor/cc/core/transform_registry.h"  // from @neptune
 #include "data/processor/proto/transform_config.pb.h"  // from @neptune
 #include "include/pybind11/pybind11.h"  // from @pybind11_bazel
 #include "include/pybind11/stl.h"  // from @pybind11_bazel
@@ -187,11 +190,59 @@ class PyTransform : public TransformBase,
   mutable std::vector<api::TypeInfo> output_types_cache_;
 };
 
+namespace pybind_internal {
+
+template <typename T, typename ReturnType, typename... Args>
+void SetDynamicFactoryInternal(pybind11::module& m, const std::string& name,
+                               ReturnType (*factory)(Args...)) {
+  auto cls = pybind11::classh<core::DynamicDispatchTransform,
+                              neptune::data::composite::TransformBase>(
+      m, name.c_str());
+  cls.def(pybind11::init([name](Args... args) {
+            std::vector<api::Value> values;
+            values.reserve(sizeof...(Args));
+            (values.emplace_back(std::forward<Args>(args)), ...);
+            auto result = core::DynamicDispatchTransform::Create(
+                name, std::move(values));
+            if (!result.ok()) {
+              throw std::runtime_error(std::string(result.status().message()));
+            }
+            return std::move(result).value();
+          }),
+          ((void)sizeof(Args), pybind11::arg().none(true))...);
+  cls.def_property_readonly(
+      "name", [name](const core::DynamicDispatchTransform&) { return name; });
+  cls.def(
+      "execute",
+      [](core::DynamicDispatchTransform& self, api::ExecuteContext& context) {
+        absl::Status status = self.Execute(context);
+        if (!status.ok()) {
+          throw std::runtime_error(std::string(status.message()));
+        }
+      },
+      "Internal api: Execute the transform with an explicitly provided "
+      "api::ExecuteContext.");
+}
+
+template <typename T>
+void SetDynamicFactory(pybind11::module& m, const std::string& name) {
+  SetDynamicFactoryInternal<T>(m, name, &T::Create);
+}
+
+}  // namespace pybind_internal
+
 // Register a specific class in the pybind11 module.
 // Note: This needs to be instantiated per-class.
 template <typename T>
 void RegisterPybindTransformExt(pybind11::module& m, const std::string& name) {
   pybind_internal::SetFactory<T>(m, name);
+}
+
+// Register a dynamic dispatch class for multi-kernel transforms in pybind11.
+template <typename T>
+void RegisterDynamicPybindTransformExt(pybind11::module& m,
+                                       const std::string& name) {
+  pybind_internal::SetDynamicFactory<T>(m, name);
 }
 
 }  // namespace composite
