@@ -464,6 +464,7 @@ class MainLibOrchestrationTest(test_utils.NptTestCase):
                     input_keys=['numeric_data'],
                     output_keys=['model_output'],
                     role=orchestration_pb2.ROLE_MODEL,
+                    use_batching=True,
                 ),
                 serving_config.ModelCall(
                     model_name='tf_model',
@@ -509,6 +510,9 @@ class MainLibOrchestrationTest(test_utils.NptTestCase):
         pipeline.components[1].role,
         orchestration_pb2.ROLE_MODEL,
     )
+    self.assertTrue(pipeline.components[1].use_batching)
+    self.assertFalse(pipeline.components[0].use_batching)
+    self.assertFalse(pipeline.components[2].use_batching)
 
     self.assertEqual(
         pipeline.components[2].function_name,

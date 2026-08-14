@@ -100,12 +100,14 @@ class PipelineNode:
     role: The role of the component in the pipeline.
     input_keys: The keys of the input dict that the function expects.
     output_keys: The keys of the output dict that the function produces.
+    use_batching: Whether to enable batch serving for this node.
   """
 
   processor: processor.Processor
   role: orchestration_pb2.Role
   input_keys: Sequence[str] = dataclasses.field(default_factory=list)
   output_keys: Sequence[str] = dataclasses.field(default_factory=list)
+  use_batching: bool = False
 
 
 def _build_orchestration_pipeline_nodes(
@@ -166,6 +168,7 @@ def _build_orchestration_pipeline_nodes(
             role=model_call.role,
             input_keys=model_call.input_keys,
             output_keys=model_call.output_keys,
+            use_batching=model_call.use_batching,
         )
     )
 
@@ -270,6 +273,7 @@ def _update_save_bundle_with_pipeline_node(
       function_name=prepared_processor.name,
       role=pipeline_node.role,
       weights_name=prepared_processor.weights_name,
+      use_batching=pipeline_node.use_batching,
   )
   if is_graph_based:
     shlo_input_sig = jax2npt_utils.to_shlo_tensor_spec(

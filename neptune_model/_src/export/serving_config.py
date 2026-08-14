@@ -150,6 +150,19 @@ class Orchestration:
     else:
       object.__setattr__(self, "_ordered_model_calls", self.model_calls)
 
+    # Check that batching calls are consecutive.
+    batching_groups = [
+        k
+        for k, _ in itertools.groupby(
+            self._ordered_model_calls, key=lambda c: c.use_batching
+        )
+    ]
+    if batching_groups.count(True) > 1:
+      raise ValueError(
+          "Model calls with `use_batching=True` must be consecutive in the"
+          " pipeline."
+      )
+
   @property
   def ordered_model_calls(self) -> Sequence[ModelCall]:
     """Returns model calls in execution order.

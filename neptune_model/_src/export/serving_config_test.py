@@ -481,6 +481,45 @@ class ServingConfigTest(parameterized.TestCase):
           orchestration=orchestration,
       )
 
+  @parameterized.named_parameters(
+      ("sequential_invalid", False, [True, False, True], False),
+      ("sequential_valid", False, [True, True, True], True),
+      ("graph_based_invalid", True, [True, False, True], False),
+      ("graph_based_valid", True, [True, True, True], True),
+  )
+  def test_orchestration_use_batching_consecutive_validation(
+      self, graph_based, batch_flags, valid
+  ):
+    call_1 = serving_config.ModelCall(
+        model_name="m1",
+        input_keys=["x"],
+        output_keys=["y"],
+        use_batching=batch_flags[0],
+    )
+    call_2 = serving_config.ModelCall(
+        model_name="m2",
+        input_keys=["y"],
+        output_keys=["z"],
+        use_batching=batch_flags[1],
+    )
+    call_3 = serving_config.ModelCall(
+        model_name="m3",
+        input_keys=["z"],
+        output_keys=["w"],
+        use_batching=batch_flags[2],
+    )
+
+    calls = (
+        [call_1, call_2, call_3] if graph_based else [call_3, call_2, call_1]
+    )
+    if not valid:
+      with self.assertRaisesRegex(
+          ValueError, "must be consecutive in the pipeline"
+      ):
+        serving_config.Orchestration(model_calls=calls, graph_based=graph_based)
+    else:
+      serving_config.Orchestration(model_calls=calls, graph_based=graph_based)
+
 
 if __name__ == "__main__":
   absltest.main()
