@@ -20,7 +20,7 @@ from typing import Any, TypeVar
 
 from absl import logging
 import jax
-from jax import export as jax_export
+from jax import export as jax_export  # pylint: disable=unused-import
 from jax.experimental import layout as jax_layout
 from jax.extend import sharding as jex_sharding
 import jax.numpy as jnp
@@ -29,12 +29,12 @@ import numpy as np
 
 from neptune_model._src.core import shlo_type
 from neptune_model._src.export import constants
-from neptune_model._src.jax2npt import typing
-from neptune_model.protos import manifest_pb2
+from neptune_model._src.jax2npt import typing  # pylint: disable=unused-import
+from neptune_model.protos import manifest_pb2  # pylint: disable=unused-import
 from neptune_model.protos.xla import xla_data_pb2  # pylint: disable=g-direct-tensorflow-import
 
 
-def get_physical_dtype(dtype) -> shlo_type.ShloDType | None:
+def get_physical_dtype(dtype) -> shlo_type.ShloDType | None:  # pylint: disable=missing-function-docstring
   try:
     if dtype == jax.numpy.int4:
       return shlo_type.ShloDType.i4
@@ -217,7 +217,7 @@ def _to_shlo_shape(
     else:
       try:
         shlo_dim = int(dim)
-      except Exception:
+      except Exception:  # pylint: disable=broad-exception-caught
         shlo_dim = None
     shlo_dim_sizes.append(shlo_dim)
   return shlo_dim_sizes
@@ -230,7 +230,7 @@ def _to_shlo_shape(
 _shlo_dtype_for_float0 = shlo_type.ShloDType.bool
 
 
-def _to_shlo_dtype(
+def _to_shlo_dtype(  # pylint: disable=missing-function-docstring
     jax_dtype: np.dtype[Any],
 ) -> shlo_type.ShloDType:
   if jax_dtype == jax.numpy.int4:
@@ -265,10 +265,10 @@ def _to_shlo_tensor_spec(
     A `ShloTensorSpec`.
   """
   assert isinstance(aval, jax.core.ShapedArray)
-  shlo_shape = _to_shlo_shape(aval.shape)
-  shlo_dtype = _to_shlo_dtype(aval.dtype)
+  shlo_shape = _to_shlo_shape(aval.shape)  # pytype: disable=attribute-error  # pylint: disable=g-blanket-type-suppression
+  shlo_dtype = _to_shlo_dtype(aval.dtype)  # pytype: disable=attribute-error  # pylint: disable=g-blanket-type-suppression
   xla_layout_proto = (
-      _to_xla_layout_proto(layout, aval.dtype) if layout is not None else None
+      _to_xla_layout_proto(layout, aval.dtype) if layout is not None else None  # pytype: disable=attribute-error  # pylint: disable=g-blanket-type-suppression
   )
   spec = shlo_type.ShloTensorSpec(
       shape=shlo_shape,
