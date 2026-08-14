@@ -46,7 +46,7 @@ repository = 'http://github.com/AI-Hypercomputer/neptune'
 
 [project.scripts]
 npt-cli = 'neptune_model.cli.npt_cli:run'
-npt-llm-export = 'neptune_model._src.llm.cli:run'
+npt-llm-export = 'neptune_model._src.llm.export_llm:main'
 
 # TODO: Figure out why composite_processor_test.py is failing on GitHub only.
 [tool.pytest.ini_options]

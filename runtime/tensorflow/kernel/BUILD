@@ -20,14 +20,39 @@ cc_library(
     ],
 )
 
+# Custom self-contained RegexSplitWithOffsets op for OSS builds.
+# In Google3, this is NOT linked into init_lib_tensorflow to avoid duplicate
+# REGISTER_OP collisions with canonical //third_party/tensorflow_text ops.
+# Copybara adds this dep to init_lib_tensorflow during OSS export.
+#
+# TODO: Figure out how to link the required tensorflow-text
+# kernels in OSS without copying or maintaining duplicate kernel
+# implementations ourselves.
+cc_library(
+    name = "regex_split_op",
+    srcs = ["regex_split_op.cc"],
+    deps = [
+        "//third_party/re2",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings:string_view",
+        "@org_tensorflow//tensorflow/core:framework",
+        "@org_tensorflow//tensorflow/core:framework_lite",
+        "@org_tensorflow//tensorflow/core/platform:errors",
+        "@xla//xla/tsl/platform:errors",
+    ],
+    alwayslink = 1,
+)
+
 cc_library(
     name = "init_lib_tensorflow",
     srcs = ["init_lib_tensorflow.cc"],
     visibility = [":kernel_users"],
     deps = [
         ":builtin_tensorflow_kernel",
+        ":regex_split_op",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/strings",
         "@neptune//runtime/kernel",
         "@org_tensorflow//tensorflow/core/platform:env",

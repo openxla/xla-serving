@@ -30,22 +30,22 @@ Commands & Usage Examples:
      npt-llm-export help
 
   2. Export a model with Greedy sampling:
-     npt-llm-export \\
-       --model Qwen/Qwen3-0.6B \\
-       --export-dir /tmp/qwen3_greedy_export \\
-       --sampling-type greedy \\
-       --batch-size 1 \\
-       --max-prompt-len 1024 \\
+     npt-llm-export \
+       --model Qwen/Qwen3-0.6B \
+       --export-dir /tmp/qwen3_greedy_export \
+       --sampling-type greedy \
+       --allowed-batch-sizes 1 \
+       --max-prompt-len 1024 \
        --max-new-tokens 32
 
   3. Export a model with Beam Search sampling:
-     npt-llm-export \\
-       --model Qwen/Qwen3-0.6B \\
-       --export-dir /tmp/qwen3_beam_export \\
-       --sampling-type beam_search \\
-       --beam-width 4 \\
-       --batch-size 1 \\
-       --max-prompt-len 512 \\
+     npt-llm-export \
+       --model Qwen/Qwen3-0.6B \
+       --export-dir /tmp/qwen3_beam_export \
+       --sampling-type beam_search \
+       --beam-width 4 \
+       --allowed-batch-sizes 1 \
+       --max-prompt-len 512 \
        --max-new-tokens 16
 
 Required Arguments:
@@ -53,10 +53,10 @@ Required Arguments:
   --export-dir: Destination directory for the Orbax Model bundle.
 
 Optional Arguments:
-  --sampling-type: greedy, top_k, beam_search, scoring.
-  --beam-width:    Number of candidate beams when using beam search (default: 4).
-  --batch-size:    Static serving batch size (default: 1).
-  --tp-size:       Tensor parallel size (defaults to all available local TPU devices).
+  --sampling-type:       greedy, top_k, beam_search, scoring.
+  --beam-width:          Number of candidate beams when using beam search (default: 4).
+  --allowed-batch-sizes: Comma-separated list of static batch sizes allowed during serving (default: '1').
+  --tp-size:             Tensor parallel size (defaults to all available local TPU devices).
 """
 
 import argparse
@@ -120,6 +120,7 @@ def _get_tpu_runner(
   engine_args = vllm_arg_utils.EngineArgs(
       model=args.model,
       max_model_len=args.max_seq_len,
+      load_format=getattr(args, "load_format", "auto"),
       enforce_eager=True,
       tensor_parallel_size=args.tp_size,
       gpu_memory_utilization=0.8,
@@ -206,10 +207,21 @@ Examples:
       help="Output directory for the exported Neptune model.",
   )
   parser.add_argument(
-      "--batch-size",
-      type=int,
-      default=1,
-      help="Static batch size for the exported serving signature (default: 1).",
+      "--load-format",
+      type=str,
+      default="auto",
+      help=(
+          "Model weight load format (e.g. 'auto', 'safetensors', 'jax_dummy')."
+      ),
+  )
+  parser.add_argument(
+      "--allowed-batch-sizes",
+      type=str,
+      default="1",
+      help=(
+          "Comma-separated list of allowed batch sizes for serving (default:"
+          " '1', e.g. '1,2,4')."
+      ),
   )
   parser.add_argument(
       "--max-seq-len",
@@ -275,6 +287,27 @@ Examples:
 
 def main(argv: list[str] | None = None):
   args = parse_args(argv)
+  if args.max_prompt_len <= 0:
+    raise ValueError(
+        f"--max-prompt-len must be positive, got {args.max_prompt_len}"
+    )
+  if args.max_new_tokens <= 0:
+    raise ValueError(
+        f"--max-new-tokens must be positive, got {args.max_new_tokens}"
+    )
+  if args.beam_width <= 0:
+    raise ValueError(f"--beam-width must be positive, got {args.beam_width}")
+
+  parsed_batch_sizes = [
+      int(b.strip()) for b in args.allowed_batch_sizes.split(",") if b.strip()
+  ]
+  if not parsed_batch_sizes:
+    raise ValueError("--allowed-batch-sizes cannot be empty.")
+  for b in parsed_batch_sizes:
+    if b <= 0:
+      raise ValueError(f"Each batch size must be positive, got {b}.")
+  allowed_batch_sizes = tuple(parsed_batch_sizes)
+
   if args.max_seq_len is None:
     args.max_seq_len = args.max_prompt_len + args.max_new_tokens
   elif args.max_seq_len < args.max_prompt_len + args.max_new_tokens:
@@ -302,7 +335,7 @@ def main(argv: list[str] | None = None):
 
   full_config = tokenizers_exporter.NeptuneLLMExportWithTokenizerConfig(
       export_dir=args.export_dir,
-      allowed_batch_sizes=[args.batch_size],
+      allowed_batch_sizes=allowed_batch_sizes,
       generation_config=gen_config,
       tokenizer_config=tokenizers_config.TokenizerConfig(
           model_name_or_path=args.model,

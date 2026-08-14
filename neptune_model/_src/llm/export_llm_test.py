@@ -32,7 +32,7 @@ class ExportLlmTest(absltest.TestCase):
     ])
     self.assertEqual(args.model, "test-model")
     self.assertEqual(args.export_dir, "/tmp/export")
-    self.assertEqual(args.batch_size, 1)
+    self.assertEqual(args.allowed_batch_sizes, "1")
     self.assertIsNone(args.max_seq_len)
     self.assertEqual(args.max_prompt_len, 1024)
     self.assertEqual(args.max_new_tokens, 8)
@@ -42,13 +42,22 @@ class ExportLlmTest(absltest.TestCase):
 
   def test_parse_args_overrides(self):
     args = export_llm.parse_args([
-        "--model", "test-model",
-        "--export-dir", "/tmp/export",
-        "--max-seq-len", "2048",
-        "--max-new-tokens", "256",
-        "--sampling-type", "beam_search",
-        "--beam-width", "8",
+        "--model",
+        "test-model",
+        "--export-dir",
+        "/tmp/export",
+        "--allowed-batch-sizes",
+        "1,2,4",
+        "--max-seq-len",
+        "2048",
+        "--max-new-tokens",
+        "256",
+        "--sampling-type",
+        "beam_search",
+        "--beam-width",
+        "8",
     ])
+    self.assertEqual(args.allowed_batch_sizes, "1,2,4")
     self.assertEqual(args.max_seq_len, 2048)
     self.assertEqual(args.max_new_tokens, 256)
     self.assertEqual(args.sampling_type, "beam_search")
@@ -85,6 +94,7 @@ class ExportLlmTest(absltest.TestCase):
         config, tokenizers_exporter.NeptuneLLMExportWithTokenizerConfig
     )
     self.assertEqual(config.export_dir, "/tmp/mocked_export")
+    self.assertEqual(config.allowed_batch_sizes, (1,))
     self.assertEqual(
         config.generation_config.sampling_method,
         export_config.SamplingMethod.TOP_K,
@@ -92,6 +102,29 @@ class ExportLlmTest(absltest.TestCase):
     self.assertEqual(config.generation_config.max_output_tokens, 512)
     self.assertEqual(config.generation_config.max_prompt_length, 1024)
     self.assertIsNone(config.generation_config.beam_size)
+
+  @mock.patch.object(export_llm, "_get_tpu_runner", autospec=True)
+  @mock.patch.object(
+      export_llm.tpu_exporter, "export_tpu_inference_model", autospec=True
+  )
+  def test_main_tpu_inference_backend_multi_batch_sizes(
+      self, mock_export, mock_init_runner
+  ):
+    mock_runner = mock.MagicMock()
+    mock_init_runner.return_value = mock_runner
+
+    export_llm.main([
+        "--model",
+        "Qwen/Qwen3-1.5B",
+        "--export-dir",
+        "/tmp/mocked_export",
+        "--allowed-batch-sizes",
+        "1,2,4",
+    ])
+
+    mock_export.assert_called_once()
+    config = mock_export.call_args[1]["config"]
+    self.assertEqual(config.allowed_batch_sizes, (1, 2, 4))
 
   @mock.patch.object(export_llm, "_get_tpu_runner", autospec=True)
   @mock.patch.object(
@@ -153,7 +186,11 @@ class ExportLlmTest(absltest.TestCase):
   def test_main_tpu_inference_backend_insufficient_seq_len(
       self, mock_export, mock_init_runner
   ):
-    with self.assertRaisesRegex(ValueError, "must be at least"):
+    with self.assertRaisesRegex(
+        ValueError,
+        r"max_seq_len \(1024\) must be at least max_prompt_len \(1024\) \+"
+        r" max_new_tokens \(512\)",
+    ):
       export_llm.main([
           "--model",
           "Qwen/Qwen3-1.5B",
@@ -169,6 +206,58 @@ class ExportLlmTest(absltest.TestCase):
 
     mock_init_runner.assert_not_called()
     mock_export.assert_not_called()
+
+  def test_main_invalid_prompt_len(self):
+    with self.assertRaisesRegex(
+        ValueError, r"--max-prompt-len must be positive, got 0"
+    ):
+      export_llm.main([
+          "--model",
+          "Qwen/Qwen3-1.5B",
+          "--export-dir",
+          "/tmp/mocked_export",
+          "--max-prompt-len",
+          "0",
+      ])
+
+  def test_main_invalid_new_tokens(self):
+    with self.assertRaisesRegex(
+        ValueError, r"--max-new-tokens must be positive, got 0"
+    ):
+      export_llm.main([
+          "--model",
+          "Qwen/Qwen3-1.5B",
+          "--export-dir",
+          "/tmp/mocked_export",
+          "--max-new-tokens",
+          "0",
+      ])
+
+  def test_main_invalid_beam_width(self):
+    with self.assertRaisesRegex(
+        ValueError, r"--beam-width must be positive, got 0"
+    ):
+      export_llm.main([
+          "--model",
+          "Qwen/Qwen3-1.5B",
+          "--export-dir",
+          "/tmp/mocked_export",
+          "--beam-width",
+          "0",
+      ])
+
+  def test_main_invalid_allowed_batch_sizes(self):
+    with self.assertRaisesRegex(
+        ValueError, r"Each batch size must be positive, got -1\."
+    ):
+      export_llm.main([
+          "--model",
+          "Qwen/Qwen3-1.5B",
+          "--export-dir",
+          "/tmp/mocked_export",
+          "--allowed-batch-sizes",
+          "-1",
+      ])
 
   def test_main_invalid_sampling_type(self):
     with self.assertRaises(SystemExit):
@@ -187,6 +276,7 @@ class ExportLlmTest(absltest.TestCase):
           "--export-dir", "/tmp",
           "--backend", "unknown-backend"
       ])
+
 
 if __name__ == "__main__":
   absltest.main()

@@ -12,13 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <dlfcn.h>
+
 #include <cstdlib>
 #include <string>
 #include <vector>
 
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/strings/match.h"  // from @abseil-cpp
+#include "absl/strings/str_split.h"  // from @abseil-cpp
 #include "runtime/kernel/kernel.h"  // from @neptune
 #include "runtime/tensorflow/kernel/builtin_tensorflow_kernel.h"  // from @neptune
 #include "tensorflow/core/platform/env.h"  // from @org_tensorflow
@@ -27,6 +31,52 @@
 namespace neptune {
 namespace {
 
+void LoadSingleSo(const std::string& so_path) {
+  // Note: We deliberately use direct dlopen with RTLD_GLOBAL (rather than
+  // env->LoadDynamicLibrary which defaults to RTLD_LOCAL) so that symbols
+  // exported by custom op libraries (e.g. TF Text, SentencePiece, C++ kernels)
+  // are visible in the global process symbol table. This allows cross-library
+  // symbol resolution and registration across interdependent shared
+  // libraries.
+  if (absl::EndsWith(so_path, ".so")) {
+    void* handle = dlopen(so_path.c_str(), RTLD_NOW | RTLD_GLOBAL);
+    if (handle != nullptr) {
+      LOG(INFO) << "Loaded TF custom op library via dlopen: " << so_path;
+    } else {
+      const char* err = dlerror();
+      LOG(WARNING) << "Failed to dlopen TF custom op library " << so_path
+                   << ": " << (err ? err : "unknown error");
+    }
+  }
+}
+
+void LoadSoFromPath(tensorflow::Env* env, const std::string& current_path) {
+  if (!env->FileExists(current_path).ok()) {
+    LOG(WARNING) << "TF_CUSTOM_OP_LIBRARY_PATH entry does not exist: "
+                 << current_path;
+    return;
+  }
+  if (!env->IsDirectory(current_path).ok()) {
+    LoadSingleSo(current_path);
+    return;
+  }
+  std::vector<std::string> children;
+  absl::Status status = env->GetChildren(current_path, &children);
+  if (!status.ok()) {
+    LOG(WARNING) << "Failed to list directory " << current_path << ": "
+                 << status.ToString();
+    return;
+  }
+  for (const auto& child : children) {
+    std::string child_path = tensorflow::io::JoinPath(current_path, child);
+    if (env->IsDirectory(child_path).ok()) {
+      LoadSoFromPath(env, child_path);
+    } else {
+      LoadSingleSo(child_path);
+    }
+  }
+}
+
 // Loads external TF custom op libraries (.so) from
 // TF_CUSTOM_OP_LIBRARY_PATH at startup to enable custom TF ops in OSS.
 void LoadTFCustomOpsFromEnv() {
@@ -34,38 +84,10 @@ void LoadTFCustomOpsFromEnv() {
   if (!path_env) return;
 
   tensorflow::Env* env = tensorflow::Env::Default();
-  if (!env->FileExists(path_env).ok()) {
-    LOG(WARNING) << "TF_CUSTOM_OP_LIBRARY_PATH does not exist: " << path_env;
-    return;
-  }
-
-  auto load_so = [env](const std::string& so_path) {
-    if (absl::EndsWith(so_path, ".so")) {
-      void* handle = nullptr;
-      absl::Status status = env->LoadDynamicLibrary(so_path.c_str(), &handle);
-      if (status.ok()) {
-        LOG(INFO) << "Loaded TF custom op library: " << so_path;
-      } else {
-        LOG(WARNING) << "Failed to load TF custom op library " << so_path
-                     << ": " << status.ToString();
-      }
-    }
-  };
-
-  if (!env->IsDirectory(path_env).ok()) {
-    load_so(path_env);
-    return;
-  }
-
-  std::vector<std::string> children;
-  absl::Status status = env->GetChildren(path_env, &children);
-  if (!status.ok()) {
-    LOG(WARNING) << "Failed to list directory " << path_env << ": "
-                 << status.ToString();
-    return;
-  }
-  for (const auto& child : children) {
-    load_so(tensorflow::io::JoinPath(path_env, child));
+  std::vector<std::string> paths =
+      absl::StrSplit(path_env, ':', absl::SkipEmpty());
+  for (const auto& raw_path : paths) {
+    LoadSoFromPath(env, raw_path);
   }
 }
 
