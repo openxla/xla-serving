@@ -72,15 +72,13 @@ from neptune_model._src.llm.tpu_inference import exporter as tpu_exporter
 
 # pylint: disable=g-import-not-at-top
 try:
-  # pytype: disable=import-error
-  from vllm.engine import args as vllm_args
+  from vllm.engine import arg_utils as vllm_arg_utils
   from tpu_inference.distributed import jax_parallel_state
   from tpu_inference.runner import tpu_runner
-  # pytype: enable=import-error
   _TPU_INFERENCE_AVAILABLE = True
   _TPU_INFERENCE_IMPORT_ERROR = None
 except ImportError as import_error:
-  vllm_args = None
+  vllm_arg_utils = None
   jax_parallel_state = None
   tpu_runner = None
   _TPU_INFERENCE_AVAILABLE = False
@@ -117,9 +115,9 @@ def _get_tpu_runner(
   if args.tp_size is None:
     args.tp_size = jax.device_count()
 
-  assert vllm_args is not None
+  assert vllm_arg_utils is not None
   # We use vLLM's EngineArgs config loader to easily parse models from HF.
-  engine_args = vllm_args.EngineArgs(
+  engine_args = vllm_arg_utils.EngineArgs(
       model=args.model,
       max_model_len=args.max_seq_len,
       enforce_eager=True,
