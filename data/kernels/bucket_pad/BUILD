@@ -1,5 +1,6 @@
 load("@com_google_protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
 load("@com_google_protobuf//bazel:py_proto_library.bzl", "py_proto_library")
+load("@neptune//data/processor/python:build_defs.bzl", "transform_pybind_library")
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 load("@rules_proto//proto:defs.bzl", "proto_library")
@@ -50,6 +51,18 @@ cc_library(
         "@xla//xla/tsl/platform:status_macros",
     ],
     alwayslink = 1,
+)
+
+transform_pybind_library(
+    name = "bucket_pad_transform_pybind",
+    srcs = ["bucket_pad_transform.cc"],
+    hdrs = ["bucket_pad_transform.h"],
+    dynamic_deps = ["@neptune//data:neptune_data_core"],
+    generate_wrappers = True,
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../.."],
+    deps = [
+        ":bucket_pad_transform",
+    ],
 )
 
 cc_test(

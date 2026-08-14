@@ -22,19 +22,28 @@ class ExportableTransform(abc.ABC):
   """Abstract base class for exportable transforms written in C++."""
 
   def __init__(self, *args: Any, **kwargs: Any):
-    pass
+    self._args = args
+    self._kwargs = kwargs
+    self._transform = None
 
-  @abc.abstractmethod
   def initialize(self, input_signature: Any) -> None:
     pass
 
-  @abc.abstractmethod
   def get_output_signature(self, input_signature: Any) -> Any:
-    pass
+    if self._transform is not None and hasattr(
+        self._transform, "get_output_signature"
+    ):
+      return self._transform.get_output_signature(input_signature)
+    return input_signature
 
   @property
   def transform(self) -> Any:
-    return getattr(self, "_transform", None)
+    return self._transform
 
   def export_assets(self) -> dict[str, str]:
     return {}
+
+  def __call__(self, *args: Any, **kwargs: Any) -> Any:
+    if self._transform is not None:
+      return self._transform(*args, **kwargs)
+    raise RuntimeError("Transform is not initialized.")
