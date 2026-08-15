@@ -1,4 +1,5 @@
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension", "pybind_library")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("@rules_python//python:py_test.bzl", "py_test")
 
 package(default_visibility = ["@neptune//data/cpu_embedding:__subpackages__"])
@@ -47,6 +48,31 @@ py_test(
     deps = [
         ":cpu_embedding_engine_pybind",
         "@absl_py//absl/testing:absltest",
+        "@neptune_pypi//numpy",
+    ],
+)
+
+py_library(
+    name = "embedding_utils",
+    srcs = ["embedding_utils.py"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@neptune//data/kernels/cpu_embedding:cpu_embedding_module",
+        "@neptune//data/ops:packing",
+        "@neptune//data/processor/proto:transform_config_py_pb2",
+        "@neptune//data/processor/python:composite_processor_pybind",
+        "@neptune//data/processor/python:processor",
+        "@neptune_pypi//jax",
+    ],
+)
+
+py_test(
+    name = "embedding_utils_test",
+    srcs = ["embedding_utils_test.py"],
+    deps = [
+        ":embedding_utils",
+        "@neptune//data/kernels/cpu_embedding:cpu_embedding_module",
+        "@neptune_pypi//jax",
         "@neptune_pypi//numpy",
     ],
 )
