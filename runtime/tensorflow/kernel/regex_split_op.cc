@@ -47,7 +47,7 @@
 
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "third_party/re2/re2.h"
+#include "re2/re2.h"  // from @re2
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/macros.h"  // from @xla
 #include "tensorflow/core/framework/op.h"  // from @org_tensorflow

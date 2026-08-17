@@ -32,12 +32,12 @@ cc_library(
     name = "regex_split_op",
     srcs = ["regex_split_op.cc"],
     deps = [
-        "//third_party/re2",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/strings:string_view",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:framework_lite",
         "@org_tensorflow//tensorflow/core/platform:errors",
+        "@re2",
         "@xla//xla/tsl/platform:errors",
     ],
     alwayslink = 1,
