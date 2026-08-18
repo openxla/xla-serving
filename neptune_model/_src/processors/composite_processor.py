@@ -275,7 +275,7 @@ class CompositeProcessor:
     """Constructs a CompositeProcessor from an ExecutionGraph."""
     instance = cls.__new__(cls)
     instance._name = name
-    instance._transforms = None
+    instance._transforms = None  # pyrefly: ignore[bad-assignment]
 
     pybind_processor = composite_processor_pybind.CompositeProcessor.create(
         graph

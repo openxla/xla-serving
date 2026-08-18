@@ -38,7 +38,7 @@ class ManifestUtilTest(absltest.TestCase):
     )
     obm_module = {'test_fn': fn}
 
-    manifest_proto = manifest_utils.build_manifest_proto(obm_module, tmp_dir)
+    manifest_proto = manifest_utils.build_manifest_proto(obm_module, tmp_dir)  # pyrefly: ignore[bad-argument-type]
 
     self.assertIn('test_fn', manifest_proto.objects)
     self.assertTrue(

@@ -98,14 +98,14 @@ def build_neptune_apply_fn(
     """The E2E compiled generation loop execution logic."""
     if isinstance(inputs, dict):
       inputs = inputs.get("tokens", inputs.get("input_ids", next(iter(inputs.values()))))
-    batch_size = inputs.shape[0]
+    batch_size = inputs.shape[0]  # pyrefly: ignore[missing-attribute]
     match strategy:
       case "beam_search":
         beam_size = generation_config.beam_size
         # Prefill phase: Process the input prompt (is_prefill=True) to
         # initialize the KV cache and get logits for the first token generation.
         initial_cache = initial_cache_factory(batch_size)
-        packed_prefill_inputs = cache_processor.pack_inputs(inputs, None)
+        packed_prefill_inputs = cache_processor.pack_inputs(inputs, None)  # pyrefly: ignore[bad-argument-type]
         prefill_logits, cache = model_forward_step_fn(
             params, packed_prefill_inputs, initial_cache, True
         )

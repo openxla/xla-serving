@@ -86,7 +86,7 @@ def shlo_tensor_spec_from(
       if not isinstance(spec, tf.TensorSpec):
         # A composite type spec (RaggedTensorSpec, etc.)
         expanded = tf.nest.flatten(spec, expand_composites=True)
-        return tuple(shlo_tensor_spec_from(s) for s in expanded)
+        return tuple(shlo_tensor_spec_from(s) for s in expanded)  # pyrefly: ignore[bad-return]
 
       # A plain (non-composite) TensorSpec.
       return shlo_type.ShloTensorSpec(

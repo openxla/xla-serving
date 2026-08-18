@@ -165,7 +165,7 @@ def _build_orchestration_pipeline_nodes(
     pipeline_nodes.append(
         PipelineNode(
             processor=processor_inst,
-            role=model_call.role,
+            role=model_call.role,  # pyrefly: ignore[bad-argument-type]
             input_keys=model_call.input_keys,
             output_keys=model_call.output_keys,
             use_batching=model_call.use_batching,

@@ -46,7 +46,7 @@ class CompositeProcessorTest(absltest.TestCase):
     self.assertEqual(repr(v_int), "Value(10)")
 
     v_float = composite_processor_pybind.Value(3.14)
-    self.assertAlmostEqual(v_float.as_encapsulated_type(), 3.14, places=2)
+    self.assertAlmostEqual(v_float.as_encapsulated_type(), 3.14, places=2)  # pyrefly: ignore[no-matching-overload]
     self.assertEqual(repr(v_float), "Value(3.14)")
 
     v_str = composite_processor_pybind.Value("hello")
@@ -434,7 +434,7 @@ class CompositeProcessorTest(absltest.TestCase):
 
   def test_create_bytes_array_from_bytearray_mutation_prevented(self):
     b = bytearray(b"initial_payload")
-    hb = composite_processor_pybind.HostBuffer.create_bytes_array([b], [1])
+    hb = composite_processor_pybind.HostBuffer.create_bytes_array([b], [1])  # pyrefly: ignore[bad-argument-type]
     self.assertEqual(hb.to_string_array(), ["initial_payload"])
     with self.assertRaises(BufferError):
       b.extend(b"mutation")
@@ -457,7 +457,7 @@ class CompositeProcessorTest(absltest.TestCase):
 
   def test_bytearray_mutation_allowed_after_host_buffer_deletion(self):
     b = bytearray(b"initial")
-    hb = composite_processor_pybind.HostBuffer.create_bytes_array([b], [1])
+    hb = composite_processor_pybind.HostBuffer.create_bytes_array([b], [1])  # pyrefly: ignore[bad-argument-type]
     self.assertEqual(hb.to_string_array(), ["initial"])
     with self.assertRaises(BufferError):
       b.clear()
@@ -476,7 +476,7 @@ class CompositeProcessorTest(absltest.TestCase):
     self.assertEqual(hb.dtype, np.int32)
     self.assertEqual(hb.shape, (2, 3))
 
-    na_out = np.from_dlpack(hb).copy()
+    na_out = np.from_dlpack(hb).copy()  # pyrefly: ignore[bad-argument-type]
     self.assertEqual(na_out.shape, (2, 3))
     self.assertEqual(na_out.dtype, np.int32)
     self.assertEqual(na_out.tolist(), [[1, 2, 3], [4, 5, 6]])
@@ -487,7 +487,7 @@ class CompositeProcessorTest(absltest.TestCase):
     self.assertEqual(hb.dtype, np.int32)
     self.assertEqual(hb.shape, (2, 3))
 
-    na_out = np.from_dlpack(hb).copy()
+    na_out = np.from_dlpack(hb).copy()  # pyrefly: ignore[bad-argument-type]
     self.assertEqual(na_out.shape, (2, 3))
     self.assertEqual(na_out.dtype, np.int32)
     self.assertEqual(na_out.tolist(), [[1, 2, 3], [4, 5, 6]])
@@ -500,7 +500,7 @@ class CompositeProcessorTest(absltest.TestCase):
     self.assertEqual(hb.dtype, np.int32)
     self.assertEqual(hb.shape, (2, 3))
 
-    na_out = np.from_dlpack(hb).copy()
+    na_out = np.from_dlpack(hb).copy()  # pyrefly: ignore[bad-argument-type]
     self.assertEqual(na_out.tolist(), [[1, 2, 3], [4, 5, 6]])
 
     hb = composite_processor_pybind.HostBuffer.from_dlpack(ja, copy=False)
@@ -509,7 +509,7 @@ class CompositeProcessorTest(absltest.TestCase):
     # For now, just verify the contents.
     self.assertEqual(hb.dtype, np.int32)
     self.assertEqual(hb.shape, (2, 3))
-    na_out = np.from_dlpack(hb).copy()
+    na_out = np.from_dlpack(hb).copy()  # pyrefly: ignore[bad-argument-type]
     self.assertEqual(na_out.tolist(), [[1, 2, 3], [4, 5, 6]])
 
   def test_host_buffer_from_numpy_dlpack_copy(self):
@@ -521,7 +521,7 @@ class CompositeProcessorTest(absltest.TestCase):
     self.assertEqual(hb.dtype, np.int32)
     self.assertEqual(hb.shape, (2, 3))
 
-    na_out = np.from_dlpack(hb).copy()
+    na_out = np.from_dlpack(hb).copy()  # pyrefly: ignore[bad-argument-type]
     self.assertEqual(na_out.tolist(), [[1, 2, 3], [4, 5, 6]])
 
     hb = composite_processor_pybind.HostBuffer.from_dlpack(na, copy=False)
@@ -692,7 +692,7 @@ class CompositeProcessorTest(absltest.TestCase):
     self.assertEqual(hb.dtype, np.int32)
     self.assertEqual(hb.shape, (3, 2))
 
-    na_out = np.from_dlpack(hb).copy()
+    na_out = np.from_dlpack(hb).copy()  # pyrefly: ignore[bad-argument-type]
     self.assertEqual(na_out.shape, (3, 2))
     self.assertEqual(na_out.dtype, np.int32)
     self.assertEqual(na_out.tolist(), [[1, 4], [2, 5], [3, 6]])
@@ -717,7 +717,7 @@ class CompositeProcessorTest(absltest.TestCase):
     # Convert to Numpy via DLPack to explicitly test the strides.
     # For a 2x3 int64 array (8 bytes per element), C-contiguous row-major
     # expected byte strides are (3 * 8 = 24, 1 * 8 = 8).
-    na = np.from_dlpack(hb)
+    na = np.from_dlpack(hb)  # pyrefly: ignore[bad-argument-type]
     self.assertEqual(na.strides, (24, 8))
     self.assertEqual(na.shape, (2, 3))
     self.assertEqual(na.dtype, np.int64)
@@ -777,8 +777,8 @@ class CompositeProcessorTest(absltest.TestCase):
           if isinstance(encap, int):
             outputs.append(composite_processor_pybind.Value(encap + 1))
           elif isinstance(encap, composite_processor_pybind.HostBuffer):
-            arr = np.from_dlpack(encap)
-            new_arr = arr + 1
+            arr = np.from_dlpack(encap)  # pyrefly: ignore[bad-argument-type]
+            new_arr = arr + 1  # pyrefly: ignore[unsupported-operation]
             new_hb = composite_processor_pybind.HostBuffer.from_dlpack(new_arr)
             outputs.append(composite_processor_pybind.Value(new_hb))
           elif isinstance(encap, str):

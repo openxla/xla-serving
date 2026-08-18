@@ -36,7 +36,7 @@ class DenseEmbedding(nnx.Module):
       embedding_specs: list[EmbeddingSpec],
       rngs: nnx.Rngs,
   ):
-    self._embeddings_by_name: nnx.Dict[str, nnx.Embed] = nnx.Dict()
+    self._embeddings_by_name: nnx.Dict[str, nnx.Embed] = nnx.Dict()  # pyrefly: ignore[bad-specialization]
 
     for spec in embedding_specs:
       self._embeddings_by_name[spec.name] = nnx.Embed(
@@ -57,7 +57,7 @@ class DenseEmbedding(nnx.Module):
             f"Feature '{embedding_name}' not found in embedding layer"
         )
       embedding_table = self._embeddings_by_name[embedding_name]
-      outputs[embedding_name] = embedding_table(ids)
+      outputs[embedding_name] = embedding_table(ids)  # pyrefly: ignore[not-callable]
 
     return outputs
 
@@ -115,9 +115,9 @@ class Model(nnx.Module):
     self.prediction_layer = prediction_layer
     self.embedding_layer = embedding_layer
 
-  def _logits(self, inputs: nnx.Dict[str, jax.Array]) -> jax.Array:
+  def _logits(self, inputs: nnx.Dict[str, jax.Array]) -> jax.Array:  # pyrefly: ignore[bad-specialization]
     embeddings = (
-        self.embedding_layer(inputs)
+        self.embedding_layer(inputs)  # pyrefly: ignore[bad-argument-type]
         if self.embedding_layer is not None
         else inputs
     )
@@ -126,7 +126,7 @@ class Model(nnx.Module):
     merged_output = request_output * candidate_output
     return self.prediction_layer(merged_output)
 
-  def __call__(self, inputs: nnx.Dict[str, jax.Array]) -> dict[str, jax.Array]:
+  def __call__(self, inputs: nnx.Dict[str, jax.Array]) -> dict[str, jax.Array]:  # pyrefly: ignore[bad-specialization]
     return {"pred": jax.nn.sigmoid(self._logits(inputs))}
 
 

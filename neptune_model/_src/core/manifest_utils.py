@@ -174,7 +174,7 @@ def build_manifest_proto(
               visibility,
               save_shlo_to_file,
           )
-          for i, fn in enumerate(obj)
+          for i, fn in enumerate(obj)  # pyrefly: ignore[bad-argument-type]
       ]
       manifest.objects[name].poly_fn.concrete_functions.extend(fn_protos)
 
@@ -185,7 +185,7 @@ def build_manifest_proto(
         )
       manifest.objects[name].value.external.data.CopyFrom(obj.data)
       if obj.loader_type is not None:
-        manifest.objects[name].value.external.loader_type = obj.loader_type
+        manifest.objects[name].value.external.loader_type = obj.loader_type  # pyrefly: ignore[bad-assignment]
 
     else:
       raise ValueError(

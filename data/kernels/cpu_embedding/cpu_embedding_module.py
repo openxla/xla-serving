@@ -269,7 +269,7 @@ class CpuEmbeddingModule:
             dense_lookup,
             self._output_feature_names,
             resolved_embedding_dim,
-            [
+            [  # pyrefly: ignore[bad-argument-type]
                 [d if d is not None else -1 for d in shape]
                 for shape in self._output_shapes
             ],

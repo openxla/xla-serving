@@ -151,7 +151,7 @@ def show(
   )
 
   # Support both --details=a --details=b and --details=a,b.
-  details = tuple(
+  details = tuple(  # pyrefly: ignore[bad-assignment]
       set(itertools.chain.from_iterable([d.split(',') for d in details]))
   )
 

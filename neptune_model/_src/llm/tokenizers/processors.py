@@ -129,7 +129,7 @@ class KerasHubTokenizerTF:
     self.pad_token_id = (
         pad_token_id
         if pad_token_id is not None
-        else real_tokenizer.pad_token_id
+        else real_tokenizer.pad_token_id  # pyrefly: ignore[missing-attribute]
     )
     if self.pad_token_id is None:
       raise ValueError("pad_token_id could not be resolved from tokenizer")
@@ -137,15 +137,15 @@ class KerasHubTokenizerTF:
     self.eos_token_id = (
         eos_token_id
         if eos_token_id is not None
-        else real_tokenizer.eos_token_id
+        else real_tokenizer.eos_token_id  # pyrefly: ignore[missing-attribute]
     )
     if self.eos_token_id is None:
       raise ValueError("eos_token_id could not be resolved from tokenizer")
 
-    vocab = real_tokenizer.get_vocab()
+    vocab = real_tokenizer.get_vocab()  # pyrefly: ignore[missing-attribute]
     vocab = {k: v for k, v in sorted(vocab.items(), key=lambda item: item[1])}
 
-    tokenizer_data = json.loads(real_tokenizer._tokenizer.to_str())
+    tokenizer_data = json.loads(real_tokenizer._tokenizer.to_str())  # pyrefly: ignore[missing-attribute]
     merges = tokenizer_data.get("model", {}).get("merges", [])
     formatted_merges = [" ".join(pair) for pair in merges]
 

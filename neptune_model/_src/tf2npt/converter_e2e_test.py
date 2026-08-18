@@ -79,7 +79,7 @@ class Tf2NptE2eTest(test_utils.NptTestCase, tf.test.TestCase):
     }
 
     persistence_lib.save(
-        npt_functions,
+        npt_functions,  # pyrefly: ignore[bad-argument-type]
         save_dir_path,
         persistence_lib.SaveOptions(
             version=2,
