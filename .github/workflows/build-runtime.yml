@@ -1,0 +1,38 @@
+name: Build Neptune Runtime
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test-runtime:
+    name: "build-runtime"
+    runs-on: linux-x86-n2-32
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Bazelisk
+        uses: bazel-contrib/setup-bazel@0.19.0
+
+      - name: Cache Bazel Build
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel
+          key: ${{ runner.os }}-bazel-${{ hashFiles('MODULE.bazel') }}
+          restore-keys: |
+            ${{ runner.os }}-bazel-
+
+      - name: Build Neptune Runtime
+        run: |
+          bazel build //runtime/...
+
+      - name: Run Runtime Tests
+        run: |
+          bazel test --test_output=errors //runtime/...
