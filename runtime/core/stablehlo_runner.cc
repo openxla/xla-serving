@@ -1095,7 +1095,7 @@ absl::Status StableHloRunner::CreateResourcesPerDeviceList(
   if (h2d_transfer_executor_factory_ != nullptr) {
     TF_ASSIGN_OR_RETURN(h2d_transfer_executor,
                         h2d_transfer_executor_factory_->Create(
-                            ifrt_client_, device_list, thread_pool));
+                            ifrt_client_.get(), device_list, thread_pool));
   }
   device_list_to_resources_map_[device_list] =
       std::make_unique<ResourcesPerDeviceList>(

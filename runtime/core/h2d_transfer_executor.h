@@ -29,7 +29,7 @@
 
 namespace neptune {
 
-// Interface for synchronous Host-to-Device (Arena) Transfers.
+// Interface for Host-to-Device (Arena) Transfers.
 // Implementations of this interface handle linear packing of HostBuffers along
 // with efficient multi-slice allocation & execution to the underlying devices.
 //
@@ -42,8 +42,8 @@ class H2DTransferExecutor {
   virtual ~H2DTransferExecutor() = default;
 
   // Converts the given `inputs` (HostBuffers) to XLA IFRT Arrays.
-  // Performs synchronous transfer of inputs to avoid unnecessary future
-  // overhead.
+  // Returns handles to the resulting IFRT Arrays, which represent asynchronous
+  // transfer operations provided by the underlying backend.
   //
   // `inputs`: The user-provided HostBuffers to transfer.
   // `input_shardings`: The exact IFRT Shardings required for these arrays.
@@ -63,7 +63,7 @@ class H2DTransferExecutorFactory {
   // `device_list`: The devices targeted for this execution.
   // `thread_pool`: A thread pool to use for concurrent packing/conversion.
   virtual absl::StatusOr<std::unique_ptr<H2DTransferExecutor>> Create(
-      std::shared_ptr<xla::ifrt::Client> client,
+      xla::ifrt::Client* client,
       xla::ifrt::DeviceListRef device_list,
       tsl::thread::ThreadPool* thread_pool) = 0;
 };
