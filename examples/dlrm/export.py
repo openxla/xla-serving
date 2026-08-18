@@ -30,6 +30,7 @@ from neptune_model._src.export import jax_model
 from neptune_model._src.export import main_lib
 from neptune_model._src.export import serving_config
 from neptune_model._src.export import tensorflow_model
+from neptune_model.protos import orchestration_pb2
 
 FLAGS = flags.FLAGS
 
@@ -38,30 +39,23 @@ _NUM_DENSE_FEATURES = flags.DEFINE_integer(
 )
 
 
-def get_synthetic_batch(batch_size, valency=None, vocab_sizes=None):
+def get_synthetic_batch(
+    batch_size: int,
+    valency: list[int] | None = None,
+    vocab_sizes: list[int] | None = None,
+):
   """Returns a synthetic batch of data.
 
   Args:
     batch_size: The size of the batch to generate.
     valency: A list of sizes for the multi-valent features.
     vocab_sizes: A list of sizes for the vocabularies of the sparse features.
-
-  Our features dict is an inputs of dictionary - {
-      'label': (0,1)
-      'dense_features': {
-          '1': 0.123,
-          '2': 0.456,
-          ...
-          '13': 0.987,
-      },
-      'sparse_features': {
-          '1': sparse_tensor,
-          '2': sparse_tensor,
-          ...
-          '26': sparse_tensor,
-      },
-  }
   """
+  if valency is None:
+    valency = model_lib.VALENCY
+  if vocab_sizes is None:
+    vocab_sizes = model_lib.VOCAB_SIZES
+
   data = {}
 
   data['clicked'] = np.random.randint(0, 2, size=(batch_size,), dtype=np.int64)
@@ -71,12 +65,14 @@ def get_synthetic_batch(batch_size, valency=None, vocab_sizes=None):
 
   sparse_features = {}
 
-  for i, rename_me in enumerate(valency):  # pyrefly: ignore[bad-argument-type]
-    sparse_features[str(i)] = np.random.randint(
+  for i, rename_me in enumerate(valency):
+    values = np.random.randint(
         low=0,
-        high=vocab_sizes[i],  # pyrefly: ignore[unsupported-operation]
+        high=vocab_sizes[i],
         size=(batch_size, rename_me),
+        dtype=np.int32,
     )
+    sparse_features[str(i)] = tf.RaggedTensor.from_tensor(values)
 
   data['sparse_features'] = sparse_features
   return data
@@ -104,26 +100,14 @@ def export_model(export_path: str):
       ]
   }
 
-  sparse_features = {}
-  for i in range(len(model_lib.VALENCY)):
-    sparse_features[str(i)] = tf.convert_to_tensor(
-        synthetic_batch_1['sparse_features'][str(i)]
-    )
-  # TODO: Enable after Sparse/Ragged support is added.
-  # Convert sparse features from dense to sparse tensors so that combiner.
-  # for f, tensor in sparse_features.items():
-  #   sparse_features[f] = tf.sparse.from_dense(tensor)
+  sparse_features = synthetic_batch_1['sparse_features']
   logging.info('sparse_features: %s', sparse_features)
   tf_sparse_embeddings = embedding_layer(sparse_features)
   logging.info('tf_sparse_embeddings: %s', tf_sparse_embeddings)
-  # This reduction is not needed when inputs are sparse tensors, TPU Embedding
-  # for serving layer automatically combines the embeddings for the multi-valent
-  # features (via parameter combiner="sum").
-  # TODO: Remove this reduction after Sparse/Ragged support is
-  # added.
-  jax_sparse_embeddings = jax.tree.map(
-      lambda x: jnp.sum(jnp.array(x.numpy()), axis=1), tf_sparse_embeddings
-  )
+  jax_sparse_embeddings = {
+      k: jnp.array(v.numpy())
+      for k, v in tf_sparse_embeddings.items()
+  }
 
   model_params = model.init(
       jax.random.PRNGKey(0),
@@ -145,18 +129,15 @@ def export_model(export_path: str):
         str(i): inputs[str(i)] for i in range(len(model_lib.VOCAB_SIZES))
     }
     sparse_embeddings = embedding_layer(sparse_features)
-    # TODO: Remove this reduction after Sparse/Ragged support is
-    # added.
-    summed_embeddings = {
-        k: tf.reduce_sum(v, axis=1) for k, v in sparse_embeddings.items()
-    }
     return {
         'dense_features': inputs['dense_features'],
-        'sparse_embeddings': summed_embeddings,
+        'sparse_embeddings': sparse_embeddings,
     }
 
   input_signature = {
-      str(i): tf.TensorSpec(shape=(None, model_lib.VALENCY[i]), dtype=tf.int32)
+      str(i): tf.RaggedTensorSpec(
+          shape=(None, None), dtype=tf.int32, ragged_rank=1
+      )
       for i in range(len(model_lib.VALENCY))
   }
   input_signature['dense_features'] = tf.TensorSpec(
@@ -206,9 +187,12 @@ def export_model(export_path: str):
                       serving_config.ModelCall(
                           model_name='tf_model',
                           method_key='preprocessing',
+                          role=orchestration_pb2.ROLE_PREPROCESSOR,
                       ),
                       serving_config.ModelCall(
-                          model_name='jax_model', method_key='serving_default'
+                          model_name='jax_model',
+                          method_key='serving_default',
+                          role=orchestration_pb2.ROLE_MODEL,
                       ),
                   ]
               ),

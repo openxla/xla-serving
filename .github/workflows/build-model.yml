@@ -54,13 +54,16 @@ jobs:
         run: |
           uv pip install build setuptools wheel grpcio-tools
 
-      - name: Build neptune_data and neptune_data_test wheels
+      - name: Build neptune_data, neptune_data_test, and neptune_model_runner wheels
         run: |
-          bazel build -c opt //data:neptune_data //data:neptune_data_test --@rules_python//python/config_settings:python_version=${{ matrix.python-version }}
+          bazel build -c opt //data:neptune_data //data:neptune_data_test //runtime/python:neptune_model_runner \
+            --@rules_python//python/config_settings:python_version=${{ matrix.python-version }} \
+            --ui_event_filters=-info,-stdout,-stderr \
+            --noshow_progress
 
-      - name: Install neptune_data and neptune_data_test wheels
+      - name: Install neptune_data, neptune_data_test, and neptune_model_runner wheels
         run: |
-          uv pip install bazel-bin/data/neptune_data*.whl
+          uv pip install bazel-bin/data/neptune_data*.whl bazel-bin/runtime/python/neptune_model_runner*.whl
 
       - name: Build the Neptune Model Wheel
         run: |
@@ -80,6 +83,15 @@ jobs:
           import neptune_model
           print('✅ Successfully imported neptune_model!')
           print(f'📦 Version: {neptune_model.__version__}')
+
+          from neptune_model_runner import model_runner
+          print('✅ Successfully imported neptune_model_runner!')
+
+          import neptune_data
+          print('✅ Successfully imported neptune_data!')
+
+          import neptune_data_test
+          print('✅ Successfully imported neptune_data_test!')
           "
 
       - name: Install Test Dependencies and Run Pytest
@@ -87,3 +99,13 @@ jobs:
           uv pip install ".[test,tf,torch]"
           uv pip uninstall triton
           pytest -v -s --full-trace neptune_model/
+
+      - name: Run Neptune Examples
+        run: |
+          for example_dir in examples/*; do
+            if [ -d "$example_dir" ] && [ -f "$example_dir/export_test.py" ]; then
+              example_name=$(basename "$example_dir")
+              echo "=== Running test for example: ${example_name} ==="
+              python -m "examples.${example_name}.export_test"
+            fi
+          done

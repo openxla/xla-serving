@@ -27,6 +27,7 @@ from neptune_model._src.export import jax_model
 from neptune_model._src.export import main_lib
 from neptune_model._src.export import serving_config
 from neptune_model._src.export import tensorflow_model
+from neptune_model.protos import orchestration_pb2
 
 FLAGS = flags.FLAGS
 flags.DEFINE_integer(
@@ -109,9 +110,12 @@ def export_model(export_path: str):
                       serving_config.ModelCall(
                           model_name='tf_model',
                           method_key='preprocessing',
+                          role=orchestration_pb2.ROLE_PREPROCESSOR,
                       ),
                       serving_config.ModelCall(
-                          model_name='jax_model', method_key='serving_default'
+                          model_name='jax_model',
+                          method_key='serving_default',
+                          role=orchestration_pb2.ROLE_MODEL,
                       ),
                   ]
               ),
