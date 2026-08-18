@@ -23,7 +23,6 @@ from typing import Any
 import unittest
 
 from absl import flags as absl_flags
-from absl import logging
 from absl.testing import absltest  # pylint: disable=g-import-not-at-top
 import jax
 import jax.numpy as jnp
@@ -318,7 +317,7 @@ class ExporterTest(absltest.TestCase):
     )
     export_config = tokenizers_exporter.NeptuneLLMExportWithTokenizerConfig(
         export_dir=export_dir,
-        allowed_batch_sizes=(1,),
+        allowed_batch_sizes=(1, 2),
         generation_config=generation_config,
         tokenizer_config=tokenizer_config,
     )
@@ -336,7 +335,7 @@ class ExporterTest(absltest.TestCase):
           max_seq_len=generation_config.max_prompt_length,
       )
       pre_processed = tokenizer.pre_process_fn(
-          {"text_input": tf.constant([prompt_text])}
+          {"text_input": tf.constant([prompt_text, "Tell me a joke."])}
       )
       inputs_jax = {
           "input_ids": jnp.array(pre_processed["input_ids"].numpy()),
@@ -354,16 +353,16 @@ class ExporterTest(absltest.TestCase):
         jax_outputs = jit_model_fn(runner.state, inputs_jax)
 
       self.assertIn("token_ids", jax_outputs)
-      self.assertEqual(jax_outputs["token_ids"].shape, (1, beam_width, 20))
+      self.assertEqual(jax_outputs["token_ids"].shape, (2, beam_width, 20))
       self.assertIn("logprobs", jax_outputs)
-      self.assertEqual(jax_outputs["logprobs"].shape, (1, beam_width))
+      self.assertEqual(jax_outputs["logprobs"].shape, (2, beam_width))
 
       post_processed = tokenizer.post_process_fn(
           {"token_ids": tf.constant(np.array(jax_outputs["token_ids"]))}
       )
       self.assertIn("text_output", post_processed)
       manual_output = post_processed["text_output"].numpy()
-      logging.info("manual_output: %s", manual_output)
+      self.assertEqual(manual_output.shape, (2, beam_width))
       # TODO(armandouv): Compare manual_output with e2e_output once we debug why
       # they are different.
 

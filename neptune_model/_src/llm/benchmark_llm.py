@@ -200,10 +200,16 @@ def _print_benchmark_metrics(
   mean_ms = sum(latencies_ms) / len(latencies_ms)
   min_ms = min(latencies_ms)
   max_ms = max(latencies_ms)
+  p50_ms = float(np.percentile(latencies_ms, 50))
+  p90_ms = float(np.percentile(latencies_ms, 90))
+  p99_ms = float(np.percentile(latencies_ms, 99))
   qps = (1000.0 / mean_ms) * batch_size
   header = f"=== {title} ==="
   print(f"\n{header}")
   print(f"Mean Batch Latency     : {mean_ms:.2f} ms")
+  print(f"p50 Batch Latency      : {p50_ms:.2f} ms")
+  print(f"p90 Batch Latency      : {p90_ms:.2f} ms")
+  print(f"p99 Batch Latency      : {p99_ms:.2f} ms")
   print(f"Min Batch Latency      : {min_ms:.2f} ms")
   print(f"Max Batch Latency      : {max_ms:.2f} ms")
   print(f"Request Throughput     : {qps:.2f} req/s")
@@ -211,6 +217,17 @@ def _print_benchmark_metrics(
     token_qps = (1000.0 / mean_ms) * batch_size * new_tokens
     print(f"Generated Token Rate   : {token_qps:.2f} tokens/s")
   print(f"{'=' * len(header)}\n")
+
+
+def _block_until_ready(tree: Any) -> Any:
+  """Blocks until all JAX array leaves in a PyTree are ready."""
+
+  def _leaf_block(x: Any) -> Any:
+    if hasattr(x, "block_until_ready"):
+      return x.block_until_ready()
+    return x
+
+  return jax.tree_util.tree_map(_leaf_block, tree)
 
 
 def _run_model_fn_benchmark(args: argparse.Namespace) -> None:
@@ -258,7 +275,7 @@ def _run_model_fn_benchmark(args: argparse.Namespace) -> None:
     print("Running Warmup...")
     start_warmup = time.perf_counter()
     outputs = jit_model_fn(runner.state, inputs_jax)
-    jax.block_until_ready(outputs)
+    _block_until_ready(outputs)
     print(f"Warmup completed in {time.perf_counter() - start_warmup:.2f} s.")
 
     post_processed = tokenizer.post_process_fn(
@@ -275,7 +292,7 @@ def _run_model_fn_benchmark(args: argparse.Namespace) -> None:
     for i in range(args.num_batches):
       t0 = time.perf_counter()
       res = jit_model_fn(runner.state, inputs_jax)
-      jax.block_until_ready(res)
+      _block_until_ready(res)
       dt = (time.perf_counter() - t0) * 1000.0
       latencies_ms.append(dt)
       print(f"  Iteration {i+1}/{args.num_batches}: {dt:.2f} ms")

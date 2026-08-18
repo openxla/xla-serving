@@ -50,34 +50,46 @@ except ImportError as e:
 
 
 @functools.partial(
-    jax.jit, static_argnames=("beam_width",), donate_argnums=(0,)
+    jax.jit, static_argnames=("beam_width", "batch_size"), donate_argnums=(0,)
 )
 def _shuffle_kv_caches(
     kv_caches: list[jax.Array],
     parent_beam_ids: jax.Array,
-    block_tables_2d: jax.Array,
+    block_tables: jax.Array,
     beam_width: int,
+    batch_size: int,
     current_block_idx: jax.Array,
 ) -> list[jax.Array]:
   """Shuffles KV cache physical pages on TPU when beams diverge across blocks.
 
   Args:
     kv_caches: List of layer-wise KV cache device buffers.
-    parent_beam_ids: Selected parent beam indices of shape (beam_width,).
-    block_tables_2d: Current 2D block tables of shape (beam_width, max_blocks).
+    parent_beam_ids: Selected parent beam indices of shape (batch_size,
+      beam_width).
+    block_tables: Current 3D block tables of shape (batch_size, beam_width,
+      max_blocks).
     beam_width: Static number of beams.
-    current_block_idx: Physical block index being decoded.
+    batch_size: Static batch size.
+    current_block_idx: Physical block indices being decoded of shape
+      (batch_size,).
 
   Returns:
     Updated list of KV cache buffers with synchronized page assignments.
   """
   kv_caches = jax.lax.optimization_barrier(kv_caches)
-  parent_blocks = block_tables_2d[parent_beam_ids, current_block_idx]
-  child_blocks = block_tables_2d[:beam_width, current_block_idx]
+  batch_arange = jnp.arange(batch_size)[:, None]
+  parent_blocks = block_tables[
+      batch_arange, parent_beam_ids, current_block_idx[:, None]
+  ].reshape(-1)
+  child_blocks = block_tables[
+      batch_arange, jnp.arange(beam_width)[None, :], current_block_idx[:, None]
+  ].reshape(-1)
+
+  total_beams = batch_size * beam_width
 
   def shuffle_layer(kv_cache: jax.Array) -> jax.Array:
     parent_data = kv_cache[parent_blocks]
-    for i in range(beam_width):
+    for i in range(total_beams):
       child_block = child_blocks[i]
       start_indices = (child_block, 0, 0, 0, 0)
       kv_cache = jax.lax.dynamic_update_slice(
@@ -90,35 +102,41 @@ def _shuffle_kv_caches(
 
 
 @functools.partial(
-    jax.jit, static_argnames=("beam_width",), donate_argnums=(0,)
+    jax.jit, static_argnames=("beam_width", "batch_size"), donate_argnums=(0,)
 )
 def _cow_block_copy_jit(
     kv_caches: list[jax.Array],
-    old_block_id: jax.Array,
-    cow_block_ids_jax: jax.Array,
+    parent_blocks: jax.Array,
+    child_blocks: jax.Array,
     beam_width: int,
+    batch_size: int,
 ) -> list[jax.Array]:
   """Copies parent KV blocks to target child blocks (Copy-On-Write).
 
   Args:
     kv_caches: List of layer-wise KV cache device buffers.
-    old_block_id: Source physical block index to copy from.
-    cow_block_ids_jax: Target physical block indices for child beams.
+    parent_blocks: Source physical block indices to copy from of shape
+      (batch_size,).
+    child_blocks: Target physical block indices for child beams of shape
+      (batch_size, beam_width).
     beam_width: Static number of beams.
+    batch_size: Static batch size.
 
   Returns:
     Updated list of KV cache buffers after performing the physical block copy.
   """
+  total_beams = batch_size * beam_width
+  flat_child_blocks = child_blocks.reshape(-1)
+  flat_parent_blocks = jnp.repeat(parent_blocks, beam_width)
+
   new_kv_caches = []
   for layer_cache in kv_caches:
-    block_data = layer_cache[old_block_id]
-    block_data_expanded = jnp.expand_dims(block_data, axis=0)
-
-    for i in range(beam_width):
-      child_block = cow_block_ids_jax[i]
+    parent_data = layer_cache[flat_parent_blocks]
+    for i in range(total_beams):
+      child_block = flat_child_blocks[i]
       start_indices = (child_block, 0, 0, 0, 0)
       layer_cache = jax.lax.dynamic_update_slice(
-          layer_cache, block_data_expanded, start_indices
+          layer_cache, jnp.expand_dims(parent_data[i], axis=0), start_indices
       )
     new_kv_caches.append(layer_cache)
   return new_kv_caches
@@ -251,6 +269,7 @@ class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
 
     self.tpu_runner = tpu_runner
     self._model_fn = _sanitize_model_fn(tpu_runner)
+    self.max_prompt_length = generation_config.max_prompt_length
     self.max_seq_len = (
         generation_config.max_prompt_length
         + generation_config.max_output_tokens
@@ -269,9 +288,11 @@ class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
       self.beam_width = 1
 
     self.block_size = tpu_runner.block_size
-    # TODO(armandouv): We can be more conservative in the number of blocks
-    # reserved for each beam, since the prefix blocks are shared across them.
-    self.max_blocks_per_beam = math.ceil(self.max_seq_len / self.block_size)
+    self.max_blocks_per_seq = math.ceil(self.max_seq_len / self.block_size)
+    self.max_prompt_blocks = math.ceil(self.max_prompt_length / self.block_size)
+    self.max_decode_blocks = (
+        math.ceil(self.max_output_tokens / self.block_size) + 1
+    )
 
     # Reconstruct layer name cache indices configuration
     kv_cache_specs = tpu_runner.kv_cache_manager.get_kv_cache_spec()
@@ -309,9 +330,12 @@ class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
       An allocated KV cache PyTree.
     """
     if self.beam_width > 1:
-      num_blocks = batch_size * self.beam_width * self.max_blocks_per_beam
+      num_blocks = (
+          batch_size * self.max_prompt_blocks
+          + batch_size * self.beam_width * self.max_decode_blocks
+      )
     else:
-      num_blocks = batch_size * self.max_blocks_per_beam
+      num_blocks = batch_size * self.max_blocks_per_seq
 
     kv_caches = [None] * (self.max_idx + 1)
     for layer_name, idx in self.layer_name_to_kvcache_index.items():
@@ -367,13 +391,15 @@ class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
           dtype=jnp.int32,
       )
 
-    max_allocated_tokens = self.max_blocks_per_beam * self.block_size
-    if prompt_input_len + self.max_output_tokens > max_allocated_tokens:
+    max_allocated_tokens = (
+        self.max_prompt_blocks * self.block_size
+        if self.beam_width > 1
+        else self.max_blocks_per_seq * self.block_size
+    )
+    if prompt_input_len > max_allocated_tokens:
       raise ValueError(
-          f"Generation length ({prompt_input_len} prompt tokens + "
-          f"{self.max_output_tokens} output tokens) exceeds allocated block "
-          f"capacity ({max_allocated_tokens} tokens). Surpassing allocated "
-          "block capacity is not supported yet."
+          f"Prompt length ({prompt_input_len} tokens) exceeds allocated prompt"
+          f" block capacity ({max_allocated_tokens} tokens)."
       )
 
     # Reconstruct AttentionMetadata for Prefill
@@ -381,9 +407,22 @@ class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
         jnp.arange(prompt_input_len, dtype=jnp.int32), (batch_size, 1)
     ).ravel()
 
-    block_tables = jnp.arange(
-        batch_size * self.max_blocks_per_beam, dtype=jnp.int32
+    prefill_block_tables = jnp.zeros(
+        (batch_size, self.max_blocks_per_seq), dtype=jnp.int32
     )
+    prompt_stride = (
+        self.max_prompt_blocks
+        if self.beam_width > 1
+        else self.max_blocks_per_seq
+    )
+    prompt_blocks = (
+        jnp.arange(self.max_prompt_blocks, dtype=jnp.int32)[None, :]
+        + (jnp.arange(batch_size, dtype=jnp.int32) * prompt_stride)[:, None]
+    )
+    prefill_block_tables = prefill_block_tables.at[
+        :, : self.max_prompt_blocks
+    ].set(prompt_blocks)
+    block_tables = prefill_block_tables.reshape(-1)
 
     assert attention_metadata is not None
     prefill_attn_metadata = attention_metadata.AttentionMetadata(
@@ -426,9 +465,9 @@ class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
     if self.beam_width > 1:
       next_cache = (kv_caches, None)
     else:
-      block_indices = jnp.arange(self.max_blocks_per_beam)[None, :]
+      block_indices = jnp.arange(self.max_blocks_per_seq)[None, :]
       batch_ids = jnp.arange(batch_size)[:, None]
-      cur_block_tables = block_indices + batch_ids * self.max_blocks_per_beam
+      cur_block_tables = block_indices + batch_ids * self.max_blocks_per_seq
       next_cache = (kv_caches, cur_block_tables)
 
     return logits, next_cache
@@ -436,7 +475,7 @@ class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
   def _replicate_cache(
       self,
       cache: jaxtyping.PyTree,
-      beam_size: int,
+      beam_width: int,
       prompt_len: jax.Array,
   ) -> jaxtyping.PyTree:
     """Prepares and replicates the cache block tables for decoding multiple beams.
@@ -446,7 +485,7 @@ class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
 
     Args:
       cache: Tuple of (kv_caches, _) from the prefill stage.
-      beam_size: Number of active beam search hypotheses.
+      beam_width: Number of active beam search hypotheses.
       prompt_len: 1D array of shape (batch_size,) containing prompt token
         lengths.
 
@@ -455,23 +494,53 @@ class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
       multi-beam decode.
     """
     kv_caches, _ = cache
+    batch_size = prompt_len.shape[0]
+    last_prompt_block_idx = (prompt_len - 1) // self.block_size  # (batch_size,)
 
-    # Reconstruct multi-beam block tables: shared for prompt, private for decode
-    last_prompt_block_idx = (prompt_len[0] - 1) // self.block_size
-    beam_ids = jnp.arange(beam_size)[:, None]
-    block_indices = jnp.arange(self.max_blocks_per_beam)[None, :]
-    is_shared_block = block_indices < last_prompt_block_idx
-    cur_block_tables = jnp.where(
-        is_shared_block,
-        block_indices,
-        block_indices + beam_ids * self.max_blocks_per_beam,
+    # Construct 3D block table mapping:
+    # - Columns [0, last_prompt_col) point to shared prompt physical blocks.
+    # - Columns [last_prompt_col, max_blocks_per_seq) point to private decode
+    #   blocks allocated per (batch_idx, beam_idx).
+    col_indices = jnp.arange(self.max_blocks_per_seq, dtype=jnp.int32)[
+        None, None, :
+    ]
+    batch_prompt_offset = (
+        jnp.arange(batch_size, dtype=jnp.int32) * self.max_prompt_blocks
+    )[:, None, None]
+    shared_blocks = batch_prompt_offset + jnp.minimum(
+        col_indices, self.max_prompt_blocks - 1
     )
 
-    # Copy the active prompt block to child beams on TPU
-    parent_block = cur_block_tables[0, last_prompt_block_idx]
-    child_blocks = cur_block_tables[:beam_size, last_prompt_block_idx]
+    beam_indices = jnp.arange(beam_width, dtype=jnp.int32)[None, :, None]
+    batch_indices = jnp.arange(batch_size, dtype=jnp.int32)[:, None, None]
+    seq_idx = batch_indices * beam_width + beam_indices
+
+    private_base = (
+        batch_size * self.max_prompt_blocks + seq_idx * self.max_decode_blocks
+    )
+
+    last_prompt_col = last_prompt_block_idx[:, None, None]
+    rel_decode_col = jnp.maximum(0, col_indices - last_prompt_col)
+    private_blocks = private_base + rel_decode_col
+
+    is_shared = col_indices < last_prompt_col
+    cur_block_tables = jnp.where(is_shared, shared_blocks, private_blocks)
+
+    # Perform Copy-on-Write (CoW) on TPU: copy the boundary prompt block into
+    # each child beam's initial private decode block so they can write
+    # subsequent tokens without mutating sibling beams.
+    batch_arange = jnp.arange(batch_size)
+    parent_blocks = (
+        batch_arange * self.max_prompt_blocks + last_prompt_block_idx
+    )
+    child_blocks = cur_block_tables[
+        batch_arange[:, None],
+        jnp.arange(beam_width)[None, :],
+        last_prompt_block_idx[:, None],
+    ]
+
     kv_caches = _cow_block_copy_jit(
-        kv_caches, parent_block, child_blocks, beam_size
+        kv_caches, parent_blocks, child_blocks, beam_width, batch_size
     )
 
     return (kv_caches, cur_block_tables)
@@ -505,10 +574,13 @@ class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
     """
     kv_caches, cur_block_tables = cache
     num_active_seqs = token_ids.shape[0]
+    batch_size = prompt_len.shape[0]
+    beam_width = num_active_seqs // batch_size
 
     # Calculate token positions and sequence lengths
-    cur_positions = jnp.broadcast_to(prompt_len, (num_active_seqs,)) - 1 + step
-    cur_seq_lens = jnp.broadcast_to(prompt_len, (num_active_seqs,)) + step
+    prompt_len_rep = jnp.repeat(prompt_len, beam_width)
+    cur_positions = prompt_len_rep - 1 + step
+    cur_seq_lens = prompt_len_rep + step
     cur_block_tables_1d = cur_block_tables.reshape(-1)
 
     query_start_loc = jnp.arange(num_active_seqs + 1, dtype=jnp.int32)
@@ -583,33 +655,33 @@ class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
       )
       batch_size = input_ids.shape[0]
 
-      if batch_size > 1:
-        raise ValueError(
-            "TPU Paged Attention Beam Search only supports batch_size=1."
-        )
-
       # 1. Allocate initial cache and run prefill pass
       empty_cache = self.initial_cache_factory(batch_size)
       logits, cache = self.prefill(
           params, input_ids, empty_cache, prompt_len=prompt_len
       )
 
-      # 2. Initialize beams from prefill logits
+      # 2. Initialize beams from prefill logits: logits shape
+      # (batch_size, vocab_size)
       logprobs_step = jax.nn.log_softmax(logits, axis=-1)
       top_logprobs, top_token_ids = jax.lax.top_k(logprobs_step, k=beam_width)
 
-      next_tokens = top_token_ids.reshape(beam_width, 1)
-      cum_logprobs = top_logprobs.ravel()
+      next_tokens = top_token_ids.reshape(batch_size * beam_width, 1)
+      cum_logprobs = top_logprobs  # shape (batch_size, beam_width)
 
       all_tokens = jnp.zeros(
-          (max_output_tokens, beam_width, 1), dtype=jnp.int32
+          (max_output_tokens, batch_size, beam_width, 1), dtype=jnp.int32
       )
-      all_tokens = all_tokens.at[0].set(next_tokens)
+      all_tokens = all_tokens.at[0].set(
+          top_token_ids.reshape(batch_size, beam_width, 1)
+      )
 
       # 3. Replicate prompt KV cache table across beams
       cache = self._replicate_cache(cache, beam_width, prompt_len=prompt_len)
 
       # 4. Run decode loop using self.decode_step
+      vmapped_select = jax.vmap(_select_next_beams, in_axes=(0, 0, None))
+
       for step in range(1, max_output_tokens):
         logits_step, cache = self.decode_step(
             params=params,
@@ -620,55 +692,58 @@ class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
         )
         kv_caches, cur_block_tables = cache
 
-        parent_beam_ids, token_ids, cum_logprobs = _select_next_beams(
-            logits_step, cum_logprobs, beam_width
+        # 4a. Select top-k candidate beams per batch item independently.
+        logits_step_3d = logits_step.reshape(batch_size, beam_width, -1)
+        parent_beam_ids, token_ids, cum_logprobs = vmapped_select(
+            logits_step_3d, cum_logprobs, beam_width
         )
 
-        cur_seq_len_val = prompt_len[0] + step
-        last_prompt_block_idx = (prompt_len[0] - 1) // self.block_size
+        # 4b. For completed block table columns, update child beams to reference
+        # their selected parent beam's completed physical blocks.
+        cur_seq_len_val = prompt_len + step
         current_block_idx = (cur_seq_len_val - 1) // self.block_size
-        crossed_boundary = (current_block_idx > last_prompt_block_idx).astype(
-            jnp.int32
+        col_indices = jnp.arange(self.max_blocks_per_seq, dtype=jnp.int32)[
+            None, None, :
+        ]
+        is_past_col = col_indices < current_block_idx[:, None, None]
+        parent_block_tables = jnp.take_along_axis(
+            cur_block_tables, parent_beam_ids[:, :, None], axis=1
+        )
+        cur_block_tables = jnp.where(
+            is_past_col, parent_block_tables, cur_block_tables
         )
 
-        parent_completed_block = cur_block_tables[
-            parent_beam_ids, last_prompt_block_idx
-        ]
-        current_child_block = cur_block_tables[
-            :beam_width, last_prompt_block_idx
-        ]
-        new_block = (
-            crossed_boundary * parent_completed_block
-            + (1 - crossed_boundary) * current_child_block
-        )
-
-        cur_block_tables = cur_block_tables.at[
-            :beam_width, last_prompt_block_idx
-        ].set(new_block)
-
+        # 4c. Synchronize active decode KV cache pages on TPU when beam
+        # parentage diverges.
         if step < max_output_tokens - 1:
           kv_caches = _shuffle_kv_caches(
               kv_caches,
               parent_beam_ids,
               cur_block_tables,
               beam_width,
+              batch_size,
               current_block_idx,
           )
 
         cache = (kv_caches, cur_block_tables)
-        next_tokens = token_ids.reshape(beam_width, 1)
-        all_tokens = all_tokens.at[step].set(next_tokens)
-        all_tokens = all_tokens.at[:step].set(
-            all_tokens[:step, parent_beam_ids]
+        next_tokens = token_ids.reshape(batch_size * beam_width, 1)
+        all_tokens = all_tokens.at[step].set(
+            token_ids.reshape(batch_size, beam_width, 1)
         )
 
-      decoded_tokens = all_tokens[:, :, 0].transpose(1, 0)
-      decoded_tokens_batched = jnp.expand_dims(decoded_tokens, axis=0)
-      cum_logprobs_batched = jnp.expand_dims(cum_logprobs, axis=0)
+        # 4d. Reorder token generation history according to selected parent
+        # beams.
+        all_tokens_prev = all_tokens[:step]
+        all_tokens_prev_reordered = jnp.take_along_axis(
+            all_tokens_prev, parent_beam_ids[None, :, :, None], axis=2
+        )
+        all_tokens = all_tokens.at[:step].set(all_tokens_prev_reordered)
+
+      decoded_tokens = jnp.squeeze(all_tokens, axis=-1).transpose(1, 2, 0)
 
       return {
-          "token_ids": decoded_tokens_batched,
-          "logprobs": cum_logprobs_batched,
+          "token_ids": decoded_tokens,
+          "logprobs": cum_logprobs,
       }
 
     return generate
