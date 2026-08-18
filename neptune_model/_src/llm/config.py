@@ -37,6 +37,8 @@ class GenerationConfig:
     top_k: Top-k tokens to consider during sampling.
     beam_size: Beam size for beam_search strategy. If None, beam search is
       disabled.
+    num_candidates: Number of candidate completion suffixes when using scoring.
+    max_candidate_tokens: Maximum token length of candidate completions.
     max_prompt_length: Maximum number of input prompt tokens allowed.
     pad_token_id: Padding token ID used for prompt padding and real length
       calculation. If None, it will be automatically obtained from the
@@ -48,6 +50,8 @@ class GenerationConfig:
   temperature: float = 1.0
   top_k: int = 50
   beam_size: int | None = None
+  num_candidates: int | None = None
+  max_candidate_tokens: int | None = None
   max_prompt_length: int = 1024
   pad_token_id: int | None = None
 

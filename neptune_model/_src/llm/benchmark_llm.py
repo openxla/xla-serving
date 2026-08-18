@@ -193,6 +193,8 @@ def _print_benchmark_metrics(
     batch_size: int,
     title: str,
     new_tokens: int | None = None,
+    num_candidates: int | None = None,
+    candidate_tokens: int | None = None,
 ) -> None:
   """Prints latency and throughput metrics for a benchmark run."""
   if not latencies_ms:
@@ -206,17 +208,38 @@ def _print_benchmark_metrics(
   qps = (1000.0 / mean_ms) * batch_size
   header = f"=== {title} ==="
   print(f"\n{header}")
-  print(f"Mean Batch Latency     : {mean_ms:.2f} ms")
-  print(f"p50 Batch Latency      : {p50_ms:.2f} ms")
-  print(f"p90 Batch Latency      : {p90_ms:.2f} ms")
-  print(f"p99 Batch Latency      : {p99_ms:.2f} ms")
-  print(f"Min Batch Latency      : {min_ms:.2f} ms")
-  print(f"Max Batch Latency      : {max_ms:.2f} ms")
-  print(f"Request Throughput     : {qps:.2f} req/s")
-  if new_tokens is not None and new_tokens > 0:
-    token_qps = (1000.0 / mean_ms) * batch_size * new_tokens
-    print(f"Generated Token Rate   : {token_qps:.2f} tokens/s")
+  print(f"Mean Batch Latency      : {mean_ms:.2f} ms")
+  print(f"p50 Batch Latency       : {p50_ms:.2f} ms")
+  print(f"p90 Batch Latency       : {p90_ms:.2f} ms")
+  print(f"p99 Batch Latency       : {p99_ms:.2f} ms")
+  print(f"Min Batch Latency       : {min_ms:.2f} ms")
+  print(f"Max Batch Latency       : {max_ms:.2f} ms")
+  print(f"Queries Per Second (QPS): {qps:.2f} qps")
+  if num_candidates is not None and num_candidates > 0:
+    cand_qps = qps * num_candidates
+    print(f"Candidate Scoring Rate  : {cand_qps:.2f} candidates/s")
+    if candidate_tokens is not None and candidate_tokens > 0:
+      token_rate = cand_qps * candidate_tokens
+      print(f"Scored Token Rate       : {token_rate:.2f} tokens/s")
+  elif new_tokens is not None and new_tokens > 0:
+    token_qps = qps * new_tokens
+    print(f"Generated Token Rate    : {token_qps:.2f} tokens/s")
   print(f"{'=' * len(header)}\n")
+
+
+def _generate_candidate_texts(
+    batch_size: int,
+    num_candidates: int,
+    num_tokens_per_candidate: int,
+) -> list[list[str]]:
+  """Generates synthetic candidate completions with enough words to reach target length."""
+  candidates_per_batch = []
+  for cand_idx in range(num_candidates):
+    words = [f"candidate_{cand_idx}"] + [
+        f"token_{i}" for i in range(1, num_tokens_per_candidate + 2)
+    ]
+    candidates_per_batch.append(" " + " ".join(words))
+  return [candidates_per_batch for _ in range(batch_size)]
 
 
 def _block_until_ready(tree: Any) -> Any:
@@ -237,18 +260,24 @@ def _run_model_fn_benchmark(args: argparse.Namespace) -> None:
 
   sampling_method = llm_config.SamplingMethod(args.sampling_type)
   is_beam_search = sampling_method == llm_config.SamplingMethod.BEAM_SEARCH
+  is_scoring = sampling_method == llm_config.SamplingMethod.SCORING
   beam_size = args.beam_width if is_beam_search else None
+  num_candidates = args.num_candidates if is_scoring else None
+  candidate_tokens = args.candidate_tokens if is_scoring else None
 
   generation_config = llm_config.GenerationConfig(
       sampling_method=sampling_method,
       max_output_tokens=args.new_tokens,
       beam_size=beam_size,
+      num_candidates=num_candidates,
+      max_candidate_tokens=candidate_tokens,
       max_prompt_length=args.prompt_len,
   )
 
   tokenizer = tokenizers_processors.KerasHubTokenizerTF(
       model_name_or_path=args.model,
       max_seq_len=args.prompt_len,
+      max_candidate_tokens=candidate_tokens,
   )
   wrapper = tpu_wrapper.TPUInferenceWrapper(
       tpu_runner=runner,
@@ -258,10 +287,34 @@ def _run_model_fn_benchmark(args: argparse.Namespace) -> None:
   prompt_text = args.prompt
   print(f"Tokenizing prompt: {prompt_text!r} (batch_size={args.batch_size})")
   prompts = [prompt_text] * args.batch_size
-  pre_processed = tokenizer.pre_process_fn({"text_input": tf.constant(prompts)})
-  inputs_jax = {
-      "input_ids": jnp.array(pre_processed["input_ids"].numpy()),
-  }
+
+  if is_scoring:
+    assert num_candidates is not None
+    assert candidate_tokens is not None
+    print(
+        f"Constructing and tokenizing {num_candidates} candidate completions"
+        f" ({candidate_tokens} tokens each)..."
+    )
+    cands = _generate_candidate_texts(
+        batch_size=args.batch_size,
+        num_candidates=num_candidates,
+        num_tokens_per_candidate=candidate_tokens,
+    )
+    pre_processed = tokenizer.pre_process_fn({
+        "text_input": tf.constant(prompts),
+        "candidate_texts": tf.constant(cands),
+    })
+    inputs_jax = {
+        "input_ids": jnp.array(pre_processed["input_ids"].numpy()),
+        "candidate_ids": jnp.array(pre_processed["candidate_ids"].numpy()),
+    }
+  else:
+    pre_processed = tokenizer.pre_process_fn(
+        {"text_input": tf.constant(prompts)}
+    )
+    inputs_jax = {
+        "input_ids": jnp.array(pre_processed["input_ids"].numpy()),
+    }
 
   print("Compiling JAX generation loop...")
   with runner.mesh:
@@ -278,11 +331,16 @@ def _run_model_fn_benchmark(args: argparse.Namespace) -> None:
     _block_until_ready(outputs)
     print(f"Warmup completed in {time.perf_counter() - start_warmup:.2f} s.")
 
-    post_processed = tokenizer.post_process_fn(
-        {"token_ids": tf.constant(np.array(outputs["token_ids"]))}
-    )
-    decoded_text = post_processed["text_output"].numpy()
-    _print_decoded_outputs(decoded_text, is_beam_search=is_beam_search)
+    if is_scoring:
+      scores = np.array(outputs["scores"])
+      print(f"Computed candidate scores shape: {scores.shape}")
+      print(f"Sample candidate scores (first 5): {scores[0, :5]}")
+    else:
+      post_processed = tokenizer.post_process_fn(
+          {"token_ids": tf.constant(np.array(outputs["token_ids"]))}
+      )
+      decoded_text = post_processed["text_output"].numpy()
+      _print_decoded_outputs(decoded_text, is_beam_search=is_beam_search)
 
     print(
         f"Running benchmark loop ({args.num_batches} iterations,"
@@ -297,12 +355,21 @@ def _run_model_fn_benchmark(args: argparse.Namespace) -> None:
       latencies_ms.append(dt)
       print(f"  Iteration {i+1}/{args.num_batches}: {dt:.2f} ms")
 
-    _print_benchmark_metrics(
-        latencies_ms=latencies_ms,
-        batch_size=args.batch_size,
-        title="model_fn Benchmark Results",
-        new_tokens=args.new_tokens,
-    )
+    if is_scoring:
+      _print_benchmark_metrics(
+          latencies_ms=latencies_ms,
+          batch_size=args.batch_size,
+          title="Candidate Scoring model_fn Benchmark Results",
+          num_candidates=num_candidates,
+          candidate_tokens=candidate_tokens,
+      )
+    else:
+      _print_benchmark_metrics(
+          latencies_ms=latencies_ms,
+          batch_size=args.batch_size,
+          title="model_fn Benchmark Results",
+          new_tokens=args.new_tokens,
+      )
 
 
 def _run_grpc_client_benchmark(args: argparse.Namespace) -> None:
@@ -329,6 +396,21 @@ def _run_grpc_client_benchmark(args: argparse.Namespace) -> None:
 
   request.inputs["text_input"].CopyFrom(hb_proto)
 
+  is_scoring = args.sampling_type == "scoring"
+  if is_scoring:
+    cands = _generate_candidate_texts(
+        batch_size=args.batch_size,
+        num_candidates=args.num_candidates,
+        num_tokens_per_candidate=args.candidate_tokens,
+    )
+    cand_proto = host_buffer_pb2.HostBufferProto()
+    cand_proto.dtype.kind = dtype_pb2.DTypeProto.Kind.Value("KIND_STRING")
+    cand_proto.shape.dims.extend([args.batch_size, args.num_candidates])
+    for batch_cands in cands:
+      for cand_str in batch_cands:
+        cand_proto.string_data.elements.append(cand_str.encode("utf-8"))
+    request.inputs["candidate_texts"].CopyFrom(cand_proto)
+
   print("Running Warmup gRPC request...")
   start_warmup = time.perf_counter()
   response = predict_method(request)
@@ -352,6 +434,23 @@ def _run_grpc_client_benchmark(args: argparse.Namespace) -> None:
           pass
       is_beam = len(dims) == 2 and dims[1] > 1
       _print_decoded_outputs(arr, is_beam_search=is_beam)
+    elif output_buffer.dtype.kind in (
+        dtype_pb2.DTypeProto.Kind.Value("KIND_F32"),
+        dtype_pb2.DTypeProto.Kind.Value("KIND_F64"),
+    ):
+      if output_buffer.dtype.kind == dtype_pb2.DTypeProto.Kind.Value(
+          "KIND_F32"
+      ):
+        dtype = np.float32
+      else:
+        dtype = np.float64
+      arr = np.frombuffer(output_buffer.raw_data, dtype=dtype)
+      if dims:
+        try:
+          arr = arr.reshape(dims)
+        except ValueError:
+          pass
+      print(f"Sample candidate scores (first 5): {arr[0, :5]}")
 
   print(
       f"Running gRPC benchmark loop ({args.num_batches} batches,"
@@ -365,11 +464,21 @@ def _run_grpc_client_benchmark(args: argparse.Namespace) -> None:
     latencies_ms.append(dt)
     print(f"  Batch {i+1}/{args.num_batches}: {dt:.2f} ms")
 
-  _print_benchmark_metrics(
-      latencies_ms=latencies_ms,
-      batch_size=args.batch_size,
-      title="grpc_client Benchmark Results",
-  )
+  if is_scoring:
+    _print_benchmark_metrics(
+        latencies_ms=latencies_ms,
+        batch_size=args.batch_size,
+        title="Candidate Scoring grpc_client Benchmark Results",
+        num_candidates=args.num_candidates,
+        candidate_tokens=args.candidate_tokens,
+    )
+  else:
+    _print_benchmark_metrics(
+        latencies_ms=latencies_ms,
+        batch_size=args.batch_size,
+        title="grpc_client Benchmark Results",
+        new_tokens=args.new_tokens,
+    )
 
 
 def _run_model_runner_benchmark(args: argparse.Namespace) -> None:
@@ -396,12 +505,25 @@ def _run_model_runner_benchmark(args: argparse.Namespace) -> None:
       "text_input": np.array(prompts, dtype=object),
   }
 
+  is_scoring = args.sampling_type == "scoring"
+  if is_scoring:
+    cands = _generate_candidate_texts(
+        batch_size=args.batch_size,
+        num_candidates=args.num_candidates,
+        num_tokens_per_candidate=args.candidate_tokens,
+    )
+    inputs["candidate_texts"] = np.array(cands, dtype=object)
+
   print("Running Warmup ModelRunner request...")
   start_warmup = time.perf_counter()
   outputs = sig.run_with_dict_return(**inputs)
   print(f"Warmup completed in {time.perf_counter() - start_warmup:.2f} s.")
 
-  if "text_output" in outputs:
+  if "scores" in outputs:
+    scores = np.array(outputs["scores"])
+    print(f"Output Name: scores, Shape: {scores.shape}")
+    print(f"Sample candidate scores (first 5): {scores[0, :5]}")
+  elif "text_output" in outputs:
     out_arr = outputs["text_output"]
     print(f"Output Name: text_output, Shape: {out_arr.shape}")
     _print_decoded_outputs(out_arr)
@@ -418,11 +540,21 @@ def _run_model_runner_benchmark(args: argparse.Namespace) -> None:
     latencies_ms.append(batch_lat_ms)
     print(f"  Batch {b + 1}/{args.num_batches}: {batch_lat_ms:.2f} ms")
 
-  _print_benchmark_metrics(
-      latencies_ms=latencies_ms,
-      batch_size=args.batch_size,
-      title="model_runner Benchmark Results",
-  )
+  if is_scoring:
+    _print_benchmark_metrics(
+        latencies_ms=latencies_ms,
+        batch_size=args.batch_size,
+        title="Candidate Scoring model_runner Benchmark Results",
+        num_candidates=args.num_candidates,
+        candidate_tokens=args.candidate_tokens,
+    )
+  else:
+    _print_benchmark_metrics(
+        latencies_ms=latencies_ms,
+        batch_size=args.batch_size,
+        title="model_runner Benchmark Results",
+        new_tokens=args.new_tokens,
+    )
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -488,6 +620,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
       help="Beam search width (default: 4).",
   )
   parser.add_argument(
+      "--num-candidates",
+      type=int,
+      default=500,
+      help="Number of candidate suffixes for scoring (default: 500).",
+  )
+  parser.add_argument(
+      "--candidate-tokens",
+      type=int,
+      default=10,
+      help="Token length of each candidate suffix for scoring (default: 10).",
+  )
+  parser.add_argument(
       "--tp-size",
       type=int,
       default=None,
@@ -551,6 +695,14 @@ def main(argv: list[str] | None = None) -> None:
     raise ValueError(f"--num-batches must be positive, got {args.num_batches}")
   if args.beam_width <= 0:
     raise ValueError(f"--beam-width must be positive, got {args.beam_width}")
+  if args.num_candidates <= 0:
+    raise ValueError(
+        f"--num-candidates must be positive, got {args.num_candidates}"
+    )
+  if args.candidate_tokens <= 0:
+    raise ValueError(
+        f"--candidate-tokens must be positive, got {args.candidate_tokens}"
+    )
   if args.prompt_len <= 0:
     raise ValueError(f"--prompt-len must be positive, got {args.prompt_len}")
   if args.new_tokens <= 0:

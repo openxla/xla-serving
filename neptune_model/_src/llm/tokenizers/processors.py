@@ -110,6 +110,7 @@ class KerasHubTokenizerTF:
       eos_token_id: int | None = None,
       pad_token_id: int | None = None,
       max_seq_len: int = 64,
+      max_candidate_tokens: int | None = None,
   ):
     """Initializes the Keras Hub TF tokenizer.
 
@@ -118,9 +119,11 @@ class KerasHubTokenizerTF:
       eos_token_id: End of sequence token ID. If None, pulled from tokenizer.
       pad_token_id: Padding token ID. If None, pulled from tokenizer.
       max_seq_len: Maximum sequence length to pad or slice to.
+      max_candidate_tokens: Maximum token length for candidate completions.
     """
     self.model_name_or_path = model_name_or_path
     self.max_seq_len = max_seq_len
+    self.max_candidate_tokens = max_candidate_tokens
 
     # Load Hugging Face tokenizer to extract vocab and merges
     print(f"Loading Hugging Face tokenizer for {model_name_or_path}...")
@@ -241,48 +244,90 @@ class KerasHubTokenizerTF:
     """Tokenizes text input inside TF graph.
 
     Args:
-      inputs: Dictionary containing "text_input" string tensor.
+      inputs: Dictionary containing "text_input" string tensor and optional
+        "candidate_texts" string tensor.
 
     Returns:
-      Dictionary containing "input_ids" integer tensor.
+      Dictionary containing "input_ids" and optional "candidate_ids" integer
+      tensors.
     """
-    text_input = inputs["text_input"]
+    result = {}
+    if "text_input" in inputs:
+      text_input = inputs["text_input"]
+      ragged_tokens = self._tokenize(text_input)
+      if isinstance(ragged_tokens, tf.RaggedTensor):
+        input_ids = ragged_tokens.to_tensor(default_value=self.pad_token_id)
+      else:
+        input_ids = tf.convert_to_tensor(ragged_tokens)
 
-    ragged_tokens = self._tokenize(text_input)
-    if isinstance(ragged_tokens, tf.RaggedTensor):
-      input_ids = ragged_tokens.to_tensor(default_value=self.pad_token_id)
-    else:
-      input_ids = tf.convert_to_tensor(ragged_tokens)
+      unbatched = text_input.shape.rank == 0
+      if unbatched and input_ids.shape.rank == 1:
+        input_ids = tf.expand_dims(input_ids, 0)
 
-    unbatched = text_input.shape.rank == 0
-    if unbatched and input_ids.shape.rank == 1:
-      input_ids = tf.expand_dims(input_ids, 0)
+      # Pad/slice input_ids to exactly max_seq_len
+      paddings = [[0, 0], [0, self.max_seq_len]]
+      padded = tf.pad(input_ids, paddings, constant_values=self.pad_token_id)
+      input_ids_fixed = tf.slice(padded, [0, 0], [-1, self.max_seq_len])
 
-    # Pad/slice input_ids to exactly max_seq_len
-    paddings = [[0, 0], [0, self.max_seq_len]]
-    padded = tf.pad(input_ids, paddings, constant_values=self.pad_token_id)
-    input_ids_fixed = tf.slice(padded, [0, 0], [-1, self.max_seq_len])
+      if unbatched:
+        input_ids_fixed = tf.squeeze(input_ids_fixed, 0)
+      elif text_input.shape[0] is not None:
+        input_ids_fixed.set_shape([text_input.shape[0], self.max_seq_len])
 
-    if unbatched:
-      input_ids_fixed = tf.squeeze(input_ids_fixed, 0)
-    elif text_input.shape[0] is not None:
-      input_ids_fixed.set_shape([text_input.shape[0], self.max_seq_len])
+      result["input_ids"] = tf.cast(input_ids_fixed, tf.int32)
 
-    return {
-        "input_ids": tf.cast(input_ids_fixed, tf.int32),
-    }
+    if "candidate_texts" in inputs:
+      if self.max_candidate_tokens is None:
+        raise ValueError(
+            "max_candidate_tokens must be specified on KerasHubTokenizerTF"
+            " when candidate_texts are provided."
+        )
+      cand_text = inputs["candidate_texts"]
+      unbatched_cand = cand_text.shape.rank == 1
+      if unbatched_cand:
+        cand_text = tf.expand_dims(cand_text, 0)
+      batch_dim = tf.shape(cand_text)[0]
+      num_cands = tf.shape(cand_text)[1]
+      flat_cands = tf.reshape(cand_text, [-1])
+      ragged_cand = self._tokenize(flat_cands)
+      if isinstance(ragged_cand, tf.RaggedTensor):
+        cand_ids = ragged_cand.to_tensor(default_value=self.pad_token_id)
+      else:
+        cand_ids = tf.convert_to_tensor(ragged_cand)
+
+      max_cand_len = self.max_candidate_tokens
+      paddings_cand = [[0, 0], [0, max_cand_len]]
+      padded_cand = tf.pad(
+          cand_ids, paddings_cand, constant_values=self.pad_token_id
+      )
+      cand_ids_fixed = tf.slice(padded_cand, [0, 0], [-1, max_cand_len])
+      cand_ids_3d = tf.reshape(
+          cand_ids_fixed, [batch_dim, num_cands, max_cand_len]
+      )
+      if unbatched_cand:
+        cand_ids_3d = tf.squeeze(cand_ids_3d, 0)
+      elif cand_text.shape[0] is not None and cand_text.shape[1] is not None:
+        cand_ids_3d.set_shape(
+            [cand_text.shape[0], cand_text.shape[1], max_cand_len]
+        )
+      result["candidate_ids"] = tf.cast(cand_ids_3d, tf.int32)
+
+    return result
 
   def post_process_fn(
       self, inputs: dict[str, tf.Tensor]
   ) -> dict[str, tf.Tensor]:
-    """Detokenizes token ids back to string inside TF graph.
+    """Detokenizes token ids or passes through scores inside TF graph.
 
     Args:
-      inputs: Dictionary containing "token_ids" integer tensor.
+      inputs: Dictionary containing "token_ids" or "scores" tensors.
 
     Returns:
-      Dictionary containing "text_output" string tensor.
+      Dictionary containing "text_output" string tensor or "scores" tensor.
     """
+    if "token_ids" not in inputs:
+      return inputs
+
     token_ids = inputs["token_ids"]
 
     ndims = token_ids.shape.ndims

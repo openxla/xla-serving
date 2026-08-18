@@ -270,11 +270,6 @@ class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
     self.tpu_runner = tpu_runner
     self._model_fn = _sanitize_model_fn(tpu_runner)
     self.max_prompt_length = generation_config.max_prompt_length
-    self.max_seq_len = (
-        generation_config.max_prompt_length
-        + generation_config.max_output_tokens
-    )
-    self.max_output_tokens = generation_config.max_output_tokens
     if (
         generation_config.sampling_method
         == llm_config.SamplingMethod.BEAM_SEARCH
@@ -284,14 +279,30 @@ class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
             "generation_config.beam_size must be specified for beam search."
         )
       self.beam_width = generation_config.beam_size
+      self.max_decode_tokens = generation_config.max_output_tokens
+    elif generation_config.sampling_method == llm_config.SamplingMethod.SCORING:
+      if generation_config.num_candidates is None:
+        raise ValueError(
+            "generation_config.num_candidates must be specified for scoring."
+        )
+      if generation_config.max_candidate_tokens is None:
+        raise ValueError(
+            "generation_config.max_candidate_tokens must be specified for"
+            " scoring."
+        )
+      self.beam_width = generation_config.num_candidates
+      self.max_decode_tokens = generation_config.max_candidate_tokens
     else:
       self.beam_width = 1
+      self.max_decode_tokens = generation_config.max_output_tokens
+
+    self.max_seq_len = self.max_prompt_length + self.max_decode_tokens
 
     self.block_size = tpu_runner.block_size
     self.max_blocks_per_seq = math.ceil(self.max_seq_len / self.block_size)
     self.max_prompt_blocks = math.ceil(self.max_prompt_length / self.block_size)
     self.max_decode_blocks = (
-        math.ceil(self.max_output_tokens / self.block_size) + 1
+        math.ceil(self.max_decode_tokens / self.block_size) + 1
     )
 
     # Reconstruct layer name cache indices configuration
@@ -638,6 +649,181 @@ class TPUInferenceWrapper(model_wrapper.LLMModelWrapper):
           "pad_token_id must be already set in the generation config."
       )
     sampling_method = config.sampling_method
+
+    if sampling_method == llm_config.SamplingMethod.SCORING:
+      num_candidates = self.beam_width
+      max_candidate_tokens = self.max_decode_tokens
+
+      def score_candidates(
+          params: jaxtyping.PyTree,
+          inputs: dict[str, jax.Array],
+      ) -> dict[str, jax.Array]:
+        """Evaluates candidate completion log-likelihood in a single parallel extend pass.
+
+        Instead of looping over sequential decode steps, candidate scoring runs:
+        1. Prefill on the prompt to populate shared KV cache and score step 0.
+        2. A single causal extend pass over all candidate continuation tokens in
+        parallel.
+        3. Chunked LM head projection to compute exact cumulative
+        log-probabilities.
+
+        Args:
+          params: Model parameters PyTree.
+          inputs: Dictionary of input tensors, including: - "input_ids": Prompt
+            token IDs, shape (batch_size, prompt_len). - "candidate_ids":
+            Candidate token IDs, shape (batch_size, num_candidates,
+            max_candidate_tokens).
+
+        Returns:
+          A dictionary of candidate scores and intermediate log-probabilities.
+        """
+        input_ids = inputs["input_ids"]
+        candidate_ids = inputs["candidate_ids"]
+        batch_size = input_ids.shape[0]
+
+        prompt_len = jnp.sum(
+            input_ids != config.pad_token_id, axis=-1, dtype=jnp.int32
+        )
+
+        # 1. Prefill prompt once to populate KV cache and obtain initial step 0
+        # logits.
+        empty_cache = self.initial_cache_factory(batch_size)
+        prefill_logits, cache = self.prefill(
+            params, input_ids, empty_cache, prompt_len=prompt_len
+        )
+
+        # 2. Extract step 0 log-probabilities: log P(y_1 | prompt).
+        prefill_logprobs = jax.nn.log_softmax(prefill_logits, axis=-1)
+        first_tokens = candidate_ids[:, :, 0]
+        step0_logprobs = jnp.take_along_axis(
+            prefill_logprobs[:, None, :], first_tokens[:, :, None], axis=-1
+        ).squeeze(-1)
+        is_first_token_valid = (first_tokens != config.pad_token_id).astype(
+            jnp.float32
+        )
+        step0_logprobs = step0_logprobs * is_first_token_valid
+
+        if max_candidate_tokens <= 1:
+          return {
+              "scores": step0_logprobs,
+              "step0_logprobs": step0_logprobs,
+              "continuation_scores": jnp.zeros_like(step0_logprobs),
+          }
+
+        # 3. Replicate KV cache table across all candidates
+        cache = self._replicate_cache(
+            cache, num_candidates, prompt_len=prompt_len
+        )
+        kv_caches, cur_block_tables = cache
+
+        # 4. Single-pass parallel extend forward pass over all candidate
+        # suffixes.
+        extend_tokens_len = max_candidate_tokens - 1
+        extend_inputs = candidate_ids[:, :, :-1]
+        target_tokens = candidate_ids[:, :, 1:]
+
+        total_seqs = batch_size * num_candidates
+        flat_extend_inputs = extend_inputs.reshape(
+            total_seqs * extend_tokens_len
+        )
+
+        prompt_len_rep = jnp.repeat(prompt_len, num_candidates)
+        seq_offsets = (
+            prompt_len_rep[:, None]
+            + jnp.arange(extend_tokens_len, dtype=jnp.int32)[None, :]
+        )
+        extend_positions = seq_offsets.reshape(-1)
+
+        seq_lens = prompt_len_rep + extend_tokens_len
+        query_start_loc = (
+            jnp.arange(total_seqs + 1, dtype=jnp.int32) * extend_tokens_len
+        )
+        request_distribution = jnp.array([0, 0, total_seqs], dtype=jnp.int32)
+
+        cur_block_tables_1d = cur_block_tables.reshape(-1)
+
+        assert attention_metadata is not None
+        extend_attn_metadata = attention_metadata.AttentionMetadata(
+            input_positions=extend_positions,
+            block_tables=cur_block_tables_1d,
+            seq_lens=seq_lens,
+            query_start_loc=query_start_loc,
+            request_distribution=request_distribution,
+        )
+
+        state_leaves = jax.tree_util.tree_leaves(params)
+        model_extend_outputs = self._model_fn(
+            state_leaves,
+            kv_caches,
+            flat_extend_inputs,
+            extend_attn_metadata,
+            None,
+            extend_positions,
+            self.kv_cache_indices,
+            None,
+            None,
+            True,
+            True,
+        )
+        extend_hidden_states = model_extend_outputs[1]
+
+        # 5. Target token logprobs computation in chunks to avoid HBM exhaustion
+        flat_target_tokens = target_tokens.reshape(-1)
+        num_flat_tokens = flat_target_tokens.shape[0]
+        chunk_size = 2048
+        num_chunks = (num_flat_tokens + chunk_size - 1) // chunk_size
+        padded_num_tokens = num_chunks * chunk_size
+
+        pad_len = padded_num_tokens - num_flat_tokens
+        padded_hidden_states = jnp.pad(
+            extend_hidden_states, ((0, pad_len), (0, 0))
+        )
+        padded_targets = jnp.pad(
+            flat_target_tokens,
+            (0, pad_len),
+            constant_values=config.pad_token_id,
+        )
+
+        chunked_hidden = padded_hidden_states.reshape(
+            num_chunks, chunk_size, -1
+        )
+        chunked_targets = padded_targets.reshape(num_chunks, chunk_size)
+
+        def _compute_chunk_logprobs(carry, chunk_data):
+          h_chunk, t_chunk = chunk_data
+          c_logits = self.tpu_runner.compute_logits_fn(
+              state_leaves, h_chunk, None
+          )
+          c_logits = c_logits.astype(jnp.float32)
+          c_logprobs = jax.nn.log_softmax(c_logits, axis=-1)
+          c_target_logprobs = jnp.take_along_axis(
+              c_logprobs, t_chunk[:, None], axis=-1
+          ).squeeze(-1)
+          return carry, c_target_logprobs
+
+        _, chunked_results = jax.lax.scan(
+            _compute_chunk_logprobs, None, (chunked_hidden, chunked_targets)
+        )
+        flat_step_logprobs = chunked_results.reshape(-1)[:num_flat_tokens]
+        step_logprobs = flat_step_logprobs.reshape(
+            batch_size, num_candidates, extend_tokens_len
+        )
+
+        is_valid_token = (target_tokens != config.pad_token_id).astype(
+            jnp.float32
+        )
+        masked_step_logprobs = step_logprobs * is_valid_token
+        continuation_scores = jnp.sum(masked_step_logprobs, axis=-1)
+
+        total_scores = step0_logprobs + continuation_scores
+
+        return {
+            "scores": total_scores,
+            "step0_logprobs": step0_logprobs,
+            "continuation_scores": continuation_scores,
+        }
+
+      return score_candidates
 
     if sampling_method != llm_config.SamplingMethod.BEAM_SEARCH:
       return super().compile_generation_loop()

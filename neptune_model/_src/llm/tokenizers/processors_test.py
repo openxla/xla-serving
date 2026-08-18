@@ -96,6 +96,7 @@ class ProcessorsTest(absltest.TestCase):
     tokenizer = processors.KerasHubTokenizerTF(
         model_name_or_path=model_path,
         max_seq_len=16,
+        max_candidate_tokens=32,
     )
     # Test scalar input
     scalar_res = tokenizer.pre_process_fn({"text_input": tf.constant("ab")})
@@ -109,6 +110,29 @@ class ProcessorsTest(absltest.TestCase):
     self.assertEqual(batched_res["input_ids"].shape, (2, 16))
     self.assertEqual(batched_res["input_ids"][0, 0].numpy(), 4)
     self.assertEqual(batched_res["input_ids"][1, 0].numpy(), 1)
+
+    # Test candidate text pre-processing and post-processing
+    inputs_cands = {
+        "text_input": tf.constant(["ab"]),
+        "candidate_texts": tf.constant([["ab", "a", "b"]]),
+    }
+    cand_preprocess = tokenizer.pre_process_fn(inputs_cands)
+    self.assertIn("input_ids", cand_preprocess)
+    self.assertIn("candidate_ids", cand_preprocess)
+    self.assertEqual(cand_preprocess["input_ids"].shape, (1, 16))
+    self.assertEqual(cand_preprocess["candidate_ids"].shape, (1, 3, 32))
+
+    scores_post = tokenizer.post_process_fn({
+        "scores": tf.constant([[-1.2, -0.8, -2.5]]),
+        "step0_logprobs": tf.constant([[-0.5, -0.3, -1.0]]),
+        "continuation_scores": tf.constant([[-0.7, -0.5, -1.5]]),
+    })
+    self.assertIn("scores", scores_post)
+    self.assertIn("step0_logprobs", scores_post)
+    self.assertIn("continuation_scores", scores_post)
+    self.assertEqual(scores_post["scores"].shape, (1, 3))
+    self.assertEqual(scores_post["step0_logprobs"].shape, (1, 3))
+    self.assertEqual(scores_post["continuation_scores"].shape, (1, 3))
 
 
 if __name__ == "__main__":

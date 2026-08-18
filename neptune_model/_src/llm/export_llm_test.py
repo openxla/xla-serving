@@ -157,6 +157,44 @@ class ExportLlmTest(absltest.TestCase):
         export_config.SamplingMethod.BEAM_SEARCH,
     )
     self.assertEqual(config.generation_config.beam_size, 8)
+    self.assertIsNone(config.generation_config.max_candidate_tokens)
+
+  @mock.patch.object(export_llm, "_get_tpu_runner", autospec=True)
+  @mock.patch.object(
+      export_llm.tpu_exporter, "export_tpu_inference_model", autospec=True
+  )
+  def test_main_tpu_inference_backend_scoring(
+      self, mock_export, mock_init_runner
+  ):
+    mock_runner = mock.MagicMock()
+    mock_init_runner.return_value = mock_runner
+
+    export_llm.main([
+        "--model",
+        "Qwen/Qwen3-1.5B",
+        "--export-dir",
+        "/tmp/mocked_export",
+        "--sampling-type",
+        "scoring",
+        "--num-candidates",
+        "16",
+        "--max-candidate-tokens",
+        "24",
+    ])
+
+    mock_init_runner.assert_called_once()
+    mock_export.assert_called_once()
+    call_kwargs = mock_export.call_args[1]
+    self.assertIs(call_kwargs["tpu_runner"], mock_runner)
+
+    config = call_kwargs["config"]
+    self.assertEqual(
+        config.generation_config.sampling_method,
+        export_config.SamplingMethod.SCORING,
+    )
+    self.assertIsNone(config.generation_config.beam_size)
+    self.assertEqual(config.generation_config.num_candidates, 16)
+    self.assertEqual(config.generation_config.max_candidate_tokens, 24)
 
   @mock.patch.object(export_llm, "_get_tpu_runner", autospec=True)
   @mock.patch.object(

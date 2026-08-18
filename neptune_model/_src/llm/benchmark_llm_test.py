@@ -24,11 +24,7 @@ from neptune_model._src.llm import benchmark_llm
 from neptune_model._src.llm import config as llm_config
 from neptune_model.protos.grpc import host_buffer_pb2
 from neptune_model.protos.grpc import predict_pb2
-
-# pylint: disable=g-direct-tensorflow-import
-from neptune_model.protos.xla.python.ifrt import dtype_pb2
-
-# pylint: enable=g-direct-tensorflow-import
+from neptune_model.protos.xla.python.ifrt import dtype_pb2  # pylint: disable=g-direct-tensorflow-import
 
 
 class BenchmarkLlmTest(absltest.TestCase):
@@ -262,6 +258,7 @@ class BenchmarkLlmTest(absltest.TestCase):
     mock_tokenizer_cls.assert_called_once_with(
         model_name_or_path="Qwen/Qwen3-0.6B",
         max_seq_len=128,
+        max_candidate_tokens=None,
     )
     mock_wrapper.compile_generation_loop.assert_called_once()
 
@@ -331,6 +328,32 @@ class BenchmarkLlmTest(absltest.TestCase):
           "Test prompt",
           "--num-batches",
           "-1",
+      ])
+
+  def test_main_invalid_num_candidates(self):
+    with self.assertRaisesRegex(
+        ValueError, r"--num-candidates must be positive, got 0"
+    ):
+      benchmark_llm.main([
+          "--mode",
+          "model_fn",
+          "--prompt",
+          "Test prompt",
+          "--num-candidates",
+          "0",
+      ])
+
+  def test_main_invalid_candidate_tokens(self):
+    with self.assertRaisesRegex(
+        ValueError, r"--candidate-tokens must be positive, got 0"
+    ):
+      benchmark_llm.main([
+          "--mode",
+          "model_fn",
+          "--prompt",
+          "Test prompt",
+          "--candidate-tokens",
+          "0",
       ])
 
   def test_main_invalid_beam_width(self):
@@ -423,11 +446,26 @@ class BenchmarkLlmTest(absltest.TestCase):
           new_tokens=10,
       )
       mock_print.assert_any_call("\n=== Test Results ===")
-      mock_print.assert_any_call("Mean Batch Latency     : 20.00 ms")
-      mock_print.assert_any_call("Min Batch Latency      : 10.00 ms")
-      mock_print.assert_any_call("Max Batch Latency      : 30.00 ms")
-      mock_print.assert_any_call("Request Throughput     : 100.00 req/s")
-      mock_print.assert_any_call("Generated Token Rate   : 1000.00 tokens/s")
+      mock_print.assert_any_call("Mean Batch Latency      : 20.00 ms")
+      mock_print.assert_any_call("Min Batch Latency       : 10.00 ms")
+      mock_print.assert_any_call("Max Batch Latency       : 30.00 ms")
+      mock_print.assert_any_call("Queries Per Second (QPS): 100.00 qps")
+      mock_print.assert_any_call("Generated Token Rate    : 1000.00 tokens/s")
+
+    with mock.patch("builtins.print") as mock_print:
+      benchmark_llm._print_benchmark_metrics(
+          latencies_ms=[10.0, 20.0, 30.0],
+          batch_size=2,
+          title="Scoring Test Results",
+          num_candidates=4,
+          candidate_tokens=5,
+      )
+      mock_print.assert_any_call("\n=== Scoring Test Results ===")
+      mock_print.assert_any_call("Queries Per Second (QPS): 100.00 qps")
+      mock_print.assert_any_call(
+          "Candidate Scoring Rate  : 400.00 candidates/s"
+      )
+      mock_print.assert_any_call("Scored Token Rate       : 2000.00 tokens/s")
 
   @mock.patch.object(benchmark_llm.jax, "jit", side_effect=lambda f: f)
   @mock.patch.object(benchmark_llm, "_get_tpu_runner", autospec=True)
@@ -497,6 +535,80 @@ class BenchmarkLlmTest(absltest.TestCase):
     mock_tokenizer_cls.assert_called_once_with(
         model_name_or_path="Qwen/Qwen3-0.6B",
         max_seq_len=128,
+        max_candidate_tokens=None,
+    )
+    mock_wrapper.compile_generation_loop.assert_called_once()
+
+  @mock.patch.object(benchmark_llm.jax, "jit", side_effect=lambda f: f)
+  @mock.patch.object(benchmark_llm, "_get_tpu_runner", autospec=True)
+  @mock.patch.object(
+      benchmark_llm.tokenizers_processors,
+      "KerasHubTokenizerTF",
+      autospec=True,
+  )
+  @mock.patch.object(
+      benchmark_llm.tpu_wrapper,
+      "TPUInferenceWrapper",
+      autospec=True,
+  )
+  def test_main_model_fn_benchmark_scoring(
+      self,
+      mock_wrapper_cls,
+      mock_tokenizer_cls,
+      mock_init_runner,
+      unused_mock_jit,
+  ):
+    mock_runner = mock.MagicMock()
+    mock_init_runner.return_value = mock_runner
+
+    mock_tokenizer = mock.MagicMock()
+    mock_tokenizer.pad_token_id = 0
+    mock_tokenizer.eos_token_id = 2
+    mock_tokenizer.pre_process_fn.return_value = {
+        "input_ids": tf.constant([[1, 2, 3]]),
+        "candidate_ids": tf.constant([[[4, 5], [6, 7]]]),
+    }
+    mock_tokenizer_cls.return_value = mock_tokenizer
+
+    mock_wrapper = mock.MagicMock()
+    mock_wrapper.generation_config = llm_config.GenerationConfig(
+        sampling_method=llm_config.SamplingMethod.SCORING,
+        num_candidates=2,
+        max_candidate_tokens=2,
+        max_prompt_length=128,
+    )
+    mock_model_fn = mock.MagicMock(
+        return_value={"scores": np.array([[-1.5, -2.5]])}
+    )
+    mock_wrapper.compile_generation_loop.return_value = mock_model_fn
+    mock_wrapper_cls.return_value = mock_wrapper
+
+    benchmark_llm.main([
+        "--mode",
+        "model_fn",
+        "--model",
+        "Qwen/Qwen3-0.6B",
+        "--prompt",
+        "Test scoring prompt",
+        "--prompt-len",
+        "128",
+        "--sampling-type",
+        "scoring",
+        "--num-candidates",
+        "2",
+        "--candidate-tokens",
+        "2",
+        "--batch-size",
+        "1",
+        "--num-batches",
+        "2",
+    ])
+
+    mock_init_runner.assert_called_once()
+    mock_tokenizer_cls.assert_called_once_with(
+        model_name_or_path="Qwen/Qwen3-0.6B",
+        max_seq_len=128,
+        max_candidate_tokens=2,
     )
     mock_wrapper.compile_generation_loop.assert_called_once()
 

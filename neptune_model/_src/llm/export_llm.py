@@ -276,6 +276,18 @@ Examples:
       ),
   )
   parser.add_argument(
+      "--num-candidates",
+      type=int,
+      default=500,
+      help="Number of candidate suffixes when using candidate scoring.",
+  )
+  parser.add_argument(
+      "--max-candidate-tokens",
+      type=int,
+      default=32,
+      help="Maximum token length of candidate completions for scoring.",
+  )
+  parser.add_argument(
       "--backend",
       type=str,
       choices=["tpu-inference"],
@@ -297,6 +309,10 @@ def main(argv: list[str] | None = None):
     )
   if args.beam_width <= 0:
     raise ValueError(f"--beam-width must be positive, got {args.beam_width}")
+  if args.num_candidates <= 0:
+    raise ValueError(
+        f"--num-candidates must be positive, got {args.num_candidates}"
+    )
 
   parsed_batch_sizes = [
       int(b.strip()) for b in args.allowed_batch_sizes.split(",") if b.strip()
@@ -323,14 +339,24 @@ def main(argv: list[str] | None = None):
 
   if sampling_method == export_config.SamplingMethod.BEAM_SEARCH:
     beam_size = args.beam_width
+    num_candidates = None
+    max_candidate_tokens = None
+  elif sampling_method == export_config.SamplingMethod.SCORING:
+    beam_size = None
+    num_candidates = args.num_candidates
+    max_candidate_tokens = args.max_candidate_tokens
   else:
     beam_size = None
+    num_candidates = None
+    max_candidate_tokens = None
 
   gen_config = export_config.GenerationConfig(
       max_prompt_length=args.max_prompt_len,
       max_output_tokens=args.max_new_tokens,
       sampling_method=sampling_method,
       beam_size=beam_size,
+      num_candidates=num_candidates,
+      max_candidate_tokens=max_candidate_tokens,
   )
 
   full_config = tokenizers_exporter.NeptuneLLMExportWithTokenizerConfig(

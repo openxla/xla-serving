@@ -87,17 +87,54 @@ def export_llm(
         )
     )
 
+  is_scoring = (
+      config.generation_config.sampling_method
+      == llm_config.SamplingMethod.SCORING
+  )
+
   if tf_model is not None:
     orchestration = serving_config.Orchestration(model_calls=model_calls)
-    input_signature = {
-        "text_input": tf.TensorSpec(shape=(None,), dtype=tf.string)
-    }
+    if is_scoring:
+      if config.generation_config.num_candidates is None:
+        raise ValueError(
+            "generation_config.num_candidates must be specified for scoring."
+        )
+      input_signature = {
+          "text_input": tf.TensorSpec(shape=(None,), dtype=tf.string),
+          "candidate_texts": tf.TensorSpec(
+              shape=(None, config.generation_config.num_candidates),
+              dtype=tf.string,
+          ),
+      }
+    else:
+      input_signature = {
+          "text_input": tf.TensorSpec(shape=(None,), dtype=tf.string)
+      }
   else:
     orchestration = None
     prompt_dim = config.generation_config.max_prompt_length
-    input_signature = {
-        "input_ids": tf.TensorSpec(shape=(None, prompt_dim), dtype=tf.int32),
-    }
+    if is_scoring:
+      if config.generation_config.num_candidates is None:
+        raise ValueError(
+            "generation_config.num_candidates must be specified for scoring."
+        )
+      if config.generation_config.max_candidate_tokens is None:
+        raise ValueError(
+            "generation_config.max_candidate_tokens must be specified for"
+            " scoring."
+        )
+      cand_len = config.generation_config.max_candidate_tokens
+      num_cands = config.generation_config.num_candidates
+      input_signature = {
+          "input_ids": tf.TensorSpec(shape=(None, prompt_dim), dtype=tf.int32),
+          "candidate_ids": tf.TensorSpec(
+              shape=(None, num_cands, cand_len), dtype=tf.int32
+          ),
+      }
+    else:
+      input_signature = {
+          "input_ids": tf.TensorSpec(shape=(None, prompt_dim), dtype=tf.int32),
+      }
 
   batch_options = orchestration_pb2.BatchOptions(
       allowed_batch_sizes=list(config.allowed_batch_sizes),
@@ -124,6 +161,8 @@ def export_llm(
   model_input_polymorphic_shapes = {
       "input_ids": input_ids_shape,
   }
+  if is_scoring:
+    model_input_polymorphic_shapes["candidate_ids"] = "b, _, _"
 
   jax_export_kwargs = {"platforms": ["tpu"]}
 

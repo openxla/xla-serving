@@ -74,6 +74,7 @@ def export_llm_with_tokenizer(
       eos_token_id=tokenizer_config_instance.eos_token_id,
       pad_token_id=tokenizer_config_instance.pad_token_id,
       max_seq_len=max_prompt_length,
+      max_candidate_tokens=generation_config_instance.max_candidate_tokens,
   )
 
   tf_model = tensorflow_model.TensorflowModel(

@@ -376,6 +376,97 @@ class ExporterTest(absltest.TestCase):
     # 3. Test exported SavedModel execution via ModelRunner and compare
     # equivalence.
 
+  def test_candidate_scoring_with_dummy_weights(self):
+    """Verifies candidate scoring execution and output shapes with dummy weights."""
+    runner = self._create_runner(load_format="jax_dummy")
+    model_dir = os.path.join(
+        os.path.dirname(__file__),
+        "../testdata/qwen_dummy",
+    )
+    num_candidates = 8
+    max_cand_tokens = 6
+
+    generation_config = llm_config.GenerationConfig(
+        sampling_method=llm_config.SamplingMethod.SCORING,
+        max_prompt_length=32,
+        num_candidates=num_candidates,
+        max_candidate_tokens=max_cand_tokens,
+    )
+    model_wrapper = tpu_wrapper.TPUInferenceWrapper(
+        tpu_runner=runner,
+        generation_config=generation_config,
+    )
+    tokenizer = tokenizers_processors.KerasHubTokenizerTF(
+        model_name_or_path=model_dir,
+        max_seq_len=32,
+        max_candidate_tokens=max_cand_tokens,
+    )
+    prompt_text = "Hello world"
+    candidate_texts = [f" candidate {i}" for i in range(num_candidates)]
+    preprocess_result = tokenizer.pre_process_fn({
+        "text_input": tf.constant([prompt_text]),
+        "candidate_texts": tf.constant([candidate_texts]),
+    })
+
+    inputs_jax = {
+        "input_ids": jnp.array(preprocess_result["input_ids"].numpy()),
+        "candidate_ids": jnp.array(preprocess_result["candidate_ids"].numpy()),
+    }
+
+    with runner.mesh:
+      model_wrapper.generation_config = dataclasses.replace(
+          model_wrapper.generation_config,
+          pad_token_id=tokenizer.pad_token_id,
+      )
+      score_fn = model_wrapper.compile_generation_loop()
+      jit_score_fn = jax.jit(score_fn)
+      outputs = jit_score_fn(runner.state, inputs_jax)
+
+    self.assertIn("scores", outputs)
+    self.assertEqual(outputs["scores"].shape, (1, num_candidates))
+    self.assertIn("step0_logprobs", outputs)
+    self.assertEqual(outputs["step0_logprobs"].shape, (1, num_candidates))
+    self.assertIn("continuation_scores", outputs)
+    self.assertEqual(outputs["continuation_scores"].shape, (1, num_candidates))
+
+    postprocess_result = tokenizer.post_process_fn({
+        "scores": tf.constant(np.array(outputs["scores"])),
+        "step0_logprobs": tf.constant(np.array(outputs["step0_logprobs"])),
+        "continuation_scores": tf.constant(
+            np.array(outputs["continuation_scores"])
+        ),
+    })
+    self.assertIn("scores", postprocess_result)
+    self.assertEqual(postprocess_result["scores"].shape, (1, num_candidates))
+    self.assertIn("step0_logprobs", postprocess_result)
+    self.assertEqual(
+        postprocess_result["step0_logprobs"].shape, (1, num_candidates)
+    )
+    self.assertIn("continuation_scores", postprocess_result)
+    self.assertEqual(
+        postprocess_result["continuation_scores"].shape, (1, num_candidates)
+    )
+
+    # 2. Export candidate scoring model
+    export_dir = self.create_tempdir().full_path
+    tokenizer_config = tokenizers_config.TokenizerConfig(
+        tokenizer_type=tokenizers_config.TokenizerType.KERAS_HUB,
+        model_name_or_path=model_dir,
+    )
+    export_config = tokenizers_exporter.NeptuneLLMExportWithTokenizerConfig(
+        export_dir=export_dir,
+        allowed_batch_sizes=(1, 2),
+        generation_config=generation_config,
+        tokenizer_config=tokenizer_config,
+    )
+    tpu_exporter.export_tpu_inference_model(
+        tpu_runner=runner,
+        config=export_config,
+    )
+    self.assertTrue(os.path.exists(export_dir))
+
+    # 3. Test exported SavedModel execution via ModelRunner
+
   @unittest.skipUnless(
       os.environ.get("RUN_REAL_WEIGHTS_TEST") == "1",
       "Requires RUN_REAL_WEIGHTS_TEST=1 env var.",
