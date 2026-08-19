@@ -28,16 +28,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Disable Android configuration
-        run: |
-          # 1. Clear the variables
-          echo "ANDROID_HOME=" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=" >> $GITHUB_ENV
-          # 2. Nuke the empty ghost folders so Bazel gives up searching
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /usr/lib/android-sdk
-
-
       - name: Install uv and Set up Python
         uses: astral-sh/setup-uv@v5
         with:
@@ -49,18 +39,14 @@ jobs:
           echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
 
-      - name: Install Bazelisk
+      - name: Setup Bazel
         uses: bazel-contrib/setup-bazel@0.19.0
-
-
-      - name: Cache Bazel Build
-        # This drastically speeds up future builds by caching Bazel's external dependencies
-        uses: actions/cache@v4
         with:
-          path: ~/.cache/bazel
-          key: ${{ runner.os }}-bazel-${{ hashFiles('MODULE.bazel') }}
-          restore-keys: |
-            ${{ runner.os }}-bazel-
+          bazelisk-cache: true
+          disk-cache: true
+          repository-cache: true
+          external-cache: true
+          cache-save: ${{ github.event_name != 'pull_request' }}
 
       - name: Install Python Build Dependencies
         run: |

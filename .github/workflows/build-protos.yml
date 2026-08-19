@@ -22,26 +22,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Disable Android configuration
-        run: |
-          # 1. Clear the variables
-          echo "ANDROID_HOME=" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=" >> $GITHUB_ENV
-
-          # 2. Nuke the empty ghost folders so Bazel gives up searching
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /usr/lib/android-sdk
-
-      - name: Install Bazelisk
+      - name: Setup Bazel
         uses: bazel-contrib/setup-bazel@0.19.0
-
-      - name: Cache Bazel Build
-        uses: actions/cache@v4
         with:
-          path: ~/.cache/bazel
-          key: ${{ runner.os }}-bazel-protos-${{ hashFiles('MODULE.bazel') }}
-          restore-keys: |
-            ${{ runner.os }}-bazel-protos-
+          bazelisk-cache: true
+          disk-cache: true
+          repository-cache: true
+          external-cache: true
+          cache-save: ${{ github.event_name != 'pull_request' }}        
 
       - name: Compile Protobufs
         # This purely validates that the syntax is correct and Bazel can resolve the graph
