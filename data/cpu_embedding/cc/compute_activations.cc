@@ -33,7 +33,7 @@
 namespace neptune::data::cpu_embedding {
 namespace {
 
-template <typename T>
+template <typename T, int Dim = Eigen::Dynamic>
 absl::Status AssembleCombinedEmbeddings(
     absl::Span<const int64_t> embedding_ids,
     absl::Span<const int32_t> row_pointers, absl::Span<const float> weights,
@@ -44,12 +44,30 @@ absl::Status AssembleCombinedEmbeddings(
   const int64_t vocab_size = embedding_table.VocabSize();
   const size_t num_samples = row_pointers.size() - 1;
 
+  auto get_row_vec = [&](const T* ptr) {
+    if constexpr (Dim == Eigen::Dynamic) {
+      return Eigen::Map<const Eigen::Matrix<T, 1, Eigen::Dynamic>>(ptr, dim);
+    } else {
+      return Eigen::Map<const Eigen::Matrix<T, 1, Dim>>(ptr);
+    }
+  };
+
+  auto get_act_vec = [&](T* ptr) {
+    if constexpr (Dim == Eigen::Dynamic) {
+      return Eigen::Map<Eigen::Matrix<T, 1, Eigen::Dynamic>>(ptr, dim);
+    } else {
+      return Eigen::Map<Eigen::Matrix<T, 1, Dim>>(ptr);
+    }
+  };
+
   for (size_t sample_num = 0; sample_num < num_samples; ++sample_num) {
     const size_t sample_start = row_pointers[sample_num];
     const size_t sample_size =
         row_pointers[sample_num + 1] - row_pointers[sample_num];
+    T* act_ptr = activations_tensor.data() + sample_num * dim;
 
     if (sample_size == 0) {
+      get_act_vec(act_ptr).setZero();
       continue;
     }
 
@@ -58,7 +76,11 @@ absl::Status AssembleCombinedEmbeddings(
     absl::Span<const float> sample_weights =
         weights.empty() ? weights : weights.subspan(sample_start, sample_size);
 
-    T* act_ptr = activations_tensor.data() + sample_num * dim;
+    Eigen::Matrix<T, 1, Dim> accumulator;
+    if constexpr (Dim == Eigen::Dynamic) {
+      accumulator.resize(dim);
+    }
+    accumulator.setZero();
 
     // 1. Bounds check scan
     for (size_t emb_idx = 0; emb_idx < sample_size; ++emb_idx) {
@@ -75,10 +97,7 @@ absl::Status AssembleCombinedEmbeddings(
     if (sample_weights.empty()) {
       for (size_t emb_idx = 0; emb_idx < sample_size; ++emb_idx) {
         const T* row_ptr = table_data + sample_ids[emb_idx] * dim;
-        Eigen::Map<const Eigen::Matrix<T, 1, Eigen::Dynamic>> row_vec(row_ptr,
-                                                                      dim);
-        Eigen::Map<Eigen::Matrix<T, 1, Eigen::Dynamic>> act_vec(act_ptr, dim);
-        act_vec += row_vec;
+        accumulator += get_row_vec(row_ptr);
       }
 
       float scale = 1.0f;
@@ -93,18 +112,14 @@ absl::Status AssembleCombinedEmbeddings(
           break;
       }
       if (scale != 1.0f) {
-        Eigen::Map<Eigen::Matrix<T, 1, Eigen::Dynamic>> act_vec(act_ptr, dim);
-        act_vec *= T(scale);
+        accumulator *= T(scale);
       }
     } else {
       float sum_weights = 0.0f;
       for (size_t emb_idx = 0; emb_idx < sample_size; ++emb_idx) {
         const T* row_ptr = table_data + sample_ids[emb_idx] * dim;
         float w = sample_weights[emb_idx];
-        Eigen::Map<const Eigen::Matrix<T, 1, Eigen::Dynamic>> row_vec(row_ptr,
-                                                                      dim);
-        Eigen::Map<Eigen::Matrix<T, 1, Eigen::Dynamic>> act_vec(act_ptr, dim);
-        act_vec += T(w) * row_vec;
+        accumulator += T(w) * get_row_vec(row_ptr);
 
         switch (embedding_table.GetCombineMode()) {
           case EmbeddingTable::CombineMode::kSum:
@@ -130,12 +145,43 @@ absl::Status AssembleCombinedEmbeddings(
           break;
       }
       if (scale != 1.0f) {
-        Eigen::Map<Eigen::Matrix<T, 1, Eigen::Dynamic>> act_vec(act_ptr, dim);
-        act_vec *= T(scale);
+        accumulator *= T(scale);
       }
     }
+    get_act_vec(act_ptr) = accumulator;
   }
   return absl::OkStatus();
+}
+
+template <typename T>
+absl::Status DispatchAssemble(absl::Span<const int64_t> embedding_ids,
+                              absl::Span<const int32_t> row_pointers,
+                              absl::Span<const float> weights,
+                              const EmbeddingTable& embedding_table,
+                              Array::TensorMap<T, 2> activations_tensor) {
+  const int64_t dim = embedding_table.EmbeddingDim();
+  switch (dim) {
+    case 16:
+      return AssembleCombinedEmbeddings<T, 16>(embedding_ids, row_pointers,
+                                               weights, embedding_table,
+                                               activations_tensor);
+    case 32:
+      return AssembleCombinedEmbeddings<T, 32>(embedding_ids, row_pointers,
+                                               weights, embedding_table,
+                                               activations_tensor);
+    case 64:
+      return AssembleCombinedEmbeddings<T, 64>(embedding_ids, row_pointers,
+                                               weights, embedding_table,
+                                               activations_tensor);
+    case 128:
+      return AssembleCombinedEmbeddings<T, 128>(embedding_ids, row_pointers,
+                                                weights, embedding_table,
+                                                activations_tensor);
+    default:
+      return AssembleCombinedEmbeddings<T, Eigen::Dynamic>(
+          embedding_ids, row_pointers, weights, embedding_table,
+          activations_tensor);
+  }
 }
 
 template <typename T>
@@ -208,7 +254,7 @@ absl::StatusOr<Array> ComputeEmbeddingActivations(
       Array activations(0.f,
                         Shape({static_cast<int64_t>(feature_batch.NumSamples()),
                                embedding_table.EmbeddingDim()}));
-      RETURN_IF_ERROR(AssembleCombinedEmbeddings<float>(
+      RETURN_IF_ERROR(DispatchAssemble<float>(
           feature_batch.EmbeddingIds(), feature_batch.RowPointers(),
           feature_batch.Weights(), embedding_table,
           activations.AsTensor<float, 2>()));
@@ -218,7 +264,7 @@ absl::StatusOr<Array> ComputeEmbeddingActivations(
       Array activations(Eigen::bfloat16(0),
                         Shape({static_cast<int64_t>(feature_batch.NumSamples()),
                                embedding_table.EmbeddingDim()}));
-      RETURN_IF_ERROR(AssembleCombinedEmbeddings<Eigen::bfloat16>(
+      RETURN_IF_ERROR(DispatchAssemble<Eigen::bfloat16>(
           feature_batch.EmbeddingIds(), feature_batch.RowPointers(),
           feature_batch.Weights(), embedding_table,
           activations.AsTensor<Eigen::bfloat16, 2>()));
@@ -258,8 +304,8 @@ absl::Status ComputeEmbeddingActivations(
 
   Array::TensorMap<T, 2> activations_tensor(buffer.data(), num_samples,
                                             embedding_table.EmbeddingDim());
-  return AssembleCombinedEmbeddings<T>(embedding_ids, row_pointers, weights,
-                                       embedding_table, activations_tensor);
+  return DispatchAssemble<T>(embedding_ids, row_pointers, weights,
+                             embedding_table, activations_tensor);
 }
 
 template absl::Status ComputeEmbeddingActivations<float>(

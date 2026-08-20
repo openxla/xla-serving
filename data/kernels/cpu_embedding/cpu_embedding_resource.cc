@@ -16,6 +16,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <utility>
@@ -42,13 +43,13 @@ namespace composite {
 
 namespace {
 
+using cpu_embedding::CpuEmbeddingEngine;
 using transforms::cpu_embedding::CpuEmbeddingManifest;
 
-absl::Status LoadCpuEmbeddingEngine(
+absl::StatusOr<std::unique_ptr<CpuEmbeddingEngine>> LoadCpuEmbeddingEngine(
     Asset& manifest,
     const absl::flat_hash_map<absl::string_view, Asset* absl_nonnull>&
         table_assets,
-    cpu_embedding::CpuEmbeddingEngine* engine,
     absl::flat_hash_map<std::string, int32_t>& feature_to_embedding_dim) {
   if (manifest.content.empty()) {
     RETURN_IF_ERROR(manifest.LoadContent());
@@ -58,7 +59,26 @@ absl::Status LoadCpuEmbeddingEngine(
   RETURN_IF_ERROR(
       tsl::ReadTextProto(tsl::Env::Default(), manifest.path, &manifest_proto));
 
-  absl::flat_hash_map<std::string, int32_t> table_to_dim;
+  CpuEmbeddingEngine::Options options;
+
+  const char* env_max_cpu_slots = std::getenv("JCE_MAX_CPU_SLOTS");
+  if (env_max_cpu_slots != nullptr) {
+    options.max_cpu_slots = std::atoi(env_max_cpu_slots);
+  } else if (manifest_proto.max_cpu_slots() > 0) {
+    options.max_cpu_slots = manifest_proto.max_cpu_slots();
+  }
+
+  const char* env_block_size = std::getenv("JCE_BLOCK_SIZE");
+  if (env_block_size != nullptr) {
+    options.block_size = std::atoi(env_block_size);
+  } else if (manifest_proto.block_size() > 0) {
+    options.block_size = manifest_proto.block_size();
+  }
+
+  auto engine = std::make_unique<CpuEmbeddingEngine>(options);
+
+  absl::flat_hash_map<std::string, int64_t> table_to_dim;
+
   for (const auto& table_config : manifest_proto.tables()) {
     auto it = table_assets.find(table_config.name());
     if (it == table_assets.end()) {
@@ -163,7 +183,7 @@ absl::Status LoadCpuEmbeddingEngine(
     }
   }
 
-  return absl::OkStatus();
+  return engine;
 }
 
 }  // namespace
@@ -187,8 +207,10 @@ absl::Status CpuEmbeddingEngineResource::LoadImpl() {
         "Failed to find manifest asset in JCE Resource.");
   }
 
-  return LoadCpuEmbeddingEngine(*manifest_asset, table_assets, engine_.get(),
-                                feature_to_embedding_dim_);
+  ASSIGN_OR_RETURN(engine_,
+                   LoadCpuEmbeddingEngine(*manifest_asset, table_assets,
+                                          feature_to_embedding_dim_));
+  return absl::OkStatus();
 }
 
 absl::StatusOr<int32_t> CpuEmbeddingEngineResource::GetEmbeddingDim(

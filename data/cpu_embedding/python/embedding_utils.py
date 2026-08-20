@@ -119,8 +119,9 @@ def build_embedding_lookup(
       'pack_ids', pack_ids_module.transform, input_edges_ids
   )
 
-  # Node 1: Pack RPs
+  # Node 1: Pack RPs (empty input edges when dense_lookup=True)
   if dense_lookup:
+
     node_1_idx = graph.add_node('pack_rps', pack_rps_module.transform, [])
   else:
     input_edges_rps = [
