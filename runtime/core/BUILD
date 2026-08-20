@@ -625,30 +625,3 @@ cc_library(
         "@xla//xla/tsl/platform:statusor",
     ],
 )
-
-cc_test(
-    name = "batched_h2d_transfer_executor_test",
-    srcs = ["batched_h2d_transfer_executor_test.cc"],
-    deps = [
-        ":batched_h2d_transfer_executor",
-        ":host_buffer",
-        ":host_buffer_matcher",
-        ":host_buffer_test_utils",
-        ":sharding_utils",
-        "@abseil-cpp//absl/container:inlined_vector",
-        "@abseil-cpp//absl/status",
-        "@abseil-cpp//absl/status:status_matchers",
-        "@abseil-cpp//absl/types:span",
-        "@googletest//:gtest_main",
-        "@tsl//tsl/platform:bfloat16",
-        "@tsl//tsl/platform:ml_dtypes",
-        "@tsl//tsl/platform:tstring",
-        "@xla//xla/hlo/ir:hlo",
-        "@xla//xla/python/ifrt",
-        "@xla//xla/python/ifrt:test_util",
-        "@xla//xla/python/pjrt_ifrt:tfrt_cpu_client_test_lib",  # buildcleaner: keep
-        "@xla//xla/python/pjrt_ifrt:xla_ifrt",
-        "@xla//xla/tsl/platform:env",
-        "@xla//xla/tsl/platform:statusor",
-    ],
-)

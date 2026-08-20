@@ -29,7 +29,9 @@ jobs:
 
       - name: Build Neptune Runtime
         run: |
-          bazel build //runtime/...
+          bazel build //runtime/... \
+          --ui_event_filters=-info,-stdout,-stderr \
+          --noshow_progress
 
       - name: Run Runtime Tests
         run: |
