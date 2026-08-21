@@ -264,7 +264,7 @@ cc_library(
         "@xla//xla/pjrt/proto:compile_options_proto_cc",
         "@xla//xla/python:refine_polymorphic_shapes",
         "@xla//xla/python/ifrt",
-        "@xla//xla/service:computation_placer_hdr",
+        "@xla//xla/service:device_assignment",
         "@xla//xla/tsl/concurrency:future",
         "@xla//xla/tsl/concurrency:ref_count",
         "@xla//xla/tsl/framework:serving_device_selector",
@@ -439,7 +439,7 @@ cc_library(
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/python/ifrt",
         "@xla//xla/python/ifrt:attribute_map",
-        "@xla//xla/service:computation_placer_hdr",
+        "@xla//xla/service:device_assignment",
         "@xla//xla/tsl/platform:statusor",
     ],
 )

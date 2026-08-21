@@ -86,7 +86,7 @@
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
 #include "xla/python/refine_polymorphic_shapes.h"  // from @xla
-#include "xla/service/computation_placer.h"  // from @xla
+#include "xla/service/device_assignment.h"  // from @xla
 #include "xla/status_macros.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/concurrency/ref_count.h"  // from @xla
