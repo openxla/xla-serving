@@ -20,7 +20,17 @@ from absl import logging
 import keras_hub
 from keras_hub.src.tokenizers import byte_pair_tokenizer
 import tensorflow as tf
+import tensorflow_text as tf_text
 import transformers
+
+if getattr(byte_pair_tokenizer, "tf_text", None) is None:
+  byte_pair_tokenizer.tf_text = tf_text
+
+# Wrap upstream BPE split function with do_not_convert to bypass
+# AutoGraph AST translation.
+_split_strings_for_bpe = tf.autograph.experimental.do_not_convert(
+    byte_pair_tokenizer.split_strings_for_bpe
+)
 
 AutoTokenizer = transformers.AutoTokenizer
 
@@ -208,9 +218,7 @@ class KerasHubTokenizerTF:
       )
 
     unsplittable_tokens = getattr(tokenizer, "unsplittable_tokens", None)
-    raw_tokens = byte_pair_tokenizer.split_strings_for_bpe(
-        text_input, unsplittable_tokens
-    )
+    raw_tokens = _split_strings_for_bpe(text_input, unsplittable_tokens)
     token_row_splits = raw_tokens.row_splits
     flat_tokens = raw_tokens.flat_values
 

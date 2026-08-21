@@ -444,7 +444,6 @@ cc_library(
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/python/ifrt",
         "@xla//xla/python/ifrt:attribute_map",
-        "@xla//xla/service:computation_placer",
         "@xla//xla/tsl/platform:statusor",
     ],
 )

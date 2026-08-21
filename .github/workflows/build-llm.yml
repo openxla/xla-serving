@@ -80,5 +80,5 @@ jobs:
         env:
           VLLM_TARGET_DEVICE: tpu
         run: |
-          pip install --pre .[test]
+          pip install --pre .[test,llm]
           pytest neptune_model/_src/llm/
