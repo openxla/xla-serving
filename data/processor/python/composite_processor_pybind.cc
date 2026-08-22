@@ -281,6 +281,10 @@ absl::StatusOr<DLDataType> IfrtDTypeToDLDataType(xla::ifrt::DType dt) {
       return DLDataType{kDLFloat, 64, 1};
     case xla::ifrt::DType::Kind::kBF16:
       return DLDataType{kDLBfloat, 16, 1};
+    case xla::ifrt::DType::Kind::kC64:
+      return DLDataType{kDLComplex, 64, 1};
+    case xla::ifrt::DType::Kind::kC128:
+      return DLDataType{kDLComplex, 128, 1};
     default:
       return absl::UnimplementedError("IFRT DType has no DLPack equivalent");
   }
@@ -341,6 +345,15 @@ absl::StatusOr<xla::ifrt::DType> DLDataTypeToIfrtDType(DLDataType dtype) {
         return xla::ifrt::DType(xla::ifrt::DType::Kind::kBF16);
       }
       return absl::InvalidArgumentError("Unsupported bfloat bits");
+    case kDLComplex:
+      switch (dtype.bits) {
+        case 64:
+          return xla::ifrt::DType(xla::ifrt::DType::Kind::kC64);
+        case 128:
+          return xla::ifrt::DType(xla::ifrt::DType::Kind::kC128);
+        default:
+          return absl::InvalidArgumentError("Unsupported complex bits");
+      }
     default:
       return absl::InvalidArgumentError("Unsupported DLPack type code");
   }

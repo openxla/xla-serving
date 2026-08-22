@@ -34,6 +34,85 @@ from data.processor.python.examples import suffix_transform_pybind
 from data.resource_manager.python import resource_manager
 
 
+def _create_raw_dlpack_object(code: int, bits: int, lanes: int = 1):
+  """Creates a dummy DLPack object with specific dtype fields for testing."""
+
+  class DLDevice(ctypes.Structure):
+    _fields_ = [
+        ("device_type", ctypes.c_uint),
+        ("device_id", ctypes.c_int32),
+    ]
+
+  class DLDataType(ctypes.Structure):
+    _fields_ = [
+        ("code", ctypes.c_uint8),
+        ("bits", ctypes.c_uint8),
+        ("lanes", ctypes.c_uint16),
+    ]
+
+  class DLTensor(ctypes.Structure):
+    _fields_ = [
+        ("data", ctypes.c_void_p),
+        ("device", DLDevice),
+        ("ndim", ctypes.c_int32),
+        ("dtype", DLDataType),
+        ("shape", ctypes.POINTER(ctypes.c_int64)),
+        ("strides", ctypes.POINTER(ctypes.c_int64)),
+        ("byte_offset", ctypes.c_uint64),
+    ]
+
+  DLManagedTensorDeleter = ctypes.CFUNCTYPE(None, ctypes.c_void_p)
+
+  class DLManagedTensor(ctypes.Structure):
+    _fields_ = [
+        ("dl_tensor", DLTensor),
+        ("manager_ctx", ctypes.c_void_p),
+        ("deleter", DLManagedTensorDeleter),
+    ]
+
+  data = (ctypes.c_byte * 16)()
+  shape = (ctypes.c_int64 * 1)(1)
+  dl_tensor = DLTensor(
+      data=ctypes.cast(data, ctypes.c_void_p),
+      device=DLDevice(device_type=1, device_id=0),  # kDLCPU
+      ndim=1,
+      dtype=DLDataType(code=code, bits=bits, lanes=lanes),
+      shape=ctypes.cast(shape, ctypes.POINTER(ctypes.c_int64)),
+      strides=None,
+      byte_offset=0,
+  )
+
+  @DLManagedTensorDeleter
+  def deleter(ptr):
+    pass
+
+  managed_tensor = DLManagedTensor(
+      dl_tensor=dl_tensor, manager_ctx=None, deleter=deleter
+  )
+
+  ctypes.pythonapi.PyCapsule_New.restype = ctypes.py_object
+  ctypes.pythonapi.PyCapsule_New.argtypes = [
+      ctypes.c_void_p,
+      ctypes.c_char_p,
+      ctypes.c_void_p,
+  ]
+  capsule = ctypes.pythonapi.PyCapsule_New(
+      ctypes.cast(ctypes.pointer(managed_tensor), ctypes.c_void_p),
+      b"dltensor",
+      None,
+  )
+
+  class RawDLPack:
+
+    def __dlpack__(self):
+      return capsule
+
+    def __dlpack_device__(self):
+      return (1, 0)  # kDLCPU
+
+  return RawDLPack()
+
+
 class CompositeProcessorTest(absltest.TestCase):
 
   def test_value_creation(self):
@@ -492,6 +571,44 @@ class CompositeProcessorTest(absltest.TestCase):
     self.assertEqual(na_out.dtype, np.int32)
     self.assertEqual(na_out.tolist(), [[1, 2, 3], [4, 5, 6]])
 
+  def test_host_buffer_from_jax_complex_dlpack(self):
+    jax.config.update("jax_enable_x64", True)
+    for dtype in [np.complex64, np.complex128]:
+      with self.subTest(dtype=dtype):
+        ja = jax.numpy.array(
+            [[1 + 2j, 3 + 4j, 5 + 6j], [7 + 8j, 9 + 10j, 11 + 12j]],
+            dtype=dtype,
+        )
+        hb = composite_processor_pybind.HostBuffer.from_dlpack(ja)
+        self.assertEqual(hb.dtype, dtype)
+        self.assertEqual(hb.shape, (2, 3))
+
+        na_out = np.from_dlpack(hb).copy()  # pyrefly: ignore[bad-argument-type]
+        self.assertEqual(na_out.shape, (2, 3))
+        self.assertEqual(na_out.dtype, dtype)
+        np.testing.assert_array_equal(na_out, np.array(ja))
+
+        ja_out = jax.dlpack.from_dlpack(hb)
+        self.assertEqual(ja_out.shape, (2, 3))
+        self.assertEqual(ja_out.dtype, dtype)
+        np.testing.assert_array_equal(np.array(ja_out), np.array(ja))
+
+  def test_host_buffer_from_numpy_complex_dlpack(self):
+    for dtype in [np.complex64, np.complex128]:
+      with self.subTest(dtype=dtype):
+        na = np.array(
+            [[1 + 2j, 3 + 4j, 5 + 6j], [7 + 8j, 9 + 10j, 11 + 12j]],
+            dtype=dtype,
+        )
+        hb = composite_processor_pybind.HostBuffer.from_dlpack(na)
+        self.assertEqual(hb.dtype, dtype)
+        self.assertEqual(hb.shape, (2, 3))
+
+        na_out = np.from_dlpack(hb).copy()  # pyrefly: ignore[bad-argument-type]
+        self.assertEqual(na_out.shape, (2, 3))
+        self.assertEqual(na_out.dtype, dtype)
+        np.testing.assert_array_equal(na_out, na)
+
   def test_host_buffer_from_jax_dlpack_copy(self):
     jax.config.update("jax_enable_x64", True)
     # JAX array data buffers are always Eigen-aligned on CPU.
@@ -599,88 +716,18 @@ class CompositeProcessorTest(absltest.TestCase):
       composite_processor_pybind.HostBuffer.from_dlpack(UnnamedCapsuleDLPack())
 
   def test_host_buffer_from_dlpack_malformed_bool(self):
-    # Define DLPack structures using ctypes
-    class DLDevice(ctypes.Structure):
-      _fields_ = [
-          ("device_type", ctypes.c_uint),
-          ("device_id", ctypes.c_int32),
-      ]
-
-    class DLDataType(ctypes.Structure):
-      _fields_ = [
-          ("code", ctypes.c_uint8),
-          ("bits", ctypes.c_uint8),
-          ("lanes", ctypes.c_uint16),
-      ]
-
-    class DLTensor(ctypes.Structure):
-      _fields_ = [
-          ("data", ctypes.c_void_p),
-          ("device", DLDevice),
-          ("ndim", ctypes.c_int32),
-          ("dtype", DLDataType),
-          ("shape", ctypes.POINTER(ctypes.c_int64)),
-          ("strides", ctypes.POINTER(ctypes.c_int64)),
-          ("byte_offset", ctypes.c_uint64),
-      ]
-
-    DLManagedTensorDeleter = ctypes.CFUNCTYPE(None, ctypes.c_void_p)
-
-    class DLManagedTensor(ctypes.Structure):
-      _fields_ = [
-          ("dl_tensor", DLTensor),
-          ("manager_ctx", ctypes.c_void_p),
-          ("deleter", DLManagedTensorDeleter),
-      ]
-
-    # Create a malformed DLManagedTensor: kDLBool (6) with 1 bit
-    data = (ctypes.c_bool * 1)(True)
-    shape = (ctypes.c_int64 * 1)(1)
-
-    dl_tensor = DLTensor(
-        data=ctypes.cast(data, ctypes.c_void_p),
-        device=DLDevice(device_type=1, device_id=0),  # kDLCPU
-        ndim=1,
-        dtype=DLDataType(code=6, bits=1, lanes=1),  # kDLBool, 1 bit
-        shape=ctypes.cast(shape, ctypes.POINTER(ctypes.c_int64)),
-        strides=None,
-        byte_offset=0,
-    )
-
-    @DLManagedTensorDeleter
-    def deleter(ptr):
-      pass
-
-    managed_tensor = DLManagedTensor(
-        dl_tensor=dl_tensor, manager_ctx=None, deleter=deleter
-    )
-
-    # Wrap in PyCapsule
-    ctypes.pythonapi.PyCapsule_New.restype = ctypes.py_object
-    ctypes.pythonapi.PyCapsule_New.argtypes = [
-        ctypes.c_void_p,
-        ctypes.c_char_p,
-        ctypes.c_void_p,
-    ]
-
-    capsule_name = b"dltensor"
-    managed_tensor_ptr = ctypes.pointer(managed_tensor)
-    capsule = ctypes.pythonapi.PyCapsule_New(
-        ctypes.cast(managed_tensor_ptr, ctypes.c_void_p), capsule_name, None
-    )
-
-    class MalformedBoolDLPack:
-
-      def __dlpack__(self):
-        return capsule
-
-      def __dlpack_device__(self):
-        return (1, 0)  # kDLCPU
-
     with self.assertRaisesRegex(
         ValueError, "Unsupported kDLBool bits: 1. Expected 8 bits."
     ):
-      composite_processor_pybind.HostBuffer.from_dlpack(MalformedBoolDLPack())
+      composite_processor_pybind.HostBuffer.from_dlpack(
+          _create_raw_dlpack_object(code=6, bits=1)  # kDLBool == 6
+      )
+
+  def test_host_buffer_from_dlpack_malformed_complex(self):
+    with self.assertRaisesRegex(ValueError, "Unsupported complex bits"):
+      composite_processor_pybind.HostBuffer.from_dlpack(
+          _create_raw_dlpack_object(code=5, bits=32)  # kDLComplex == 5
+      )
 
   def test_host_buffer_from_dlpack_strided(self):
     jax.config.update("jax_enable_x64", True)
