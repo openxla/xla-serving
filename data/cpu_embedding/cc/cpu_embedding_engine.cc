@@ -225,7 +225,7 @@ absl::Status CpuEmbeddingEngine::ExecuteBatch(
   }
 
   return internal::ExecuteEmbeddingBagBatch(
-      absl::MakeSpan(batch_requests), internal::EmbeddingBagBackend::kPortable,
+      absl::MakeSpan(batch_requests), internal::EmbeddingBagBackend::kAuto,
       thread_pool_.get());
 }
 

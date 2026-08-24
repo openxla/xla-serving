@@ -7,6 +7,14 @@ package(default_visibility = [
     "@xla_serving//data/cpu_embedding:__subpackages__",
 ])
 
+config_setting(
+    name = "linux_aarch64",
+    constraint_values = [
+        "@platforms//cpu:aarch64",
+        "@platforms//os:linux",
+    ],
+)
+
 cc_library(
     name = "embedding_table",
     srcs = ["embedding_table.cc"],
@@ -90,8 +98,13 @@ cc_library(
     srcs = ["embedding_bag.cc"],
     hdrs = ["embedding_bag.h"],
     defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
+    local_defines = select({
+        ":linux_aarch64": ["XLA_SERVING_HAS_SVE_EMBEDDING_BAG=1"],
+        "//conditions:default": [],
+    }),
     visibility = ["//visibility:private"],
     deps = [
+        ":embedding_bag_f32_sve",
         ":embedding_table",
         "@abseil-cpp//absl/functional:any_invocable",
         "@abseil-cpp//absl/status",
@@ -102,6 +115,25 @@ cc_library(
         "@eigen_archive//:eigen3",
         "@xla//xla/tsl/platform:status_macros",
     ],
+)
+
+cc_library(
+    name = "embedding_bag_f32_sve",
+    # Isolate SVE flags so portable objects remain valid on non-SVE AArch64.
+    srcs = ["embedding_bag_f32_sve.cc"],
+    hdrs = ["embedding_bag_f32_sve.h"],
+    copts = select({
+        ":linux_aarch64": [
+            "-march=armv8-a+sve",
+            "-msve-vector-bits=scalable",
+        ],
+        "//conditions:default": [],
+    }),
+    local_defines = select({
+        ":linux_aarch64": ["XLA_SERVING_HAS_SVE_EMBEDDING_BAG=1"],
+        "//conditions:default": [],
+    }),
+    visibility = ["//visibility:private"],
 )
 
 cc_test(

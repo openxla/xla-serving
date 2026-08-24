@@ -23,12 +23,18 @@
 #include <utility>
 #include <vector>
 
+#if defined(__linux__) && defined(__aarch64__)
+#include <asm/hwcap.h>
+#include <sys/auxv.h>
+#endif
+
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/synchronization/blocking_counter.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "Eigen/Core"
+#include "data/cpu_embedding/cc/embedding_bag_f32_sve.h"  // from @xla_serving
 #include "data/cpu_embedding/cc/embedding_table.h"  // from @xla_serving
 #include "unsupported/Eigen/CXX11/ThreadPool"
 #include "xla/tsl/platform/status_macros.h"
@@ -38,11 +44,27 @@ namespace xla_serving::data::cpu_embedding::internal {
 namespace {
 
 absl::StatusOr<EmbeddingBagBackend> ResolveBackend(
-    EmbeddingBagBackend requested) {
+    const EmbeddingBagRequest& request, EmbeddingBagBackend requested) {
   switch (requested) {
-    case EmbeddingBagBackend::kAuto:
+    case EmbeddingBagBackend::kAuto: {
+      const EmbeddingTable& table = *request.embedding_table;
+      if (table.EmbeddingDim() == 128 && request.weights.empty() &&
+          table.GetCombineMode() == EmbeddingTable::CombineMode::kSum &&
+          IsEmbeddingBagSveAvailable()) {
+        // Defer kAuto because SVE vector length is thread-local.
+        return EmbeddingBagBackend::kAuto;
+      }
+      return EmbeddingBagBackend::kPortable;
+    }
     case EmbeddingBagBackend::kPortable:
       return EmbeddingBagBackend::kPortable;
+    case EmbeddingBagBackend::kSve:
+      if (!IsEmbeddingBagSveAvailable()) {
+        return absl::FailedPreconditionError(
+            "The SVE embedding-bag backend is not compiled or unavailable "
+            "at runtime.");
+      }
+      return EmbeddingBagBackend::kSve;
   }
   return absl::InvalidArgumentError("Unknown embedding-bag backend.");
 }
@@ -170,6 +192,31 @@ void ReducePortable(const EmbeddingBagRequest& request,
   }
 }
 
+void ReduceSve(const EmbeddingBagRequest& request,
+               absl::Span<float> output_buffer, size_t bag_begin,
+               size_t bag_end) {
+  const size_t dim = request.embedding_table->EmbeddingDim();
+  absl::Span<float> output = output_buffer.subspan(
+      bag_begin * dim, (bag_end - bag_begin) * dim);
+  // CSR offsets are absolute; shift only the row-pointer base.
+  std::fill(output.begin(), output.end(), 0.0f);
+  sve::AccumulateEmbeddingBagsF32(
+      request.embedding_ids.data(), request.row_pointers.data() + bag_begin,
+      bag_end - bag_begin,
+      request.weights.empty() ? nullptr : request.weights.data(),
+      request.embedding_table->AsTensor<float>().data(), dim, output.data());
+  if (request.embedding_table->GetCombineMode() ==
+      EmbeddingTable::CombineMode::kSum) {
+    return;
+  }
+  for (size_t bag = bag_begin; bag < bag_end; ++bag) {
+    if (request.row_pointers[bag] == request.row_pointers[bag + 1]) continue;
+    Eigen::Map<Eigen::VectorXf> bag_output(
+        output_buffer.data() + bag * dim, dim);
+    bag_output *= BagScale(request, bag);
+  }
+}
+
 struct PreparedRequest {
   const EmbeddingBagRequest* request;
   EmbeddingBagBackend backend;
@@ -193,7 +240,8 @@ absl::StatusOr<PreparedRequest> PrepareRequest(
   }
   absl::StatusOr<size_t> output_size = ValidateEmbeddingBagInput(request);
   if (!output_size.ok()) return RequestError(index, output_size.status());
-  absl::StatusOr<EmbeddingBagBackend> backend = ResolveBackend(requested);
+  absl::StatusOr<EmbeddingBagBackend> backend =
+      ResolveBackend(request, requested);
   if (!backend.ok()) return RequestError(index, backend.status());
   const size_t table_elements =
       static_cast<size_t>(request.embedding_table->VocabSize()) *
@@ -363,19 +411,56 @@ absl::StatusOr<std::vector<Task>> BuildTasks(
   return tasks;
 }
 
+EmbeddingBagBackend BackendForCurrentThread(
+    const PreparedRequest& prepared) {
+  if (prepared.backend != EmbeddingBagBackend::kAuto) return prepared.backend;
+  return EmbeddingBagSveVectorLengthBytes() == kAutoSveVectorLengthBytes
+             ? EmbeddingBagBackend::kSve
+             : EmbeddingBagBackend::kPortable;
+}
+
 void ExecuteTask(absl::Span<const PreparedRequest> requests,
                  const Task& task) {
   const PreparedRequest& prepared = requests[task.request_index];
-  switch (prepared.backend) {
+  switch (BackendForCurrentThread(prepared)) {
     case EmbeddingBagBackend::kAuto:
     case EmbeddingBagBackend::kPortable:
       ReducePortable(*prepared.request, prepared.output, task.bag_begin,
                      task.bag_end);
       return;
+    case EmbeddingBagBackend::kSve:
+      ReduceSve(*prepared.request, prepared.output, task.bag_begin,
+                task.bag_end);
+      return;
   }
 }
 
+bool IsEmbeddingBagSveCompiled() {
+#if defined(XLA_SERVING_HAS_SVE_EMBEDDING_BAG)
+  return true;
+#else
+  return false;
+#endif
+}
+
+bool CpuSupportsSve() {
+#if defined(__linux__) && defined(__aarch64__) && defined(HWCAP_SVE)
+  static const bool available = (getauxval(AT_HWCAP) & HWCAP_SVE) != 0;
+  return available;
+#else
+  return false;
+#endif
+}
+
 }  // namespace
+
+bool IsEmbeddingBagSveAvailable() {
+  return IsEmbeddingBagSveCompiled() && CpuSupportsSve();
+}
+
+int EmbeddingBagSveVectorLengthBytes() {
+  return IsEmbeddingBagSveAvailable() ? sve::VectorLengthBytes() : 0;
+}
 
 absl::Status ComputeEmbeddingActivationsF32(
     absl::Span<const int64_t> embedding_ids,
@@ -395,7 +480,7 @@ absl::Status ComputeEmbeddingActivationsF32(
                    PrepareRequest(request, 0, requested));
   RETURN_IF_ERROR(AllocateOutputs(absl::MakeSpan(&prepared, 1)));
   RETURN_IF_ERROR(ValidateOutputIsolation(absl::MakeConstSpan(&prepared, 1)));
-  if (selected != nullptr) *selected = prepared.backend;
+  if (selected != nullptr) *selected = BackendForCurrentThread(prepared);
   ExecuteTask(absl::MakeConstSpan(&prepared, 1),
               Task{0, 0, row_pointers.size() - 1});
   return absl::OkStatus();

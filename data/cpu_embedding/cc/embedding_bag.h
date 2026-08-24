@@ -32,10 +32,14 @@ class EmbeddingTable;
 
 namespace xla_serving::data::cpu_embedding::internal {
 
+// Auto-dispatch selects SVE only for the measured 128-bit vector length.
+inline constexpr int kAutoSveVectorLengthBytes = 16;
+
 // Backend selection for standard FP32 embedding-bag reductions.
 enum class EmbeddingBagBackend {
   kAuto,
   kPortable,
+  kSve,
 };
 
 // Borrowed inputs, the allocator, and allocated output storage must remain
@@ -47,6 +51,10 @@ struct EmbeddingBagRequest {
   absl::Span<const float> weights;
   absl::AnyInvocable<absl::Span<float>(size_t)>* output_allocator = nullptr;
 };
+
+// Availability is process-wide; vector length belongs to the calling thread.
+bool IsEmbeddingBagSveAvailable();
+int EmbeddingBagSveVectorLengthBytes();
 
 // Executes one request and optionally reports the selected backend.
 absl::Status ComputeEmbeddingActivationsF32(
