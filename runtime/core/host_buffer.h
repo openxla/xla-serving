@@ -101,9 +101,9 @@ class BufferData {
              std::shared_ptr<void> owner = nullptr)
       : base_(base),
         dtype_(dtype),
-        shape_(shape),
+        shape_(std::move(shape)),
         byte_strides_(std::move(byte_strides)),
-        owner_(owner) {}
+        owner_(std::move(owner)) {}
 
   void* base() const { return base_; }
   xla::ifrt::DType dtype() const { return dtype_; }

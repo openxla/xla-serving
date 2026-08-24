@@ -69,7 +69,13 @@ message LeafType {
 
 message TokenType {}
 
-// Next ID: 5
+enum Placement {
+  PLACEMENT_UNSPECIFIED = 0;
+  HOST = 1;
+  DEVICE = 2;
+}
+
+// Next ID: 6
 message TensorType {
   Shape shape = 1;
   DType dtype = 2;
@@ -79,6 +85,8 @@ message TensorType {
   optional xla.OpSharding sharding = 3;
 
   optional xla.LayoutProto layout = 4;
+
+  optional Placement placement = 5;
 }
 
 message Shape {

@@ -305,12 +305,21 @@ absl::StatusOr<ArgSpec> ConvertToArgSpec(
     TF_ASSIGN_OR_RETURN(layout, xla::Layout::FromProto(type.layout()));
   }
   xla::ifrt::Shape ifrt_shape = ToIfrtShape(shape);
+  std::optional<Placement> placement = std::nullopt;
+  if (type.has_placement()) {
+    if (type.placement() == neptune_model_type::DEVICE) {
+      placement = Placement::kDevice;
+    } else if (type.placement() == neptune_model_type::HOST) {
+      placement = Placement::kHost;
+    }
+  }
   return ArgSpec{
       .dtype = std::move(dtype),
       .shape = std::move(shape),
       .ifrt_shape = std::move(ifrt_shape),
       .sharding = std::move(hlo_sharding),
       .layout = std::move(layout),
+      .placement = placement,
   };
 }
 

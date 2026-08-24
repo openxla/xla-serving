@@ -37,6 +37,8 @@
 
 namespace neptune {
 
+enum class Placement { kHost = 0, kDevice = 1 };
+
 // Represents the shape of an input or output. Any dimension that is not set is
 // assumed to be dynamic. We just use the same type that we get out of the MLIR
 // library for this, it can be assumed to behave like a
@@ -54,6 +56,7 @@ struct ArgSpec {
   std::optional<xla::ifrt::Shape> ifrt_shape;
   xla::HloSharding sharding;
   std::optional<xla::Layout> layout;
+  std::optional<Placement> placement = std::nullopt;
 
   xla::ifrt::Shape GetIfrtShape() const {
     if (ifrt_shape.has_value()) {

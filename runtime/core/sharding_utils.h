@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_SHARDING_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_SHARDING_UTILS_H_
+#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_CORE_SHARDING_UTILS_H_
+#define THIRD_PARTY_NEPTUNE_RUNTIME_CORE_SHARDING_UTILS_H_
 
 #include <cstdint>
 #include <vector>
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "runtime/core/device_buffer.h"  // from @neptune
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
@@ -62,16 +63,18 @@ absl::StatusOr<HostBuffer> MakeHostBufferFromDisassembledBuffers(
 absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
     xla::ifrt::Client& ifrt_client, const HostBuffer& input_host_buffer,
     absl::Span<const int> device_ids, xla::ifrt::ShardingRef sharding,
-    const tsl::thread::ThreadPool& thread_pool);
+    const tsl::thread::ThreadPool& thread_pool,
+    xla::ifrt::Client::HostBufferSemantics semantics = xla::ifrt::Client::
+        HostBufferSemantics::kImmutableUntilTransferCompletes);
 
 // A variant of the above api. The difference is that the user passes in
 // device_list directly instead of a list of device_ids.
 absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
     xla::ifrt::Client& ifrt_client, const HostBuffer& input_host_buffer,
     const xla::ifrt::DeviceListRef& device_list,
-    xla::ifrt::ShardingRef sharding,
-    const tsl::thread::ThreadPool& thread_pool);
-
+    xla::ifrt::ShardingRef sharding, const tsl::thread::ThreadPool& thread_pool,
+    xla::ifrt::Client::HostBufferSemantics semantics = xla::ifrt::Client::
+        HostBufferSemantics::kImmutableUntilTransferCompletes);
 
 // Reshards a disassembled array list back to one single tensor based on given
 // sharding spec.
@@ -99,6 +102,13 @@ absl::StatusOr<xla::ifrt::ShardingRef> ToIfrtSharding(
     xla::ifrt::Client& ifrt_client, const xla::HloSharding& hlo_sharding,
     const xla::ifrt::DeviceListRef& device_list);
 
+// Creates a DeviceBuffer bound to pinned host memory with zero-copy semantics.
+absl::StatusOr<DeviceBuffer> MakeDeviceBufferFromPinnedHost(
+    const std::shared_ptr<xla::ifrt::Client>& client,
+    const HostBuffer& host_buffer, const xla::ifrt::DeviceListRef& device_list,
+    xla::ifrt::ShardingRef sharding,
+    const tsl::thread::ThreadPool& thread_pool);
+
 }  // namespace neptune::sharding_internal
 
-#endif  //  THIRD_PARTY_NEPTUNE_RUNTIME_SHARDING_UTILS_H_
+#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_SHARDING_UTILS_H_

@@ -34,6 +34,7 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "unsupported/Eigen/CXX11/Tensor"
+#include "runtime/core/device_buffer.h"  // from @neptune
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "runtime/core/host_buffer_type_utils.h"  // from @neptune
 #include "runtime/core/sharding_utils_core.h"  // from @neptune
@@ -50,6 +51,7 @@
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
 #include "xla/python/pjrt_ifrt/xla_sharding.h"  // from @xla
+#include "xla/status_macros.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/concurrency/ref_count.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
@@ -233,18 +235,18 @@ absl::StatusOr<int> VerifyIndexDomainsAndGetReplicas(
 // A simple wrapper function to create ifrt array for one single device.
 absl::StatusOr<xla::ifrt::ArrayRef> CreateArrayFromHostBufferForSingleDevice(
     xla::ifrt::Client& ifrt_client, const HostBuffer& host_buffer,
-    xla::ifrt::Device* device) {
+    xla::ifrt::Device* device, xla::ifrt::Client::HostBufferSemantics semantics,
+    xla::ifrt::MemoryKind memory_kind) {
   VLOG(2) << "Make single device array for buffer slice at "
-          << host_buffer.base();
+          << host_buffer.base() << " with semantics "
+          << static_cast<int>(semantics);
   auto single_device_sharding =
-      xla::ifrt::SingleDeviceSharding::Create(device, xla::ifrt::MemoryKind());
+      xla::ifrt::SingleDeviceSharding::Create(device, memory_kind);
 
   return ifrt_client.MakeArrayFromHostBuffer(
-      host_buffer.base(), host_buffer.dtype(), std::move(host_buffer.shape()),
+      host_buffer.base(), host_buffer.dtype(), host_buffer.shape(),
       std::nullopt, std::move(single_device_sharding),
-      /*layout=*/nullptr,
-      xla::ifrt::Client::HostBufferSemantics::kImmutableZeroCopy,
-      [host_buffer]() {
+      /*layout=*/nullptr, semantics, [host_buffer]() {
         // Keep host_buffer alive
         VLOG(2) << "Done with single device host buffer for slice " << " at "
                 << host_buffer.base();
@@ -597,13 +599,15 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
     xla::ifrt::Client& ifrt_client, const HostBuffer& input_host_buffer,
     const xla::ifrt::DeviceListRef& device_list,
     xla::ifrt::ShardingRef ifrt_sharding,
-    const tsl::thread::ThreadPool& thread_pool) {
+    const tsl::thread::ThreadPool& thread_pool,
+    xla::ifrt::Client::HostBufferSemantics semantics) {
   tsl::profiler::TraceMe trace_me("MakeArrayFromHostBuffer_DeviceList",
                                   /*level=*/3);
   if (xla::ifrt::isa<const xla::ifrt::SingleDeviceSharding>(
           ifrt_sharding.get())) {
     return CreateArrayFromHostBufferForSingleDevice(
-        ifrt_client, input_host_buffer, ifrt_sharding->devices()->devices()[0]);
+        ifrt_client, input_host_buffer, ifrt_sharding->devices()->devices()[0],
+        semantics, ifrt_sharding->memory_kind());
   }
   const xla::ifrt::HloSharding* ifrt_hlo_sharding =
       xla::ifrt::dyn_cast<const xla::ifrt::HloSharding>(ifrt_sharding.get());
@@ -633,8 +637,9 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
     int unique_device_id = xla_hlo_sharding.GetUniqueDevice();
     TF_ASSIGN_OR_RETURN(device, ifrt_client.LookupDevice(
                                     xla::ifrt::DeviceId(unique_device_id)));
-    return CreateArrayFromHostBufferForSingleDevice(ifrt_client,
-                                                    input_host_buffer, device);
+    return CreateArrayFromHostBufferForSingleDevice(
+        ifrt_client, input_host_buffer, device, semantics,
+        ifrt_sharding->memory_kind());
   }
 
   // Fast path for replicated sharding.
@@ -643,12 +648,9 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
 
     xla::ifrt::DType ifrt_dtype = input_host_buffer.dtype();
     return ifrt_client.MakeArrayFromHostBuffer(
-        input_host_buffer.base(), ifrt_dtype,
-        std::move(input_host_buffer.shape()), std::nullopt,
-        std::move(ifrt_sharding),
-        /*layout=*/nullptr,
-        xla::ifrt::Client::HostBufferSemantics::
-            kImmutableUntilTransferCompletes,
+        input_host_buffer.base(), ifrt_dtype, input_host_buffer.shape(),
+        std::nullopt, std::move(ifrt_sharding),
+        /*layout=*/nullptr, semantics,
         [input_host_buffer]() {  // keep host_buffer alive
         });
   }
@@ -661,14 +663,15 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
 absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
     xla::ifrt::Client& ifrt_client, const HostBuffer& input_host_buffer,
     absl::Span<const int> device_ids, xla::ifrt::ShardingRef ifrt_sharding,
-    const tsl::thread::ThreadPool& thread_pool) {
+    const tsl::thread::ThreadPool& thread_pool,
+    xla::ifrt::Client::HostBufferSemantics semantics) {
   tsl::profiler::TraceMe trace_me("MakeArrayFromHostBuffer_DeviceIds",
                                   /*level=*/3);
   TF_ASSIGN_OR_RETURN(xla::ifrt::DeviceListRef device_list,
                       CreateDeviceList(ifrt_client, device_ids));
   return MakeArrayFromHostBuffer(ifrt_client, input_host_buffer,
                                  std::move(device_list), ifrt_sharding,
-                                 thread_pool);
+                                 thread_pool, semantics);
 }
 
 absl::StatusOr<xla::ifrt::DeviceListRef> CreateDeviceList(
@@ -836,6 +839,33 @@ absl::StatusOr<xla::ifrt::ShardingRef> ToIfrtSharding(
 
   return xla::ifrt::HloSharding::Create(device_list, xla::ifrt::MemoryKind(),
                                         hlo_sharding);
+}
+
+absl::StatusOr<DeviceBuffer> MakeDeviceBufferFromPinnedHost(
+    const std::shared_ptr<xla::ifrt::Client>& client,
+    const HostBuffer& host_buffer, const xla::ifrt::DeviceListRef& device_list,
+    xla::ifrt::ShardingRef sharding,
+    const tsl::thread::ThreadPool& thread_pool) {
+  TF_RET_CHECK(client != nullptr) << "Client must not be null.";
+  TF_ASSIGN_OR_RETURN(
+      std::unique_ptr<xla::ifrt::Sharding> pinned_sharding,
+      sharding->WithDeviceAssignment(
+          /*devices=*/std::nullopt,
+          /*memory_kind=*/xla::ifrt::MemoryKind("pinned_host")));
+  xla::ifrt::ShardingRef pinned_sharding_ref(std::move(pinned_sharding));
+  TF_ASSIGN_OR_RETURN(
+      xla::ifrt::ArrayRef array,
+      MakeArrayFromHostBuffer(
+          *client, host_buffer, device_list, pinned_sharding_ref, thread_pool,
+          xla::ifrt::Client::HostBufferSemantics::kImmutableZeroCopy));
+  return DeviceBuffer{
+      .ifrt_client = client,
+      .ifrt_array = std::move(array),
+      .sharding = std::move(pinned_sharding_ref),
+      .device_list = device_list,
+      .memory_kind = BufferMemoryKind::kPinnedHost,
+      .owner = host_buffer.owner(),
+  };
 }
 
 }  // namespace neptune::sharding_internal

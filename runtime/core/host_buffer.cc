@@ -145,7 +145,8 @@ HostBuffer::HostBuffer(void* base, xla::ifrt::DType dtype,
     : dtype_(dtype) {
   if (dtype.kind() == xla::ifrt::DType::Kind::kString) {
     buffer_data_.emplace(base, dtype, shape,
-                         CreateDefaultStrides(shape.dims(), dtype), owner);
+                         CreateDefaultStrides(shape.dims(), dtype),
+                         std::move(owner));
     return;
   }
 
@@ -155,7 +156,7 @@ HostBuffer::HostBuffer(void* base, xla::ifrt::DType dtype,
   }
   buffer_data_.emplace(base, storage_dtype, shape,
                        CreateDefaultStrides(shape.dims(), storage_dtype),
-                       owner);
+                       std::move(owner));
 }
 
 HostBuffer::HostBuffer(const xla::ifrt::DType& dtype,
@@ -202,7 +203,8 @@ HostBuffer::HostBuffer(const xla::ifrt::DType& dtype,
     allocator->Free(ptr, EIGEN_MAX_ALIGN_BYTES);
   });
   auto strides = CreateDefaultStrides(shape.dims(), storage_dtype);
-  buffer_data_.emplace(aligned_raw_ptr, storage_dtype, shape, strides, owner);
+  buffer_data_.emplace(aligned_raw_ptr, storage_dtype, shape, strides,
+                       std::move(owner));
 }
 
 HostBuffer::HostBuffer(
@@ -215,7 +217,8 @@ HostBuffer::HostBuffer(
       !dtype.byte_size().has_value()) {
     storage_dtype = xla::ifrt::DType(xla::ifrt::DType::Kind::kU8);
   }
-  buffer_data_.emplace(base, storage_dtype, shape, byte_strides, owner);
+  buffer_data_.emplace(base, storage_dtype, shape, byte_strides,
+                       std::move(owner));
 }
 
 int64_t HostBuffer::total_storage_bytes() const {

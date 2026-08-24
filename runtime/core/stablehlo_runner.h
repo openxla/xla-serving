@@ -15,7 +15,6 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_STABLEHLO_RUNNER_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_STABLEHLO_RUNNER_H_
 
-#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -128,7 +127,24 @@ class StableHloRunner {
   }
 
   struct ExecuteOptions {
-    bool require_d2h = true;
+    // Granular output placements. If specified, must match output count.
+    // Placement resolution precedence:
+    // 1. `options.placements[i]` if `options.placements` is non-empty.
+    // 2. Model manifest `io_spec.outputs[i].placement` if annotated.
+    // 3. Fallback to `Placement::kHost` (D2H transfer) if unannotated.
+    std::vector<Placement> placements;
+
+    // Convenience helper for zero-boilerplate device chaining.
+    static ExecuteOptions AllDevice(int num_outputs) {
+      return ExecuteOptions{.placements = std::vector<Placement>(
+                                num_outputs, Placement::kDevice)};
+    }
+
+    // Convenience helper for explicit all-host transfers.
+    static ExecuteOptions AllHost(int num_outputs) {
+      return ExecuteOptions{
+          .placements = std::vector<Placement>(num_outputs, Placement::kHost)};
+    }
   };
 
   bool has_streaming() const { return loaded_stablehlo_->has_streaming(); }
@@ -142,9 +158,9 @@ class StableHloRunner {
   // (as passed to `Create`) will be looked in `IfrtLoadedVariableRegistry` from
   // the variable name. These will be passed as the first arguments to the
   // computation. The inputs and outputs are wrapped in `neptune::Value` containers.
-  // If options.require_d2h is true, each returned value
-  // will wrap a `HostBuffer`. If this option is false, it returns
-  // a `neptune::DeviceBuffer`.
+  // Output placement is resolved via the 3-tier precedence hierarchy above:
+  // `Placement::kHost` returns a `neptune::HostBuffer`, while `Placement::kDevice`
+  // returns a `neptune::DeviceBuffer` (retained on accelerator device memory).
   absl::StatusOr<std::vector<neptune::Value>> Execute(
       absl::Span<const neptune::Value> inputs, ExecuteOptions options,
       const RunContext& run_context);
@@ -282,10 +298,12 @@ class StableHloRunner {
         const CachedExecutableBundle& executable_bundle,
         absl::Span<const int> stablehlo_indices) const;
 
-    // Converts the outputs from `xla::ifrt::Array` to `HostBuffer`.
-    absl::StatusOr<std::vector<HostBuffer>> ConvertOutput(
+    // Converts the outputs from `xla::ifrt::Array` to `neptune::Value` according
+    // to `placements`.
+    absl::StatusOr<std::vector<neptune::Value>> ConvertOutput(
         absl::Span<const xla::ifrt::ArrayRef> stablehlo_outputs,
-        const CachedExecutableBundle& executable_bundle);
+        const CachedExecutableBundle& executable_bundle,
+        absl::Span<const Placement> placements);
 
    private:
     // Validates input data types and shapes against the model specification

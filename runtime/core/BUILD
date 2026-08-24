@@ -120,6 +120,7 @@ cc_library(
     ],
     visibility = [":core_users"],
     deps = [
+        ":device_buffer",
         ":host_buffer",
         ":host_buffer_type_utils",
         ":sharding_utils_core",
@@ -132,6 +133,7 @@ cc_library(
         "@abseil-cpp//absl/types:span",
         "@eigen_archive//:eigen3",
         "@tsl//tsl/profiler/lib:traceme",
+        "@xla//xla:status_macros",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/hlo/ir:hlo",
         "@xla//xla/python/ifrt",
@@ -201,7 +203,12 @@ cc_library(
     name = "device_buffer",
     hdrs = ["device_buffer.h"],
     visibility = [":core_users"],
-    deps = ["@xla//xla/python/ifrt"],
+    deps = [
+        ":host_buffer",
+        "@abseil-cpp//absl/status:statusor",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/tsl/platform:env",
+    ],
 )
 
 cc_library(
@@ -232,7 +239,6 @@ cc_library(
         "@abseil-cpp//absl/base:core_headers",
         "@abseil-cpp//absl/base:nullability",
         "@abseil-cpp//absl/container:flat_hash_map",
-        "@abseil-cpp//absl/container:flat_hash_set",
         "@abseil-cpp//absl/container:inlined_vector",
         "@abseil-cpp//absl/hash",
         "@abseil-cpp//absl/log",

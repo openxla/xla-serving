@@ -47,6 +47,7 @@ pybind_extension(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/strings:string_view",
         "@nanobind_bazel//:nanobind",
+        "@neptune//runtime/core:device_buffer",
         "@neptune//runtime/core:host_buffer",
         "@neptune//runtime/core:value",
         "@neptune//runtime/interpreter",

@@ -24,6 +24,9 @@
 
 namespace neptune {
 
+// Physical memory placement kind for on-device and zero-copy host buffers.
+enum class BufferMemoryKind { kDevice = 0, kPinnedHost = 1 };
+
 // A metadata-rich container representing an array that already resides in
 // device memory. This struct bundles the physical `xla::ifrt::ArrayRef` with
 // the execution context (client, device list) and the `xla::ifrt::ShardingRef`
@@ -40,6 +43,11 @@ struct DeviceBuffer {
   xla::ifrt::ShardingRef sharding;
   // The specific devices across which the array is distributed.
   xla::ifrt::DeviceListRef device_list;
+  // Physical memory placement kind.
+  BufferMemoryKind memory_kind = BufferMemoryKind::kDevice;
+  // Shared ownership handle to prevent premature deallocation of backing host
+  // memory.
+  std::shared_ptr<void> owner = nullptr;
 };
 
 }  // namespace neptune

@@ -34,6 +34,7 @@
 #include "include/nanobind/stl/string_view.h"  // from @nanobind_bazel  // IWYU pragma: keep
 #include "include/nanobind/stl/unordered_map.h"  // from @nanobind_bazel  // IWYU pragma: keep
 #include "include/nanobind/stl/vector.h"  // from @nanobind_bazel  // IWYU pragma: keep
+#include "runtime/core/device_buffer.h"  // from @neptune
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
 #include "runtime/interpreter/interpreter.h"  // from @neptune
@@ -85,10 +86,22 @@ neptune::Value GetValueFromNbArray(const xla::nb_numpy_ndarray& array,
 // Converts a `neptune::Value` to a `xla::nb_numpy_ndarray` for output.
 xla::nb_numpy_ndarray GetNbArrayFromValue(const neptune::Value& value,
                                           neptune::KernelIODataType data_type) {
+  if (value.IsType<neptune::DeviceBuffer>()) {
+    throw nb::value_error(
+        "Received on-device buffer (neptune::DeviceBuffer) in Python layer. "
+        "Host transfer (D2H) must be requested via Placement::kHost.");
+  }
   switch (data_type) {
     case neptune::KernelIODataType::kHostBuffer:
+      if (!value.IsType<neptune::HostBuffer>()) {
+        throw nb::value_error("Value type mismatch: expected neptune::HostBuffer.");
+      }
       return neptune::ToNbArray(value.Get<neptune::HostBuffer>());
     case neptune::KernelIODataType::kTensor:
+      if (!value.IsType<tensorflow::Tensor>()) {
+        throw nb::value_error(
+            "Value type mismatch: expected tensorflow::Tensor.");
+      }
       return neptune::ToNbArray(value.Get<tensorflow::Tensor>());
     default:
       throw nb::value_error(
