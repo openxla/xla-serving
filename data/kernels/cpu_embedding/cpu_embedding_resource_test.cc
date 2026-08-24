@@ -1,4 +1,5 @@
 // Copyright 2026 Google LLC
+// Copyright 2026 Arm Ltd. and affiliates
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,6 +38,24 @@ namespace composite {
 namespace {
 
 using transforms::cpu_embedding::CpuEmbeddingManifest;
+
+CpuEmbeddingManifest MakeSumManifest(int64_t vocab_size, int64_t dimension) {
+  CpuEmbeddingManifest manifest;
+  auto* table = manifest.add_tables();
+  table->set_name("table1");
+  table->set_vocab_size(vocab_size);
+  table->set_embedding_dim(dimension);
+  table->set_combine_mode(CpuEmbeddingManifest::EmbeddingTable::SUM);
+  auto* feature = manifest.add_feature_specs();
+  feature->set_name("feature1");
+  feature->set_table("table1");
+  return manifest;
+}
+
+std::string RawBytes(absl::Span<const float> values) {
+  return std::string(reinterpret_cast<const char*>(values.data()),
+                     values.size() * sizeof(float));
+}
 
 TEST(CpuEmbeddingEngineResourceTest, Lifecycle) {
   CpuEmbeddingEngineResource resource("my_engine", {},
@@ -104,6 +123,9 @@ TEST(CpuEmbeddingEngineResourceTest, LoadFromAssets) {
 
   // Trigger native Restoration loader
   EXPECT_OK(resource.Load());
+  // Verify path-backed table contents remain unmaterialized after loading.
+  ASSERT_EQ(resource.assets().size(), 2);
+  EXPECT_TRUE(resource.assets()[1].content.empty());
 
   // Verify cached features properties are extracted and served.
   ASSERT_OK_AND_ASSIGN(auto dim, resource.GetEmbeddingDim("table1"));
@@ -134,6 +156,127 @@ TEST(CpuEmbeddingEngineResourceTest, LoadFromAssets) {
                               testing::FloatEq(1.0f), testing::FloatEq(2.0f),
                               testing::FloatEq(3.0f), testing::FloatEq(2.5f),
                               testing::FloatEq(3.5f), testing::FloatEq(4.5f)));
+}
+
+class MappedCpuEmbeddingResourceTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    manifest_path_ =
+        tsl::io::JoinPath(::testing::TempDir(), "mapped_manifest.textproto");
+    table_path_ =
+        tsl::io::JoinPath(::testing::TempDir(), "mapped_table.bin");
+    ASSERT_OK(WriteManifest());
+    ASSERT_OK(WriteTable(table_data_));
+  }
+
+  absl::Status WriteManifest() {
+    return tsl::WriteTextProto(tsl::Env::Default(), manifest_path_, manifest_);
+  }
+
+  absl::Status WriteTable(absl::Span<const float> values) {
+    return tsl::WriteStringToFile(tsl::Env::Default(), table_path_,
+                                  RawBytes(values));
+  }
+
+  std::vector<Asset> Assets(std::string content = {}) const {
+    return {
+        {.name = std::string(CpuEmbeddingEngineResource::kManifestAssetName),
+         .path = manifest_path_},
+        {.name = "table1", .path = table_path_, .content = std::move(content)},
+    };
+  }
+
+  static absl::Status Execute(CpuEmbeddingEngineResource& resource,
+                              std::vector<float>* output) {
+    const std::vector<int64_t> ids = {0, 1};
+    const std::vector<int32_t> rows = {0, 2};
+    const std::vector<float> weights = {1.0f, 1.0f};
+    auto allocator = [output](size_t size) -> absl::Span<float> {
+      output->resize(size);
+      return absl::MakeSpan(*output);
+    };
+    return resource
+        .Get()
+        ->Execute<float>("feature1", ids, rows, weights, std::move(allocator))
+        .status();
+  }
+
+  CpuEmbeddingManifest manifest_ = MakeSumManifest(2, 3);
+  std::vector<float> table_data_ = {1.0f, 2.0f, 3.0f,
+                                    4.0f, 5.0f, 6.0f};
+  std::string manifest_path_;
+  std::string table_path_;
+};
+
+// Verify inline and mapped tables produce identical outputs.
+TEST_F(MappedCpuEmbeddingResourceTest, InlineAndMappedTablesMatch) {
+  CpuEmbeddingEngineResource mapped(Assets());
+  CpuEmbeddingEngineResource inline_resource(Assets(RawBytes(table_data_)));
+  ASSERT_OK(mapped.Load());
+  ASSERT_OK(inline_resource.Load());
+
+  std::vector<float> mapped_output;
+  std::vector<float> inline_output;
+  ASSERT_OK(Execute(mapped, &mapped_output));
+  ASSERT_OK(Execute(inline_resource, &inline_output));
+  EXPECT_THAT(mapped_output, testing::ElementsAre(5.0f, 7.0f, 9.0f));
+  EXPECT_THAT(mapped_output, testing::ContainerEq(inline_output));
+  EXPECT_TRUE(mapped.assets()[1].content.empty());
+}
+
+// Verify mappings survive path replacement and removal.
+TEST_F(MappedCpuEmbeddingResourceTest, MappingSurvivesPathReplacementAndRemoval) {
+  const std::string replacement_path =
+      tsl::io::JoinPath(::testing::TempDir(), "mapped_replacement.bin");
+  const std::vector<float> replacement_data(6, 100.0f);
+  ASSERT_OK(tsl::WriteStringToFile(tsl::Env::Default(), replacement_path,
+                                   RawBytes(replacement_data)));
+  CpuEmbeddingEngineResource resource(Assets());
+  ASSERT_OK(resource.Load());
+
+  ASSERT_OK(tsl::Env::Default()->DeleteFile(table_path_));
+  ASSERT_OK(tsl::Env::Default()->RenameFile(replacement_path, table_path_));
+  std::vector<float> output;
+  ASSERT_OK(Execute(resource, &output));
+  EXPECT_THAT(output, testing::ElementsAre(5.0f, 7.0f, 9.0f));
+
+  ASSERT_OK(tsl::Env::Default()->DeleteFile(table_path_));
+  ASSERT_OK(Execute(resource, &output));
+  EXPECT_THAT(output, testing::ElementsAre(5.0f, 7.0f, 9.0f));
+}
+
+// Verify mapped-file errors and exact-size validation.
+TEST_F(MappedCpuEmbeddingResourceTest, RejectsMissingAndTruncatedTables) {
+  ASSERT_OK(WriteTable(absl::MakeConstSpan(table_data_).first(3)));
+  CpuEmbeddingEngineResource truncated(Assets());
+  absl::Status status = truncated.Load();
+  EXPECT_FALSE(status.ok());
+  EXPECT_THAT(status.message(), testing::HasSubstr("size mismatch"));
+  EXPECT_TRUE(truncated.assets()[1].content.empty());
+
+  ASSERT_OK(tsl::Env::Default()->DeleteFile(table_path_));
+  CpuEmbeddingEngineResource missing(Assets());
+  status = missing.Load();
+  EXPECT_FALSE(status.ok());
+  EXPECT_THAT(status.message(),
+              testing::HasSubstr("Failed to map table asset"));
+  EXPECT_THAT(status.message(), testing::HasSubstr("mapped_table.bin"));
+}
+
+// Verify failed loads leave the resource retryable.
+TEST_F(MappedCpuEmbeddingResourceTest, FailedLoadCanBeRetriedTransactionally) {
+  auto* feature = manifest_.add_feature_specs();
+  feature->set_name("feature2");
+  feature->set_table("missing_table");
+  ASSERT_OK(WriteManifest());
+
+  CpuEmbeddingEngineResource resource(Assets());
+  EXPECT_FALSE(resource.Load().ok());
+  manifest_.mutable_feature_specs(1)->set_table("table1");
+  ASSERT_OK(WriteManifest());
+  ASSERT_OK(resource.Load());
+  EXPECT_OK(resource.GetEmbeddingDim("feature1"));
+  EXPECT_OK(resource.GetEmbeddingDim("feature2"));
 }
 
 }  // namespace
