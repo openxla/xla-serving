@@ -1,4 +1,5 @@
 // Copyright 2026 Google LLC
+// Copyright 2026 Arm Ltd. and affiliates
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,6 +38,7 @@ namespace composite {
 
 class CpuEmbeddingLookupTransform : public TransformBase {
  public:
+  // Uses embedding_dim when resource metadata has no dimension.
   static absl::StatusOr<std::unique_ptr<CpuEmbeddingLookupTransform>> Create(
       std::shared_ptr<CpuEmbeddingEngineResource> resource,
       std::vector<std::string> feature_names, bool dense_lookup = false,

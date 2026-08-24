@@ -1,4 +1,5 @@
 // Copyright 2026 Google LLC
+// Copyright 2026 Arm Ltd. and affiliates
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,7 +42,18 @@ class CpuEmbeddingEngine final {
  public:
   struct Options {
     int max_cpu_slots = 8;
+    // Only the in-place, single-feature Execute<T>() uses this setting.
     size_t block_size = 64;
+  };
+
+  // Borrowed inputs and allocator-owned outputs must remain valid until
+  // ExecuteBatch() returns.
+  struct BatchRequest {
+    absl::string_view feature_name;
+    absl::Span<const int64_t> embedding_ids;
+    absl::Span<const int32_t> row_pointers;
+    absl::Span<const float> weights;
+    absl::AnyInvocable<absl::Span<float>(size_t)> output_allocator;
   };
 
   CpuEmbeddingEngine();
@@ -55,6 +67,11 @@ class CpuEmbeddingEngine final {
 
   absl::StatusOr<std::vector<Array>> Execute(
       absl::Span<const FeatureBatchCsrInput> feature_batches) const;
+
+  // Executes standard non-sequence FP32 bags without custom combiners on the
+  // shared pool. Validates request inputs before allocation and allocated
+  // output spans before writing.
+  absl::Status ExecuteBatch(absl::Span<BatchRequest> requests) const;
 
   template <typename T>
   absl::StatusOr<absl::Span<T>> Execute(

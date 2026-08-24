@@ -1,4 +1,5 @@
 // Copyright 2026 Google LLC
+// Copyright 2026 Arm Ltd. and affiliates
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,7 +43,30 @@
 namespace xla_serving::data {
 namespace composite {
 
-namespace {}  // namespace
+namespace {
+
+struct PreparedLookup {
+  int64_t batch_size = 0;
+  std::vector<int64_t> converted_ids;
+  absl::Span<const int64_t> embedding_ids;
+  std::vector<int32_t> generated_row_pointers;
+  absl::Span<const int32_t> row_pointers;
+  absl::Span<const float> weights;
+};
+
+xla_serving::HostBuffer AllocateOutput(int64_t batch_size, size_t size) {
+  if (batch_size > 0 && size % batch_size == 0) {
+    return xla_serving::HostBuffer(
+        xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+        xla::ifrt::Shape(
+            {batch_size, static_cast<int64_t>(size / batch_size)}));
+  }
+  return xla_serving::HostBuffer(
+      xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+      xla::ifrt::Shape({static_cast<int64_t>(size)}));
+}
+
+}  // namespace
 
 CpuEmbeddingLookupTransform::CpuEmbeddingLookupTransform(
     std::shared_ptr<CpuEmbeddingEngineResource> resource,
@@ -228,12 +252,11 @@ CpuEmbeddingLookupTransform::operator()(
     }
   }
 
-  std::vector<xla_serving::HostBuffer> outputs;
-  outputs.reserve(feature_names_.size());
-
+  // Keep converted IDs and generated row pointers alive through the batch.
+  std::vector<PreparedLookup> prepared(feature_names_.size());
   for (size_t i = 0; i < feature_names_.size(); ++i) {
-    const auto& feature_name = feature_names_[i];
-    xla_serving::HostBuffer ids_hb = ids[i];
+    const xla_serving::HostBuffer& ids_hb = ids[i];
+    PreparedLookup& lookup = prepared[i];
 
     if (ids_hb.DebugString() == "Empty host buffer" ||
         ids_hb.base() == nullptr) {
@@ -241,33 +264,19 @@ CpuEmbeddingLookupTransform::operator()(
           "ids HostBuffer is uninitialized or null.");
     }
 
-    const int32_t* ids_ptr_s32 = nullptr;
-    const int64_t* ids_ptr_s64 = nullptr;
-    std::vector<int64_t> temp_ids_s64;
-
     if (ids_hb.dtype().kind() == xla::ifrt::DType::Kind::kS32) {
       auto flat_ids = ids_hb.flat<int32_t>();
-      ids_ptr_s32 = flat_ids.data();
-      const int64_t num_ids = flat_ids.size();
-      temp_ids_s64.resize(num_ids);
-      for (size_t k = 0; k < num_ids; ++k) {
-        temp_ids_s64[k] = ids_ptr_s32[k];
-      }
-      ids_ptr_s64 = temp_ids_s64.data();
+      lookup.converted_ids.assign(flat_ids.data(),
+                                  flat_ids.data() + flat_ids.size());
+      lookup.embedding_ids = absl::MakeConstSpan(lookup.converted_ids);
     } else if (ids_hb.dtype().kind() == xla::ifrt::DType::Kind::kS64) {
       auto flat_ids = ids_hb.flat<int64_t>();
-      ids_ptr_s64 = flat_ids.data();
+      lookup.embedding_ids =
+          absl::MakeConstSpan(flat_ids.data(), flat_ids.size());
     } else {
       return absl::InvalidArgumentError(
           "Embedding IDs must be int32 or int64.");
     }
-    auto ids_span =
-        absl::MakeConstSpan(ids_ptr_s64, ids_hb.shape().num_elements());
-
-    int64_t batch_size = 0;
-    std::vector<int32_t> temp_row_pointers;
-    absl::Span<const int32_t> row_pointers_span;
-    absl::Span<const float> weights_span;
 
     if (dense_lookup_) {
       if (ids_hb.shape().dims().size() != 2) {
@@ -275,75 +284,65 @@ CpuEmbeddingLookupTransform::operator()(
             "Dense embedding IDs must be a 2D HostBuffer [batch_size, "
             "valency].");
       }
-      batch_size = ids_hb.shape().dims()[0];
-      int64_t valency = ids_hb.shape().dims()[1];
-      if (batch_size < 0 || valency < 0) {
+      lookup.batch_size = ids_hb.shape().dims()[0];
+      const int64_t valency = ids_hb.shape().dims()[1];
+      if (lookup.batch_size < 0 || valency < 0) {
         return absl::InvalidArgumentError(
             "Dense embedding IDs dimensions must be non-negative.");
       }
-      if (batch_size >= INT32_MAX) {
+      if (lookup.batch_size >= INT32_MAX) {
         return absl::InvalidArgumentError(
             "Batch size exceeds INT32_MAX bounds.");
       }
-      if (batch_size > 0 && valency > INT32_MAX / batch_size) {
+      if (lookup.batch_size > 0 && valency > INT32_MAX / lookup.batch_size) {
         return absl::InvalidArgumentError(
             "Batch volume (batch_size * valency) exceeds INT32_MAX bounds.");
       }
-      temp_row_pointers.resize(batch_size + 1);
-      for (int64_t b = 0; b <= batch_size; ++b) {
-        temp_row_pointers[b] = b * valency;
+      lookup.generated_row_pointers.resize(lookup.batch_size + 1);
+      for (int64_t b = 0; b <= lookup.batch_size; ++b) {
+        lookup.generated_row_pointers[b] = b * valency;
       }
-      row_pointers_span = absl::MakeConstSpan(temp_row_pointers);
+      lookup.row_pointers = absl::MakeConstSpan(lookup.generated_row_pointers);
     } else {
-      xla_serving::HostBuffer row_pointers_hb = row_pointers[i];
-      xla_serving::HostBuffer weights_hb = weights[i];
+      const xla_serving::HostBuffer& row_pointers_hb = row_pointers[i];
+      const xla_serving::HostBuffer& weights_hb = weights[i];
 
       RETURN_IF_ERROR(
           ValidateLookupInputs(ids_hb, row_pointers_hb, weights_hb));
-      batch_size = row_pointers_hb.shape().num_elements() > 0
-                       ? row_pointers_hb.shape().dims()[0] - 1
-                       : 0;
+      lookup.batch_size = row_pointers_hb.shape().num_elements() > 0
+                              ? row_pointers_hb.shape().dims()[0] - 1
+                              : 0;
 
       auto rp_flat = row_pointers_hb.flat<int32_t>();
-      const int32_t* rp_ptr = rp_flat.size() > 0 ? rp_flat.data() : nullptr;
-
       auto w_flat = weights_hb.flat<float>();
-      const float* w_ptr = w_flat.size() > 0 ? w_flat.data() : nullptr;
-
-      row_pointers_span = absl::MakeConstSpan(rp_ptr, rp_flat.size());
-      weights_span = absl::MakeConstSpan(w_ptr, w_flat.size());
+      lookup.row_pointers =
+          absl::MakeConstSpan(rp_flat.data(), rp_flat.size());
+      lookup.weights = absl::MakeConstSpan(w_flat.data(), w_flat.size());
     }
-
-    xla_serving::HostBuffer output_hb;
-    auto allocator = [&](size_t size) {
-      int64_t dim1 = size;
-      int64_t dim2 = 1;
-      if (batch_size > 0 && size % batch_size == 0) {
-        dim1 = batch_size;
-        dim2 = size / batch_size;
-        output_hb =
-            xla_serving::HostBuffer(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
-                            xla::ifrt::Shape({dim1, dim2}));
-      } else {
-        output_hb =
-            xla_serving::HostBuffer(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
-                            xla::ifrt::Shape({static_cast<int64_t>(size)}));
-      }
-      auto out_flat = output_hb.flat<float>();
-      float* data = out_flat.data();
-      return absl::MakeSpan(data, size);
-    };
-
-    RETURN_IF_ERROR(resource_->Get()
-                        ->Execute<float>(feature_name, ids_span,
-                                         row_pointers_span, weights_span,
-                                         std::move(allocator))
-                        .status());
-
-    outputs.push_back(std::move(output_hb));
   }
 
-  return outputs;
+  using Engine = cpu_embedding::CpuEmbeddingEngine;
+  std::vector<xla_serving::HostBuffer> batch_outputs(feature_names_.size());
+  std::vector<Engine::BatchRequest> batch_requests;
+  batch_requests.reserve(feature_names_.size());
+  for (size_t i = 0; i < feature_names_.size(); ++i) {
+    batch_requests.push_back({
+        .feature_name = feature_names_[i],
+        .embedding_ids = prepared[i].embedding_ids,
+        .row_pointers = prepared[i].row_pointers,
+        .weights = prepared[i].weights,
+        .output_allocator =
+            [&batch_outputs, &prepared, i](size_t size) {
+              batch_outputs[i] = AllocateOutput(prepared[i].batch_size, size);
+              auto output = batch_outputs[i].flat<float>();
+              return absl::MakeSpan(output.data(), output.size());
+            },
+    });
+  }
+
+  RETURN_IF_ERROR(
+      resource_->Get()->ExecuteBatch(absl::MakeSpan(batch_requests)));
+  return batch_outputs;
 }
 
 absl::Status CpuEmbeddingLookupTransform::PropagateSignatureImpl(
@@ -368,6 +367,13 @@ absl::Status CpuEmbeddingLookupTransform::PropagateSignatureImpl(
       }
     } else {
       int64_t embedding_dim = embedding_dim_;
+      const absl::StatusOr<int32_t> resource_dim =
+          resource_->GetEmbeddingDim(feature_names_[i]);
+      if (resource_dim.ok()) {
+        embedding_dim = *resource_dim;
+      } else if (resource_dim.status().code() != absl::StatusCode::kNotFound) {
+        return resource_dim.status();
+      }
       output_dims.push_back(kDynamicDimension);
 
       if (i < ids_specs.size()) {

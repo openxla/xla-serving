@@ -33,6 +33,7 @@ cc_library(
     deps = [
         ":array",
         ":compute_activations",
+        ":embedding_bag",
         ":embedding_table",
         ":feature_batch_csr_input",
         ":feature_spec",
@@ -78,6 +79,25 @@ cc_library(
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings:str_format",
+        "@abseil-cpp//absl/types:span",
+        "@eigen_archive//:eigen3",
+        "@xla//xla/tsl/platform:status_macros",
+    ],
+)
+
+cc_library(
+    name = "embedding_bag",
+    srcs = ["embedding_bag.cc"],
+    hdrs = ["embedding_bag.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
+    visibility = ["//visibility:private"],
+    deps = [
+        ":embedding_table",
+        "@abseil-cpp//absl/functional:any_invocable",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings:str_format",
+        "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/types:span",
         "@eigen_archive//:eigen3",
         "@xla//xla/tsl/platform:status_macros",
