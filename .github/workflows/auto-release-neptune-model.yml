@@ -5,9 +5,8 @@ on:
     branches: [ "main" ] # Triggers automatically when code is merged to main
   workflow_dispatch:
 
-# CRITICAL PERMISSIONS
-permissions:
-  contents: write    # Required to create the GitHub Release
+# Set minimal default permissions at workflow level
+permissions: read-all
 
 jobs:
   # ==========================================
@@ -26,7 +25,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Detect Version in version.bzl
         id: version_check
@@ -39,8 +38,9 @@ jobs:
         id: release_check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version_check.outputs.version }}
         run: |
-          if gh release view "v${{ steps.version_check.outputs.version }}" > /dev/null 2>&1; then
+          if gh release view "v$VERSION" > /dev/null 2>&1; then
             echo "Release already exists. Skipping build."
             echo "is_new=false" >> $GITHUB_OUTPUT
           else
@@ -54,6 +54,8 @@ jobs:
   build-and-publish:
     name: Build and Publish
     runs-on: linux-x86-n2-16
+    permissions:
+      contents: write # Required to create the GitHub Release
     container:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
     # 1. Wait for Job 1 to finish
@@ -63,10 +65,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Install uv and Set up Python
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@887a942a15af3a7626099df99e897a18d9e5ab3a # v5.1.0
         with:
           python-version: "3.12"
 
@@ -77,7 +79,7 @@ jobs:
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
 
       - name: Setup Bazel
-        uses: bazel-contrib/setup-bazel@0.19.0
+        uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
         with:
           bazelisk-cache: true
           disk-cache: true
@@ -132,8 +134,8 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: v${{ needs.check-version.outputs.version }}
         run: |
-          VERSION="v${{ needs.check-version.outputs.version }}"
           git config --global --add safe.directory /__w/neptune/neptune
           gh release create "$VERSION" \
             dist/*.whl \
