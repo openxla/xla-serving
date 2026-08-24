@@ -297,6 +297,40 @@ TEST(EmbeddingBagSveTest, AutoDispatchIsGuardedAndPreservesAdditionOrder) {
   }
 }
 
+TEST(EmbeddingBagSveTest, ForcedUnweightedFastSlicesAndTailMatchPortable) {
+  if (!internal::IsEmbeddingBagSveAvailable()) {
+    GTEST_SKIP() << "SVE is unavailable";
+  }
+
+  const int embedding_dim =
+      8 * (internal::EmbeddingBagSveVectorLengthBytes() /
+           static_cast<int>(sizeof(float))) +
+      1;
+  constexpr int kRows = 4;
+  const float row_values[kRows] = {1.0e20f, 1.25f, -1.0e20f, 0.33333334f};
+  std::vector<float> table_data(kRows * embedding_dim);
+  for (int row = 0; row < kRows; ++row) {
+    for (int column = 0; column < embedding_dim; ++column) {
+      table_data[row * embedding_dim + column] =
+          row_values[row] + static_cast<float>(column % 3) * 0.03125f;
+    }
+  }
+  ASSERT_OK_AND_ASSIGN(auto table, MakeTable(table_data, embedding_dim));
+  std::vector<int64_t> ids;
+  for (int index = 0; index < 17; ++index) ids.push_back(index % kRows);
+  const std::vector<int32_t> rows = {0, 17};
+  std::vector<float> portable(embedding_dim, -1.0f);
+  std::vector<float> forced(embedding_dim, -2.0f);
+
+  ASSERT_OK(internal::ComputeEmbeddingActivationsF32(
+      ids, rows, {}, *table, absl::MakeSpan(portable),
+      internal::EmbeddingBagBackend::kPortable));
+  ASSERT_OK(internal::ComputeEmbeddingActivationsF32(
+      ids, rows, {}, *table, absl::MakeSpan(forced),
+      internal::EmbeddingBagBackend::kSve));
+  EXPECT_EQ(forced, portable);
+}
+
 // Covers forced SVE tails, weights, normalization, and unavailable hardware.
 TEST(EmbeddingBagSveTest, ForcedBackendIsGuardedAndDimensionAgnostic) {
   constexpr int kEmbeddingDim = 7;
