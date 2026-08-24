@@ -250,5 +250,132 @@ TEST(EmbeddingBagBatchTest, PoolReentryExecutesInline) {
   EXPECT_THAT(output, ElementsAre(1.0f, 2.0f));
 }
 
+// Covers auto gating and exact FP32 addition order across all ID blocks.
+TEST(EmbeddingBagSveTest, AutoDispatchIsGuardedAndPreservesAdditionOrder) {
+  constexpr int kRows = 4;
+  constexpr int kEmbeddingDim = 128;
+  const float row_values[kRows] = {1.0e20f, 1.25f, -1.0e20f, 0.33333334f};
+  std::vector<float> table_data(kRows * kEmbeddingDim);
+  for (int row = 0; row < kRows; ++row) {
+    for (int column = 0; column < kEmbeddingDim; ++column) {
+      table_data[row * kEmbeddingDim + column] =
+          row_values[row] + static_cast<float>(column % 3) * 0.03125f;
+    }
+  }
+  ASSERT_OK_AND_ASSIGN(auto table, MakeTable(table_data, kEmbeddingDim));
+  std::vector<int64_t> ids;
+  for (int index = 0; index < 37; ++index) ids.push_back(index % kRows);
+  // 31 IDs exercise the 16/8/4/2/1 block decomposition.
+  const std::vector<int32_t> rows = {0, 31, 37};
+  std::vector<float> portable(2 * kEmbeddingDim, -1.0f);
+  std::vector<float> automatic(2 * kEmbeddingDim, -2.0f);
+  internal::EmbeddingBagBackend selected =
+      internal::EmbeddingBagBackend::kAuto;
+
+  ASSERT_OK(internal::ComputeEmbeddingActivationsF32(
+      ids, rows, {}, *table, absl::MakeSpan(portable),
+      internal::EmbeddingBagBackend::kPortable));
+  ASSERT_OK(internal::ComputeEmbeddingActivationsF32(
+      ids, rows, {}, *table, absl::MakeSpan(automatic),
+      internal::EmbeddingBagBackend::kAuto, &selected));
+
+  const internal::EmbeddingBagBackend expected =
+      internal::IsEmbeddingBagSveAvailable() &&
+              internal::EmbeddingBagSveVectorLengthBytes() ==
+                  internal::kAutoSveVectorLengthBytes
+          ? internal::EmbeddingBagBackend::kSve
+          : internal::EmbeddingBagBackend::kPortable;
+  EXPECT_EQ(selected, expected);
+  EXPECT_EQ(automatic, portable);
+
+  if (internal::IsEmbeddingBagSveAvailable()) {
+    std::vector<float> forced(2 * kEmbeddingDim, -3.0f);
+    ASSERT_OK(internal::ComputeEmbeddingActivationsF32(
+        ids, rows, {}, *table, absl::MakeSpan(forced),
+        internal::EmbeddingBagBackend::kSve));
+    EXPECT_EQ(forced, portable);
+  }
+}
+
+// Covers forced SVE tails, weights, normalization, and unavailable hardware.
+TEST(EmbeddingBagSveTest, ForcedBackendIsGuardedAndDimensionAgnostic) {
+  constexpr int kEmbeddingDim = 7;
+  std::vector<float> table_data(3 * kEmbeddingDim);
+  for (size_t index = 0; index < table_data.size(); ++index) {
+    table_data[index] = static_cast<float>(index + 1) * 0.125f;
+  }
+  ASSERT_OK_AND_ASSIGN(auto table,
+                       MakeTable(table_data, kEmbeddingDim,
+                                 EmbeddingTable::CombineMode::kMean));
+  const std::vector<int64_t> ids = {0, 2, 1};
+  const std::vector<int32_t> rows = {0, 2, 2, 3};
+  const std::vector<float> weights = {0.25f, 1.25f, 0.5f};
+  std::vector<float> portable(3 * kEmbeddingDim, -1.0f);
+  std::vector<float> forced(3 * kEmbeddingDim, 41.0f);
+  ASSERT_OK(internal::ComputeEmbeddingActivationsF32(
+      ids, rows, weights, *table, absl::MakeSpan(portable),
+      internal::EmbeddingBagBackend::kPortable));
+
+  const absl::Status status = internal::ComputeEmbeddingActivationsF32(
+      ids, rows, weights, *table, absl::MakeSpan(forced),
+      internal::EmbeddingBagBackend::kSve);
+  if (internal::IsEmbeddingBagSveAvailable()) {
+    ASSERT_OK(status);
+    EXPECT_THAT(forced, Pointwise(Approx(1e-6f), portable));
+  } else {
+    EXPECT_THAT(status,
+                absl_testing::StatusIs(absl::StatusCode::kFailedPrecondition));
+    EXPECT_THAT(forced,
+                testing::Each(testing::FloatEq(41.0f)));
+  }
+}
+
+// Covers absolute CSR offsets for threaded work starting mid-batch.
+TEST(EmbeddingBagSveTest, ForcedBatchCoversThreadedNonzeroBagRanges) {
+  constexpr int kRows = 4;
+  constexpr int kEmbeddingDim = 128;
+  constexpr int kBags = 16;
+  std::vector<float> table_data(kRows * kEmbeddingDim);
+  for (int row = 0; row < kRows; ++row) {
+    for (int column = 0; column < kEmbeddingDim; ++column) {
+      table_data[row * kEmbeddingDim + column] =
+          static_cast<float>((row + 1) * 128 + column);
+    }
+  }
+  ASSERT_OK_AND_ASSIGN(auto table, MakeTable(table_data, kEmbeddingDim));
+  std::vector<int64_t> ids;
+  std::vector<int32_t> rows;
+  for (int bag = 0; bag < kBags; ++bag) {
+    rows.push_back(bag);
+    ids.push_back(bag % kRows);
+  }
+  rows.push_back(kBags);
+  std::vector<float> portable(kBags * kEmbeddingDim, -1.0f);
+  std::vector<float> forced(kBags * kEmbeddingDim, -3.0f);
+  auto allocate_portable = MakeAllocator(&portable);
+  auto allocate_forced = MakeAllocator(&forced);
+  auto portable_request =
+      MakeRequest(ids, rows, table.get(), {}, &allocate_portable);
+  auto forced_request =
+      MakeRequest(ids, rows, table.get(), {}, &allocate_forced);
+  Eigen::ThreadPool pool(2);
+
+  ASSERT_OK(internal::ExecuteEmbeddingBagBatch(
+      absl::MakeSpan(&portable_request, 1),
+      internal::EmbeddingBagBackend::kPortable, &pool));
+  const absl::Status status = internal::ExecuteEmbeddingBagBatch(
+      absl::MakeSpan(&forced_request, 1), internal::EmbeddingBagBackend::kSve,
+      &pool);
+
+  if (internal::IsEmbeddingBagSveAvailable()) {
+    ASSERT_OK(status);
+    EXPECT_EQ(forced, portable);
+  } else {
+    EXPECT_THAT(status,
+                absl_testing::StatusIs(absl::StatusCode::kFailedPrecondition));
+    EXPECT_THAT(forced, testing::Each(testing::FloatEq(-3.0f)));
+  }
+}
+
 }  // namespace
 }  // namespace xla_serving::data::cpu_embedding
