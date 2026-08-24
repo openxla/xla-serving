@@ -738,9 +738,10 @@ StableHloRunner::LookUpOrCreateExecutable(
       CachedExecutableBundle::PortableShardingMap arg_map;
       CachedExecutableBundle::PortableShardingMap output_map;
       for (xla::ifrt::Device* device : ifrt_client_->addressable_devices()) {
+        TF_ASSIGN_OR_RETURN(auto* default_memory, device->DefaultMemory());
         xla::ifrt::ShardingRef sharding =
             xla::ifrt::SingleDeviceSharding::Create(device,
-                                                    xla::ifrt::MemoryKind());
+                                                    default_memory->Kind());
         arg_map[device->Id()] = std::vector<xla::ifrt::ShardingRef>(
             (*executable_bundle)->io_spec.inputs.size(), sharding);
         output_map[device->Id()] = std::vector<xla::ifrt::ShardingRef>(
@@ -1051,6 +1052,7 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
   // `final_used_inputs` only contains used inputs, so we just insert them
   // at the end of the list.
   for (auto& arr : final_used_inputs) {
+    CHECK(arr.has_value());  // Crash OK: Handled by loop above
     inputs_with_weights.push_back(std::move(*arr));
   }
 

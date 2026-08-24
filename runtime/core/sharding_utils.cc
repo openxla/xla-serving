@@ -103,8 +103,10 @@ SplitAndCreateArraysFromHostBuffer(
         return absl::InternalError(
             absl::StrCat("Missing Device ", i, " for slice ", slice_idx));
       }
+      TF_ASSIGN_OR_RETURN(auto* default_memory,
+                          (*device_iter)->DefaultMemory());
       auto single_device_sharding = xla::ifrt::SingleDeviceSharding::Create(
-          *device_iter, xla::ifrt::MemoryKind());
+          *device_iter, default_memory->Kind());
 
       TF_ASSIGN_OR_RETURN(xla::ifrt::ArrayRef array,
                           ifrt_client.MakeArrayFromHostBuffer(
@@ -823,8 +825,10 @@ absl::StatusOr<xla::ifrt::ShardingRef> ToIfrtSharding(
   }
 
   if (device_list->size() == 1) {
-    return xla::ifrt::SingleDeviceSharding::Create(
-        device_list->devices().front(), xla::ifrt::MemoryKind());
+    auto* device = device_list->devices().front();
+    TF_ASSIGN_OR_RETURN(auto* default_memory, device->DefaultMemory());
+    return xla::ifrt::SingleDeviceSharding::Create(device,
+                                                   default_memory->Kind());
   }
 
   if (hlo_sharding.IsSingleDevice()) {
@@ -833,12 +837,24 @@ absl::StatusOr<xla::ifrt::ShardingRef> ToIfrtSharding(
     int unique_device_id = hlo_sharding.GetUniqueDevice();
     TF_ASSIGN_OR_RETURN(device, ifrt_client.LookupDevice(
                                     xla::ifrt::DeviceId(unique_device_id)));
+    TF_ASSIGN_OR_RETURN(auto* default_memory, device->DefaultMemory());
     return xla::ifrt::SingleDeviceSharding::Create(device,
-                                                   xla::ifrt::MemoryKind());
+                                                   default_memory->Kind());
   }
 
-  return xla::ifrt::HloSharding::Create(device_list, xla::ifrt::MemoryKind(),
-                                        hlo_sharding);
+  // TODO: Handle multi-device MemoryKind properly.
+  // For now, fallback to universal default if we can't easily get it.
+  // Or try to get it from the first device.
+  xla::ifrt::MemoryKind memory_kind;
+  if (!device_list->devices().empty()) {
+    auto* device = device_list->devices().front();
+    auto default_memory = device->DefaultMemory();
+    if (default_memory.ok()) {
+      memory_kind = default_memory.value()->Kind();
+    }
+  }
+
+  return xla::ifrt::HloSharding::Create(device_list, memory_kind, hlo_sharding);
 }
 
 absl::StatusOr<DeviceBuffer> MakeDeviceBufferFromPinnedHost(

@@ -127,6 +127,7 @@ absl::Status AotStableHloRunner::PopulateAotExecutableCache(
     executable_bundle->io_spec.outputs = spec.outputs;
     executable_bundle->original_io_spec.inputs = spec.inputs;
     executable_bundle->original_io_spec.outputs = spec.outputs;
+
     executable_bundle->ifrt_executable = std::move(options.executables[i]);
     executable_bundle->program_fingerprint_with_timestamp =
         GetProgramFingerprintWithTimestamp(executable_bundle->ifrt_executable,
@@ -140,7 +141,6 @@ absl::Status AotStableHloRunner::PopulateAotExecutableCache(
       user_input_shapes.push_back(
           executable_bundle->io_spec.inputs[j].GetIfrtShape());
     }
-
     // IFRT requires an explicit device mapping when executing unbound
     // (portable) AOT artifacts. Bound executables already contain their device
     // assignment.
@@ -149,9 +149,10 @@ absl::Status AotStableHloRunner::PopulateAotExecutableCache(
       CachedExecutableBundle::PortableShardingMap output_map;
       for (xla::ifrt::Device* device :
            options.base_options.client->addressable_devices()) {
+        TF_ASSIGN_OR_RETURN(auto* default_memory, device->DefaultMemory());
         xla::ifrt::ShardingRef sharding =
             xla::ifrt::SingleDeviceSharding::Create(device,
-                                                    xla::ifrt::MemoryKind());
+                                                    default_memory->Kind());
         arg_map[device->Id()] = std::vector<xla::ifrt::ShardingRef>(
             executable_bundle->module_kept_var_indices.size(), sharding);
         output_map[device->Id()] = std::vector<xla::ifrt::ShardingRef>(
