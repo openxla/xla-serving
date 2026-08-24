@@ -1,4 +1,5 @@
 # Copyright 2026 Google LLC
+# Copyright 2026 Arm Ltd. and affiliates
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,6 +30,7 @@ MANIFEST_ASSET_NAME = cpu_embedding_module.MANIFEST_ASSET_NAME
 serialize = cpu_embedding_module.serialize
 
 CpuEmbeddingResource = cpu_embedding_module.CpuEmbeddingResource
+MappedEmbeddingTable = cpu_embedding_module.MappedEmbeddingTable
 CpuEmbeddingModule = cpu_embedding_module.CpuEmbeddingModule
 
 
@@ -215,6 +217,7 @@ def cpu_embedding(
 
 __all__ = [
     "CpuEmbeddingResource",
+    "MappedEmbeddingTable",
     "CpuEmbeddingModule",
     "DenseCpuEmbeddingLookupTransform",
     "CpuEmbeddingLookupTransformWrapper",

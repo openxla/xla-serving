@@ -1,4 +1,5 @@
 // Copyright 2026 Google LLC
+// Copyright 2026 Arm Ltd. and affiliates
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,11 +47,56 @@ namespace {
 using cpu_embedding::CpuEmbeddingEngine;
 using transforms::cpu_embedding::CpuEmbeddingManifest;
 
-absl::StatusOr<std::unique_ptr<CpuEmbeddingEngine>> LoadCpuEmbeddingEngine(
+absl::StatusOr<cpu_embedding::Array> LoadTableArray(
+    const Asset& table_asset, absl::string_view table_name,
+    const cpu_embedding::Shape& shape, size_t expected_bytes) {
+  if (!table_asset.content.empty()) {
+    absl::string_view bytes(table_asset.content);
+    if (bytes.size() != expected_bytes) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Table asset size mismatch for ", table_name, ". Expected ",
+          expected_bytes, " bytes, but got ", bytes.size()));
+    }
+
+    const float* raw_table_data = reinterpret_cast<const float*>(bytes.data());
+    return cpu_embedding::Array::Wrap(const_cast<float*>(raw_table_data),
+                                      shape);
+  }
+
+  // Keep the mapping alive if the path is replaced or unlinked. Mutating the
+  // mapped file remains unsupported.
+  std::unique_ptr<tsl::ReadOnlyMemoryRegion> mapped_region;
+  absl::Status map_status =
+      tsl::Env::Default()->NewReadOnlyMemoryRegionFromFile(table_asset.path,
+                                                           &mapped_region);
+  if (!map_status.ok()) {
+    return absl::Status(
+        map_status.code(),
+        absl::StrCat("Failed to map table asset ", table_name, " at ",
+                     table_asset.path, ": ", map_status.message()));
+  }
+  if (mapped_region->length() != expected_bytes) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Table asset size mismatch for ", table_name, ". Expected ",
+        expected_bytes, " bytes, but got ", mapped_region->length()));
+  }
+
+  auto owner =
+      std::shared_ptr<tsl::ReadOnlyMemoryRegion>(std::move(mapped_region));
+  const float* raw_table_data = static_cast<const float*>(owner->data());
+  return cpu_embedding::Array::Wrap(const_cast<float*>(raw_table_data), shape,
+                                    std::move(owner));
+}
+
+struct LoadedCpuEmbeddingEngine {
+  std::unique_ptr<CpuEmbeddingEngine> engine;
+  absl::flat_hash_map<std::string, int32_t> feature_to_embedding_dim;
+};
+
+absl::StatusOr<LoadedCpuEmbeddingEngine> LoadCpuEmbeddingEngine(
     Asset& manifest,
     const absl::flat_hash_map<absl::string_view, Asset* absl_nonnull>&
-        table_assets,
-    absl::flat_hash_map<std::string, int32_t>& feature_to_embedding_dim) {
+        table_assets) {
   if (manifest.content.empty()) {
     RETURN_IF_ERROR(manifest.LoadContent());
   }
@@ -78,6 +124,7 @@ absl::StatusOr<std::unique_ptr<CpuEmbeddingEngine>> LoadCpuEmbeddingEngine(
   auto engine = std::make_unique<CpuEmbeddingEngine>(options);
 
   absl::flat_hash_map<std::string, int64_t> table_to_dim;
+  absl::flat_hash_map<std::string, int32_t> feature_to_embedding_dim;
 
   for (const auto& table_config : manifest_proto.tables()) {
     auto it = table_assets.find(table_config.name());
@@ -86,9 +133,6 @@ absl::StatusOr<std::unique_ptr<CpuEmbeddingEngine>> LoadCpuEmbeddingEngine(
           absl::StrCat("Failed to find table asset: ", table_config.name()));
     }
     Asset* table_asset = it->second;
-    if (table_asset->content.empty()) {
-      RETURN_IF_ERROR(table_asset->LoadContent());
-    }
 
     int64_t vocab_size = table_config.vocab_size();
     int64_t embedding_dim = table_config.embedding_dim();
@@ -117,19 +161,12 @@ absl::StatusOr<std::unique_ptr<CpuEmbeddingEngine>> LoadCpuEmbeddingEngine(
                        intermediate_bytes, " * ", sizeof(float)));
     }
 
-    absl::string_view bytes(table_asset->content);
-    if (bytes.size() != expected_bytes) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "Table asset size mismatch for ", table_config.name(), ". Expected ",
-          expected_bytes, " bytes, but got ", bytes.size()));
-    }
-
-    const float* raw_table_data = reinterpret_cast<const float*>(bytes.data());
     cpu_embedding::Shape shape(
         {table_config.vocab_size(), table_config.embedding_dim()});
 
-    auto array = cpu_embedding::Array::Wrap(
-        const_cast<float*>(raw_table_data), shape);
+    ASSIGN_OR_RETURN(cpu_embedding::Array array,
+                     LoadTableArray(*table_asset, table_config.name(), shape,
+                                    expected_bytes));
 
     cpu_embedding::EmbeddingTable::CombineMode combine_mode;
     switch (table_config.combine_mode()) {
@@ -159,7 +196,6 @@ absl::StatusOr<std::unique_ptr<CpuEmbeddingEngine>> LoadCpuEmbeddingEngine(
     }
     RETURN_IF_ERROR(engine->AddLocalTable(std::string(table_config.name()),
                                           std::move(table_status).value()));
-    table_to_dim[table_config.name()] = table_config.embedding_dim();
   }
 
   for (const auto& feature : manifest_proto.feature_specs()) {
@@ -183,7 +219,8 @@ absl::StatusOr<std::unique_ptr<CpuEmbeddingEngine>> LoadCpuEmbeddingEngine(
     }
   }
 
-  return engine;
+  return LoadedCpuEmbeddingEngine{std::move(engine),
+                                  std::move(feature_to_embedding_dim)};
 }
 
 }  // namespace
@@ -207,9 +244,10 @@ absl::Status CpuEmbeddingEngineResource::LoadImpl() {
         "Failed to find manifest asset in JCE Resource.");
   }
 
-  ASSIGN_OR_RETURN(engine_,
-                   LoadCpuEmbeddingEngine(*manifest_asset, table_assets,
-                                          feature_to_embedding_dim_));
+  ASSIGN_OR_RETURN(LoadedCpuEmbeddingEngine loaded,
+                   LoadCpuEmbeddingEngine(*manifest_asset, table_assets));
+  engine_ = std::move(loaded.engine);
+  feature_to_embedding_dim_ = std::move(loaded.feature_to_embedding_dim);
   return absl::OkStatus();
 }
 

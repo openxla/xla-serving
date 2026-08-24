@@ -1,4 +1,5 @@
 # Copyright 2026 Google LLC
+# Copyright 2026 Arm Ltd. and affiliates
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +15,11 @@
 
 """Python wrappers for CPU Embedding lookups."""
 
+import dataclasses
+import numbers
+import os
 import tempfile
+from collections.abc import Mapping
 from typing import Any, Sequence
 
 from google.protobuf import text_format
@@ -31,15 +36,84 @@ from data.resource_manager.python import resource_manager
 
 MANIFEST_ASSET_NAME = cpu_embedding_serializer_pybind.MANIFEST_ASSET_NAME
 serialize = cpu_embedding_serializer_pybind.serialize
+_COMBINE_MODE_ENUM = (
+    cpu_embedding_pb2.CpuEmbeddingManifest.EmbeddingTable.CombineMode
+)
+_COMBINE_MODES = {
+    "SUM": _COMBINE_MODE_ENUM.SUM,
+    "MEAN": _COMBINE_MODE_ENUM.MEAN,
+    "SQRT_N": _COMBINE_MODE_ENUM.SQRT_N,
+}
+
+
+def _combine_mode(mode: str) -> int:
+  try:
+    return _COMBINE_MODES[mode]
+  except KeyError as error:
+    raise ValueError(f"Unknown combine mode: {mode}") from error
+
+
+def _build_manifest(
+    table_shapes: Mapping[str, Sequence[int]],
+    combine_modes: Mapping[str, str],
+    feature_specs: Sequence[dict[str, Any]],
+    *,
+    max_cpu_slots: int = 8,
+    block_size: int = 64,
+) -> tuple[cpu_embedding_pb2.CpuEmbeddingManifest, dict[str, int]]:
+  manifest = cpu_embedding_pb2.CpuEmbeddingManifest()
+  manifest.max_cpu_slots = max_cpu_slots
+  manifest.block_size = block_size
+  table_dims = {}
+  for table_name, shape in table_shapes.items():
+    if (
+        not isinstance(table_name, str)
+        or not table_name
+        or "/" in table_name
+        or "\\" in table_name
+        or ".." in table_name
+        or table_name == MANIFEST_ASSET_NAME
+    ):
+      raise ValueError(
+          "Invalid table name (empty, reserved, or path traversal): "
+          f"{table_name!r}"
+      )
+    table = manifest.tables.add()
+    table.name = table_name
+    table.vocab_size = shape[0]
+    table.embedding_dim = shape[1]
+    table.combine_mode = _combine_mode(combine_modes.get(table_name, "MEAN"))
+    table_dims[table_name] = int(shape[1])
+
+  embedding_dims = {}
+  for spec_dict in feature_specs:
+    feature = manifest.feature_specs.add()
+    feature.name = spec_dict["name"]
+    feature.table = spec_dict["table_name"]
+    if "max_sequence_length" in spec_dict:
+      feature.max_sequence_length = spec_dict["max_sequence_length"]
+    if feature.table in table_dims:
+      embedding_dims[feature.name] = table_dims[feature.table]
+  return manifest, embedding_dims
+
+
+@dataclasses.dataclass(frozen=True)
+class MappedEmbeddingTable:
+  """A raw row-major, little-endian FP32 table mapped read-only at load time.
+
+  Replacing or unlinking the path does not retarget the mapping. Modifying or
+  truncating the mapped file is unsupported.
+  """
+
+  path: str | os.PathLike[str]
+  shape: tuple[int, int]
 
 
 class CpuEmbeddingResource:
   """Python wrapper for CpuEmbeddingEngineResource.
 
-  This class handles the serialization of CPU embedding assets, such as
-  embedding tables and their configurations (manifest). It manages a temporary
-  directory where these assets are written, and makes them available to the C++
-  runtime.
+  In-memory tables and their manifest are serialized in a temporary directory.
+  Mapped tables retain their source paths; only their manifest is temporary.
 
   Args:
     table_data: A mapping from table names to their numpy arrays containing the
@@ -49,6 +123,10 @@ class CpuEmbeddingResource:
     feature_specs: A list of dictionaries defining the lookup features. Each
       dictionary must contain "name", "table_name", and optionally
       "max_sequence_length".
+    max_cpu_slots: Number of threads in the CPU lookup worker pool.
+    block_size: Only legacy single-feature in-place lookups use this setting.
+      Grouped `CpuEmbeddingModule` and `DenseCpuEmbeddingLookupTransform`
+      lookups ignore it.
 
   Example usage:
 
@@ -75,64 +153,118 @@ class CpuEmbeddingResource:
       max_cpu_slots: int = 8,
       block_size: int = 64,
   ) -> None:
-    self._temp_dir = tempfile.TemporaryDirectory(prefix="jce_resource_")
-
-    # Create Manifest Proto
-    manifest = cpu_embedding_pb2.CpuEmbeddingManifest()
-    manifest.max_cpu_slots = max_cpu_slots
-    manifest.block_size = block_size
-
-    for table_name, data in table_data.items():
-      if "/" in table_name or "\\" in table_name or ".." in table_name:
-        raise ValueError(
-            f"Invalid table name (path traversal detected): {table_name}"
-        )
-      table = manifest.tables.add()
-      table.name = table_name
-      table.vocab_size = data.shape[0]
-      table.embedding_dim = data.shape[1]
-
-      mode = combine_modes.get(table_name, "MEAN")
-      combine_mode_enum = (
-          cpu_embedding_pb2.CpuEmbeddingManifest.EmbeddingTable.CombineMode
-      )
-      if mode == "SUM":
-        table.combine_mode = combine_mode_enum.SUM
-      elif mode == "MEAN":
-        table.combine_mode = combine_mode_enum.MEAN
-      elif mode == "SQRT_N":
-        table.combine_mode = combine_mode_enum.SQRT_N
-      else:
-        raise ValueError(f"Unknown combine mode: {mode}")
-
-    self._embedding_dims: dict[str, int] = {}
-    for spec_dict in feature_specs:
-      feature = manifest.feature_specs.add()
-      feature.name = spec_dict["name"]
-      feature.table = spec_dict["table_name"]
-      if "max_sequence_length" in spec_dict:
-        feature.max_sequence_length = spec_dict["max_sequence_length"]
-      if feature.table in table_data:
-        self._embedding_dims[feature.name] = int(
-            table_data[feature.table].shape[1]
-        )
+    manifest, self._embedding_dims = _build_manifest(
+        {name: data.shape for name, data in table_data.items()},
+        combine_modes,
+        feature_specs,
+        max_cpu_slots=max_cpu_slots,
+        block_size=block_size,
+    )
 
     first_table_data = next(iter(table_data.values()))
     self._embedding_dim = first_table_data.shape[1]
 
-    # Call C++ Serialization helper!
-    # This automatically writes manifest and table files to temp_dir,
-    # returning Asset list!
-    self._assets = cpu_embedding_serializer_pybind.serialize(
-        self._temp_dir.name, table_data, text_format.MessageToString(manifest)
+    self._temp_dir = tempfile.TemporaryDirectory(prefix="jce_resource_")
+    try:
+      self._assets = cpu_embedding_serializer_pybind.serialize(
+          self._temp_dir.name,
+          table_data,
+          text_format.MessageToString(manifest),
+      )
+      self._resource = (
+          cpu_embedding_resource_pybind.CpuEmbeddingEngineResource(
+              self._assets
+          )
+      )
+      # Load eagerly to validate the engine.
+      self._resource.load()
+    except Exception:
+      self._temp_dir.cleanup()
+      raise
+
+  @classmethod
+  def from_mapped_tables(
+      cls,
+      table_files: Mapping[str, MappedEmbeddingTable],
+      combine_modes: Mapping[str, str],
+      feature_specs: Sequence[dict[str, Any]],
+      max_cpu_slots: int = 8,
+      block_size: int = 64,
+  ) -> "CpuEmbeddingResource":
+    """Creates a resource backed by read-only mapped FP32 tables.
+
+    The C++ loader validates each file against its declared shape. Only the
+    generated manifest is stored in the resource's temporary directory.
+    """
+    if not table_files:
+      raise ValueError("At least one mapped embedding table is required.")
+
+    normalized_tables: list[tuple[str, str, tuple[int, int]]] = []
+    for table_name, descriptor in table_files.items():
+      if not isinstance(descriptor, MappedEmbeddingTable):
+        raise TypeError(
+            "Mapped tables must use MappedEmbeddingTable descriptors."
+        )
+
+      try:
+        raw_shape = tuple(descriptor.shape)
+      except TypeError as error:
+        raise ValueError(
+            f"Table {table_name!r} must have an exact 2-D shape."
+        ) from error
+      if len(raw_shape) != 2:
+        raise ValueError(f"Table {table_name!r} must have an exact 2-D shape.")
+      if any(
+          isinstance(dim, (bool, np.bool_))
+          or not isinstance(dim, numbers.Integral)
+          or dim <= 0
+          for dim in raw_shape
+      ):
+        raise ValueError(
+            f"Table {table_name!r} dimensions must be positive integers."
+        )
+      shape = (int(raw_shape[0]), int(raw_shape[1]))
+
+      table_path = os.path.abspath(os.fspath(descriptor.path))
+      if not isinstance(table_path, str):
+        raise TypeError(f"Table {table_name!r} path must resolve to a string.")
+
+      normalized_tables.append((table_name, table_path, shape))
+
+    manifest, embedding_dims = _build_manifest(
+        {name: shape for name, _, shape in normalized_tables},
+        combine_modes,
+        feature_specs,
+        max_cpu_slots=max_cpu_slots,
+        block_size=block_size,
     )
 
-    # Instantiate C++ Resource
-    self._resource = cpu_embedding_resource_pybind.CpuEmbeddingEngineResource(
-        self._assets
-    )
-    # Trigger load to compile/verify JCE engine immediately on export startup
-    self._resource.load()
+    instance = cls.__new__(cls)
+    instance._temp_dir = tempfile.TemporaryDirectory(prefix="jce_resource_")
+    try:
+      instance._assets = list(
+          serialize(
+              instance._temp_dir.name,
+              {},
+              text_format.MessageToString(manifest),
+          )
+      )
+      instance._assets.extend(
+          resource_manager.Asset(path=path, name=name)
+          for name, path, _ in normalized_tables
+      )
+      instance._embedding_dims = embedding_dims
+      instance._embedding_dim = normalized_tables[0][2][1]
+      instance._resource = (
+          cpu_embedding_resource_pybind.CpuEmbeddingEngineResource(
+              instance._assets
+          )
+      )
+      instance._resource.load()
+    except Exception:
+      instance._temp_dir.cleanup()
+      raise
+    return instance
 
   def get_embedding_dim(self, feature_name: str) -> int:
     if feature_name not in self._embedding_dims:
