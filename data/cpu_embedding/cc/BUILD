@@ -142,6 +142,27 @@ cc_test(
 )
 
 cc_test(
+    name = "embedding_bag_test",
+    srcs = ["embedding_bag_test.cc"],
+    defines = [
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS",
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS",
+    ],
+    deps = [
+        ":array",
+        ":embedding_bag",
+        ":embedding_table",
+        "@abseil-cpp//absl/functional:any_invocable",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@abseil-cpp//absl/types:span",
+        "@eigen_archive//:eigen3",
+        "@googletest//:gtest_main",
+        "@xla_serving//data/test_utils:status_macros",
+    ],
+)
+
+cc_test(
     name = "feature_batch_csr_input_test",
     srcs = ["feature_batch_csr_input_test.cc"],
     defines = [
@@ -170,6 +191,8 @@ cc_test(
         ":embedding_table",
         ":feature_batch_csr_input",
         ":feature_spec",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
         "@abseil-cpp//absl/types:span",
         "@eigen_archive//:eigen3",
         "@googletest//:gtest_main",

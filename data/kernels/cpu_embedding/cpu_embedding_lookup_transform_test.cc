@@ -1,4 +1,5 @@
 // Copyright 2026 Google LLC
+// Copyright 2026 Arm Ltd. and affiliates
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -202,6 +203,7 @@ TEST(CpuEmbeddingLookupTransformTest, DenseExecute) {
                           FloatEq(5.0), FloatEq(7.0), FloatEq(9.0)));
 }
 
+// Covers grouped lookup across heterogeneous embedding dimensions.
 TEST(CpuEmbeddingLookupTransformTest, MultiLookupSuccess) {
   // 1. Setup JCE Engine with 2 tables
   auto resource = std::make_shared<TestCpuEmbeddingEngineResource>(
@@ -218,8 +220,8 @@ TEST(CpuEmbeddingLookupTransformTest, MultiLookupSuccess) {
                            cpu_embedding::EmbeddingTable::CombineMode::kMean));
   EXPECT_OK(engine->AddLocalTable("tableA", std::move(tableA)));
 
-  std::vector<float> tableB_data = {7.0, 8.0, 9.0, 10.0, 11.0, 12.0};
-  cpu_embedding::Shape shapeB({2, 3});
+  std::vector<float> tableB_data = {7.0, 8.0, 9.0, 10.0};
+  cpu_embedding::Shape shapeB({2, 2});
   auto arrayB = cpu_embedding::Array(
       absl::MakeConstSpan(tableB_data.data(), tableB_data.size()), shapeB);
   ASSERT_OK_AND_ASSIGN(auto tableB,
@@ -239,11 +241,32 @@ TEST(CpuEmbeddingLookupTransformTest, MultiLookupSuccess) {
   EXPECT_OK(engine->RegisterFeatureSpec(specB));
 
   resource->RegisterEmbeddingDim("tableA", 3);
-  resource->RegisterEmbeddingDim("tableB", 3);
+  resource->RegisterEmbeddingDim("tableB", 2);
   // 2. Setup Transform with 2 features
   ASSERT_OK_AND_ASSIGN(auto transform, CpuEmbeddingLookupTransform::Create(
                                            resource, std::vector<std::string>{
                                                          "tableA", "tableB"}));
+
+  // Verify per-feature dimensions in the grouped signature.
+  auto specs = [](xla::ifrt::DType::Kind kind) {
+    return api::ShapeInferenceValue::SpecList(
+        2, api::HostBufferSpec{xla::ifrt::DType(kind),
+                               xla::ifrt::Shape({-1})});
+  };
+  std::vector<api::ShapeInferenceValue> shape_inputs = {
+      api::ShapeInferenceValue(specs(xla::ifrt::DType::Kind::kS64)),
+      api::ShapeInferenceValue(specs(xla::ifrt::DType::Kind::kS32)),
+      api::ShapeInferenceValue(specs(xla::ifrt::DType::Kind::kF32)),
+  };
+  api::ShapeInferenceContext shape_context;
+  shape_context.inputs = shape_inputs;
+  ASSERT_OK(transform->PropagateSignature(shape_context));
+  ASSERT_EQ(shape_context.outputs.size(), 1);
+  ASSERT_TRUE(shape_context.outputs[0].IsSpecList());
+  const auto& output_specs = shape_context.outputs[0].spec_list();
+  ASSERT_EQ(output_specs.size(), 2);
+  EXPECT_EQ(output_specs[0].shape, xla::ifrt::Shape({-1, 3}));
+  EXPECT_EQ(output_specs[1].shape, xla::ifrt::Shape({-1, 2}));
 
   // 3. Prepare Inputs
   // Table A inputs
@@ -307,10 +330,10 @@ TEST(CpuEmbeddingLookupTransformTest, MultiLookupSuccess) {
 
   // 6. Verify Table B Output
   xla_serving::HostBuffer outB = std::move(out_vector[1]);
-  EXPECT_EQ(outB.shape(), xla::ifrt::Shape({1, 3}));
+  EXPECT_EQ(outB.shape(), xla::ifrt::Shape({1, 2}));
   const float* dataB = reinterpret_cast<const float*>(outB.base());
-  std::vector<float> vecB(dataB, dataB + 3);
-  EXPECT_THAT(vecB, ElementsAre(FloatEq(10.0), FloatEq(11.0), FloatEq(12.0)));
+  std::vector<float> vecB(dataB, dataB + 2);
+  EXPECT_THAT(vecB, ElementsAre(FloatEq(9.0), FloatEq(10.0)));
 }
 
 TEST(CpuEmbeddingLookupTransformTest, ScalarRowPointersFails) {
@@ -877,8 +900,7 @@ TEST(CpuEmbeddingLookupTransformTest, ExecuteRowPointersNotSortedReturnsError) {
 
   auto status = transform->Execute(context);
   EXPECT_FALSE(status.ok());
-  EXPECT_THAT(std::string(status.message()),
-              testing::HasSubstr("Row pointers must be monotonic."));
+  EXPECT_THAT(std::string(status.message()), testing::HasSubstr("monotonic"));
 }
 
 TEST(CpuEmbeddingLookupTransformTest, ExecuteWeightsSizeMismatchReturnsError) {
