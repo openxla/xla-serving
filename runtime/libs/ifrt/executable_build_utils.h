@@ -31,7 +31,7 @@
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/executable.h"  // from @xla
 #include "xla/service/compilation_environments.h"  // from @xla
-#include "xla/service/device_assignment.h"  // from @xla
+#include "xla/service/computation_placer.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
 namespace neptune {

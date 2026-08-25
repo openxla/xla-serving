@@ -56,7 +56,7 @@ cc_library(
         "@xla//xla/python/ifrt/hlo:hlo_program",
         "@xla//xla/python/pjrt_ifrt:xla_ifrt",
         "@xla//xla/service:compilation_environments",
-        "@xla//xla/service:device_assignment",
+        "@xla//xla/service:computation_placer",
         "@xla//xla/tsl/platform:statusor",
     ],
 )
@@ -86,7 +86,7 @@ cc_library(
         "@xla//xla/python/ifrt/hlo:hlo_program",
         "@xla//xla/python/pjrt_ifrt:xla_ifrt",
         "@xla//xla/service:compilation_environments",
-        "@xla//xla/service:device_assignment",
+        "@xla//xla/service:computation_placer",
         "@xla//xla/tsl/platform:statusor",
     ],
 )

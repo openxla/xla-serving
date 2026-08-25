@@ -35,7 +35,7 @@
 #include "xla/python/ifrt/device.h"  // from @xla
 #include "xla/python/ifrt/executable.h"  // from @xla
 #include "xla/python/ifrt/host_callback.h"  // from @xla
-#include "xla/service/device_assignment.h"  // from @xla
+#include "xla/service/computation_placer.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
