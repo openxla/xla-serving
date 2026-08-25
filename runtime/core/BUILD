@@ -204,10 +204,37 @@ cc_library(
     hdrs = ["device_buffer.h"],
     visibility = [":core_users"],
     deps = [
-        ":host_buffer",
+        "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/types:span",
         "@xla//xla/python/ifrt",
-        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:statusor",
+    ],
+)
+
+cc_library(
+    name = "device_buffer_test_lib",
+    testonly = True,
+    srcs = ["device_buffer_test.cc"],
+    visibility = ["@neptune//runtime/core/google:__subpackages__"],
+    deps = [
+        ":device_buffer",
+        "@abseil-cpp//absl/types:span",
+        "@googletest//:gtest",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/python/ifrt:test_util",
+        "@xla//xla/tsl/lib/core:status_test_util",
+        "@xla//xla/tsl/platform:statusor",
+    ],
+    alwayslink = True,
+)
+
+cc_test(
+    name = "device_buffer_test",
+    deps = [
+        ":device_buffer_test_lib",
+        ":pjrt_ifrt_cpu_client_test_lib",  # buildcleaner: keep
+        "@googletest//:gtest_main",
     ],
 )
 
@@ -496,15 +523,21 @@ cc_library(
 
 cc_library(
     name = "value_utils",
+    srcs = ["value_utils.cc"],
     hdrs = ["value_utils.h"],
     visibility = [":core_users"],
     deps = [
+        ":device_buffer",
+        ":host_buffer",
         ":value",
         "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/types:span",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/tsl/platform:statusor",
     ],
 )
 

@@ -175,6 +175,16 @@ class HostBuffer {
       int64_t start, int64_t end,
       Allocator* allocator = DefaultAllocator::GetInstance()) const;
 
+  // Returns a new HostBuffer reshaped to the shape specified. Returns an error
+  // if the total number of elements mismatch.
+  absl::StatusOr<HostBuffer> Reshape(const xla::ifrt::Shape& shape) const;
+
+  // Returns a new HostBuffer reshaped to the shape specified, reinterpreted
+  // with the dtype specified. Returns an error if the total number of bytes
+  // mismatch.
+  absl::StatusOr<HostBuffer> Bitcast(xla::ifrt::DType dtype,
+                                     const xla::ifrt::Shape& shape) const;
+
   /// Splits the host buffer into 'sizes.size()' individual buffers, along the
   /// 0th dimension using the given allocator. The ith output buffer has
   /// 0th-dimension size 'sizes[i]'.
@@ -241,6 +251,7 @@ class HostBuffer {
   Eigen::DSizes<Eigen::DenseIndex, NDIMS> ShapeAsEigenDSizesCopy() const {
     return AsEigenDSizesCopy<NDIMS, Eigen::DenseIndex>(shape());
   }
+
   bool IsAligned(size_t alignment) const {
     if (dtype_.kind() == xla::ifrt::DType::Kind::kString) return true;
     if (shape().num_elements() == 0) return true;

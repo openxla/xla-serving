@@ -14,7 +14,6 @@
 
 #include "runtime/core/host_buffer.h"  // from @neptune
 
-#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <memory>
@@ -101,6 +100,10 @@ absl::Status ValidateHostBufferShape(xla::ifrt::DType dtype,
                                      const xla::ifrt::Shape& shape) {
   int64_t num_elements = 1;
   for (int64_t d : shape.dims()) {
+    if (d < 0) {
+      return absl::InvalidArgumentError(
+          absl::StrFormat("Invalid negative dimension in shape: %d", d));
+    }
     auto [next_num_elements, overflow] =
         xla::OverflowSafeMultiply(num_elements, d);
     if (overflow) {
@@ -304,6 +307,39 @@ absl::StatusOr<HostBuffer> HostBuffer::SliceAlongFirstDimension(
   } else {
     return SliceInDim(/*dim=*/0, start, end);
   }
+}
+
+absl::StatusOr<HostBuffer> HostBuffer::Reshape(
+    const xla::ifrt::Shape& shape) const {
+  if (!buffer_data_) {
+    return absl::FailedPreconditionError("HostBuffer is uninitialized.");
+  }
+  TF_RETURN_IF_ERROR(ValidateHostBufferShape(dtype(), shape));
+  if (this->shape().num_elements() != shape.num_elements()) {
+    return absl::InvalidArgumentError("Number of elements mismatch");
+  }
+  return HostBuffer(base(), dtype(), shape, owner());
+}
+
+absl::StatusOr<HostBuffer> HostBuffer::Bitcast(
+    xla::ifrt::DType dtype, const xla::ifrt::Shape& shape) const {
+  if (!buffer_data_) {
+    return absl::FailedPreconditionError("HostBuffer is uninitialized.");
+  }
+  TF_RETURN_IF_ERROR(ValidateHostBufferShape(dtype, shape));
+  if (!dtype_.byte_size().has_value() ||
+      !storage_dtype().byte_size().has_value() ||
+      !dtype.byte_size().has_value()) {
+    return absl::InvalidArgumentError(
+        "Cannot bitcast datatypes that do not have a fixed byte size.");
+  }
+  int64_t in_bytes =
+      *storage_dtype().byte_size() * this->shape().num_elements();
+  int64_t out_bytes = *dtype.byte_size() * shape.num_elements();
+  if (in_bytes != out_bytes) {
+    return absl::InvalidArgumentError("Total byte size mismatch");
+  }
+  return HostBuffer(base(), dtype, shape, owner());
 }
 
 absl::string_view HostBuffer::raw_data() const {

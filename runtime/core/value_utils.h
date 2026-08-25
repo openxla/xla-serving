@@ -16,16 +16,32 @@
 #define THIRD_PARTY_NEPTUNE_RUNTIME_VALUE_UTILS_H_
 
 #include <algorithm>
+#include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/value.h"  // from @neptune
+#include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
 
-namespace neptune::internal {
+namespace neptune {
+
+// Returns a new Value containing a buffer reshaped to the shape specified.
+// Supports HostBuffer and DeviceBuffer.
+absl::StatusOr<Value> Reshape(Value&& value,
+                             const xla::ifrt::Shape& shape);
+
+// Returns a new Value containing a buffer reshaped to the shape specified and
+// reinterpreted with the dtype specified. Supports HostBuffer and DeviceBuffer.
+absl::StatusOr<Value> Bitcast(Value&& value, xla::ifrt::DType dtype,
+                             const xla::ifrt::Shape& shape);
+
+namespace internal {
 
 // Creates a vector of `Value` from a vector of objects. The objects will be
 // moved.
@@ -83,6 +99,7 @@ absl::StatusOr<std::vector<T>> UnpackFromValues(
   return result;
 }
 
-}  // namespace neptune::internal
+}  // namespace internal
+}  // namespace neptune
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_VALUE_UTILS_H_

@@ -16,11 +16,20 @@
 #define THIRD_PARTY_NEPTUNE_RUNTIME_CORE_DEVICE_BUFFER_H_
 
 #include <memory>
+#include <utility>
+#include <vector>
 
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "xla/python/ifrt/array.h"  // from @xla
+#include "xla/python/ifrt/array_spec.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
+#include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
 
 namespace neptune {
 
@@ -48,7 +57,50 @@ struct DeviceBuffer {
   // Shared ownership handle to prevent premature deallocation of backing host
   // memory.
   std::shared_ptr<void> owner = nullptr;
+
+  absl::StatusOr<DeviceBuffer> Reshape(const xla::ifrt::Shape& shape) &&;
+  absl::StatusOr<DeviceBuffer> Bitcast(xla::ifrt::DType dtype,
+                                      const xla::ifrt::Shape& shape) &&;
 };
+
+inline absl::StatusOr<DeviceBuffer> DeviceBuffer::Reshape(
+    const xla::ifrt::Shape& shape) && {
+  if (ifrt_client == nullptr || ifrt_array == nullptr) {
+    return absl::FailedPreconditionError("DeviceBuffer is uninitialized.");
+  }
+  return std::move(*this).Bitcast(ifrt_array->dtype(), shape);
+}
+
+inline absl::StatusOr<DeviceBuffer> DeviceBuffer::Bitcast(
+    xla::ifrt::DType dtype, const xla::ifrt::Shape& shape) && {
+  if (ifrt_client == nullptr || ifrt_array == nullptr) {
+    return absl::FailedPreconditionError("DeviceBuffer is uninitialized.");
+  }
+  xla::ifrt::ShardingRef target_sharding =
+      sharding != nullptr ? sharding : ifrt_array->shared_ptr_sharding();
+  xla::ifrt::ArraySpec new_spec = {
+      .dtype = dtype,
+      .shape = shape,
+      .sharding = target_sharding,
+  };
+  xla::ifrt::ArrayRef array_ref = std::move(ifrt_array);
+  TF_ASSIGN_OR_RETURN(
+      std::vector<xla::ifrt::ArrayRef> new_arrays,
+      ifrt_client->BitcastArrays(
+          absl::MakeSpan(&array_ref, 1),
+          absl::MakeSpan(&new_spec, 1),
+          xla::ifrt::ArrayCopySemantics::kDonateInput));
+  xla::ifrt::ShardingRef result_sharding =
+      new_arrays[0]->shared_ptr_sharding();
+  return DeviceBuffer{
+      .ifrt_client = std::move(ifrt_client),
+      .ifrt_array = std::move(new_arrays[0]),
+      .sharding = std::move(result_sharding),
+      .device_list = std::move(device_list),
+      .memory_kind = memory_kind,
+      .owner = std::move(owner),
+  };
+}
 
 }  // namespace neptune
 
