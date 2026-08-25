@@ -3,6 +3,7 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("@rules_python//python:packaging.bzl", "py_wheel")
 load("//:version.bzl", "VERSION")
+load("@rules_python//python:py_extension.bzl", "py_extension")
 
 package_group(
     name = "friends",
@@ -18,24 +19,21 @@ package(default_visibility = [
     ":internal",
 ])
 
-cc_library(
-    name = "model_runner_linkopts",
+py_extension(
+    name = "model_runner",
+    srcs = ["model_runner.cc"],
+    copts = ["-fexceptions"],
+    features = ["-use_header_modules"],
     linkopts = [
         "-Wl,--gc-sections",
         "-Wl,--icf=all",
     ],
-)
-
-pybind_extension(
-    name = "model_runner",
-    srcs = ["model_runner.cc"],
     visibility = [
         ":friends",
         ":internal",
     ],
     deps = [
         ":ifrt_client_factory",
-        ":model_runner_linkopts",
         ":numpy_utils",
         "//examples/composite_processor:composite_processor_example_support",
         "//runtime/neptune_data:interpreter_composite_processor_support",
