@@ -798,7 +798,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
                   [](int64_t val) {
                     neptune::HostBuffer hb(
                         xla::ifrt::DType(xla::ifrt::DType::Kind::kS64),
-                        xla::ifrt::Shape({1}));
+                        xla::ifrt::Shape({}));
                     int64_t* ptr = reinterpret_cast<int64_t*>(hb.base());
                     *ptr = val;
                     return hb;
@@ -807,7 +807,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
                   [](int64_t val) {
                     neptune::HostBuffer hb(
                         xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
-                        xla::ifrt::Shape({1}));
+                        xla::ifrt::Shape({}));
                     int32_t* ptr = reinterpret_cast<int32_t*>(hb.base());
                     *ptr = val;
                     return hb;
@@ -816,7 +816,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
                   [](std::string val) {
                     neptune::HostBuffer hb(
                         xla::ifrt::DType(xla::ifrt::DType::Kind::kString),
-                        xla::ifrt::Shape({1}));
+                        xla::ifrt::Shape({}));
                     tsl::tstring* ptr =
                         reinterpret_cast<tsl::tstring*>(hb.base());
                     *ptr = std::move(val);
@@ -1032,17 +1032,23 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
       .def_readwrite("model_version", &api::ExecuteMetadata::model_version)
       .def_readwrite("trace_id", &api::ExecuteMetadata::trace_id);
 
-  // Internal API only. Do not export.
   py::class_<api::HostBufferSpec>(m, "HostBufferSpec")
       .def(py::init([](py::object dtype_obj, std::vector<int64_t> shape_vec) {
         xla::nb_dtype xla_dtype =
             nanobind::borrow<xla::nb_dtype>(dtype_obj.ptr());
-        auto ifrt_dtype = xla::DtypeToIfRtDType(xla_dtype);
-        if (!ifrt_dtype.ok()) {
-          throw py::value_error(std::string(ifrt_dtype.status().message()));
+        xla::ifrt::DType ifrt_dtype(xla::ifrt::DType::kInvalid);
+        if (xla_dtype.kind() == 'O' || xla_dtype.kind() == 'U' ||
+            xla_dtype.kind() == 'S' || xla_dtype.kind() == 'T') {
+          ifrt_dtype = xla::ifrt::DType(xla::ifrt::DType::kString);
+        } else {
+          auto status_or_dtype = xla::DtypeToIfRtDType(xla_dtype);
+          if (!status_or_dtype.ok()) {
+            throw py::value_error(std::string(status_or_dtype.status().message()));
+          }
+          ifrt_dtype = *status_or_dtype;
         }
         xla::ifrt::Shape shape(shape_vec);
-        return api::HostBufferSpec{*ifrt_dtype, shape};
+        return api::HostBufferSpec{ifrt_dtype, shape};
       }))
       .def_property_readonly("dtype",
                              [](const api::HostBufferSpec& self) {
