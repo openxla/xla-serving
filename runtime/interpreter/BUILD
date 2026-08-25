@@ -192,7 +192,6 @@ cc_library(
         "@neptune//protos:manifest_cc_proto",
         "@neptune//protos:orchestration_cc_proto",
         "@neptune//protos:type_cc_proto",
-        "@neptune//runtime/core:common_util",
         "@neptune//runtime/core:constants",
         "@neptune//runtime/core:flat_signature",
         "@neptune//runtime/core:ifrt_device_utils",

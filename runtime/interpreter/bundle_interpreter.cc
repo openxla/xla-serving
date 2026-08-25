@@ -27,7 +27,7 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "protos/bundle_orchestration.pb.h"  // from @neptune
-#include "runtime/core/common_util.h"  // from @neptune
+#include "runtime/core/constants.h"  // from @neptune
 #include "runtime/core/flat_signature.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
 #include "runtime/interpreter/interpreter.h"  // from @neptune
@@ -43,6 +43,18 @@
 namespace neptune {
 
 namespace {
+
+absl::Status IsOrbaxModelDirectory(absl::string_view path) {
+  tsl::Env* env = tsl::Env::Default();
+  const std::string neptune_model_manifest_version_path =
+      tsl::io::JoinPath(path, kNeptuneModelManifestVersionTxt);
+  if (env->FileExists(neptune_model_manifest_version_path).ok()) {
+    return absl::OkStatus();
+  }
+  const std::string orbax_model_manifest_version_path =
+      tsl::io::JoinPath(path, kOrbaxModelManifestVersionTxt);
+  return env->FileExists(orbax_model_manifest_version_path);
+}
 
 absl::StatusOr<neptune_bundle_orchestration::BundlePipelines>
 ParseBundleOrchestration(absl::string_view bundle_path) {
