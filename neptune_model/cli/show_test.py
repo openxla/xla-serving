@@ -54,6 +54,29 @@ class ShowTest(absltest.TestCase):
     self.assertIn('Failed to load Neptune model', result.output)
     self.assertEqual(result.exit_code, 1)
 
+  def test_get_stable_hlo_body_polymorphic_function(self):
+    manifest = manifest_pb2.Manifest()
+    poly_fn = manifest_pb2.PolymorphicFunction()
+
+    fn1 = poly_fn.concrete_functions.add()
+    fn1.body.stable_hlo_body.calling_convention_version = 1
+    fn2 = poly_fn.concrete_functions.add()
+    fn2.body.stable_hlo_body.calling_convention_version = 2
+
+    manifest.objects['serving_default'].poly_fn.CopyFrom(poly_fn)
+
+    # Defaults to first concrete function
+    body1 = show._get_stable_hlo_body(manifest, 'serving_default')
+    self.assertEqual(body1.calling_convention_version, 1)
+
+    # Explicit concrete function index with #1
+    body1_explicit = show._get_stable_hlo_body(manifest, 'serving_default #1')
+    self.assertEqual(body1_explicit.calling_convention_version, 1)
+
+    # Explicit concrete function index with #2
+    body2 = show._get_stable_hlo_body(manifest, 'serving_default #2')
+    self.assertEqual(body2.calling_convention_version, 2)
+
 
 if __name__ == '__main__':
   absltest.main()

@@ -46,11 +46,36 @@ def _get_stable_hlo_body(
     manifest: manifest_pb2.Manifest, fn_name: str
 ) -> manifest_pb2.StableHloFunctionBody:
   """Returns the StableHLO function body for the given function."""
-  if fn_name not in manifest.objects:
+  base_name = fn_name
+  concrete_idx = 0
+  if ' #' in fn_name:
+    base_name, idx_str = fn_name.rsplit(' #', 1)
+    if idx_str.isdigit():
+      concrete_idx = int(idx_str) - 1
+  elif '#' in fn_name:
+    base_name, idx_str = fn_name.rsplit('#', 1)
+    if idx_str.isdigit():
+      concrete_idx = int(idx_str) - 1
+
+  if base_name not in manifest.objects:
     _bail(f'Function `{fn_name}` not found in the manifest')
-  if not manifest.objects[fn_name].HasField('function'):
-    _bail(f'Object `{fn_name}` is not a function')
-  fn = manifest.objects[fn_name].function
+
+  obj = manifest.objects[base_name]
+  if obj.HasField('function'):
+    fn = obj.function
+  elif obj.HasField('poly_fn'):
+    poly_fn = obj.poly_fn
+    if not poly_fn.concrete_functions:
+      _bail(f'Polymorphic function `{base_name}` has no concrete functions')
+    if concrete_idx < 0 or concrete_idx >= len(poly_fn.concrete_functions):
+      _bail(
+          f'Invalid concrete function index {concrete_idx + 1} for'
+          f' `{base_name}` (available: 1..{len(poly_fn.concrete_functions)})'
+      )
+    fn = poly_fn.concrete_functions[concrete_idx]
+  else:
+    _bail(f'Object `{base_name}` is not a function')
+
   if not fn.body.HasField('stable_hlo_body'):
     _bail(f'Function `{fn_name}` does not have a StableHLO body')
   return fn.body.stable_hlo_body
