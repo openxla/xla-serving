@@ -18,14 +18,6 @@ package(default_visibility = [
     ":internal",
 ])
 
-cc_library(
-    name = "model_runner_linkopts",
-    linkopts = [
-        "-Wl,--gc-sections",
-        "-Wl,--icf=all",
-    ],
-)
-
 pybind_extension(
     name = "model_runner",
     srcs = ["model_runner.cc"],
@@ -35,7 +27,6 @@ pybind_extension(
     ],
     deps = [
         ":ifrt_client_factory",
-        ":model_runner_linkopts",
         ":numpy_utils",
         "//examples/composite_processor:composite_processor_example_support",
         "//runtime/neptune_data:interpreter_composite_processor_support",
