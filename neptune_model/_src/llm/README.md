@@ -141,7 +141,194 @@ python3 -m neptune_model._src.llm.benchmark_llm \
 
 ---
 
-## 4. Benchmarking Suite (`neptune_model._src.llm.benchmark_llm`)
+## 4. Querying the Server via gRPC
+
+Neptune exposes standard gRPC endpoints over `neptune.serving.PredictionService`
+(RPC method `Predict`). Clients can query the server directly in Python, C++, or
+any gRPC-supported language.
+
+### A. API Specifications
+
+- **Service**: `neptune.serving.PredictionService`
+- **RPC Method**: `Predict` (URI: `/neptune.serving.PredictionService/Predict`)
+- **Request Message**: `neptune.serving.PredictRequest`
+  - `model_spec.name`: Model name matching the server (`--model_name`, e.g. `"qwen3"`).
+  - `model_spec.signature_name`: Serving signature (defaults to `"serving_default"`).
+  - `inputs`: `map<string, neptune.HostBufferProto>`.
+- **Response Message**: `neptune.serving.PredictResponse`
+  - `outputs`: `map<string, neptune.HostBufferProto>`.
+
+#### Expected Tensor I/O Signatures
+
+| Mode | Input Tensor Name | Input DType & Shape | Output Tensor Name | Output DType & Shape |
+| :--- | :--- | :--- | :--- | :--- |
+| **Generation (Greedy / Top-K)** | `"text_input"` | `KIND_STRING`, `[batch_size]` | `"text_output"` | `KIND_STRING`, `[batch_size]` |
+| **Generation (Beam Search)** | `"text_input"` | `KIND_STRING`, `[batch_size]` | `"text_output"` | `KIND_STRING`, `[batch_size, beam_width]` |
+| **Candidate Scoring** | `"text_input"`<br>`"candidate_texts"` | `KIND_STRING`, `[batch_size]`<br>`KIND_STRING`, `[batch_size, num_cands]` | `"scores"`<br>`"step0_logprobs"` | `KIND_F32` / `KIND_F64`, `[batch_size, num_cands]` |
+
+---
+
+### B. Python Querying Snippets
+
+```python
+import grpc
+import numpy as np
+from neptune_model.protos.grpc import host_buffer_pb2, predict_pb2
+from neptune_model.protos.xla.python.ifrt import dtype_pb2
+
+channel = grpc.insecure_channel("localhost:8500")
+predict_fn = channel.unary_unary(
+    "/neptune.serving.PredictionService/Predict",
+    request_serializer=predict_pb2.PredictRequest.SerializeToString,
+    response_deserializer=predict_pb2.PredictResponse.FromString,
+)
+
+
+# --- 1. Text Generation (Greedy, Top-K, Beam Search) ---
+def generate_text(
+    prompts: list[str],
+    model_name: str = "qwen3",
+    signature_name: str = "serving_default",
+) -> list[str] | list[list[str]]:
+  request = predict_pb2.PredictRequest()
+  request.model_spec.name = model_name
+  request.model_spec.signature_name = signature_name
+
+  hb_proto = host_buffer_pb2.HostBufferProto()
+  hb_proto.dtype.kind = dtype_pb2.DTypeProto.Kind.Value("KIND_STRING")
+  hb_proto.shape.dims.append(len(prompts))
+  for p in prompts:
+    hb_proto.string_data.elements.append(p.encode("utf-8"))
+  request.inputs["text_input"].CopyFrom(hb_proto)
+
+  response = predict_fn(request)
+  out = response.outputs["text_output"]
+  elements = [
+      raw.decode("utf-8", errors="replace") for raw in out.string_data.elements
+  ]
+  return np.array(elements, dtype=object).reshape(list(out.shape.dims)).tolist()
+
+
+# --- 2. Candidate Scoring ---
+def score_candidates(
+    prompts: list[str],
+    candidate_texts: list[list[str]],
+    model_name: str = "qwen3",
+    signature_name: str = "serving_default",
+) -> np.ndarray:
+  request = predict_pb2.PredictRequest()
+  request.model_spec.name = model_name
+  request.model_spec.signature_name = signature_name
+
+  batch_size = len(prompts)
+  num_cands = len(candidate_texts[0])
+
+  # text_input: shape [batch_size]
+  p_proto = host_buffer_pb2.HostBufferProto()
+  p_proto.dtype.kind = dtype_pb2.DTypeProto.Kind.Value("KIND_STRING")
+  p_proto.shape.dims.append(batch_size)
+  for p in prompts:
+    p_proto.string_data.elements.append(p.encode("utf-8"))
+  request.inputs["text_input"].CopyFrom(p_proto)
+
+  # candidate_texts: shape [batch_size, num_cands]
+  c_proto = host_buffer_pb2.HostBufferProto()
+  c_proto.dtype.kind = dtype_pb2.DTypeProto.Kind.Value("KIND_STRING")
+  c_proto.shape.dims.extend([batch_size, num_cands])
+  for batch in candidate_texts:
+    for cand in batch:
+      c_proto.string_data.elements.append(cand.encode("utf-8"))
+  request.inputs["candidate_texts"].CopyFrom(c_proto)
+
+  response = predict_fn(request)
+  scores_buf = response.outputs["scores"]
+  dtype = (
+      np.float32
+      if scores_buf.dtype.kind == dtype_pb2.DTypeProto.Kind.Value("KIND_F32")
+      else np.float64
+  )
+  return np.frombuffer(scores_buf.raw_data, dtype=dtype).reshape(
+      list(scores_buf.shape.dims)
+  )
+```
+
+---
+
+### C. C++ Querying Snippets
+
+```cpp
+#include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "include/grpcpp/create_channel.h"
+#include "protos/grpc/host_buffer.pb.h"
+#include "protos/grpc/predict.pb.h"
+#include "protos/grpc/prediction_service.grpc.pb.h"
+#include "xla/python/ifrt/dtype.pb.h"
+
+// --- 1. Text Generation ---
+void QueryTextGeneration(neptune::serving::PredictionService::Stub* stub) {
+  neptune::serving::PredictRequest request;
+  request.mutable_model_spec()->set_name("qwen3");
+  request.mutable_model_spec()->set_signature_name("serving_default");
+
+  auto* input = &(*request.mutable_inputs())["text_input"];
+  input->mutable_dtype()->set_kind(xla::ifrt::DTypeProto::KIND_STRING);
+  input->mutable_shape()->add_dims(1);
+  input->mutable_string_data()->add_elements(
+      "The most unexpected thing happened when I opened the door,");
+
+  grpc::ClientContext context;
+  neptune::serving::PredictResponse response;
+  if (stub->Predict(&context, request, &response).ok()) {
+    const auto& out = response.outputs().at("text_output");
+    for (const auto& elem : out.string_data().elements()) {
+      std::cout << "Completion: " << elem << std::endl;
+    }
+  }
+}
+
+// --- 2. Candidate Scoring ---
+void QueryCandidateScoring(neptune::serving::PredictionService::Stub* stub) {
+  neptune::serving::PredictRequest request;
+  request.mutable_model_spec()->set_name("qwen3");
+  request.mutable_model_spec()->set_signature_name("serving_default");
+
+  // text_input: shape [1]
+  auto* text_in = &(*request.mutable_inputs())["text_input"];
+  text_in->mutable_dtype()->set_kind(xla::ifrt::DTypeProto::KIND_STRING);
+  text_in->mutable_shape()->add_dims(1);
+  text_in->mutable_string_data()->add_elements("Context prompt");
+
+  // candidate_texts: shape [1, 2]
+  auto* cands_in = &(*request.mutable_inputs())["candidate_texts"];
+  cands_in->mutable_dtype()->set_kind(xla::ifrt::DTypeProto::KIND_STRING);
+  cands_in->mutable_shape()->add_dims(1);
+  cands_in->mutable_shape()->add_dims(2);
+  cands_in->mutable_string_data()->add_elements(" candidate one");
+  cands_in->mutable_string_data()->add_elements(" candidate two");
+
+  grpc::ClientContext context;
+  neptune::serving::PredictResponse response;
+  if (stub->Predict(&context, request, &response).ok()) {
+    const auto& scores = response.outputs().at("scores");
+    const float* score_data = reinterpret_cast<const float*>(scores.raw_data().data());
+    std::cout << "Scores: " << score_data[0] << ", " << score_data[1] << std::endl;
+  }
+}
+
+int main() {
+  auto channel = grpc::CreateChannel("localhost:8500", grpc::InsecureChannelCredentials());
+  auto stub = neptune::serving::PredictionService::NewStub(channel);
+  QueryTextGeneration(stub.get());
+  QueryCandidateScoring(stub.get());
+  return 0;
+}
+```
+
+## 5. Benchmarking Suite (`neptune_model._src.llm.benchmark_llm`)
 
 Use the consolidated `benchmark_llm` CLI to benchmark model generation loops,
 C++ model runner bindings, or gRPC serving performance. It supports three modes
@@ -193,7 +380,7 @@ python3 -m neptune_model._src.llm.benchmark_llm \
 
 ---
 
-## 5. Running Unit & Integration Tests
+## 6. Running Unit & Integration Tests
 
 ### Pytest Testing (OSS Setup)
 Run unit tests with pytest:
@@ -205,9 +392,11 @@ pytest -s neptune_model/_src/llm/benchmark_llm_test.py
 pytest -s neptune_model/_src/llm/tpu_inference/tpu_exporter_test.py
 ```
 
+<!-- copybara:strip_begin -->
 ### Google3 / Blaze Testing
 Run the full LLM test suite using `blaze`:
 
 ```bash
 SKYBUILD=1 blaze test //third_party/neptune/neptune_model/_src/llm/...
 ```
+<!-- copybara:strip_end -->
