@@ -557,6 +557,7 @@ def save_tf_functions(
     ],
     *,
     trackable_resources: Any = None,
+    save_options: tf.saved_model.SaveOptions | None = None,
     tf_saved_model_sub_dir: str = NPT_TF_SAVED_MODEL_SUB_DIR,
 ) -> dict[str, persistence_lib.GlobalSupplemental]:
   """Saves TensorFlow (TF) concrete functions with names to a TF SavedModel.
@@ -573,6 +574,8 @@ def save_tf_functions(
       (directly or indirectly) must be present in this structure. Otherwise, an
       "untracked resource" error will be raised. If tf.Module is passed, it will
       be used to create the saved model.
+    save_options: An optional `tf.saved_model.SaveOptions` for configuring save
+      options.
     tf_saved_model_sub_dir: Saved model dir name relative to `model_dir`.
 
   Returns:
@@ -595,7 +598,9 @@ def save_tf_functions(
     tf_module.resources = trackable_resources
 
   target_path = os.path.join(model_dir, tf_saved_model_sub_dir)
-  tf.saved_model.save(tf_module, target_path, signatures=wrapped_fns)
+  tf.saved_model.save(
+      tf_module, target_path, signatures=wrapped_fns, options=save_options
+  )
 
   _add_defaults_to_signatures(target_path, fns)
 

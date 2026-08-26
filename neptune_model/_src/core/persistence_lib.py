@@ -21,6 +21,7 @@ persisted OBM module.
 from collections.abc import Mapping, Sequence
 import dataclasses
 import pathlib
+from typing import Any
 
 from absl import logging
 
@@ -76,6 +77,9 @@ class SaveOptions:
       compile external artifacts (e.g. PJRT executables) that takes serialized
       MLIR bytecode, kept variable indices, and the number of weights, and
       returns an iterable of `manifest_utils.CompiledArtifact`s.
+    extra_options: Optional. A map of extra options for saving (e.g.,
+      `tf.saved_model.SaveOptions` under key `"tf_save_options"` when saving TF
+      pre/post-processors).
   """
 
   version: int | None = None
@@ -87,6 +91,7 @@ class SaveOptions:
   save_shlo_to_file: bool = False
   include_stablehlo: bool = True
   compiler_hook: manifest_utils.CompilerHook | None = None
+  extra_options: Mapping[str, Any] | None = None
 
 
 def save(
