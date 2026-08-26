@@ -78,11 +78,8 @@ inline absl::StatusOr<DeviceBuffer> DeviceBuffer::Bitcast(
   }
   xla::ifrt::ShardingRef target_sharding =
       sharding != nullptr ? sharding : ifrt_array->shared_ptr_sharding();
-  xla::ifrt::ArraySpec new_spec = {
-      .dtype = dtype,
-      .shape = shape,
-      .sharding = target_sharding,
-  };
+  xla::ifrt::ArraySpec new_spec(dtype, shape, target_sharding,
+                                /*layout=*/nullptr);
   xla::ifrt::ArrayRef array_ref = std::move(ifrt_array);
   TF_ASSIGN_OR_RETURN(
       std::vector<xla::ifrt::ArrayRef> new_arrays,
