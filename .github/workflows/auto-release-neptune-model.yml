@@ -96,11 +96,13 @@ jobs:
           bazel test -c opt //data/... \
             --@rules_python//python/config_settings:python_version=3.12 \
             --ui_event_filters=-info,-stdout,-stderr \
-            --noshow_progress
+            --show_progress_rate_limit=30 \
+            --curses=no
           bazel build -c opt //data:neptune_data //data:neptune_data_test //runtime/python:neptune_model_runner \
             --@rules_python//python/config_settings:python_version=3.12 \
             --ui_event_filters=-info,-stdout,-stderr \
-            --noshow_progress
+            --show_progress_rate_limit=30 \
+            --curses=no
 
       - name: Install neptune_data, neptune_data_test, and neptune_model_runner wheels
         run: |

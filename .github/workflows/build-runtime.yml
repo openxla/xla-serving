@@ -31,10 +31,14 @@ jobs:
 
       - name: Build Neptune Runtime
         run: |
-          bazel build //runtime/... \
-          --ui_event_filters=-info,-stdout,-stderr \
-          --noshow_progress
+          bazel build -c opt //runtime/... \
+            --ui_event_filters=-info,-stdout,-stderr \
+            --show_progress_rate_limit=30 \
+            --curses=no
 
       - name: Run Runtime Tests
         run: |
-          bazel test --test_output=errors //runtime/...
+          bazel test -c opt --test_output=errors //runtime/... \
+            --ui_event_filters=-info,-stdout,-stderr \
+            --show_progress_rate_limit=30 \
+            --curses=no

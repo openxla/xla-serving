@@ -56,7 +56,11 @@ jobs:
 
       - name: Build neptune_data and neptune_data_test wheels
         run: |
-          bazel build -c opt //data:neptune_data //data:neptune_data_test --@rules_python//python/config_settings:python_version=${{ matrix.python-version }}
+          bazel build -c opt //data:neptune_data //data:neptune_data_test \
+            --@rules_python//python/config_settings:python_version=${{ matrix.python-version }} \
+            --ui_event_filters=-info,-stdout,-stderr \
+            --show_progress_rate_limit=30 \
+            --curses=no
 
       - name: Install neptune_data and neptune_data_test wheels
         run: |

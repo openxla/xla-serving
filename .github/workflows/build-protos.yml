@@ -35,4 +35,7 @@ jobs:
         # This purely validates that the syntax is correct and Bazel can resolve the graph
         run: |
           echo "Validating pure Bazel proto compilation..."
-          bazel build //protos:all
+          bazel build -c opt //protos:all \
+            --ui_event_filters=-info,-stdout,-stderr \
+            --show_progress_rate_limit=30 \
+            --curses=no
