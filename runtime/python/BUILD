@@ -21,10 +21,6 @@ package(default_visibility = [
 pybind_extension(
     name = "model_runner",
     srcs = ["model_runner.cc"],
-    visibility = [
-        ":friends",
-        ":internal",
-    ],
     deps = [
         ":ifrt_client_factory",
         ":numpy_utils",
