@@ -31,4 +31,4 @@ class Value(abc.ABC):
 class ExternalValue(Value):
   data: manifest_pb2.UnstructuredData
   type: jaxtyping.PyTree[shlo_type.ShloTensorSpec] | None = None
-  loader_type: int | None = None
+  loader_type: manifest_pb2.LoaderType | None = None

@@ -14,7 +14,10 @@
 
 """Utilities for building Manifest proto."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+import dataclasses
+import re
+from typing import Protocol, TypeGuard
 from absl import logging
 from neptune_model._src.core import constants
 from neptune_model._src.core import device_assignment
@@ -28,19 +31,77 @@ from neptune_model._src.core import value
 from neptune_model.protos import manifest_pb2
 
 
+# Note: Single-device portable executables decouple binary from host device IDs.
+# Multi-device execution in IFRT/XLA requires topology-bound executables.
+@dataclasses.dataclass(frozen=True)
+class CompiledArtifact:
+  """The resulting artifact from an Ahead-Of-Time (AOT) compilation hook."""
+
+  pjrt_executable_bytes: bytes
+  kept_var_idx: Sequence[int]
+  target_topology_label: str
+  executable_version: bytes
+
+
+class CompilerHook(Protocol):
+  """Protocol for an Ahead-Of-Time (AOT) compiler callback.
+
+  Invoked during manifest generation to compile serialized StableHLO modules
+  into hardware-specific executable artifacts (e.g. PJRT executables).
+  """
+
+  def __call__(
+      self,
+      mlir_module_serialized: bytes,
+      module_kept_var_idx: Sequence[int],
+      num_weights: int,
+      /,
+  ) -> Iterable[CompiledArtifact]:
+    """Compiles a serialized MLIR module into compiled artifacts.
+
+    Args:
+      mlir_module_serialized: Serialized StableHLO MLIR bytecode/module.
+      module_kept_var_idx: Indices of kept variables/arguments in the module.
+      num_weights: Number of weights (data names) passed to the function.
+
+    Returns:
+      An iterable of `CompiledArtifact` objects containing compiled executable
+      payloads and associated topology metadata.
+    """
+    ...
+
+
 def _build_function(
     fn: function.Function,
     target_dir: str,
     name: str,
     visibility: manifest_pb2.Visibility,
     save_shlo_to_file: bool = False,
+    compiler_hook: CompilerHook | None = None,
+    include_stablehlo: bool = True,
 ) -> manifest_pb2.Function:
-  """Builds a `manifest_pb2.Function` proto from a `function.Function` object."""
+  """Builds a `manifest_pb2.Function` proto from a `Function` object.
+
+  Args:
+    fn: The `Function` object to build into a proto.
+    target_dir: Target directory where external payload files are written.
+    name: Function name in the manifest.
+    visibility: Visibility level (PUBLIC or PRIVATE).
+    save_shlo_to_file: If True, writes StableHLO MLIR payload to a separate file
+      rather than inlining it in the manifest.
+    compiler_hook: Optional `CompilerHook` callback to compile StableHLO modules
+      into AOT compiled executables.
+    include_stablehlo: If True, includes the StableHLO payload in the exported
+      function proto.
+
+  Returns:
+    A populated `manifest_pb2.Function` proto.
+  """
 
   fn_proto = manifest_pb2.Function()
   fn_proto.visibility = visibility
 
-  if fn.data_names is not None:
+  if fn.data_names:
     fn_proto.data_names.extend(fn.data_names)
 
   fn_proto.signature.CopyFrom(
@@ -51,44 +112,82 @@ def _build_function(
 
   if isinstance(fn, shlo_function.ShloFunction):
     stable_hlo_body = fn_proto.body.stable_hlo_body
-    if save_shlo_to_file:
-      shlo_data = manifest_pb2.UnstructuredData(
-          inlined_bytes=fn.mlir_module_serialized,
-          mime_type=constants.SHLO_MIME_TYPE,
-          version=constants.SHLO_VERSION,
-      )
-      filename = unstructured_data.build_relative_filepath_from_extension(
-          name, "shlo"
-      )
-      shlo_file_data = unstructured_data.write_inlined_data_to_file(
-          shlo_data, target_dir, filename
-      )
-      stable_hlo_body.stable_hlo.CopyFrom(shlo_file_data)
-    else:
-      stable_hlo_body.stable_hlo.inlined_bytes = fn.mlir_module_serialized
-      stable_hlo_body.stable_hlo.mime_type = constants.SHLO_MIME_TYPE
-      stable_hlo_body.stable_hlo.version = constants.SHLO_VERSION
+    if include_stablehlo:
+      if save_shlo_to_file:
+        shlo_data = manifest_pb2.UnstructuredData(
+            inlined_bytes=fn.mlir_module_serialized,
+            mime_type=constants.SHLO_MIME_TYPE,
+            version=constants.SHLO_VERSION,
+        )
+        filename = unstructured_data.build_relative_filepath_from_extension(
+            name, "shlo"
+        )
+        shlo_file_data = unstructured_data.write_inlined_data_to_file(
+            shlo_data, target_dir, filename
+        )
+        stable_hlo_body.stable_hlo.CopyFrom(shlo_file_data)
+      else:
+        stable_hlo_body.stable_hlo.inlined_bytes = fn.mlir_module_serialized
+        stable_hlo_body.stable_hlo.mime_type = constants.SHLO_MIME_TYPE
+        stable_hlo_body.stable_hlo.version = constants.SHLO_VERSION
     stable_hlo_body.calling_convention_version = fn.calling_convention_version
 
-    for lowering_platform in fn.lowering_platforms:
-      stable_hlo_body.lowering_platforms.append(lowering_platform)
+    stable_hlo_body.lowering_platforms.extend(fn.lowering_platforms)
 
     stable_hlo_body.module_kept_var_idx.extend(fn.module_kept_var_idx)
 
     # Serialize and add all supplementals to the function body proto.
-    if fn.supplemental_info is not None:
-      for supp_name, supp in fn.supplemental_info.items():
-        supp = supp.serializable_to_proto()
-        supp_proto = supp.proto
+    for supp_name, supp in (fn.supplemental_info or {}).items():
+      supp = supp.serializable_to_proto()
+      supp_proto = supp.proto
 
-        if supp.ext_name is not None:
-          filename = unstructured_data.build_relative_filepath_from_extension(
-              name + "_" + supp_name + "_supplemental", supp.ext_name
-          )
-          supp_proto = unstructured_data.write_inlined_data_to_file(
-              supp_proto, target_dir, filename
-          )
-        stable_hlo_body.supplemental_info[supp_name].CopyFrom(supp_proto)
+      if supp.ext_name:
+        filename = unstructured_data.build_relative_filepath_from_extension(
+            name + "_" + supp_name + "_supplemental", supp.ext_name
+        )
+        supp_proto = unstructured_data.write_inlined_data_to_file(
+            supp_proto, target_dir, filename
+        )
+      stable_hlo_body.supplemental_info[supp_name].CopyFrom(supp_proto)
+
+    if compiler_hook:
+      num_weights = len(fn.data_names or [])
+      safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
+      artifacts = compiler_hook(
+          fn.mlir_module_serialized, fn.module_kept_var_idx, num_weights
+      )
+      for artifact in artifacts:
+        safe_label = re.sub(
+            r"[^a-zA-Z0-9_-]", "_", artifact.target_topology_label
+        )
+        filename = f"{safe_name}_{safe_label}_pjrt_executable.bin"
+        pjrt_proto = manifest_pb2.UnstructuredData(
+            inlined_bytes=artifact.pjrt_executable_bytes,
+            mime_type=constants.IFRT_EXECUTABLE_MIME_TYPE,
+        )
+        pjrt_proto = unstructured_data.write_inlined_data_to_file(
+            pjrt_proto, target_dir, filename
+        )
+        compiled_exec_proto = stable_hlo_body.compiled_executables.add()
+        compiled_exec_proto.aot_executable.CopyFrom(pjrt_proto)
+        compiled_exec_proto.target_topology_label = (
+            artifact.target_topology_label
+        )
+        compiled_exec_proto.aot_kept_var_idx.extend(artifact.kept_var_idx)
+        compiled_exec_proto.executable_version = artifact.executable_version
+
+    # Fail-fast payload validation assertion
+    has_stable_hlo = (
+        stable_hlo_body.HasField("stable_hlo") if include_stablehlo else False
+    )
+    has_aot_executables = bool(stable_hlo_body.compiled_executables)
+
+    if not (has_stable_hlo or has_aot_executables):
+      raise ValueError(
+          f"Function '{name}' contains no executable payload. When"
+          " `include_stablehlo=False`, `compiler_hook` must produce at least"
+          " one AOT compiled executable artifact."
+      )
 
   elif isinstance(fn, serializable_function.SerializableFunction):
     body_proto = fn.body.proto
@@ -114,7 +213,7 @@ def _build_function(
 def _build_device_assignment_by_coords_proto(
     device_assignments: Sequence[device_assignment.DeviceAssignment],
 ) -> manifest_pb2.DeviceAssignmentByCoords:
-  """Builds a DeviceAssignmentByCoords proto from a sequence of DeviceAssignment.
+  """Builds a DeviceAssignmentByCoords proto from device assignments.
 
   Args:
     device_assignments: A sequence of DeviceAssignment objects.
@@ -134,15 +233,20 @@ def _build_device_assignment_by_coords_proto(
   return proto
 
 
-def _is_seq_of_functions(obj: saveable.Saveable) -> bool:
-  """Checks if the object is a sequence of `Function`s."""
-  return isinstance(obj, Sequence) and all(
-      isinstance(elem, function.Function) for elem in obj
+def _is_seq_of_functions(
+    obj: saveable.Saveable,
+) -> TypeGuard[Sequence[function.Function]]:
+  """Checks if the object is a non-empty sequence of `Function`s."""
+  return (
+      isinstance(obj, Sequence)
+      and not isinstance(obj, (str, bytes))
+      and bool(obj)
+      and all(isinstance(elem, function.Function) for elem in obj)
   )
 
 
 def build_manifest_proto(
-    obm_module: dict[str, saveable.Saveable],
+    obm_module: Mapping[str, saveable.Saveable],
     target_dir: str,
     supplementals: Mapping[str, manifest_pb2.UnstructuredData] | None = None,
     visibilities: Mapping[str, manifest_pb2.Visibility] | None = None,
@@ -150,11 +254,28 @@ def build_manifest_proto(
         Sequence[device_assignment.DeviceAssignment] | None
     ) = None,
     save_shlo_to_file: bool = False,
+    compiler_hook: CompilerHook | None = None,
+    include_stablehlo: bool = True,
 ) -> manifest_pb2.Manifest:
-  """Builds a manifest proto from an OBM module."""
+  """Builds a manifest proto from an OBM module.
 
-  if visibilities is None:
-    visibilities = {}
+  Args:
+    obm_module: A mapping from object name to saveable module components.
+    target_dir: Target directory where external payload files are written.
+    supplementals: Optional global supplemental unstructured data entries.
+    visibilities: Optional mapping from object name to visibility.
+    device_assignments: Optional sequence of device assignments.
+    save_shlo_to_file: If True, writes StableHLO MLIR payloads to separate
+      files.
+    compiler_hook: Optional `CompilerHook` callback to compile StableHLO modules
+      into AOT compiled executables.
+    include_stablehlo: If True, includes StableHLO payloads in the manifest.
+
+  Returns:
+    A populated `manifest_pb2.Manifest` proto.
+  """
+
+  visibilities = visibilities or {}
   manifest = manifest_pb2.Manifest()
 
   for name, obj in obm_module.items():
@@ -162,7 +283,15 @@ def build_manifest_proto(
 
     if isinstance(obj, function.Function):
       manifest.objects[name].function.CopyFrom(
-          _build_function(obj, target_dir, name, visibility, save_shlo_to_file)
+          _build_function(
+              obj,
+              target_dir,
+              name,
+              visibility,
+              save_shlo_to_file,
+              compiler_hook,
+              include_stablehlo,
+          )
       )
 
     elif _is_seq_of_functions(obj):
@@ -173,34 +302,36 @@ def build_manifest_proto(
               f"__{name}_{i}",
               visibility,
               save_shlo_to_file,
+              compiler_hook,
+              include_stablehlo,
           )
-          for i, fn in enumerate(obj)  # pyrefly: ignore[bad-argument-type]
+          for i, fn in enumerate(obj)
       ]
       manifest.objects[name].poly_fn.concrete_functions.extend(fn_protos)
 
     elif isinstance(obj, value.ExternalValue):
-      if obj.type is not None:
+      if obj.type:
         raise NotImplementedError(
             "Serializing `ExternalValue.type` is not supported yet."
         )
       manifest.objects[name].value.external.data.CopyFrom(obj.data)
       if obj.loader_type is not None:
-        manifest.objects[name].value.external.loader_type = obj.loader_type  # pyrefly: ignore[bad-assignment]
+        manifest.objects[name].value.external.loader_type = obj.loader_type
 
     else:
       raise ValueError(
           f"Unsupported module value type at key {name}: {type(obj)}"
       )
 
-  if supplementals is not None:
+  if supplementals:
     for name, supp in supplementals.items():
       manifest.supplemental_info[name].CopyFrom(supp)
 
-  if device_assignments is not None:
+  if device_assignments:
     manifest.device_assignment_by_coords.CopyFrom(
         _build_device_assignment_by_coords_proto(device_assignments)
     )
 
-  logging.vlog(3, f"Final manifest proto: {manifest}")
+  logging.vlog(3, "Final manifest proto: %s", manifest)
 
   return manifest

@@ -22,6 +22,13 @@ SHLO_MIME_TYPE = 'application/x.mlir-stablehlo'
 SHLO_VERSION = '1.0'
 
 ################################################################################
+# Executable constants
+################################################################################
+
+# The mime type of the compiled IFRT / PJRT executable payload in the manifest.
+IFRT_EXECUTABLE_MIME_TYPE = 'application/x-ifrt-executable'
+
+################################################################################
 # Manifest model format constants
 ################################################################################
 

@@ -252,7 +252,7 @@ def convert_path_to_value(
     path: str,
     mime_type: str | None = None,
     version: str | None = None,
-    loader_type: int | None = None,
+    loader_type: manifest_pb2.LoaderType | None = None,
 ) -> value.ExternalValue:
   return value.ExternalValue(
       data=manifest_pb2.UnstructuredData(

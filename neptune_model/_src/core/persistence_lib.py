@@ -70,6 +70,12 @@ class SaveOptions:
       saved in the manifest.pb.
     save_shlo_to_file: Optional. If true, save the SHLO in a separate file
       instead of inlining it in the manifest.pb.
+    include_stablehlo: Optional. A boolean flag indicating whether to include
+      the StableHLO payload in the exported manifest. Defaults to True.
+    compiler_hook: Optional. A `manifest_utils.CompilerHook` callback invoked to
+      compile external artifacts (e.g. PJRT executables) that takes serialized
+      MLIR bytecode, kept variable indices, and the number of weights, and
+      returns an iterable of `manifest_utils.CompiledArtifact`s.
   """
 
   version: int | None = None
@@ -79,10 +85,12 @@ class SaveOptions:
       Sequence[device_assignment.DeviceAssignment] | None
   ) = None
   save_shlo_to_file: bool = False
+  include_stablehlo: bool = True
+  compiler_hook: manifest_utils.CompilerHook | None = None
 
 
 def save(
-    module: dict[str, saveable.Saveable],
+    module: Mapping[str, saveable.Saveable],
     target_dir: str,
     options: SaveOptions,
 ) -> None:
@@ -93,7 +101,7 @@ def save(
   logging.info('Save version: %d', options.version)
   # Generate and export the manifest proto.
   supplemental_info = None
-  if options.supplementals is not None:
+  if options.supplementals:
     supplemental_info = {
         name: _save_supplemental(supp, target_dir)
         for name, supp in options.supplementals.items()
@@ -106,6 +114,8 @@ def save(
       visibilities=options.visibility,
       device_assignments=options.device_assignment_by_coords,
       save_shlo_to_file=options.save_shlo_to_file,
+      compiler_hook=options.compiler_hook,
+      include_stablehlo=options.include_stablehlo,
   )
 
   manifest_path = pathlib.Path(target_dir) / constants.MANIFEST_FILE_PATH
@@ -145,12 +155,14 @@ def _load_model_version(
       pathlib.Path(saved_state_dir) / constants.MODEL_VERSION_FILENAME
   )
   if file_utils.exists(str(current_path)):
+    # pylint: disable=g-unsafe-pickle-load
     return metadata.ModelVersion.load(str(current_path))
 
   legacy_path = (
       pathlib.Path(saved_state_dir) / constants.MODEL_VERSION_LEGACY_FILENAME
   )
   if file_utils.exists(str(legacy_path)):
+    # pylint: disable=g-unsafe-pickle-load
     return metadata.ModelVersion.load(str(legacy_path))
 
   raise FileNotFoundError(

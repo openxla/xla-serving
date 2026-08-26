@@ -14,13 +14,16 @@
 
 """Persistence tests (saving/loading the model)."""
 
+from collections.abc import Sequence
 import os
 
 from absl.testing import absltest
+from absl.testing import parameterized
 
 from neptune_model._src.core import constants
 from neptune_model._src.core import device_assignment
 from neptune_model._src.core import file_utils
+from neptune_model._src.core import manifest_utils
 from neptune_model._src.core import persistence_lib
 from neptune_model._src.core import serializable_function
 from neptune_model._src.core import shlo_function
@@ -32,7 +35,7 @@ from neptune_model.protos import manifest_pb2
 from neptune_model.protos import type_pb2
 
 
-class PersistenceLibTest(test_utils.NptTestCase):
+class PersistenceLibTest(test_utils.NptTestCase, parameterized.TestCase):
 
   def test_save_succeeds_with_all_fields(self):
     target_dir: str = self.create_tempdir().full_path
@@ -167,6 +170,258 @@ class PersistenceLibTest(test_utils.NptTestCase):
     self.assertTrue(
         os.path.exists(os.path.join(target_dir, '__my_seq_of_funcs_1.pb'))
     )
+
+  def test_save_without_stablehlo(self):
+    target_dir: str = self.create_tempdir().full_path
+    func1 = TestShloFunction(b'func1')
+
+    def custom_compiler_hook(
+        _mlir_bytes: bytes,
+        module_kept_var_idx: Sequence[int],
+        _num_weights: int,
+    ):
+      return [
+          manifest_utils.CompiledArtifact(
+              pjrt_executable_bytes=b'compiled_bytes',
+              kept_var_idx=list(module_kept_var_idx),
+              target_topology_label='target_label',
+              executable_version=b'v1',
+          )
+      ]
+
+    persistence_lib.save(
+        module={'my_func': func1},
+        target_dir=target_dir,
+        options=persistence_lib.SaveOptions(
+            version=2,
+            include_stablehlo=False,
+            compiler_hook=custom_compiler_hook,
+        ),
+    )
+    actual_manifest = persistence_lib.load(target_dir)
+    self.assertTrue(
+        actual_manifest.objects['my_func'].function.body.HasField(
+            'stable_hlo_body'
+        )
+    )
+    self.assertFalse(
+        actual_manifest.objects[
+            'my_func'
+        ].function.body.stable_hlo_body.HasField('stable_hlo')
+    )
+    exec_protos = actual_manifest.objects[
+        'my_func'
+    ].function.body.stable_hlo_body.compiled_executables
+    self.assertLen(exec_protos, 1)
+    self.assertEqual(exec_protos[0].target_topology_label, 'target_label')
+    self.assertEqual(list(exec_protos[0].aot_kept_var_idx), [0, 1])
+    self.assertEqual(exec_protos[0].executable_version, b'v1')
+    self.assertEqual(
+        exec_protos[0].aot_executable.mime_type,
+        constants.IFRT_EXECUTABLE_MIME_TYPE,
+    )
+    expected_bin_path = os.path.join(
+        target_dir, 'my_func_target_label_pjrt_executable.bin'
+    )
+    self.assertTrue(os.path.exists(expected_bin_path))
+    with open(expected_bin_path, 'rb') as f:
+      self.assertEqual(f.read(), b'compiled_bytes')
+
+  def test_save_without_stablehlo_and_no_hook_fails(self):
+    """Verifies ValueError when saving without StableHLO and no compiler
+
+    hook.
+    """
+    target_dir: str = self.create_tempdir().full_path
+    func1 = TestShloFunction(b'func1')
+    with self.assertRaisesRegex(ValueError, 'contains no executable payload'):
+      persistence_lib.save(
+          module={'my_func': func1},
+          target_dir=target_dir,
+          options=persistence_lib.SaveOptions(
+              version=2, include_stablehlo=False, compiler_hook=None
+          ),
+      )
+
+  @parameterized.parameters(None, 1, 0, -1)
+  def test_save_fails_with_invalid_version(self, invalid_version):
+    """Verifies ValueError when saving with version < 2 or None."""
+    target_dir: str = self.create_tempdir().full_path
+    func1 = TestShloFunction(b'func1')
+    with self.assertRaisesRegex(ValueError, 'Version must be >= 2'):
+      persistence_lib.save(
+          module={'my_func': func1},
+          target_dir=target_dir,
+          options=persistence_lib.SaveOptions(version=invalid_version),
+      )
+
+  def test_aot_save_and_load_with_compiler_hook(self):
+    target_dir: str = self.create_tempdir().full_path
+    func1 = TestShloFunction(b'test_stablehlo')
+
+    def custom_compiler_hook(
+        mlir_bytes: bytes, module_kept_var_idx: Sequence[int], num_weights: int
+    ):
+      self.assertEqual(mlir_bytes, b'test_stablehlo')
+      self.assertSequenceEqual(module_kept_var_idx, (0, 1))
+      self.assertEqual(num_weights, 0)
+      return [
+          manifest_utils.CompiledArtifact(
+              pjrt_executable_bytes=b'compiled_bytes_cpu',
+              kept_var_idx=[0],
+              target_topology_label='cpu_topology_label',
+              executable_version=b'version_cpu',
+          )
+      ]
+
+    persistence_lib.save(
+        module={'my_func': func1},
+        target_dir=target_dir,
+        options=persistence_lib.SaveOptions(
+            version=2,
+            compiler_hook=custom_compiler_hook,
+        ),
+    )
+
+    actual_manifest = persistence_lib.load(target_dir)
+    self.assertIn('my_func', actual_manifest.objects)
+    fn_obj = actual_manifest.objects['my_func'].function
+    self.assertLen(fn_obj.body.stable_hlo_body.compiled_executables, 1)
+    self.assertEqual(
+        fn_obj.body.stable_hlo_body.compiled_executables[
+            0
+        ].aot_executable.file_system_location.string_path,
+        'my_func_cpu_topology_label_pjrt_executable.bin',
+    )
+    self.assertEqual(
+        fn_obj.body.stable_hlo_body.compiled_executables[
+            0
+        ].target_topology_label,
+        'cpu_topology_label',
+    )
+    self.assertEqual(
+        list(
+            fn_obj.body.stable_hlo_body.compiled_executables[0].aot_kept_var_idx
+        ),
+        [0],
+    )
+    self.assertEqual(
+        fn_obj.body.stable_hlo_body.compiled_executables[0].executable_version,
+        b'version_cpu',
+    )
+    self.assertEqual(
+        fn_obj.body.stable_hlo_body.compiled_executables[
+            0
+        ].aot_executable.mime_type,
+        constants.IFRT_EXECUTABLE_MIME_TYPE,
+    )
+
+  def test_aot_save_and_load_poly_fn_with_compiler_hook(self):
+    """Verifies save and load roundtrip of polymorphic function with AOT
+
+    compiler hook.
+    """
+    target_dir: str = self.create_tempdir().full_path
+    func0 = TestShloFunction(b'test_stablehlo_bucket0')
+    func1 = TestShloFunction(b'test_stablehlo_bucket1')
+
+    def custom_compiler_hook(
+        mlir_bytes: bytes, module_kept_var_idx: Sequence[int], _num_weights: int
+    ):
+      if mlir_bytes == b'test_stablehlo_bucket0':
+        label = 'bucket0_target'
+        kept_var_idx = [0]
+      else:
+        label = 'bucket1_target'
+        kept_var_idx = list(module_kept_var_idx)
+      return [
+          manifest_utils.CompiledArtifact(
+              pjrt_executable_bytes=b'compiled_' + mlir_bytes,
+              kept_var_idx=kept_var_idx,
+              target_topology_label=label,
+              executable_version=b'version_v1',
+          )
+      ]
+
+    persistence_lib.save(
+        module={'my_poly_func': [func0, func1]},
+        target_dir=target_dir,
+        options=persistence_lib.SaveOptions(
+            version=2,
+            compiler_hook=custom_compiler_hook,
+        ),
+    )
+
+    actual_manifest = persistence_lib.load(target_dir)
+    self.assertIn('my_poly_func', actual_manifest.objects)
+    poly_obj = actual_manifest.objects['my_poly_func'].poly_fn
+    self.assertLen(poly_obj.concrete_functions, 2)
+
+    cf0 = poly_obj.concrete_functions[0]
+    self.assertLen(cf0.body.stable_hlo_body.compiled_executables, 1)
+    self.assertEqual(
+        cf0.body.stable_hlo_body.compiled_executables[0].target_topology_label,
+        'bucket0_target',
+    )
+    self.assertEqual(
+        list(cf0.body.stable_hlo_body.compiled_executables[0].aot_kept_var_idx),
+        [0],
+    )
+    self.assertEqual(
+        cf0.body.stable_hlo_body.compiled_executables[0].executable_version,
+        b'version_v1',
+    )
+    self.assertEqual(
+        cf0.body.stable_hlo_body.compiled_executables[
+            0
+        ].aot_executable.mime_type,
+        constants.IFRT_EXECUTABLE_MIME_TYPE,
+    )
+    self.assertEqual(
+        cf0.body.stable_hlo_body.compiled_executables[
+            0
+        ].aot_executable.file_system_location.string_path,
+        '__my_poly_func_0_bucket0_target_pjrt_executable.bin',
+    )
+    file0 = os.path.join(
+        target_dir, '__my_poly_func_0_bucket0_target_pjrt_executable.bin'
+    )
+    self.assertTrue(os.path.exists(file0))
+    with open(file0, 'rb') as f:
+      self.assertEqual(f.read(), b'compiled_test_stablehlo_bucket0')
+
+    cf1 = poly_obj.concrete_functions[1]
+    self.assertLen(cf1.body.stable_hlo_body.compiled_executables, 1)
+    self.assertEqual(
+        cf1.body.stable_hlo_body.compiled_executables[0].target_topology_label,
+        'bucket1_target',
+    )
+    self.assertEqual(
+        list(cf1.body.stable_hlo_body.compiled_executables[0].aot_kept_var_idx),
+        [0, 1],
+    )
+    self.assertEqual(
+        cf1.body.stable_hlo_body.compiled_executables[0].executable_version,
+        b'version_v1',
+    )
+    self.assertEqual(
+        cf1.body.stable_hlo_body.compiled_executables[
+            0
+        ].aot_executable.mime_type,
+        constants.IFRT_EXECUTABLE_MIME_TYPE,
+    )
+    self.assertEqual(
+        cf1.body.stable_hlo_body.compiled_executables[
+            0
+        ].aot_executable.file_system_location.string_path,
+        '__my_poly_func_1_bucket1_target_pjrt_executable.bin',
+    )
+    file1 = os.path.join(
+        target_dir, '__my_poly_func_1_bucket1_target_pjrt_executable.bin'
+    )
+    self.assertTrue(os.path.exists(file1))
+    with open(file1, 'rb') as f:
+      self.assertEqual(f.read(), b'compiled_test_stablehlo_bucket1')
 
   def test_load_fails_version_file_missing(self):
     target_dir: str = self.create_tempdir().full_path
