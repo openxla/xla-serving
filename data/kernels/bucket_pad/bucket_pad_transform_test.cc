@@ -30,6 +30,7 @@
 #include "data/processor/cc/core/transform.h"  // from @neptune
 #include "data/processor/cc/utils/default_value.pb.h"  // from @neptune
 #include "data/processor/proto/transform_config.pb.h"  // from @neptune
+#include "data/test_utils/status_macros.h"  // from @neptune
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla

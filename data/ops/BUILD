@@ -35,3 +35,25 @@ py_library(
         "@neptune//data/kernels/cpu_embedding:unpack_host_buffer_vector_module",
     ],
 )
+
+py_library(
+    name = "bucket_pad",
+    srcs = ["bucket_pad.py"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@neptune//data/kernels/bucket_pad:bucket_pad_transform_pybind",
+        "@neptune//data/processor/cc/utils:default_value_py_pb2",
+        "@neptune//data/processor/python:transform",
+    ],
+)
+
+py_test(
+    name = "bucket_pad_test",
+    srcs = ["bucket_pad_test.py"],
+    deps = [
+        ":bucket_pad",
+        "@absl_py//absl/testing:absltest",
+        "@neptune//data/processor/python:composite_processor_pybind",
+        "@neptune_pypi//numpy",
+    ],
+)

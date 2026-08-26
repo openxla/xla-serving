@@ -104,14 +104,19 @@ genrule(
     srcs = [
         ":neptune_data_core",
         "@pybind11_abseil//pybind11_abseil:status.so",
+        "//data/ops:bucket_pad.py",
         "//data/ops:cpu_embedding.py",
+        "//data/kernels/bucket_pad:bucket_pad_transform_pybind.so",
+        "//data/kernels/bucket_pad:bucket_pad_transform_py_pb2",
         "//data/kernels/cpu_embedding:cpu_embedding_module.py",
         "//data/kernels/cpu_embedding:cpu_embedding_lookup_transform_pybind.so",
         "//data/kernels/cpu_embedding:cpu_embedding_resource_pybind.so",
         "//data/kernels/cpu_embedding:cpu_embedding_serializer_pybind.so",
         "//data/kernels/cpu_embedding:cpu_embedding_py_pb2",
         "//data/processor/python:composite_processor_pybind.so",
+        "//data/processor/python:transform.py",
         "//data/processor/proto:transform_config_py_pb2",
+        "//data/processor/cc/utils:default_value_py_pb2",
         "//data/resource_manager/python:resource_manager.py",
         "//data/resource_manager/python:resource_manager_pybind.so",
         "//data/resource_manager/proto:resource_manager_py_pb2",
@@ -120,8 +125,12 @@ genrule(
         "neptune_data/__init__.py",
         "neptune_data/libneptune_data_core.so",
         "neptune_data/ops/__init__.py",
+        "neptune_data/ops/bucket_pad.py",
         "neptune_data/ops/cpu_embedding.py",
         "neptune_data/kernels/__init__.py",
+        "neptune_data/kernels/bucket_pad/__init__.py",
+        "neptune_data/kernels/bucket_pad/bucket_pad_transform_pybind.so",
+        "neptune_data/kernels/bucket_pad/bucket_pad_transform_pb2.py",
         "neptune_data/kernels/cpu_embedding/__init__.py",
         "neptune_data/kernels/cpu_embedding/cpu_embedding_module.py",
         "neptune_data/kernels/cpu_embedding/cpu_embedding_lookup_transform_pybind.so",
@@ -131,8 +140,12 @@ genrule(
         "neptune_data/processor/__init__.py",
         "neptune_data/processor/python/__init__.py",
         "neptune_data/processor/python/composite_processor_pybind.so",
+        "neptune_data/processor/python/transform.py",
         "neptune_data/processor/proto/__init__.py",
         "neptune_data/processor/proto/transform_config_pb2.py",
+        "neptune_data/processor/cc/__init__.py",
+        "neptune_data/processor/cc/utils/__init__.py",
+        "neptune_data/processor/cc/utils/default_value_pb2.py",
         "neptune_data/resource_manager/__init__.py",
         "neptune_data/resource_manager/python/__init__.py",
         "neptune_data/resource_manager/python/resource_manager.py",
@@ -144,9 +157,11 @@ genrule(
     ],
     cmd = """
   mkdir -p $(@D)/neptune_data/ops
+  mkdir -p $(@D)/neptune_data/kernels/bucket_pad
   mkdir -p $(@D)/neptune_data/kernels/cpu_embedding
   mkdir -p $(@D)/neptune_data/processor/python
   mkdir -p $(@D)/neptune_data/processor/proto
+  mkdir -p $(@D)/neptune_data/processor/cc/utils
   mkdir -p $(@D)/neptune_data/resource_manager/python
   mkdir -p $(@D)/neptune_data/resource_manager/proto
   mkdir -p $(@D)/neptune_data/pybind11_abseil
@@ -154,18 +169,31 @@ genrule(
   touch $(@D)/neptune_data/__init__.py
   touch $(@D)/neptune_data/ops/__init__.py
   touch $(@D)/neptune_data/kernels/__init__.py
+  touch $(@D)/neptune_data/kernels/bucket_pad/__init__.py
   touch $(@D)/neptune_data/kernels/cpu_embedding/__init__.py
   touch $(@D)/neptune_data/processor/__init__.py
   touch $(@D)/neptune_data/processor/python/__init__.py
   touch $(@D)/neptune_data/processor/proto/__init__.py
+  touch $(@D)/neptune_data/processor/cc/__init__.py
+  touch $(@D)/neptune_data/processor/cc/utils/__init__.py
   touch $(@D)/neptune_data/resource_manager/__init__.py
   touch $(@D)/neptune_data/resource_manager/python/__init__.py
   touch $(@D)/neptune_data/resource_manager/proto/__init__.py
   touch $(@D)/neptune_data/pybind11_abseil/__init__.py
 
   cp $(location :neptune_data_core) $(@D)/neptune_data/libneptune_data_core.so
+  cp $(location //data/ops:bucket_pad.py) $(@D)/neptune_data/ops/bucket_pad.py
+  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/ops/bucket_pad.py
   cp $(location //data/ops:cpu_embedding.py) $(@D)/neptune_data/ops/cpu_embedding.py
   sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/ops/cpu_embedding.py
+  cp $(location //data/kernels/bucket_pad:bucket_pad_transform_pybind.so) $(@D)/neptune_data/kernels/bucket_pad/bucket_pad_transform_pybind.so
+  for f in $(locations //data/kernels/bucket_pad:bucket_pad_transform_py_pb2); do
+    if [[ $$f == *bucket_pad_transform_pb2.py ]]; then
+      cp $$f $(@D)/neptune_data/kernels/bucket_pad/bucket_pad_transform_pb2.py
+      sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/bucket_pad/bucket_pad_transform_pb2.py
+      sed -i 's/data\\.kernels\\.bucket_pad/neptune_data\\.kernels\\.bucket_pad/g' $(@D)/neptune_data/kernels/bucket_pad/bucket_pad_transform_pb2.py
+    fi
+  done
   cp $(location //data/kernels/cpu_embedding:cpu_embedding_module.py) $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_module.py
   sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_module.py
   cp $(location //data/kernels/cpu_embedding:cpu_embedding_lookup_transform_pybind.so) $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_lookup_transform_pybind.so
@@ -179,11 +207,20 @@ genrule(
     fi
   done
   cp $(location //data/processor/python:composite_processor_pybind.so) $(@D)/neptune_data/processor/python/composite_processor_pybind.so
+  cp $(location //data/processor/python:transform.py) $(@D)/neptune_data/processor/python/transform.py
+  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/processor/python/transform.py
   for f in $(locations //data/processor/proto:transform_config_py_pb2); do
     if [[ $$f == *transform_config_pb2.py ]]; then
       cp $$f $(@D)/neptune_data/processor/proto/transform_config_pb2.py
       sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/processor/proto/transform_config_pb2.py
       sed -i 's/data\\.processor\\.proto/neptune_data\\.processor\\.proto/g' $(@D)/neptune_data/processor/proto/transform_config_pb2.py
+    fi
+  done
+  for f in $(locations //data/processor/cc/utils:default_value_py_pb2); do
+    if [[ $$f == *default_value_pb2.py ]]; then
+      cp $$f $(@D)/neptune_data/processor/cc/utils/default_value_pb2.py
+      sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/processor/cc/utils/default_value_pb2.py
+      sed -i 's/data\\.processor\\.cc\\.utils/neptune_data\\.processor\\.cc\\.utils/g' $(@D)/neptune_data/processor/cc/utils/default_value_pb2.py
     fi
   done
   cp $(location //data/resource_manager/python:resource_manager.py) $(@D)/neptune_data/resource_manager/python/resource_manager.py
@@ -209,11 +246,16 @@ py_library(
         "neptune_data/kernels/cpu_embedding/cpu_embedding_module.py",
         "neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.py",
         "neptune_data/ops/__init__.py",
+        "neptune_data/ops/bucket_pad.py",
         "neptune_data/ops/cpu_embedding.py",
         "neptune_data/processor/__init__.py",
+        "neptune_data/processor/cc/__init__.py",
+        "neptune_data/processor/cc/utils/__init__.py",
+        "neptune_data/processor/cc/utils/default_value_pb2.py",
         "neptune_data/processor/proto/__init__.py",
         "neptune_data/processor/proto/transform_config_pb2.py",
         "neptune_data/processor/python/__init__.py",
+        "neptune_data/processor/python/transform.py",
         "neptune_data/pybind11_abseil/__init__.py",
         "neptune_data/resource_manager/__init__.py",
         "neptune_data/resource_manager/proto/__init__.py",

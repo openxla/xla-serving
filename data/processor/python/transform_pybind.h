@@ -80,6 +80,7 @@ void SetFactoryInternal(pybind11::module& m, const std::string& name,
       "api::ExecuteContext.");
   if constexpr (requires { &T::operator(); }) {
     cls.def("execute", &T::operator(), "Execute the transform directly.");
+    cls.def("__call__", &T::operator(), "Execute the transform directly.");
   }
 }
 
