@@ -594,6 +594,21 @@ py::object BuildNestedStringList(const tsl::tstring* ptr,
   return l;
 }
 
+py::object BuildNestedBytesList(const tsl::tstring* ptr,
+                                absl::Span<const int64_t> dims, int dim_idx,
+                                int& element_idx) {
+  if (dim_idx == dims.size()) {
+    const tsl::tstring& s = ptr[element_idx++];
+    return py::bytes(s.data(), s.size());
+  }
+  int size = dims[dim_idx];
+  py::list l(size);
+  for (int64_t i = 0; i < size; ++i) {
+    l[i] = BuildNestedBytesList(ptr, dims, dim_idx + 1, element_idx);
+  }
+  return l;
+}
+
 template <bool IsVersioned>
 struct DLPackHostBuffer {
   using MT = std::conditional_t<IsVersioned, DLManagedTensorVersioned,
@@ -925,6 +940,27 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
              int element_idx = 0;
              return BuildNestedStringList(ptr, self.shape().dims(), 0,
                                           element_idx);
+           })
+      .def("to_bytes",
+           [](const neptune::HostBuffer& self) {
+             if (self.dtype().kind() != xla::ifrt::DType::Kind::kString ||
+                 self.shape().num_elements() <= 0) {
+               throw py::value_error("HostBuffer is not of expected type");
+             }
+             const tsl::tstring* ptr =
+                 reinterpret_cast<const tsl::tstring*>(self.base());
+             return py::bytes(ptr->data(), ptr->size());
+           })
+      .def("to_bytes_array",
+           [](const neptune::HostBuffer& self) {
+             if (self.dtype().kind() != xla::ifrt::DType::Kind::kString) {
+               throw py::value_error("HostBuffer is not of expected type");
+             }
+             const tsl::tstring* ptr =
+                 reinterpret_cast<const tsl::tstring*>(self.base());
+             int element_idx = 0;
+             return BuildNestedBytesList(ptr, self.shape().dims(), 0,
+                                         element_idx);
            })
       .def_property_readonly("dtype",
                              [](const neptune::HostBuffer& self) {
