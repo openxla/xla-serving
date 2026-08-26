@@ -16,6 +16,7 @@
 
 #include <memory>
 #include <utility>
+#include <optional>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
@@ -23,6 +24,7 @@
 #include "absl/memory/memory.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "xla/pjrt/pjrt_layout.h"  // from @xla
 #include "xla/python/ifrt/rtti.h"  // from @xla
 #include "runtime/core/h2d_transfer_executor.h"  // from @neptune
 #include "runtime/core/host_buffer.h"  // from @neptune
@@ -49,66 +51,107 @@ namespace neptune {
 
 namespace {
 
-// Encapsulates data needed to batch inputs that share the same target device.
-// Keeps track of the original input indices and their corresponding shapes.
-struct BatchData {
-  std::vector<int> indices;
+using PjRtBuffers = std::vector<std::shared_ptr<xla::PjRtBuffer>>;
+
+// Encapsulates planning information for an eligible batched input.
+struct BatchPlan {
+  xla::Shape shape;
+  absl::InlinedVector<xla::ifrt::Device*, 4> devices;
+};
+
+// Represents an entry in a per-device batch, mapping a device buffer slot back
+// to the output slot and the source host buffer.
+struct DeviceBatchEntry {
+  // Pointer to the specific slot in `batched_inputs` where this buffer belongs.
+  std::shared_ptr<xla::PjRtBuffer>* output_slot;
+  // Pointer to the source host buffer, needed for DMA transfer.
+  const HostBuffer* source_buffer;
+};
+
+// Encapsulates data needed to batch inputs on a target device.
+struct DeviceBatchData {
+  std::vector<DeviceBatchEntry> entries;
   absl::InlinedVector<xla::Shape, 4> shapes;
 };
 
-absl::StatusOr<bool> TryEnqueueForBatching(
-    int index, const HostBuffer& input, const xla::ifrt::ShardingRef& sharding,
-    xla::ifrt::Client* client,
-    absl::flat_hash_map<xla::ifrt::Device*, BatchData>& batches) {
-  xla::ifrt::Device* target_device = nullptr;
-  if (const auto* single_device_sharding =
-          xla::ifrt::dyn_cast_or_null<xla::ifrt::SingleDeviceSharding>(
-              sharding.get())) {
-    target_device = single_device_sharding->devices()->devices().front();
-  } else if (const auto* hlo_sharding =
-                 xla::ifrt::dyn_cast_or_null<xla::ifrt::HloSharding>(
-                     sharding.get())) {
-    // Handle XLA's tile-maximal sharding, which assigns an entire,
-    // unpartitioned tensor to just one specific device within a multi-device
-    // scenario.
-    if (hlo_sharding->xla_hlo_sharding().IsSingleDevice()) {
-      int unique_device_id = hlo_sharding->xla_hlo_sharding().GetUniqueDevice();
-      TF_ASSIGN_OR_RETURN(
-          target_device,
-          client->LookupDevice(xla::ifrt::DeviceId(unique_device_id)));
-    }
-  }
-
-  if (!target_device) {
-    return false;
-  }
-
+// Inspects the input buffer and sharding to determine if it qualifies for
+// batched transfer. If eligible, returns the target shape and device list.
+// Returns std::nullopt if the input should route to the fallback path (e.g.
+// partitioned shardings, strings, sub-byte types, custom host byte strides).
+absl::StatusOr<std::optional<BatchPlan>> GetBatchPlanIfEligible(
+    const HostBuffer& input, const xla::ifrt::ShardingRef& sharding,
+    xla::ifrt::Client* client) {
   // Disqualify strings and packed storage (sub-byte types).
   if (input.dtype().kind() == xla::ifrt::DType::kString ||
       input.dtype() != input.storage_dtype()) {
-    return false;
+    return std::nullopt;
   }
 
-  absl::StatusOr<xla::PrimitiveType> primitive_type_or =
-      xla::ifrt::ToPrimitiveType(input.dtype());
-  if (!primitive_type_or.ok()) {
-    return false;
-  }
+  TF_ASSIGN_OR_RETURN(xla::PrimitiveType primitive_type,
+                      xla::ifrt::ToPrimitiveType(input.dtype()));
 
   // Default MakeShape assumes a dense, major-to-minor layout.
   // If the buffer uses custom byte strides (e.g. view or slice),
   // route it to the fallback path which correctly handles host layouts.
   if (input.byte_strides().has_value()) {
-    return false;
+    return std::nullopt;
   }
 
   xla::Shape xla_shape =
-      xla::ShapeUtil::MakeShape(*primitive_type_or, input.shape().dims());
+      xla::ShapeUtil::MakeShape(primitive_type, input.shape().dims());
 
-  BatchData& batch = batches[target_device];
-  batch.indices.push_back(index);
-  batch.shapes.push_back(std::move(xla_shape));
-  return true;
+  // Case 1: SingleDeviceSharding (tensor targeted to 1 device)
+  if (const auto* single_device_sharding =
+          xla::ifrt::dyn_cast_or_null<xla::ifrt::SingleDeviceSharding>(
+              sharding.get())) {
+    absl::Span<xla::ifrt::Device* const> devices =
+        single_device_sharding->devices()->devices();
+    if (devices.empty()) {
+      return std::nullopt;
+    }
+    return BatchPlan{
+        .shape = std::move(xla_shape),
+        .devices = {devices.begin(), devices.end()},
+    };
+  }
+
+  // Case 2: Tile-Maximal HloSharding (assigns an entire, unpartitioned tensor
+  // to 1 specific device within a multi-device mesh)
+  if (const auto* hlo_sharding =
+          xla::ifrt::dyn_cast_or_null<xla::ifrt::HloSharding>(
+              sharding.get())) {
+    if (hlo_sharding->xla_hlo_sharding().IsSingleDevice()) {
+      int unique_device_id =
+          hlo_sharding->xla_hlo_sharding().GetUniqueDevice();
+      TF_ASSIGN_OR_RETURN(
+          xla::ifrt::Device* target_device,
+          client->LookupDevice(xla::ifrt::DeviceId(unique_device_id)));
+      if (!target_device) {
+        return std::nullopt;
+      }
+      return BatchPlan{
+          .shape = std::move(xla_shape),
+          .devices = {target_device},
+      };
+    }
+  }
+
+  // Case 3: Fully Replicated Sharding (covers HloSharding::Replicate() and any
+  // sharding where the entire tensor is cloned across all target devices)
+  if (sharding->IsFullyReplicated()) {
+    absl::Span<xla::ifrt::Device* const> devices =
+        sharding->devices()->devices();
+    if (devices.empty()) {
+      return std::nullopt;
+    }
+    return BatchPlan{
+        .shape = std::move(xla_shape),
+        .devices = {devices.begin(), devices.end()},
+    };
+  }
+
+  // Partitioned/tiled or unsupported sharding types route to fallback.
+  return std::nullopt;
 }
 
 }  // namespace
@@ -145,22 +188,40 @@ BatchedH2DTransferExecutor::ExecuteTransfer(
     return absl::InvalidArgumentError("inputs and shardings size mismatch");
   }
 
-  absl::flat_hash_map<xla::ifrt::Device*, BatchData> batches_by_device;
+  absl::flat_hash_map<xla::ifrt::Device*, DeviceBatchData> batches_by_device;
+  std::vector<std::optional<PjRtBuffers>> batched_inputs(inputs.size());
   std::vector<int> fallback_input_indices;
+  fallback_input_indices.reserve(inputs.size());
 
   std::vector<xla::ifrt::ArrayRef> results(inputs.size());
 
+  // Phase 1: Classify inputs into per-device batches or fallback paths.
   for (int i = 0; i < inputs.size(); ++i) {
     TF_ASSIGN_OR_RETURN(
-        bool queued,
-        TryEnqueueForBatching(i, inputs[i], input_shardings[i], client_,
-                              batches_by_device));
-    if (!queued) {
+        std::optional<BatchPlan> batch_plan,
+        GetBatchPlanIfEligible(inputs[i], input_shardings[i], client_));
+    if (!batch_plan.has_value()) {
       fallback_input_indices.push_back(i);
+      continue;
+    }
+
+    PjRtBuffers& slots =
+        batched_inputs[i].emplace(batch_plan->devices.size());
+
+    for (int dev_idx = 0; dev_idx < batch_plan->devices.size(); ++dev_idx) {
+      xla::ifrt::Device* device = batch_plan->devices[dev_idx];
+      DeviceBatchData& batch = batches_by_device[device];
+      batch.entries.push_back(
+          {.output_slot = &slots[dev_idx], .source_buffer = &inputs[i]});
+      if (dev_idx == batch_plan->devices.size() - 1) {
+        batch.shapes.push_back(std::move(batch_plan->shape));
+      } else {
+        batch.shapes.push_back(batch_plan->shape);
+      }
     }
   }
 
-  // Handle batched transfers
+  // Phase 2: Execute per-device batched allocations and async DMA transfers.
   xla::PjRtClient* pjrt_client = client_->pjrt_client();
 
   for (const auto& [device, batch_data] : batches_by_device) {
@@ -173,7 +234,7 @@ BatchedH2DTransferExecutor::ExecuteTransfer(
         xla::PjRtMemorySpace * memory_space,
         pjrt_compatible_device->pjrt_device()->default_memory_space());
 
-    const std::vector<int>& batched_indices = batch_data.indices;
+    const std::vector<DeviceBatchEntry>& batched_entries = batch_data.entries;
     const absl::InlinedVector<xla::Shape, 4>& batched_shapes =
         batch_data.shapes;
 
@@ -185,29 +246,24 @@ BatchedH2DTransferExecutor::ExecuteTransfer(
                         pjrt_client->CreateBuffersForAsyncHostToDevice(
                             batched_shapes, memory_space));
 
-    int num_batched = batched_indices.size();
+    int num_batched = batched_entries.size();
 
-    // 1. Retrieve Loop: Get all buffers and wrap them in IFRT arrays.
+    // 1. Retrieve Loop: Get all PjRtBuffer handles for this device and store
+    // them directly into their target output slots.
     for (int b = 0; b < num_batched; ++b) {
       std::unique_ptr<xla::PjRtBuffer> buffer =
           transfer_manager->RetrieveBuffer(b);
       if (!buffer) return absl::InternalError("Failed to retrieve PJRT buffer");
 
-      int original_idx = batched_indices[b];
-      std::shared_ptr<xla::PjRtBuffer> buffer_shared(buffer.release());
-
-      absl::StatusOr<tsl::RCReference<xla::ifrt::PjRtCompatibleArray>>
-          array_or = client_->CreatePjRtArray(buffer_shared);
-      if (!array_or.ok()) return array_or.status();
-
-      results[original_idx] =
-          tsl::RCReference<xla::ifrt::Array>(std::move(array_or.value()));
+      const DeviceBatchEntry& entry = batched_entries[b];
+      *entry.output_slot = std::shared_ptr<xla::PjRtBuffer>(buffer.release());
     }
 
-    // 2. Transfer Loop: Start data transfer for all buffers.
+    // 2. Transfer Loop: Start asynchronous DMA transfers for all buffers on
+    // this device.
     for (int b = 0; b < num_batched; ++b) {
-      int original_idx = batched_indices[b];
-      const HostBuffer& input = inputs[original_idx];
+      const DeviceBatchEntry& entry = batched_entries[b];
+      const HostBuffer& input = *entry.source_buffer;
       auto literal = std::make_unique<xla::BorrowingLiteral>(
           static_cast<const char*>(input.raw_data().data()), batched_shapes[b]);
       xla::BorrowingLiteral* literal_ptr = literal.get();
@@ -228,7 +284,25 @@ BatchedH2DTransferExecutor::ExecuteTransfer(
     }
   }
 
-  // Concurrently initiate default transfers
+  // Phase 3: Assemble IFRT Arrays for all batched inputs.
+  for (int i = 0; i < inputs.size(); ++i) {
+    if (!batched_inputs[i].has_value()) {
+      continue;
+    }
+    PjRtBuffers& buffers = *batched_inputs[i];
+    xla::ifrt::PjRtArray::PjRtBuffers pjrt_buffers(buffers.begin(),
+                                                  buffers.end());
+    TF_ASSIGN_OR_RETURN(
+        tsl::RCReference<xla::ifrt::PjRtArray> array,
+        xla::ifrt::PjRtArray::Create(
+            client_, inputs[i].dtype(), inputs[i].shape(),
+            input_shardings[i], std::move(pjrt_buffers),
+            /*layout=*/std::shared_ptr<const xla::PjRtLayout>()));
+    results[i] = tsl::RCReference<xla::ifrt::Array>(std::move(array));
+  }
+
+  // Phase 4: Concurrently initiate default transfers for fallback inputs
+  // (e.g. partitioned/tiled shardings, strings, strided buffers).
   for (int idx : fallback_input_indices) {
     TF_ASSIGN_OR_RETURN(
         results[idx],
