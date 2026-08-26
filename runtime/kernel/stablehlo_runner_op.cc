@@ -256,9 +256,12 @@ absl::Status StableHloRunnerOp::RunInternal(ExecuteContext& context) {
     }
   }
 
+  StableHloRunner::ExecuteOptions execute_options;
+  execute_options.placements = context.run_context.placements;
   TF_ASSIGN_OR_RETURN(
       std::vector<Value> output_values,
-      stablehlo_runner_->Execute(inputs_span, context.run_context));
+      stablehlo_runner_->Execute(inputs_span, std::move(execute_options),
+                                 context.run_context));
   context.outputs = std::move(output_values);
 
   return absl::OkStatus();

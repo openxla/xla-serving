@@ -38,6 +38,7 @@ pybind_extension(
         "@neptune//runtime/core:host_buffer",
         "@neptune//runtime/core:value",
         "@neptune//runtime/interpreter",
+        "@neptune//runtime/interpreter:run_options",
         "@neptune//runtime/kernel:kernel_io_data_type",
         "@neptune//runtime/tensorflow:interpreter_tensorflow_support",  # buildcleaner: keep
         "@neptune//runtime/tensorflow:tf_compatible_interpreter_create_options",

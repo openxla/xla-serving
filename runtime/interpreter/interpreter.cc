@@ -1547,14 +1547,19 @@ absl::StatusOr<std::vector<Value>> Interpreter::Run(
                         GetGraphBundle(pipeline_name));
     TF_ASSIGN_OR_RETURN(const KernelGraph* graph,
                         GetOrCreateGraph(*graph_bundle));
+    std::vector<Placement> resolved_placements =
+        graph_bundle->signature.output_signature.ResolvePlacements(
+            run_options.placement_map);
+    RunContext run_context = RunContext::Create(
+        run_options, std::move(resolved_placements), callback_id_);
+
     if (graph_bundle->keyword_arguments_execution) {
       absl::flat_hash_map<std::string, Value> keyword_outputs;
       TF_ASSIGN_OR_RETURN(
           keyword_outputs,
-          ExecuteLinearGraphWithKeywordArgs(
-              RunContext::Create(run_options, callback_id_), keyword_inputs,
-              *graph, create_options_->model_name,
-              create_options_->model_version));
+          ExecuteLinearGraphWithKeywordArgs(run_context, keyword_inputs, *graph,
+                                            create_options_->model_name,
+                                            create_options_->model_version));
       TF_ASSIGN_OR_RETURN(
           std::vector<absl::string_view> pipeline_output_names,
           graph_bundle->signature.output_signature.GetAllNames());
@@ -1571,15 +1576,15 @@ absl::StatusOr<std::vector<Value>> Interpreter::Run(
       return outputs;
     }
     if (keyword_inputs.empty()) {
-      return ExecuteLinearGraph(
-          RunContext::Create(run_options, callback_id_), positional_inputs,
-          *graph, create_options_->model_name, create_options_->model_version);
+      return ExecuteLinearGraph(run_context, positional_inputs, *graph,
+                                create_options_->model_name,
+                                create_options_->model_version);
     }
     TF_ASSIGN_OR_RETURN(std::vector<Value> inputs,
                         ConvertToVectorInputs(*graph_bundle, positional_inputs,
                                               keyword_inputs));
-    return ExecuteLinearGraph(RunContext::Create(run_options, callback_id_),
-                              inputs, *graph, create_options_->model_name,
+    return ExecuteLinearGraph(run_context, inputs, *graph,
+                              create_options_->model_name,
                               create_options_->model_version);
   }();
 
@@ -1648,10 +1653,17 @@ tsl::Future<std::vector<Value>> Interpreter::RunAsync(
       return tsl::Future<std::vector<Value>>(graph.status());
     }
 
+    std::vector<Placement> resolved_placements =
+        (*graph_bundle)
+            ->signature.output_signature.ResolvePlacements(
+                run_options.placement_map);
+    RunContext run_context = RunContext::Create(
+        run_options, std::move(resolved_placements), callback_id_);
+
     if (keyword_inputs.empty()) {
       return AsyncExecuteLinearGraph(
-          RunContext::Create(run_options, callback_id_), positional_inputs,
-          **graph, create_options_->execute_worker_thread_pool,
+          run_context, positional_inputs, **graph,
+          create_options_->execute_worker_thread_pool,
           create_options_->model_name, create_options_->model_version);
     }
     absl::StatusOr<std::vector<Value>> inputs = ConvertToVectorInputs(
@@ -1659,10 +1671,10 @@ tsl::Future<std::vector<Value>> Interpreter::RunAsync(
     if (!inputs.ok()) {
       return tsl::Future<std::vector<Value>>(inputs.status());
     }
-    return AsyncExecuteLinearGraph(
-        RunContext::Create(run_options, callback_id_), *inputs, **graph,
-        create_options_->execute_worker_thread_pool,
-        create_options_->model_name, create_options_->model_version);
+    return AsyncExecuteLinearGraph(run_context, *inputs, **graph,
+                                   create_options_->execute_worker_thread_pool,
+                                   create_options_->model_name,
+                                   create_options_->model_version);
   }();
 
   future.OnReady([model_name = create_options_->model_name,
@@ -1699,7 +1711,7 @@ Interpreter::RunAsyncWithMapReturn(
   auto [promise, map_output_future] =
       tsl::MakePromise<absl::flat_hash_map<std::string, Value>>();
   outputs.OnReady(
-      [&output_flat_signature = (*graph_bundle)->signature.output_signature,
+      [output_flat_signature = (*graph_bundle)->signature.output_signature,
        output_promise = std::move(promise)](
           absl::StatusOr<std::vector<Value>> vector_outputs) mutable -> void {
         if (!vector_outputs.ok()) {
@@ -1707,7 +1719,7 @@ Interpreter::RunAsyncWithMapReturn(
           return;
         }
         output_promise.Set(
-            output_flat_signature.UnflattenToMap(*vector_outputs));
+            output_flat_signature.UnflattenToMap(*std::move(vector_outputs)));
         return;
       });
   return map_output_future;

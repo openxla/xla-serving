@@ -237,6 +237,7 @@ cc_library(
         "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/time",
         "@neptune//runtime/core:host_buffer",
+        "@neptune//runtime/core:stablehlo_utils",
     ],
 )
 
@@ -257,6 +258,7 @@ cc_library(
         "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/time",
         "@neptune//runtime/core:host_buffer",
+        "@neptune//runtime/core:stablehlo_utils",
     ],
 )
 
