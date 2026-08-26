@@ -131,6 +131,17 @@ absl::StatusOr<std::unique_ptr<StableHloRunner>> CreateJitRunner(
     optimizer = nullptr;
   }
 
+  // Model name (recorded onto compiled programs for XSymbol attribution).
+  // Optional: if unset, the runner leaves the annotation empty.
+  std::string model_name;
+  if (absl::StatusOr<std::string> model_name_config =
+          context.GetConfig<std::string>(kHloModelName);
+      model_name_config.ok()) {
+    model_name = *std::move(model_name_config);
+  }
+
+  bool is_batched = context.GetConfig<bool>(kIsBatched).value_or(false);
+
   return StableHloRunner::Create(
       std::move(stablehlo),
       compile_options.ok() ? std::make_optional(*compile_options)
@@ -138,7 +149,8 @@ absl::StatusOr<std::unique_ptr<StableHloRunner>> CreateJitRunner(
       ifrt_client, persistent_compilation_cache, ifrt_loaded_variable_registry,
       std::move(weights), compilation_environment_proto, thread_pool,
       *optimizer, assigned_devices, serving_core_selector,
-      /*h2d_transfer_executor_factory=*/nullptr, callback_id);
+      /*h2d_transfer_executor_factory=*/nullptr, callback_id, model_name,
+      is_batched);
 }
 
 }  // namespace

@@ -20,6 +20,12 @@
 namespace neptune {
 
 inline constexpr absl::string_view kStableHlo = "stablehlo";
+// Model name (falls back to model path) recorded onto compiled programs as
+// module-level frontend_attributes for XSymbol attribution.
+inline constexpr absl::string_view kHloModelName = "model_name";
+// Whether the component uses Neptune dynamic request batching. When true,
+// batch size is extracted from dim 0 of input shapes for XSymbol attribution.
+inline constexpr absl::string_view kIsBatched = "is_batched";
 // Some kernels's implementation can take different numbers of inputs. This
 // constant is used to specify the number of inputs.
 inline constexpr absl::string_view kNumKernelInputs = "num_kernel_inputs";

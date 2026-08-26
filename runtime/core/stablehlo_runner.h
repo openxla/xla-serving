@@ -104,7 +104,13 @@ class StableHloRunner {
       ServingCoreSelector* absl_nullable serving_core_selector,
       std::unique_ptr<H2DTransferExecutorFactory>
           h2d_transfer_executor_factory = nullptr,
-      std::optional<int64_t> callback_id = std::nullopt);
+      std::optional<int64_t> callback_id = std::nullopt,
+      // Model name (falls back to model path) recorded onto compiled programs
+      // for XSymbol attribution. Supplied by the interpreter via kHloModelName.
+      absl::string_view model_name = "",
+      // Whether this runner executes a batched component. When true, batch_size
+      // is extracted from dim 0 of input shapes for XSymbol attribution.
+      bool is_batched = false);
 
   // Virtual destructor is required for safe polymorphic destruction of
   // subclasses.
@@ -426,7 +432,10 @@ class StableHloRunner {
       absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
       ServingCoreSelector* absl_nullable serving_core_selector,
       std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory,
-      std::optional<int64_t> callback_id);
+      std::optional<int64_t> callback_id = std::nullopt,
+      // Model name (falls back to model path) recorded onto compiled programs
+      // for XSymbol attribution. Supplied by the interpreter via kModelName.
+      absl::string_view model_name = "");
 
   using SharedCachedExecutableBundle = std::shared_ptr<CachedExecutableBundle>;
 
@@ -509,6 +518,13 @@ class StableHloRunner {
 
   std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory_;
   std::optional<int64_t> streaming_host_callback_id_;
+
+  // Model name recorded onto each compiled program's module-level
+  // frontend_attributes for XSymbol attribution. Empty if not supplied.
+  std::string model_name_;
+  // Whether this runner executes a batched component. When true, batch_size
+  // is extracted from dim 0 of input shapes for XSymbol attribution.
+  bool is_batched_ = false;
 
   absl::flat_hash_map<xla::ifrt::DeviceListRef,
                       std::unique_ptr<ResourcesPerDeviceList>>

@@ -194,6 +194,23 @@ absl::Status ValidateOutputArray(const xla::ifrt::Array& array_for_copy,
   return absl::OkStatus();
 }
 
+// Attaches a key-value attribute to the module's mhlo.frontend_attributes,
+// preserving any existing attributes in the dictionary.
+void SetFrontendAttribute(mlir::ModuleOp module, absl::string_view key,
+                          absl::string_view value) {
+  mlir::Builder builder(module.getContext());
+  mlir::StringAttr frontend_attr_name =
+      builder.getStringAttr("mhlo.frontend_attributes");
+
+  mlir::NamedAttrList attrs;
+  if (auto existing =
+          module->getAttrOfType<mlir::DictionaryAttr>(frontend_attr_name)) {
+    attrs = mlir::NamedAttrList(existing);
+  }
+  attrs.set(key, builder.getStringAttr(value));
+  module->setAttr(frontend_attr_name, attrs.getDictionary(module.getContext()));
+}
+
 }  // namespace
 
 StableHloRunner::DataConverter::DataConverter(
@@ -438,7 +455,7 @@ StableHloRunner::StableHloRunner(
     absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
     ServingCoreSelector* absl_nullable serving_core_selector,
     std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory,
-    std::optional<int64_t> callback_id)
+    std::optional<int64_t> callback_id, absl::string_view model_name)
     : loaded_stablehlo_(std::move(loaded_stablehlo)),
       compile_options_(std::move(compile_options)),
       assigned_device_list_(std::move(assigned_device_list)),
@@ -450,7 +467,8 @@ StableHloRunner::StableHloRunner(
       optimizer_(optimizer),
       assigned_devices_(std::move(assigned_devices)),
       serving_core_selector_(serving_core_selector),
-      h2d_transfer_executor_factory_(std::move(h2d_transfer_executor_factory)) {
+      h2d_transfer_executor_factory_(std::move(h2d_transfer_executor_factory)),
+      model_name_(model_name) {
   if (loaded_stablehlo_->has_streaming()) {
     DCHECK(callback_id.has_value());
     streaming_host_callback_id_ = callback_id;
@@ -470,7 +488,8 @@ absl::StatusOr<std::unique_ptr<StableHloRunner>> StableHloRunner::Create(
     absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
     ServingCoreSelector* absl_nullable serving_core_selector,
     std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory,
-    std::optional<int64_t> callback_id) {
+    std::optional<int64_t> callback_id, absl::string_view model_name,
+    bool is_batched) {
   if (!stablehlo) {
     return absl::InvalidArgumentError(
         "`StableHlo` should be non-null when creating `StableHloRunner`");
@@ -520,7 +539,8 @@ absl::StatusOr<std::unique_ptr<StableHloRunner>> StableHloRunner::Create(
       assigned_device_list, compilation_environment_proto,
       persistent_compilation_cache, optimizer, assigned_devices,
       serving_core_selector, std::move(h2d_transfer_executor_factory),
-      callback_id));
+      callback_id, model_name));
+  runner->is_batched_ = is_batched;
   TF_RETURN_IF_ERROR(runner->Init(thread_pool));
   return runner;
 }
@@ -561,6 +581,23 @@ StableHloRunner::CreateExecutableSynchronously(
   // Annotate parameters tied to constant weights with an attribute.
   // All parameters before input_offset are considered constant weights.
   AnnotateConstantWeights(*module_bundle->module, module_bundle->input_offset);
+
+  // Record model name and concrete batch size onto the module so XSymbol can
+  // attribute this program to (model_name, batch_size). Done after refinement
+  // and before optimization/compilation so the annotation survives into the
+  // device HLO.
+  if (!model_name_.empty()) {
+    SetFrontendAttribute(*module_bundle->module, "model_name", model_name_);
+  }
+  // In a batched model, weights are never in input_shapes (bound separately via
+  // weight_arrays), and Neptune's BatchResourceBase rejects scalars and
+  // enforces uniform 0th dimensions. Thus input_shapes.front() carries the
+  // batch size.
+  if (is_batched_ && !input_shapes.empty() &&
+      !input_shapes.front().dims().empty()) {
+    SetFrontendAttribute(*module_bundle->module, "batch_size",
+                         absl::StrCat(input_shapes.front().dims().front()));
+  }
 
   if (VLOG_IS_ON(1)) {
     DumpMlirOpToFile("stablehlo_module_after_refinement",

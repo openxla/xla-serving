@@ -702,6 +702,15 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateStableHloRunnerOp(
   TF_RETURN_IF_ERROR(builder.SetConfig(kIfrtLoadedVariableRegistry,
                                        ifrt_loaded_variable_registry));
   TF_RETURN_IF_ERROR(builder.SetConfig(kWeights, weight_names));
+  // Prefer the semantic model name; fall back to the model path (which is
+  // always populated). model_name is optional and may be empty (e.g. in some
+  // export/warmup paths).
+  TF_RETURN_IF_ERROR(
+      builder.SetConfig(kHloModelName, create_options.model_name.empty()
+                                           ? create_options.model_path
+                                           : create_options.model_name));
+  TF_RETURN_IF_ERROR(
+      builder.SetConfig(kIsBatched, create_options.enable_batching));
   TF_RETURN_IF_ERROR(
       builder.SetConfig(kCompilationEnvProto, create_options.compilation_env));
   if (compile_options != nullptr) {
