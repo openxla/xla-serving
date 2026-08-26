@@ -33,13 +33,12 @@ DEFAULT_MODEL_NAME: str = 'jax_model'
 class JaxModel:
   """A JAX model, consisting of an apply_fn and its parameters.
 
-  Exactly one of `params` or `checkpoint_path` must be provided.
-
   Attributes:
     name: The name of the model.
     apply_fn_bundle: The function bundle for applying the model, or a mapping of
       such bundles.
     params: The parameters of the model.
+    checkpoint_path: The path to an existing checkpoint of the model parameters.
     jax_mesh: Mesh for the model.
   """
 
@@ -47,6 +46,7 @@ class JaxModel:
       self,
       apply_fn_bundle: ApplyFnBundle | Mapping[str, ApplyFnBundle],
       params: jaxtyping.PyTree | None = None,
+      checkpoint_path: str | None = None,
       jax_mesh: jax.sharding.Mesh | None = None,
       name: str = DEFAULT_MODEL_NAME,
   ):
@@ -55,6 +55,7 @@ class JaxModel:
     else:
       self._apply_fn_bundle = {DEFAULT_METHOD_KEY: apply_fn_bundle}
     self._params = params
+    self._checkpoint_path = checkpoint_path
     self._jax_mesh = jax_mesh
     if not name:
       raise ValueError('JaxModel name must not be empty')
@@ -91,20 +92,33 @@ class JaxModel:
       checkpoint_path: str,
       weights_name: str,
   ) -> Mapping[str, value.ExternalValue]:
-    """Saves the JAX model parameters to an Orbax checkpoint.
+    """Saves the JAX model parameters to an Orbax checkpoint or references an existing checkpoint.
+
+    If `checkpoint_path` was provided when initializing `JaxModel`, the external
+    checkpoint path is registered in the manifest without saving parameters.
+    Otherwise, if `params` are present, they are saved to `checkpoint_path` within
+    `export_path`.
 
     Args:
       export_path: The root directory where the Neptune model is being exported.
       checkpoint_path: The relative subdirectory path within `export_path` where
-        the Orbax checkpoint should be saved.
+        the Orbax checkpoint should be saved if `checkpoint_path` was not provided
+        to the model.
       weights_name: The manifest object key under which this checkpoint's
         external value will be registered.
 
     Returns:
       A mapping from `weights_name` to the corresponding ExternalValue
       object representing the saved checkpoint, or an empty dict if the model
-      has no parameters.
+      has no parameters and no checkpoint path.
     """
+    if self._checkpoint_path is not None:
+      return {
+          weights_name: jax2npt.convert_path_to_value(
+              self._checkpoint_path,
+              constants.ORBAX_CHECKPOINT_MIME_TYPE,
+          )
+      }
     if self._params is None:
       return {}
     checkpointer = ocp.Checkpointer(ocp.StandardCheckpointHandler())

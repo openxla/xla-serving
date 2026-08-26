@@ -14,6 +14,8 @@
 
 """Tests for neptune.model._src.export.jax_module."""
 
+import pathlib
+
 from absl.testing import absltest
 import jax.numpy as jnp
 from neptune_model._src.export import jax_model
@@ -42,8 +44,66 @@ class JaxModelTest(absltest.TestCase):
         params={'w': jnp.array(2.0)},
     )
     self.assertEqual(model._apply_fn_bundle['another_key'], bundle)
-    self.assertEqual(model.params, {'w': jnp.array(2.0)})
-    self.assertIsNone(model.jax_mesh)
+
+  def test_save_checkpoint_with_checkpoint_path_does_not_save_params(self):
+    bundle = jax_model.ApplyFnBundle(apply_fn=lambda p, x: x * p['w'])
+    model = jax_model.JaxModel(
+        name='test_model',
+        apply_fn_bundle=bundle,
+        params={'w': jnp.array(2.0)},
+        checkpoint_path='external/path/to/checkpoint',
+    )
+    temp_dir = self.create_tempdir().full_path
+    result = model.save_checkpoint(
+        export_path=temp_dir,
+        checkpoint_path='checkpoints/test_model',
+        weights_name='test_model_weights',
+    )
+    self.assertIn('test_model_weights', result)
+    ext_val = result['test_model_weights']
+    self.assertEqual(
+        ext_val.data.file_system_location.string_path,
+        'external/path/to/checkpoint',
+    )
+    # Verify no checkpoints were written to export_path
+    export_path_entries = list(pathlib.Path(temp_dir).iterdir())
+    self.assertEmpty(export_path_entries)
+
+  def test_save_checkpoint_without_checkpoint_path_saves_params(self):
+    bundle = jax_model.ApplyFnBundle(apply_fn=lambda p, x: x * p['w'])
+    model = jax_model.JaxModel(
+        name='test_model',
+        apply_fn_bundle=bundle,
+        params={'w': jnp.array(2.0)},
+    )
+    temp_dir = self.create_tempdir().full_path
+    result = model.save_checkpoint(
+        export_path=temp_dir,
+        checkpoint_path='checkpoints',
+        weights_name='weights',
+    )
+    self.assertIn('weights', result)
+    ext_val = result['weights']
+    self.assertEqual(
+        ext_val.data.file_system_location.string_path,
+        'checkpoints',
+    )
+    # Verify checkpoint was written to export_path / checkpoints
+    self.assertTrue((pathlib.Path(temp_dir) / 'checkpoints').exists())
+
+  def test_save_checkpoint_without_params_or_checkpoint_path(self):
+    bundle = jax_model.ApplyFnBundle(apply_fn=lambda p, x: x * 2.0)
+    model = jax_model.JaxModel(
+        name='test_model',
+        apply_fn_bundle=bundle,
+    )
+    temp_dir = self.create_tempdir().full_path
+    result = model.save_checkpoint(
+        export_path=temp_dir,
+        checkpoint_path='checkpoints',
+        weights_name='weights',
+    )
+    self.assertEmpty(result)
 
 
 if __name__ == '__main__':

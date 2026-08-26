@@ -577,6 +577,36 @@ class ValidateSaveParamsTest(absltest.TestCase):
     )
     self.assertTrue(pathlib.Path(export_path, shlo_file).is_file())
 
+  def test_save_model_with_checkpoint_path(self):
+    """Tests that save() with checkpoint_path does not save parameters to disk."""
+    model = jax_model.JaxModel(
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=lambda params, inputs: {'out': inputs['x'] * params['w']},
+            jax_export_kwargs={'platforms': ['cpu']},
+        ),
+        params={'w': jnp.array([2.0], dtype=jnp.float32)},
+        checkpoint_path='/cns/path/to/existing/checkpoint',
+    )
+    cfg = serving_config.ServingConfig(
+        serving_signature='serving_default',
+        input_signature={
+            'x': jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.float32)
+        },
+    )
+    export_path = self.create_tempdir().full_path
+    main_lib.save(
+        model,
+        export_path=export_path,
+        serving_configs=[cfg],
+    )
+
+    manifest_proto = persistence_lib.load(export_path)
+    self.assertIn('weights', manifest_proto.objects)
+    weights_val = manifest_proto.objects['weights'].value.external
+    self.assertEqual(
+        weights_val.data.file_system_location.string_path,
+        '/cns/path/to/existing/checkpoint',
+    )
 
 if __name__ == '__main__':
   absltest.main()
