@@ -957,6 +957,77 @@ class CompositeProcessorTest(absltest.TestCase):
     ):
       composite_processor_pybind.GraphEdge.node_output(0, -1)
 
+  def test_host_buffer_spec_creation(self):
+    # Numeric and complex types
+    numeric_types = [
+        np.dtype(np.int8),
+        np.dtype(np.int16),
+        np.dtype(np.int32),
+        np.dtype(np.int64),
+        np.dtype(np.uint8),
+        np.dtype(np.uint16),
+        np.dtype(np.uint32),
+        np.dtype(np.uint64),
+        np.dtype(np.float16),
+        np.dtype(np.float32),
+        np.dtype(np.float64),
+        np.dtype(np.bool_),
+        np.dtype(np.complex64),
+        np.dtype(np.complex128),
+    ]
+    for in_dtype in numeric_types:
+      with self.subTest(dtype=in_dtype):
+        spec = composite_processor_pybind.HostBufferSpec(in_dtype, [2, 3])
+        self.assertEqual(spec.shape, (2, 3))
+        self.assertEqual(spec.dtype, in_dtype)
+
+    # String / object kinds ('O', 'U', 'S', 'T')
+    string_types = [
+        np.dtype("O"),
+        np.dtype("U"),
+        np.dtype("S"),
+        np.dtype("T"),
+        np.dtype("str"),
+        np.dtype(np.str_),
+        np.dtype(np.bytes_),
+        np.dtype(np.object_),
+    ]
+    for str_dtype in string_types:
+      with self.subTest(dtype=str_dtype):
+        spec = composite_processor_pybind.HostBufferSpec(str_dtype, [4, 5, 6])
+        self.assertEqual(spec.shape, (4, 5, 6))
+        self.assertEqual(spec.dtype, np.dtype(np.object_))
+
+    # Invalid dtype object raises ValueError
+    with self.assertRaises(ValueError):
+      composite_processor_pybind.HostBufferSpec(object(), [1, 2])
+
+  def test_shape_inference_value(self):
+    spec1 = composite_processor_pybind.HostBufferSpec(
+        np.dtype(np.int32), [2, 3]
+    )
+    spec2 = composite_processor_pybind.HostBufferSpec(
+        np.dtype(np.complex64), [4, 5]
+    )
+
+    # Single spec
+    val_single = composite_processor_pybind.ShapeInferenceValue(spec1)
+    self.assertTrue(val_single.is_spec())
+    self.assertFalse(val_single.is_spec_list())
+    self.assertEqual(val_single.spec().shape, (2, 3))
+    self.assertEqual(val_single.spec().dtype, np.dtype(np.int32))
+
+    # Spec list
+    val_list = composite_processor_pybind.ShapeInferenceValue([spec1, spec2])
+    self.assertFalse(val_list.is_spec())
+    self.assertTrue(val_list.is_spec_list())
+    specs = val_list.spec_list()
+    self.assertLen(specs, 2)
+    self.assertEqual(specs[0].shape, (2, 3))
+    self.assertEqual(specs[0].dtype, np.dtype(np.int32))
+    self.assertEqual(specs[1].shape, (4, 5))
+    self.assertEqual(specs[1].dtype, np.dtype(np.complex64))
+
 
 if __name__ == "__main__":
   absltest.main()

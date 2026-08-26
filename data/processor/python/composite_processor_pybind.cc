@@ -549,6 +549,20 @@ neptune::HostBuffer HostBufferFromDLPack(py::object obj, std::optional<bool> cop
   }
 }
 
+absl::StatusOr<xla::ifrt::DType> DtypeToIfRtDTypeWithStrings(
+    py::handle dtype_obj) {
+  char kind = 0;
+  if (py::hasattr(dtype_obj, "kind")) {
+    kind = dtype_obj.attr("kind").cast<char>();
+  }
+  // Handle string types that xla::DtypeToIfRtDType does not support.
+  if (kind == 'O' || kind == 'U' || kind == 'S' || kind == 'T') {
+    return xla::ifrt::DType(xla::ifrt::DType::Kind::kString);
+  }
+  xla::nb_dtype xla_dtype = nanobind::borrow<xla::nb_dtype>(dtype_obj.ptr());
+  return xla::DtypeToIfRtDType(xla_dtype);
+}
+
 py::object IfrtDTypeToPyObject(xla::ifrt::DType dtype) {
   auto nb_dtype = xla::IfrtDtypeToNbDtype(dtype);
   if (!nb_dtype.ok()) {
@@ -1035,9 +1049,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
   // Internal API only. Do not export.
   py::class_<api::HostBufferSpec>(m, "HostBufferSpec")
       .def(py::init([](py::object dtype_obj, std::vector<int64_t> shape_vec) {
-        xla::nb_dtype xla_dtype =
-            nanobind::borrow<xla::nb_dtype>(dtype_obj.ptr());
-        auto ifrt_dtype = xla::DtypeToIfRtDType(xla_dtype);
+        auto ifrt_dtype = DtypeToIfRtDTypeWithStrings(dtype_obj);
         if (!ifrt_dtype.ok()) {
           throw py::value_error(std::string(ifrt_dtype.status().message()));
         }
