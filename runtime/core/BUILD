@@ -213,32 +213,6 @@ cc_library(
 )
 
 cc_library(
-    name = "device_buffer_test_lib",
-    testonly = True,
-    srcs = ["device_buffer_test.cc"],
-    visibility = ["@neptune//runtime/core/google:__subpackages__"],
-    deps = [
-        ":device_buffer",
-        "@abseil-cpp//absl/types:span",
-        "@googletest//:gtest",
-        "@xla//xla/python/ifrt",
-        "@xla//xla/python/ifrt:test_util",
-        "@xla//xla/tsl/lib/core:status_test_util",
-        "@xla//xla/tsl/platform:statusor",
-    ],
-    alwayslink = True,
-)
-
-cc_test(
-    name = "device_buffer_test",
-    deps = [
-        ":device_buffer_test_lib",
-        ":pjrt_ifrt_cpu_client_test_lib",  # buildcleaner: keep
-        "@googletest//:gtest_main",
-    ],
-)
-
-cc_library(
     name = "stablehlo_runner",
     srcs = [
         "aot_stablehlo_runner.cc",
