@@ -191,7 +191,8 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadFromTensorStoreDefaultImpl(
     context = *std::move(custom_context);
   }
 
-  TensorStoreLoader loader(ifrt_client, std::move(context));
+  TensorStoreLoader loader(ifrt_client, std::move(context),
+                           opts.memory_kind.value_or(xla::ifrt::MemoryKind()));
   return loader.Load(specs, base_dir);
 }
 
@@ -283,8 +284,7 @@ absl::StatusOr<xla::ifrt::ArrayRef> TensorStoreLoader::LoadSingleArray(
         ifrt_client_->MakeArrayFromHostBuffer(
             data.get(), ifrt_dtype, xla::ifrt::Shape(per_shard_shape),
             /*byte_stride=*/std::nullopt,
-            xla::ifrt::SingleDeviceSharding::Create(dest_device,
-                                                    xla::ifrt::MemoryKind()),
+            xla::ifrt::SingleDeviceSharding::Create(dest_device, memory_kind_),
             std::move(layout_ref),
             xla::ifrt::Client::HostBufferSemantics::kImmutableOnlyDuringCall,
             {}));

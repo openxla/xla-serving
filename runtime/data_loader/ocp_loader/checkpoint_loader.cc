@@ -126,7 +126,8 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadCheckpoint(
     TF_ASSIGN_OR_RETURN(xla::HloSharding hlo_sharding,
                         xla::HloSharding::FromProto(weight_spec.sharding));
     auto ifrt_sharding = xla::ifrt::HloSharding::Create(
-        device_list, xla::ifrt::MemoryKind(), hlo_sharding);
+        device_list, weight_spec.memory_kind.value_or(xla::ifrt::MemoryKind()),
+        hlo_sharding);
 
     VLOG(4) << "ifrt_sharding: " << *ifrt_sharding;
 
@@ -170,10 +171,14 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadCheckpoint(
     ts_load_specs.push_back(ts_load_spec);
   }
 
+  LoadFromTensorstoreExtraOptions opts;
+  if (!weight_specs.empty() && weight_specs[0].memory_kind.has_value()) {
+    opts.memory_kind = weight_specs[0].memory_kind;
+  }
+
   // Assume each weight has a full path
   return LoadFromTensorstore(&client, absl::MakeSpan(ts_load_specs),
-                             /*base_dir=*/root_path,
-                             /*opts=*/{}, checkpoint_type);
+                             /*base_dir=*/root_path, opts, checkpoint_type);
 }
 
 bool IsOcdbtCheckpoint(const std::string& path) {

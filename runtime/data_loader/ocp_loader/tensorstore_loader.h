@@ -91,9 +91,11 @@ class TensorStoreLoader {
   // ifrt_client must outlive
   explicit TensorStoreLoader(
       xla::ifrt::Client* ifrt_client,
-      std::optional<tensorstore::Context> context = std::nullopt)
+      std::optional<tensorstore::Context> context = std::nullopt,
+      xla::ifrt::MemoryKind memory_kind = xla::ifrt::MemoryKind())
       : ifrt_client_(ifrt_client),
-        context_(context.value_or(tensorstore::Context())) {}
+        context_(context.value_or(tensorstore::Context())),
+        memory_kind_(std::move(memory_kind)) {}
 
   // Loads a single array from tensorstore.
   absl::StatusOr<xla::ifrt::ArrayRef> LoadSingleArray(
@@ -107,6 +109,7 @@ class TensorStoreLoader {
  private:
   xla::ifrt::Client* ifrt_client_;
   tensorstore::Context context_;
+  xla::ifrt::MemoryKind memory_kind_;
 };
 
 // Uses TensorStoreLoader to load arrays from tensorstore.

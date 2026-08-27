@@ -32,6 +32,7 @@
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
+#include "xla/python/ifrt/memory.h"  // from @xla
 
 namespace neptune {
 
@@ -41,6 +42,7 @@ struct ArraySpec {
   xla::ifrt::Shape shape;
   xla::OpSharding sharding;
   std::optional<xla::Layout> layout;
+  std::optional<xla::ifrt::MemoryKind> memory_kind = std::nullopt;
 };
 
 // Load a list of weights.
