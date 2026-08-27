@@ -12,6 +12,7 @@ package_group(
 package_group(
     name = "interpreter_users",
     packages = [
+        "//examples/...",
         "//runtime/...",
     ],
 )

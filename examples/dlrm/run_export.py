@@ -21,12 +21,17 @@ from examples.dlrm import export
 FLAGS = flags.FLAGS
 _EXPORT_PATH = flags.DEFINE_string('export_path', None, 'Path to export model.')
 flags.mark_flag_as_required('export_path')
+_EMBEDDING_SIZE = flags.DEFINE_integer('embedding_size', 128, 'Embedding size.')
 
 
 def main(argv):
   if len(argv) > 1:
     raise app.UsageError('Too many command-line arguments.')
-  export.export_model(_EXPORT_PATH.value)  # pyrefly: ignore[bad-argument-type]
+  if _EXPORT_PATH.value is None:
+    raise app.UsageError('Flag --export_path must be specified.')
+  export.export_model(
+      _EXPORT_PATH.value, embedding_size=_EMBEDDING_SIZE.value or 128
+  )
 
 
 if __name__ == '__main__':

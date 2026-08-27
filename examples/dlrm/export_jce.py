@@ -210,7 +210,7 @@ def export_model(
           input_polymorphic_shapes=input_polyshape,
           jax_export_kwargs={'platforms': ['cpu']},
           input_polymorphic_shape_symbol_values={
-              'b': [1, 64],
+              'b': [1, 64, 512, 4096],
           },
       ),
       params=model_params,
