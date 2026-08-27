@@ -43,8 +43,18 @@
 #include "data/cpu_embedding/cc/embedding_table.h"  // from @neptune
 #include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @neptune
 #include "data/cpu_embedding/cc/feature_spec.h"  // from @neptune
-
 namespace neptune::data::cpu_embedding {
+namespace {
+
+// Work threshold (in float32 elements / bytes equivalent) below which
+// thread-pool task scheduling overhead dominates compute time. Empirically
+// determined via DLRM CPU benchmark sweeps (Dim=16..128, BS=1..4096): for
+// workloads <= 64K elements (256 KB, matching private CPU L2 cache size),
+// sequential execution avoids mutex, thread wake, and interconnect
+// synchronization latency.
+constexpr size_t kWorkThreshold = 65536;
+
+}  // namespace
 
 CpuEmbeddingEngine::CpuEmbeddingEngine() : CpuEmbeddingEngine(Options{}) {}
 
@@ -211,6 +221,14 @@ absl::StatusOr<absl::Span<T>> CpuEmbeddingEngine::Execute(
 
   const size_t block_size = options_.block_size;
   const int slots = options_.max_cpu_slots > 0 ? options_.max_cpu_slots : 8;
+
+  // Optimize: Avoid thread pool overhead for small workloads or single-thread
+  // configs.
+  if (slots <= 1 || num_samples * dim <= kWorkThreshold) {
+    RETURN_IF_ERROR(ComputeEmbeddingActivations(
+        embedding_ids, row_pointers, weights, *embedding_table, buffer));
+    return buffer;
+  }
 
   if (block_size == std::numeric_limits<size_t>::max()) {
     // Mode: Eigen Loop Partitioner (parallelFor)
