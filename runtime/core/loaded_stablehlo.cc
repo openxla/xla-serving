@@ -199,6 +199,14 @@ absl::Status VerifyMultiBucketConsistency(
       return absl::InvalidArgumentError(
           "Mismatched number of outputs across buckets");
     }
+    for (int j = 0; j < num_outputs; ++j) {
+      if (stablehlo->specs()[i].outputs[j].placement !=
+          stablehlo->specs()[0].outputs[j].placement) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Mismatched output placement across buckets for output #", j,
+            ": bucket 0 vs bucket ", i));
+      }
+    }
   }
 
   if (num_user_inputs_out) *num_user_inputs_out = num_user_inputs;
@@ -221,7 +229,8 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::CreateForAot(
   return absl::WrapUnique(new LoadedStableHlo(
       /*concrete_module_bundles=*/std::nullopt,
       /*symbolic_module_bundle=*/std::nullopt, std::move(weight_specs),
-      num_user_inputs, num_outputs,
+      /*output_specs=*/stablehlo->specs()[0].outputs, num_user_inputs,
+      num_outputs,
       // TODO: Set has_streaming based on AOT executable metadata
       // when AOT + streaming execution is formally supported.
       /*has_streaming=*/false));
@@ -391,7 +400,8 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
 
   return absl::WrapUnique(new LoadedStableHlo(
       std::move(concrete_module_bundles), std::move(symbolic_module_bundle),
-      std::move(weight_specs), num_user_inputs, num_outputs, has_streaming));
+      std::move(weight_specs), /*output_specs=*/stablehlo->specs()[0].outputs,
+      num_user_inputs, num_outputs, has_streaming));
 };
 
 absl::StatusOr<std::unique_ptr<LoadedStableHlo::ModuleBundle>>

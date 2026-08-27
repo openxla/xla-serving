@@ -62,7 +62,6 @@
 #include "runtime/core/streaming/stream.h"  // from @neptune
 #include "runtime/core/streaming/utils.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
-#include "runtime/core/value_utils.h"  // from @neptune
 #include "runtime/interpreter/context.h"  // from @neptune
 #include "runtime/interpreter/manifest_utils.h"  // from @neptune
 #include "runtime/libs/ifrt/executable_build_utils.h"  // from @neptune
@@ -618,6 +617,20 @@ StableHloRunner::CreateExecutableSynchronously(
       GetStableHloIOSpec(*module_bundle->module, compile_options_.has_value()
                                                      ? &compile_options_.value()
                                                      : nullptr));
+
+  // Output placement metadata is propagated from the loaded StableHLO specs so
+  // that output conversion (ConvertOutput) can honor manifest-declared
+  // placements (Device vs. Host). Input placement does not need to be set here
+  // because inputs carry their physical placement intrinsically via their
+  // runtime type (DeviceBuffer vs. HostBuffer) during execution.
+  for (size_t i = 0; i < io_spec.outputs.size(); ++i) {
+    if (i < loaded_stablehlo_->output_specs().size()) {
+      io_spec.outputs[i].placement =
+          loaded_stablehlo_->output_specs()[i].placement;
+      original_io_spec.outputs[i].placement =
+          loaded_stablehlo_->output_specs()[i].placement;
+    }
+  }
 
   BuildIfrtExecutableOptions options;
 

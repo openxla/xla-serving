@@ -285,18 +285,21 @@ std::vector<xla::nb_numpy_ndarray> ModelRunner::Signature::Run(
   if (kwargs.contains("run_options") && !kwargs["run_options"].is_none()) {
     run_options = nb::cast<neptune::RunOptions>(kwargs["run_options"]);
   }
-  auto [positional_inputs, keyword_inputs] = ConvertArgsKwargsToInputs(
-      args, kwargs, *interpreter_->GetModelInputDataType(pipeline_name_));
+  auto input_type = interpreter_->GetModelInputDataType(pipeline_name_);
+  ThrowIfError(input_type.status(), "Failed to get model input data type");
+  auto [positional_inputs, keyword_inputs] =
+      ConvertArgsKwargsToInputs(args, kwargs, *input_type);
 
   absl::StatusOr<std::vector<neptune::Value>> outputs = interpreter_->Run(
       pipeline_name_, positional_inputs, keyword_inputs, run_options);
   ThrowIfError(outputs.status(), "Failed to run the model");
   std::vector<neptune::Value> output_values = *std::move(outputs);
+  auto output_type = interpreter_->GetModelOutputDataType(pipeline_name_);
+  ThrowIfError(output_type.status(), "Failed to get model output data type");
   std::vector<xla::nb_numpy_ndarray> output_arrays;
   output_arrays.reserve(output_values.size());
   for (const auto& output_value : output_values) {
-    output_arrays.push_back(GetNbArrayFromValue(
-        output_value, *interpreter_->GetModelOutputDataType(pipeline_name_)));
+    output_arrays.push_back(GetNbArrayFromValue(output_value, *output_type));
   }
 
   return output_arrays;
@@ -312,18 +315,21 @@ ModelRunner::Signature::RunWithMapReturn(nb::args args, nb::kwargs kwargs) {
   if (kwargs.contains("run_options") && !kwargs["run_options"].is_none()) {
     run_options = nb::cast<neptune::RunOptions>(kwargs["run_options"]);
   }
-  auto [positional_inputs, keyword_inputs] = ConvertArgsKwargsToInputs(
-      args, kwargs, *interpreter_->GetModelInputDataType(pipeline_name_));
+  auto input_type = interpreter_->GetModelInputDataType(pipeline_name_);
+  ThrowIfError(input_type.status(), "Failed to get model input data type");
+  auto [positional_inputs, keyword_inputs] =
+      ConvertArgsKwargsToInputs(args, kwargs, *input_type);
   absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>> outputs =
       interpreter_->RunWithMapReturn(pipeline_name_, positional_inputs,
                                      keyword_inputs, run_options);
   ThrowIfError(outputs.status(), "Failed to run the model");
   absl::flat_hash_map<std::string, neptune::Value> output_values =
       *std::move(outputs);
+  auto output_type = interpreter_->GetModelOutputDataType(pipeline_name_);
+  ThrowIfError(output_type.status(), "Failed to get model output data type");
   std::unordered_map<std::string, xla::nb_numpy_ndarray> output_arrays;
   for (const auto& [name, value] : output_values) {
-    output_arrays[name] = GetNbArrayFromValue(
-        value, *interpreter_->GetModelOutputDataType(pipeline_name_));
+    output_arrays[name] = GetNbArrayFromValue(value, *output_type);
   }
 
   return output_arrays;

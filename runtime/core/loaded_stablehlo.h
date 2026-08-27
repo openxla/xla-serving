@@ -122,6 +122,9 @@ class LoadedStableHlo {
     return weight_specs_;
   }
 
+  // Returns the `ArgSpec`s for model outputs.
+  const std::vector<ArgSpec>& output_specs() const { return output_specs_; }
+
   // Returns the number of weights irrespective of whether they are passed to
   // the main function in MLIR module or not.
   int num_weights() const { return weight_specs_.size(); }
@@ -151,11 +154,13 @@ class LoadedStableHlo {
           concrete_module_bundles,
       std::optional<std::unique_ptr<ModuleBundleWithLoader>>
           symbolic_module_bundle,
-      std::vector<std::optional<ArgSpec>> weight_specs, int num_user_inputs,
-      int num_outputs, bool has_streaming)
+      std::vector<std::optional<ArgSpec>> weight_specs,
+      std::vector<ArgSpec> output_specs, int num_user_inputs, int num_outputs,
+      bool has_streaming)
       : concrete_module_bundles_(std::move(concrete_module_bundles)),
         symbolic_module_bundle_(std::move(symbolic_module_bundle)),
         weight_specs_(std::move(weight_specs)),
+        output_specs_(std::move(output_specs)),
         num_user_inputs_(num_user_inputs),
         num_outputs_(num_outputs),
         has_streaming_(has_streaming) {}
@@ -177,6 +182,9 @@ class LoadedStableHlo {
   // `ArgSpec`s for model weights. When a weight is not used by any of the
   // StableHLO(s), the corresponding `ArgSpec` will be `std::nullopt`.
   const std::vector<std::optional<ArgSpec>> weight_specs_;
+
+  // `ArgSpec`s for model outputs.
+  const std::vector<ArgSpec> output_specs_;
 
   // Number of user-provided inputs to the model (excluding weights and any
   // system-added inputs like streaming request IDs). This should be the same
