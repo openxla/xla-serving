@@ -19,11 +19,13 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
 #include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/stablehlo_utils.h"  // from @neptune
 #include "runtime/interpreter/clock.h"  // from @neptune
 #include "runtime/interpreter/run_options.h"  // from @neptune
 
@@ -49,15 +51,18 @@ struct RunContext {
   // the same position in the batch.
   std::vector<int32_t> request_ids;
   std::optional<int64_t> callback_id;
+  std::vector<Placement> placements;
 
   static RunContext Create(const RunOptions& run_options,
+                           std::vector<Placement> resolved_placements = {},
                            std::optional<int64_t> callback_id = std::nullopt) {
     return RunContext{
         .cancellation_context = {.deadline = run_options.deadline},
         .streamed_output_callback = run_options.streamed_output_callback,
         .request_id = run_options.request_id,
-        .callback_id = callback_id};
-  };
+        .callback_id = callback_id,
+        .placements = std::move(resolved_placements)};
+  }
 };
 
 }  // namespace neptune

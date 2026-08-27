@@ -26,8 +26,6 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
-#include "protos/type.pb.h"  // from @neptune
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
 #include "xla/tsl/platform/errors.h"  // from @xla
@@ -72,7 +70,7 @@ void FlatSignature::PopulateNameToIndexMap() {
 absl::Status FlatSignature::CheckIndexInRange(int index) const {
   if (index < 0 || index >= specs_.size()) {
     return absl::InvalidArgumentError(absl::StrCat(
-        "The index ", index, "is out of range. It should be within [0, ",
+        "The index ", index, " is out of range. It should be within [0, ",
         specs_.size() - 1, "]"));
   }
   return absl::OkStatus();
@@ -216,6 +214,26 @@ absl::StatusOr<std::vector<absl::string_view>> FlatSignature::GetAllNames()
     all_names.push_back(*spec.name);
   }
   return all_names;
+}
+
+std::vector<Placement> FlatSignature::ResolvePlacements(
+    const absl::flat_hash_map<std::string, Placement>& placement_map) const {
+  if (placement_map.empty()) {
+    return {};
+  }
+  std::vector<Placement> resolved(specs_.size(), Placement::kHost);
+  for (int i = 0; i < specs_.size(); ++i) {
+    if (specs_[i].spec.placement.has_value()) {
+      resolved[i] = *specs_[i].spec.placement;
+    }
+  }
+  for (const auto& [name, placement] : placement_map) {
+    auto it = name_to_index_.find(name);
+    if (it != name_to_index_.end()) {
+      resolved[it->second] = placement;
+    }
+  }
+  return resolved;
 }
 
 }  // namespace neptune

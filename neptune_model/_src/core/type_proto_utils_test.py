@@ -91,6 +91,15 @@ class ShloTensorSpecToTensorTypeProtoTest(
     )
     self.assertEqual(tensor_type_proto, expected_proto)
 
+  def test_placement_enum_values(self):
+    tensor_proto = type_pb2.TensorType()
+    tensor_proto.placement = type_pb2.DEVICE
+    self.assertEqual(tensor_proto.placement, type_pb2.DEVICE)
+    tensor_proto.placement = type_pb2.HOST
+    self.assertEqual(tensor_proto.placement, type_pb2.HOST)
+    tensor_proto.placement = type_pb2.PLACEMENT_UNSPECIFIED
+    self.assertEqual(tensor_proto.placement, type_pb2.PLACEMENT_UNSPECIFIED)
+
 
 class ShloTensorSpecPyTreeToTypeProtoTest(
     test_utils.NptTestCase, parameterized.TestCase

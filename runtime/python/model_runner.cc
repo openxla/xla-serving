@@ -38,6 +38,7 @@
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "runtime/core/value.h"  // from @neptune
 #include "runtime/interpreter/interpreter.h"  // from @neptune
+#include "runtime/interpreter/run_options.h"  // from @neptune
 #include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
 #include "runtime/python/ifrt_client_factory.h"  // from @neptune
 #include "runtime/python/numpy_utils.h"  // from @neptune
@@ -123,9 +124,12 @@ ConvertArgsKwargsToInputs(nb::args args, nb::kwargs kwargs,
 
   absl::flat_hash_map<std::string, neptune::Value> keyword_inputs;
   for (const auto& [key, arg] : kwargs) {
+    std::string key_str = nb::cast<std::string>(key, true);
+    if (key_str == "run_options") {
+      continue;
+    }
     auto array = xla::nb_numpy_ndarray::ensure(arg);
-    keyword_inputs[nb::cast<std::string>(key, true)] =
-        GetValueFromNbArray(array, data_type);
+    keyword_inputs[key_str] = GetValueFromNbArray(array, data_type);
   }
   return {std::move(positional_inputs), std::move(keyword_inputs)};
 }
@@ -277,11 +281,15 @@ std::vector<xla::nb_numpy_ndarray> ModelRunner::Signature::Run(
         "The interpreter is not initialized. Check if the model is correctly "
         "loaded.");
   }
+  neptune::RunOptions run_options;
+  if (kwargs.contains("run_options") && !kwargs["run_options"].is_none()) {
+    run_options = nb::cast<neptune::RunOptions>(kwargs["run_options"]);
+  }
   auto [positional_inputs, keyword_inputs] = ConvertArgsKwargsToInputs(
       args, kwargs, *interpreter_->GetModelInputDataType(pipeline_name_));
 
-  absl::StatusOr<std::vector<neptune::Value>> outputs =
-      interpreter_->Run(pipeline_name_, positional_inputs, keyword_inputs);
+  absl::StatusOr<std::vector<neptune::Value>> outputs = interpreter_->Run(
+      pipeline_name_, positional_inputs, keyword_inputs, run_options);
   ThrowIfError(outputs.status(), "Failed to run the model");
   std::vector<neptune::Value> output_values = *std::move(outputs);
   std::vector<xla::nb_numpy_ndarray> output_arrays;
@@ -300,11 +308,15 @@ ModelRunner::Signature::RunWithMapReturn(nb::args args, nb::kwargs kwargs) {
     throw nb::value_error(
         "The interpreter is not initialized. This should never happen.");
   }
+  neptune::RunOptions run_options;
+  if (kwargs.contains("run_options") && !kwargs["run_options"].is_none()) {
+    run_options = nb::cast<neptune::RunOptions>(kwargs["run_options"]);
+  }
   auto [positional_inputs, keyword_inputs] = ConvertArgsKwargsToInputs(
       args, kwargs, *interpreter_->GetModelInputDataType(pipeline_name_));
   absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>> outputs =
       interpreter_->RunWithMapReturn(pipeline_name_, positional_inputs,
-                                     keyword_inputs);
+                                     keyword_inputs, run_options);
   ThrowIfError(outputs.status(), "Failed to run the model");
   absl::flat_hash_map<std::string, neptune::Value> output_values =
       *std::move(outputs);
@@ -321,6 +333,25 @@ ModelRunner::Signature::RunWithMapReturn(nb::args args, nb::kwargs kwargs) {
 
 NB_MODULE(model_runner, m) {
   tsl::ImportNumpy();
+
+  nb::enum_<neptune::Placement>(m, "Placement")
+      .value("HOST", neptune::Placement::kHost)
+      .value("DEVICE", neptune::Placement::kDevice)
+      .export_values();
+
+  nb::class_<neptune::RunOptions>(m, "RunOptions")
+      .def(nb::init<>())
+      .def_prop_rw(
+          "output_placement_map",
+          [](const neptune::RunOptions& self) {
+            return std::unordered_map<std::string, neptune::Placement>(
+                self.output_placement_map.begin(),
+                self.output_placement_map.end());
+          },
+          [](neptune::RunOptions& self,
+             const std::unordered_map<std::string, neptune::Placement>& map) {
+            self.output_placement_map = {map.begin(), map.end()};
+          });
 
   nb::class_<ModelRunner>(m, "ModelRunner")
       .def(nb::new_(&ModelRunner::Create),

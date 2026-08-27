@@ -22,6 +22,7 @@
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
 #include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/stablehlo_utils.h"  // from @neptune
 
 namespace neptune {
 
@@ -37,6 +38,16 @@ struct RunOptions {
   // buffer.
   std::function<void(absl::flat_hash_map<std::string, HostBuffer>)>
       streamed_output_callback = nullptr;
+
+  // Sparse named output placement map, keyed by output tensor name.
+  // Controls whether each returned model output is transferred to host memory
+  // (Placement::kHost, producing neptune::HostBuffer) or retained on accelerator
+  // device memory (Placement::kDevice, wrapping xla::ifrt::Array in
+  // neptune::DeviceBuffer). Unspecified outputs default to the manifest-defined
+  // placement if present, or fall back to Placement::kHost. Note: Input
+  // placement is determined automatically by the concrete type of the input
+  // value (HostBuffer vs DeviceBuffer) and does not use a placement map.
+  absl::flat_hash_map<std::string, Placement> output_placement_map;
 
   // The unique identifier for this execution request. Internal-only field,
   // populated automatically by the Interpreter. User should not set this field.
