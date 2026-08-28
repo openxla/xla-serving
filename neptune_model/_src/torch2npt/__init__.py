@@ -11,5 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""Public entry points for converting PyTorch models to Neptune ShloFunctions."""
 
-"""Required __init__ file for package."""
+from neptune_model._src.torch2npt import main_lib
+
+convert_to_jax = main_lib.convert_to_jax
+convert_to_shlo_fn = main_lib.convert_to_shlo_fn
+
+__all__ = [
+    "convert_to_jax",
+    "convert_to_shlo_fn",
+]

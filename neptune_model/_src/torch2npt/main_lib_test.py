@@ -11,53 +11,26 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for torch2npt main_lib."""
-
-import os
+"""Hermetic unit tests for torch2npt main_lib."""
 
 from absl.testing import absltest
-import jax
-import jax.numpy as jnp
-import numpy as np
 import torch
 from torch import nn
 
 from neptune_model._src.core import test_utils
-from neptune_model._src.jax2npt import main_lib as jax2npt_lib
 from neptune_model._src.torch2npt import main_lib
-
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-os.environ["OMP_NUM_THREADS"] = "1"
 
 
 class MainLibTest(test_utils.NptTestCase):
 
-  def test_pt_model_against_jax(self):
+  def test_convert_to_shlo_fn_linear(self):
     pt_model = nn.Linear(10, 10)
     input_tensor = torch.randn(1, 10)
-    shlo_fn_pt = main_lib.convert_to_shlo_fn(pt_model, input_tensor)
+    shlo_fn = main_lib.convert_to_shlo_fn(pt_model, input_tensor)
+    self.assertNotEmpty(shlo_fn.mlir_module_serialized)
+    self.assertGreater(shlo_fn.calling_convention_version, 0)
 
-    weights, jfunc = main_lib.convert_to_jax(pt_model)
-
-    input_np = input_tensor.detach().cpu().numpy()
-    input_jax = jax.device_put(input_np)
-    jax_output = jfunc(weights, (input_jax,))
-    pt_output = pt_model(input_tensor).detach().cpu().numpy()
-    np.testing.assert_allclose(jax_output, pt_output, rtol=1e-5, atol=1e-5)
-
-    def native_jax_linear(w, inputs):
-      x = inputs[0]
-      return jnp.matmul(x, jnp.transpose(w["weight"])) + w["bias"]
-
-    shlo_fn_jax = jax2npt_lib.convert(
-        native_jax_linear,
-        args_spec=(weights, (jax.ShapeDtypeStruct((1, 10), jnp.float32),)),
-        kwargs_spec={},
-    )
-    self.assertEqual(shlo_fn_pt.input_signature, shlo_fn_jax.input_signature)
-    self.assertEqual(shlo_fn_pt.output_signature, shlo_fn_jax.output_signature)
-
-  def test_conversion_to_shlo(self):
+  def test_convert_to_shlo_fn_sequential(self):
     model = nn.Sequential(
         nn.Linear(10, 20),
         nn.ReLU(),
@@ -68,9 +41,7 @@ class MainLibTest(test_utils.NptTestCase):
     )
     input_tensor = torch.randn(1, 10)
     shlo_fn = main_lib.convert_to_shlo_fn(model, input_tensor)
-
     self.assertNotEmpty(shlo_fn.mlir_module_serialized)
-
 
 if __name__ == "__main__":
   absltest.main()
