@@ -225,7 +225,10 @@ def generate_pyi(output_file, registrations, all_code):
       cls_block = re.search(
           rf'class\s+{short_cls}\s*[:{{](.*?)}};', all_code, re.DOTALL
       )
-      target_code = cls_block.group(1) if cls_block else all_code
+      if cls_block:
+        target_code = cls_block.group(1)
+      else:
+        target_code = all_code
 
       init_params = '*args: Any, **kwargs: Any'
       exec_params = '*args: Any, **kwargs: Any'
@@ -287,7 +290,7 @@ def main():
       r'(?P<ns>namespace\s+(?P<ns_name>[a-zA-Z_][a-zA-Z0-9_:]*)\s*\{)|'
       r'(?P<lcb>\{)|'
       r'(?P<rcb>\})|'
-      r'(?P<reg>(?:ND|JD)_REGISTER_TRANSFORM\s*\(\s*(?P<type>[^,]+)\s*,\s*"(?P<name>[^"]+)"\s*\))'
+      r'(?P<reg>(?:ND|JD)_REGISTER_TRANSFORM\s*\(\s*(?P<type>[^,]+)\s*,\s*"(?P<name>[^"]+)"\s*\))|'
   )
 
   all_code = ''
