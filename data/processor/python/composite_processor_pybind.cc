@@ -827,7 +827,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
                   [](int64_t val) {
                     neptune::HostBuffer hb(
                         xla::ifrt::DType(xla::ifrt::DType::Kind::kS64),
-                        xla::ifrt::Shape({1}));
+                        xla::ifrt::Shape({}));
                     int64_t* ptr = reinterpret_cast<int64_t*>(hb.base());
                     *ptr = val;
                     return hb;
@@ -836,7 +836,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
                   [](int64_t val) {
                     neptune::HostBuffer hb(
                         xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
-                        xla::ifrt::Shape({1}));
+                        xla::ifrt::Shape({}));
                     int32_t* ptr = reinterpret_cast<int32_t*>(hb.base());
                     *ptr = val;
                     return hb;
@@ -845,7 +845,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
                   [](std::string val) {
                     neptune::HostBuffer hb(
                         xla::ifrt::DType(xla::ifrt::DType::Kind::kString),
-                        xla::ifrt::Shape({1}));
+                        xla::ifrt::Shape({}));
                     tsl::tstring* ptr =
                         reinterpret_cast<tsl::tstring*>(hb.base());
                     *ptr = std::move(val);
@@ -1082,7 +1082,6 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
       .def_readwrite("model_version", &api::ExecuteMetadata::model_version)
       .def_readwrite("trace_id", &api::ExecuteMetadata::trace_id);
 
-  // Internal API only. Do not export.
   py::class_<api::HostBufferSpec>(m, "HostBufferSpec")
       .def(py::init([](py::object dtype_obj, std::vector<int64_t> shape_vec) {
         auto ifrt_dtype = DtypeToIfRtDTypeWithStrings(dtype_obj);

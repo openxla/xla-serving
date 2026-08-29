@@ -516,15 +516,15 @@ class CompositeProcessorTest(absltest.TestCase):
   def test_host_buffer_properties(self):
     hb = composite_processor_pybind.HostBuffer.create_int64(100)
     self.assertEqual(hb.dtype, np.int64)
-    self.assertEqual(hb.shape, (1,))
+    self.assertEqual(hb.shape, ())
     self.assertEqual(hb.storage_dtype, np.int64)
-    self.assertEqual(repr(hb), "<HostBuffer: dtype=S64 shape=[1]>")
+    self.assertEqual(repr(hb), "<HostBuffer: dtype=S64 shape=[]>")
 
     hb = composite_processor_pybind.HostBuffer.create_string("hello")
     self.assertEqual(hb.dtype, np.object_)
-    self.assertEqual(hb.shape, (1,))
+    self.assertEqual(hb.shape, ())
     self.assertEqual(hb.storage_dtype, np.object_)
-    self.assertEqual(repr(hb), "<HostBuffer: dtype=STRING shape=[1]>")
+    self.assertEqual(repr(hb), "<HostBuffer: dtype=STRING shape=[]>")
 
     val = composite_processor_pybind.Value(hb)
     self.assertRegex(
@@ -794,9 +794,9 @@ class CompositeProcessorTest(absltest.TestCase):
     jax.config.update("jax_enable_x64", True)
     hb = composite_processor_pybind.HostBuffer.create_int32(12345)
     ja: jax.Array = jax.dlpack.from_dlpack(hb)
-    self.assertEqual(ja.shape, (1,))
+    self.assertEqual(ja.shape, ())
     self.assertEqual(ja.dtype, np.int32)
-    self.assertEqual(ja[0], 12345)
+    self.assertEqual(ja, 12345)
 
     hb = composite_processor_pybind.HostBuffer.create_int64_array(
         [1, 2, 3, 4, 5, 6], [2, 3]
@@ -871,7 +871,7 @@ class CompositeProcessorTest(absltest.TestCase):
             outputs.append(composite_processor_pybind.Value(encap + 1))
           elif isinstance(encap, composite_processor_pybind.HostBuffer):
             arr = np.from_dlpack(encap)  # pyrefly: ignore[bad-argument-type]
-            new_arr = arr + 1  # pyrefly: ignore[unsupported-operation]
+            new_arr = np.asarray(arr + 1)  # pyrefly: ignore[unsupported-operation]
             new_hb = composite_processor_pybind.HostBuffer.from_dlpack(new_arr)
             outputs.append(composite_processor_pybind.Value(new_hb))
           elif isinstance(encap, str):
