@@ -22,19 +22,27 @@ from typing import Any
 from absl import logging
 import jax
 from jax.experimental import topologies
-from mlir import ir
+import jax.extend as jex
+from jax.interpreters import mlir
+
+import jaxlib
 
 from neptune_model._src.core import (
     manifest_utils,
 )
-from .third_party.neptune.runtime.python import (
-    optimizer as neptune_optimizer,
-)
 
-OptimizerType = (
-    neptune_optimizer.StablehloOptimizer
-    | Callable[[bytes, Sequence[int]], bytes]
-)
+try:
+  from neptune.runtime.python import optimizer as neptune_optimizer  # pylint: disable=g-import-not-at-top
+except ImportError:
+  neptune_optimizer = None
+
+if neptune_optimizer is not None:
+  OptimizerType = (
+      neptune_optimizer.StablehloOptimizer
+      | Callable[[bytes, Sequence[int]], bytes]
+  )
+else:
+  OptimizerType = Any
 
 _SUPPORTED_PLATFORMS = frozenset({"cpu", "cuda", "tpu"})
 
@@ -117,6 +125,39 @@ def _get_compile_fn(
   return client.compile
 
 
+def _apply_optimizer(
+    mlir_module_serialized: bytes,
+    weight_indices: Sequence[int],
+    optimizer: OptimizerType,
+) -> bytes:
+  """Dispatches optimization to C++ StablehloOptimizer or callable."""
+  if isinstance(optimizer, type):
+    raise TypeError(
+        "Expected an optimizer instance or callable, but got class "
+        f"'{optimizer.__name__}'. Did you forget to instantiate it?"
+    )
+  if neptune_optimizer is not None and isinstance(
+      optimizer, neptune_optimizer.StablehloOptimizer
+  ):
+    result = optimizer.optimize(mlir_module_serialized, weight_indices)
+    if not isinstance(result, bytes):
+      raise TypeError(
+          f"Optimizer.optimize must return bytes, got {type(result).__name__}"
+      )
+    return result
+  if callable(optimizer):
+    result = optimizer(mlir_module_serialized, weight_indices)
+    if not isinstance(result, bytes):
+      raise TypeError(
+          f"Optimizer callable must return bytes, got {type(result).__name__}"
+      )
+    return result
+  raise TypeError(
+      f"Unsupported optimizer type: {type(optimizer)}. Expected an instance"
+      " of StablehloOptimizer or a callable."
+  )
+
+
 def _optimize_mlir_payload(
     mlir_module_serialized: bytes,
     module_kept_var_idx: Sequence[int],
@@ -127,27 +168,10 @@ def _optimize_mlir_payload(
   if num_weights < 0:
     raise ValueError(f"num_weights must be non-negative, got {num_weights}")
 
-  if isinstance(optimizer, type):
-    raise TypeError(
-        "Expected an optimizer instance or callable, but got class "
-        f"'{optimizer.__name__}'. Did you forget to instantiate it?"
-    )
-
   weight_indices = [
       idx for idx in module_kept_var_idx if 0 <= idx < num_weights
   ]
-
-  if isinstance(optimizer, neptune_optimizer.StablehloOptimizer):
-    return optimizer.optimize(mlir_module_serialized, weight_indices)
-  if callable(optimizer):
-    optimized_bytes = optimizer(mlir_module_serialized, weight_indices)
-    if not isinstance(optimized_bytes, bytes):
-      raise TypeError(
-          "Optimizer callable must return bytes, got"
-          f" {type(optimized_bytes).__name__}"
-      )
-    return optimized_bytes
-  raise TypeError(f"Unsupported optimizer type: {type(optimizer)}")
+  return _apply_optimizer(mlir_module_serialized, weight_indices, optimizer)
 
 
 def create_offline_compiler_hook(
@@ -219,17 +243,20 @@ def create_offline_compiler_hook(
         )
 
       # 3. Scope MLIR Context around both parsing and compilation
-      with jax.interpreters.mlir.make_ir_context():
+      with mlir.make_ir_context():
         try:
-          module = ir.Module.parse(optimized_mlir)
-        except ir.MLIRError as e:
-          raise ValueError(f"Failed to parse MLIR module: {e}") from e
+          module = jex.mlir.deserialize_portable_artifact(optimized_mlir)
+        except (ValueError, RuntimeError, mlir.ir.MLIRError):
+          try:
+            module = mlir.ir.Module.parse(optimized_mlir)
+          except mlir.ir.MLIRError as e:
+            raise ValueError(f"Failed to parse MLIR module: {e}") from e
 
         # 4. Compile Options Configuration
         if config.compile_options is not None:
           compile_options = copy.deepcopy(config.compile_options)
         else:
-          compile_options = jax.jaxlib.xla_client.CompileOptions()
+          compile_options = jaxlib.xla_client.CompileOptions()
 
         if config.compile_portable_executable is not None:
           compile_options.compile_portable_executable = (
@@ -246,7 +273,7 @@ def create_offline_compiler_hook(
 
         # 5. Compilation Phase
         client = topology.devices[0].client
-        device_list = jax.jaxlib.xla_client.DeviceList(tuple(topology.devices))
+        device_list = jaxlib.xla_client.DeviceList(tuple(topology.devices))
         compile_fn = _get_compile_fn(client, enable_deviceless_compilation)
         executable = compile_fn(
             module, device_list, compile_options=compile_options

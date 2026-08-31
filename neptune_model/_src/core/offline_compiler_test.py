@@ -15,19 +15,37 @@
 """Tests for Neptune offline AOT compiler across CPU, CUDA, and TPU backends."""
 
 from collections.abc import Sequence
-import typing
-from typing import Any
+from typing import Any, cast
 
 from absl.testing import absltest
 from absl.testing import parameterized
 import jax
+from jax import export as jax_export
 from jax.experimental import topologies
 import jax.numpy as jnp
 
 from neptune_model._src.core import offline_compiler
-from .third_party.neptune.runtime.python import (
-    optimizer as neptune_optimizer,
-)
+
+try:
+  from neptune.runtime.python import optimizer as neptune_optimizer  # pylint: disable=g-import-not-at-top
+except ImportError:
+  neptune_optimizer = None
+
+
+def _get_vhlo_portable_artifact() -> bytes:
+  """Generates valid VHLO portable artifact using jax.export."""
+  exported = jax_export.export(jax.jit(lambda x: x + 1.0))(
+      jax.ShapeDtypeStruct((2, 2), jnp.float32)
+  )
+  return exported.mlir_module_serialized
+
+
+def _get_raw_text_mlir() -> bytes:
+  """Returns raw text MLIR module bytes."""
+  return (
+      b"module { func.func @main(%arg0: tensor<2x2xf32>) -> tensor<2x2xf32> {"
+      b" return %arg0 : tensor<2x2xf32> } }"
+  )
 
 
 def _get_stablehlo_mlir() -> bytes:
@@ -44,6 +62,120 @@ class OfflineCompilerTest(parameterized.TestCase):
   # ---------------------------------------------------------------------------
   # 1. Deviceless AOT Compilation Tests (Parameterized across backends)
   # ---------------------------------------------------------------------------
+
+  @parameterized.named_parameters(
+      (
+          "cpu",
+          "cpu",
+          None,
+          False,
+      ),
+      (
+          "cuda_h100",
+          "cuda",
+          "h100=8",
+          True,
+      ),
+      (
+          "tpu_df2x2",
+          "tpu",
+          "df:2x2",
+          False,
+      ),
+  )
+  def test_deviceless_compilation_vhlo_portable_artifact(
+      self, platform: str, topology_name: str | None, needs_autotune_db: bool
+  ):
+    """Verifies deviceless AOT compilation of genuine VHLO portable artifact."""
+    try:
+      if platform == "cpu":
+        topo = topologies.get_attached_topology(platform="cpu")
+      else:
+        assert topology_name is not None
+        topo = topologies.get_topology_desc(topology_name, platform=platform)
+      serialized_topo = topo.serialize()
+    except Exception as e:  # pylint: disable=broad-exception-caught
+      self.skipTest(
+          f"{platform.upper()} topology factory or serialization not supported"
+          f" in this binary: {e}"
+      )
+    vhlo_bytes = _get_vhlo_portable_artifact()
+    autotune_db = self.create_tempdir().full_path if needs_autotune_db else None
+
+    config = offline_compiler.TargetConfig(
+        target_topology_label=f"{platform}_vhlo_artifact",
+        enable_deviceless_compilation=True,
+        platform=platform,
+        serialized_topology=serialized_topo,
+        autotune_database_path=autotune_db,
+    )
+    hook = offline_compiler.create_offline_compiler_hook([config])
+    artifacts = list(hook(vhlo_bytes, [0], 0))
+
+    self.assertLen(artifacts, 1)
+    self.assertEqual(
+        artifacts[0].target_topology_label, f"{platform}_vhlo_artifact"
+    )
+    self.assertNotEmpty(artifacts[0].pjrt_executable_bytes)
+    self.assertEqual(artifacts[0].kept_var_idx, [0])
+    self.assertIsInstance(artifacts[0].executable_version, bytes)
+
+  @parameterized.named_parameters(
+      (
+          "cpu",
+          "cpu",
+          None,
+          False,
+      ),
+      (
+          "cuda_h100",
+          "cuda",
+          "h100=8",
+          True,
+      ),
+      (
+          "tpu_df2x2",
+          "tpu",
+          "df:2x2",
+          False,
+      ),
+  )
+  def test_deviceless_compilation_raw_text_mlir(
+      self, platform: str, topology_name: str | None, needs_autotune_db: bool
+  ):
+    """Verifies deviceless AOT compilation of raw text MLIR fallback payload."""
+    try:
+      if platform == "cpu":
+        topo = topologies.get_attached_topology(platform="cpu")
+      else:
+        assert topology_name is not None
+        topo = topologies.get_topology_desc(topology_name, platform=platform)
+      serialized_topo = topo.serialize()
+    except Exception as e:  # pylint: disable=broad-exception-caught
+      self.skipTest(
+          f"{platform.upper()} topology factory or serialization not supported"
+          f" in this binary: {e}"
+      )
+    raw_mlir_bytes = _get_raw_text_mlir()
+    autotune_db = self.create_tempdir().full_path if needs_autotune_db else None
+
+    config = offline_compiler.TargetConfig(
+        target_topology_label=f"{platform}_raw_text_mlir",
+        enable_deviceless_compilation=True,
+        platform=platform,
+        serialized_topology=serialized_topo,
+        autotune_database_path=autotune_db,
+    )
+    hook = offline_compiler.create_offline_compiler_hook([config])
+    artifacts = list(hook(raw_mlir_bytes, [0], 0))
+
+    self.assertLen(artifacts, 1)
+    self.assertEqual(
+        artifacts[0].target_topology_label, f"{platform}_raw_text_mlir"
+    )
+    self.assertNotEmpty(artifacts[0].pjrt_executable_bytes)
+    self.assertEqual(artifacts[0].kept_var_idx, [0])
+    self.assertIsInstance(artifacts[0].executable_version, bytes)
 
   @parameterized.named_parameters(
       (
@@ -122,13 +254,12 @@ class OfflineCompilerTest(parameterized.TestCase):
       else:
         assert topology_name is not None
         topo = topologies.get_topology_desc(topology_name, platform=platform)
+      serialized_topo = topo.serialize()
     except Exception as e:  # pylint: disable=broad-exception-caught
       self.skipTest(
-          f"{platform.upper()} topology factory not registered in this"
-          f" binary: {e}"
+          f"{platform.upper()} topology factory or serialization not supported"
+          f" in this binary: {e}"
       )
-
-    serialized_topo = topo.serialize()
     stablehlo_mlir = _get_stablehlo_mlir()
     autotune_db = self.create_tempdir().full_path if needs_autotune_db else None
 
@@ -184,6 +315,8 @@ class OfflineCompilerTest(parameterized.TestCase):
 
   def test_offline_compilation_with_stablehlo_optimizer(self):
     """Verifies compilation with generic StablehloOptimizer instance."""
+    if neptune_optimizer is None:
+      self.skipTest("neptune_optimizer C++ extension not available in OSS.")
     stablehlo_mlir = _get_stablehlo_mlir()
     config = offline_compiler.TargetConfig(
         target_topology_label="cpu_opt",
@@ -199,6 +332,8 @@ class OfflineCompilerTest(parameterized.TestCase):
 
   def test_offline_compilation_with_stablehlo_tpu_optimizer(self):
     """Verifies compilation with StablehloTpuOptimizer instance on TPU."""
+    if neptune_optimizer is None:
+      self.skipTest("neptune_optimizer C++ extension not available in OSS.")
     try:
       topologies.get_topology_desc("df:2x2", platform="tpu")
     except Exception as e:  # pylint: disable=broad-exception-caught
@@ -355,11 +490,15 @@ class OfflineCompilerTest(parameterized.TestCase):
 
   def test_uninstantiated_optimizer_class_raises_type_error(self):
     """Verifies TypeError when uninstantiated class is passed as optimizer."""
+
+    class _UninstantiatedClass:
+      pass
+
     stablehlo_mlir = _get_stablehlo_mlir()
     config = offline_compiler.TargetConfig(
         target_topology_label="cpu_target",
         platform="cpu",
-        optimizer=typing.cast(Any, neptune_optimizer.StablehloOptimizer),
+        optimizer=cast(Any, _UninstantiatedClass),
     )
     hook = offline_compiler.create_offline_compiler_hook([config])
     with self.assertRaisesRegex(
@@ -370,7 +509,7 @@ class OfflineCompilerTest(parameterized.TestCase):
   def test_callable_optimizer_returns_non_bytes_raises_type_error(self):
     """Verifies TypeError when custom optimizer returns non-bytes."""
     stablehlo_mlir = _get_stablehlo_mlir()
-    bad_opt = typing.cast(Any, lambda mlir, idx: "non_bytes_return")
+    bad_opt = cast(Any, lambda mlir, idx: "non_bytes_return")
     config = offline_compiler.TargetConfig(
         target_topology_label="cpu_target",
         enable_deviceless_compilation=False,
@@ -390,7 +529,7 @@ class OfflineCompilerTest(parameterized.TestCase):
         target_topology_label="cpu_target",
         enable_deviceless_compilation=False,
         platform="cpu",
-        optimizer=typing.cast(Any, "invalid_optimizer_type"),
+        optimizer=cast(Any, "invalid_optimizer_type"),
     )
     hook = offline_compiler.create_offline_compiler_hook([config])
     with self.assertRaisesRegex(
@@ -404,7 +543,7 @@ class OfflineCompilerTest(parameterized.TestCase):
         target_topology_label="cpu_target",
         enable_deviceless_compilation=False,
         platform="cpu",
-        optimizer=neptune_optimizer.StablehloOptimizer(),
+        optimizer=lambda mlir, idx: mlir,
     )
     hook = offline_compiler.create_offline_compiler_hook([config])
     stablehlo_mlir = _get_stablehlo_mlir()
