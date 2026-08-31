@@ -8,6 +8,49 @@ package(default_visibility = [
 ])
 
 cc_library(
+    name = "compiled_custom_combiner",
+    srcs = ["compiled_custom_combiner.cc"],
+    hdrs = ["compiled_custom_combiner.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
+    deps = [
+        "@abseil-cpp//absl/container:inlined_vector",
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:str_format",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/types:span",
+        "@eigen_archive//:eigen3",
+        "@neptune//data/kernels/cpu_embedding:cpu_embedding_cc_proto",
+        "@xla//xla/backends/cpu/nanort:nanort_client",
+        "@xla//xla/backends/cpu/nanort:nanort_executable",
+        "@xla//xla/hlo/builder:xla_computation",
+        "@xla//xla/pjrt:mlir_to_hlo",
+        "@xla//xla/tsl/concurrency:async_value",
+        "@xla//xla/tsl/platform:errors",
+        "@xla//xla/tsl/platform:statusor",
+    ],
+)
+
+cc_test(
+    name = "compiled_custom_combiner_test",
+    srcs = ["compiled_custom_combiner_test.cc"],
+    defines = [
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS",
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS",
+    ],
+    deps = [
+        ":compiled_custom_combiner",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/types:span",
+        "@googletest//:gtest_main",
+        "@neptune//data/kernels/cpu_embedding:cpu_embedding_cc_proto",
+        "@neptune//data/test_utils:status_macros",
+    ],
+)
+
+cc_library(
     name = "embedding_table",
     srcs = ["embedding_table.cc"],
     hdrs = ["embedding_table.h"],

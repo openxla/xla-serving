@@ -123,6 +123,21 @@ class EmbeddingUtilsTest(googletest.TestCase):
     # Output 2: Passthrough dense_passthrough -> (2, 8)
     self.assertEqual(prepared.output_signature[2].shape, (2, 8))
 
+  def test_custom_combiner_export(self):
+    def custom_sum_combiner(valencies, vectors):
+      return jnp.sum(vectors, axis=1)
+
+    custom_combiner = embedding_utils.CustomCombiner(
+        combiner_fn=custom_sum_combiner,
+        max_valency=8,
+        tile_size=16,
+    )
+    bytecode = embedding_utils.export_custom_combiner_to_stablehlo(
+        custom_sum_combiner, tile_size=16, max_valency=8, embedding_dim=64
+    )
+    self.assertIsInstance(bytecode, bytes)
+    self.assertNotEmpty(bytecode)
+
 
 if __name__ == "__main__":
   googletest.main()
