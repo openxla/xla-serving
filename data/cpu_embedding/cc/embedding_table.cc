@@ -19,6 +19,7 @@
 #include <utility>
 
 #include "data/cpu_embedding/cc/array.h"  // from @neptune
+#include "data/cpu_embedding/cc/compiled_custom_combiner.h"  // from @neptune
 #include "absl/memory/memory.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
@@ -54,8 +55,7 @@ absl::StatusOr<Array> LookupImpl(absl::Span<const int64_t> ids,
 }  // namespace
 
 absl::StatusOr<std::unique_ptr<EmbeddingTable>> EmbeddingTable::Create(
-    absl::string_view name, Array data, enum CombineMode combine_mode,
-    CustomCombinerFn custom_combiner) {
+    absl::string_view name, Array data, enum CombineMode combine_mode) {
   if (data.GetShape().dims.size() != 2) {
     return absl::InvalidArgumentError(absl::StrFormat(
         "Embedding table data must be a 2D array. Got shape: (%s)",
@@ -66,7 +66,28 @@ absl::StatusOr<std::unique_ptr<EmbeddingTable>> EmbeddingTable::Create(
   }
 
   return absl::WrapUnique(
-      new EmbeddingTable(name, std::move(data), combine_mode, custom_combiner));
+      new EmbeddingTable(name, std::move(data), combine_mode));
+}
+
+absl::StatusOr<std::unique_ptr<EmbeddingTable>>
+EmbeddingTable::CreateWithCustomCombiner(
+    absl::string_view name, Array data,
+    std::shared_ptr<const CompiledCustomCombiner> custom_combiner) {
+  if (data.GetShape().dims.size() != 2) {
+    return absl::InvalidArgumentError(absl::StrFormat(
+        "Embedding table data must be a 2D array. Got shape: (%s)",
+        absl::StrJoin(data.GetShape().dims, ",")));
+  }
+  if (name.empty()) {
+    return absl::InvalidArgumentError("Embedding table name cannot be empty.");
+  }
+  if (custom_combiner == nullptr) {
+    return absl::InvalidArgumentError("custom_combiner cannot be null.");
+  }
+
+  return absl::WrapUnique(new EmbeddingTable(
+      name, std::move(data), CombineMode::kCustom,
+      std::move(custom_combiner)));
 }
 
 absl::StatusOr<Array> EmbeddingTable::Lookup(
@@ -82,13 +103,13 @@ absl::StatusOr<Array> EmbeddingTable::Lookup(
   }
 }
 
-EmbeddingTable::EmbeddingTable(absl::string_view name, Array data,
-                               enum CombineMode combine_mode,
-                               CustomCombinerFn custom_combiner)
+EmbeddingTable::EmbeddingTable(
+    absl::string_view name, Array data, enum CombineMode combine_mode,
+    std::shared_ptr<const CompiledCustomCombiner> compiled_custom_combiner)
     : name_(name),
       data_(std::move(data)),
       combine_mode_(combine_mode),
-      custom_combiner_(custom_combiner) {
+      compiled_custom_combiner_(std::move(compiled_custom_combiner)) {
   vocab_size_ = data_.GetShape().dims[0];
   embedding_dim_ = data_.GetShape().dims[1];
 }

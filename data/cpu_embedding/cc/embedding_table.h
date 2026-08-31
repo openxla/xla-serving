@@ -20,20 +20,13 @@
 #include <string>
 
 #include "data/cpu_embedding/cc/array.h"  // from @neptune
+#include "data/cpu_embedding/cc/compiled_custom_combiner.h"  // from @neptune
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "unsupported/Eigen/CXX11/Tensor"
 
 namespace neptune::data::cpu_embedding {
-
-// Define the CustomCombinerFn signature matching C-ABI
-typedef void (*CustomCombinerFn)(const int64_t* ids, int64_t ids_size,
-                                 const int32_t* row_pointers,
-                                 int64_t row_pointers_size,
-                                 const float* weights, int64_t weights_size,
-                                 const float* table_data, int64_t vocab_size,
-                                 int64_t dim, float* output_data);
 
 // Read-only embedding table.
 class EmbeddingTable {
@@ -42,12 +35,16 @@ class EmbeddingTable {
     kSum,
     kMean,
     kSqrtN,
+    kCustom,
   };
 
   static absl::StatusOr<std::unique_ptr<EmbeddingTable>> Create(
       absl::string_view name, Array data,
-      CombineMode combine_mode = CombineMode::kSum,
-      CustomCombinerFn custom_combiner = nullptr);
+      CombineMode combine_mode = CombineMode::kSum);
+
+  static absl::StatusOr<std::unique_ptr<EmbeddingTable>> CreateWithCustomCombiner(
+      absl::string_view name, Array data,
+      std::shared_ptr<const CompiledCustomCombiner> custom_combiner);
 
   EmbeddingTable() = default;
 
@@ -77,18 +74,23 @@ class EmbeddingTable {
     return data_.AsTensor<const T, 2>();
   }
 
-  CustomCombinerFn GetCustomCombiner() const { return custom_combiner_; }
+  std::shared_ptr<const CompiledCustomCombiner> GetCompiledCustomCombiner()
+      const {
+    return compiled_custom_combiner_;
+  }
 
  private:
   // Private constructor. Use Create() instead.
-  EmbeddingTable(absl::string_view name, Array data,
-                 enum CombineMode combine_mode,
-                 CustomCombinerFn custom_combiner);
+  EmbeddingTable(
+      absl::string_view name, Array data, enum CombineMode combine_mode,
+      std::shared_ptr<const CompiledCustomCombiner> compiled_custom_combiner =
+          nullptr);
 
   std::string name_;
   Array data_;
   enum CombineMode combine_mode_ = CombineMode::kSum;
-  CustomCombinerFn custom_combiner_ = nullptr;
+  std::shared_ptr<const CompiledCustomCombiner> compiled_custom_combiner_ =
+      nullptr;
 
   // Cached for convenience.
   int64_t vocab_size_;

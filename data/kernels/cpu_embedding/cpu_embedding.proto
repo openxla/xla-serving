@@ -16,6 +16,29 @@ edition = "2024";
 
 package neptune.data.composite.transforms.cpu_embedding;
 
+message CustomCombinerSpec {
+  enum Format {
+    FORMAT_UNSPECIFIED = 0;
+    STABLEHLO_BYTECODE = 1;
+    STABLEHLO_TEXT = 2;
+    HLO_PROTO = 3;
+    HLO_TEXT = 4;
+  }
+
+  Format format = 1;
+
+  oneof payload {
+    bytes bytecode = 2;
+    string text = 3;
+    string asset_name = 4;
+  }
+
+  int32 max_valency = 5;
+  int32 num_weights = 6;
+  int32 tile_size = 7;
+  int32 output_dim = 8;
+}
+
 message CpuEmbeddingManifest {
   message EmbeddingTable {
     enum CombineMode {
@@ -23,12 +46,14 @@ message CpuEmbeddingManifest {
       SUM = 1;
       MEAN = 2;
       SQRT_N = 3;
+      CUSTOM = 4;
     }
 
     string name = 1;
     int64 vocab_size = 2;
     int32 embedding_dim = 3;
     CombineMode combine_mode = 5;
+    CustomCombinerSpec custom_combiner_spec = 6;
   }
 
   message FeatureSpec {
