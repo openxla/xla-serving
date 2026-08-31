@@ -68,4 +68,3 @@ MIME_TYPE_FLAGS = {
     MIME_TYPE_XLA_COMPILE_OPTIONS: 'xla_compile_options',
     MIME_TYPE_ORBAX_XLA_COMPILE_OPTIONS: 'xla_compile_options',
 }
-

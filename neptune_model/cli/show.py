@@ -22,7 +22,6 @@ from google.protobuf import message
 from google.protobuf import text_format
 import jax.extend as jex
 from jax.interpreters import mlir
-
 import rich
 import rich.table
 import typer

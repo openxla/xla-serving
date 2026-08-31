@@ -22,3 +22,10 @@ XLA_COMPILE_OPTIONS = 'xla_compile_options'
 XLA_COMPILE_OPTIONS_MIME_TYPE = (
     'application/protobuf; type=neptune_model_manifest.CompileOptionsProtoMap'
 )
+
+# JAX specific info constants.
+JAX_SPECIFIC_INFO = 'jax_specific_info'
+CURRENT_JAX_SUPPLEMENTAL_MIME_TYPE = (
+    'application/protobuf; type=neptune_model_jax_supplemental.Function'
+)
+CURRENT_JAX_SUPPLEMENTAL_VERSION = '0.0.1'
