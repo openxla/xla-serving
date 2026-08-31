@@ -1,0 +1,36 @@
+name: Check Bazel Cache
+
+on:
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  check-cache-access:
+    name: Check GCS Bucket Access
+    runs-on: linux-x86-n2-16
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
+
+    steps:
+      - name: Verify Read and Write Access to xse-bazel-cache
+        run: |
+          TEST_FILE="test-${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}-$(date +%s).txt"
+          echo "Testing GCS read/write access for xse-bazel-cache: ${TEST_FILE}" > "${TEST_FILE}"
+
+          echo "1. Writing test file to gs://xse-bazel-cache/..."
+          gcloud storage cp "${TEST_FILE}" "gs://xse-bazel-cache/${TEST_FILE}"
+
+          echo "2. Reading test file back from gs://xse-bazel-cache/..."
+          gcloud storage cp "gs://xse-bazel-cache/${TEST_FILE}" "downloaded_${TEST_FILE}"
+
+          echo "3. Verifying file content integrity..."
+          cmp -s "${TEST_FILE}" "downloaded_${TEST_FILE}"
+          echo "Content match confirmed."
+
+          echo "4. Cleaning up test file from bucket..."
+          gcloud storage rm "gs://xse-bazel-cache/${TEST_FILE}"
+
+          echo "✅ Successfully verified read and write access to gs://xse-bazel-cache"
