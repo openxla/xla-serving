@@ -48,6 +48,7 @@ cc_library(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/strings:string_view",
         "@neptune//data/cpu_embedding/cc:array",
+        "@neptune//data/cpu_embedding/cc:compiled_custom_combiner",
         "@neptune//data/cpu_embedding/cc:cpu_embedding_engine",
         "@neptune//data/cpu_embedding/cc:embedding_table",
         "@neptune//data/cpu_embedding/cc:feature_spec",

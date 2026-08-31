@@ -37,9 +37,10 @@ namespace composite {
 absl::StatusOr<std::vector<Asset>> SerializeCpuEmbedding(
     std::string_view dir_path,
     const absl::flat_hash_map<std::string, cpu_embedding::Array>& tables,
-    std::string_view manifest_proto_text) {
+    std::string_view manifest_proto_text,
+    const absl::flat_hash_map<std::string, std::string>& custom_combiners) {
   std::vector<Asset> assets;
-  assets.reserve(1 + tables.size());
+  assets.reserve(1 + tables.size() + custom_combiners.size());
 
   std::string manifest_path = absl::StrCat(dir_path, "/manifest.textproto");
   RETURN_IF_ERROR(tsl::WriteStringToFile(tsl::Env::Default(), manifest_path,
@@ -68,6 +69,21 @@ absl::StatusOr<std::vector<Asset>> SerializeCpuEmbedding(
         absl::string_view(reinterpret_cast<const char*>(span.data()),
                           span.size() * sizeof(float))));
     assets.push_back(Asset{.name = name, .path = table_path});
+  }
+
+  // Serialize custom combiner assets (e.g. .mlirbc, .mlir, .pb, .hlo)
+  for (const auto& [asset_name, content] : custom_combiners) {
+    if (absl::StrContains(asset_name, '/') ||
+        absl::StrContains(asset_name, '\\') ||
+        absl::StrContains(asset_name, "..")) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Invalid combiner asset name (path traversal detected): ",
+          asset_name));
+    }
+    std::string asset_path = absl::StrCat(dir_path, "/", asset_name);
+    RETURN_IF_ERROR(
+        tsl::WriteStringToFile(tsl::Env::Default(), asset_path, content));
+    assets.push_back(Asset{.name = asset_name, .path = asset_path});
   }
 
   return assets;

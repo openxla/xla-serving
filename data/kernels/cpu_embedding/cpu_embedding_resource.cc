@@ -29,6 +29,7 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "data/cpu_embedding/cc/array.h"  // from @neptune
+#include "data/cpu_embedding/cc/compiled_custom_combiner.h"  // from @neptune
 #include "data/cpu_embedding/cc/cpu_embedding_engine.h"  // from @neptune
 #include "data/cpu_embedding/cc/embedding_table.h"  // from @neptune
 #include "data/cpu_embedding/cc/feature_spec.h"  // from @neptune
@@ -130,6 +131,63 @@ absl::StatusOr<std::unique_ptr<CpuEmbeddingEngine>> LoadCpuEmbeddingEngine(
 
     auto array = cpu_embedding::Array::Wrap(
         const_cast<float*>(raw_table_data), shape);
+
+    if (table_config.combine_mode() ==
+        CpuEmbeddingManifest::EmbeddingTable::CUSTOM) {
+      if (!table_config.has_custom_combiner_spec()) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Custom combine mode selected for table ", table_config.name(),
+            " but custom_combiner_spec is missing."));
+      }
+      const auto& spec = table_config.custom_combiner_spec();
+      absl::string_view bytecode_or_text;
+      if (spec.has_asset_name()) {
+        auto asset_it = table_assets.find(spec.asset_name());
+        if (asset_it == table_assets.end()) {
+          return absl::NotFoundError(absl::StrCat(
+              "Failed to find custom combiner asset: ", spec.asset_name()));
+        }
+        Asset* combiner_asset = asset_it->second;
+        if (combiner_asset->content.empty()) {
+          RETURN_IF_ERROR(combiner_asset->LoadContent());
+        }
+        bytecode_or_text = combiner_asset->content;
+      } else if (spec.has_bytecode()) {
+        bytecode_or_text = spec.bytecode();
+      } else if (spec.has_text()) {
+        bytecode_or_text = spec.text();
+      } else {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Custom combiner spec for table ", table_config.name(),
+            " must specify asset_name, bytecode, or text."));
+      }
+
+      cpu_embedding::CompiledCustomCombiner::Options custom_options;
+      custom_options.embedding_dim = embedding_dim;
+      if (spec.tile_size() > 0) custom_options.tile_size = spec.tile_size();
+      if (spec.max_valency() > 0)
+        custom_options.max_valency = spec.max_valency();
+      if (spec.num_weights() > 0)
+        custom_options.num_weights = spec.num_weights();
+      custom_options.output_dim =
+          spec.output_dim() > 0 ? spec.output_dim() : embedding_dim;
+
+      ASSIGN_OR_RETURN(
+          auto compiled_combiner,
+          cpu_embedding::CompiledCustomCombiner::CompileFromStableHlo(
+              bytecode_or_text, spec.format(), custom_options));
+
+      ASSIGN_OR_RETURN(
+          auto table,
+          cpu_embedding::EmbeddingTable::CreateWithCustomCombiner(
+              table_config.name(), std::move(array),
+              std::move(compiled_combiner)));
+
+      RETURN_IF_ERROR(engine->AddLocalTable(std::string(table_config.name()),
+                                            std::move(table)));
+      table_to_dim[table_config.name()] = custom_options.output_dim;
+      continue;
+    }
 
     cpu_embedding::EmbeddingTable::CombineMode combine_mode;
     switch (table_config.combine_mode()) {

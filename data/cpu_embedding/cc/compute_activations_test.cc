@@ -16,13 +16,16 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "Eigen/Core"
 #include "data/cpu_embedding/cc/array.h"  // from @neptune
+#include "data/cpu_embedding/cc/compiled_custom_combiner.h"  // from @neptune
 #include "data/cpu_embedding/cc/embedding_table.h"  // from @neptune
 #include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @neptune
 #include "data/test_utils/status_macros.h"  // from @neptune
@@ -251,6 +254,181 @@ struct TypeNamer {
 
 INSTANTIATE_TYPED_TEST_SUITE_P(test, ComputeActivationsTest, MyTypes,
                                TypeNamer);
+
+TEST(ComputeActivationsCustomCombinerTest, FunctionCustomCombinerSumEquivalence) {
+  // Embedding table: 4 rows of dim 4
+  std::vector<float> table_data = {
+      1.0f, 2.0f, 3.0f, 4.0f,
+      5.0f, 6.0f, 7.0f, 8.0f,
+      9.0f, 10.0f, 11.0f, 12.0f,
+      13.0f, 14.0f, 15.0f, 16.0f,
+  };
+  Array table_array(absl::MakeConstSpan(table_data), Shape({4, 4}));
+
+  CompiledCustomCombiner::Options options;
+  options.tile_size = 2;
+  options.max_valency = 3;
+  options.embedding_dim = 4;
+  options.output_dim = 4;
+
+  auto sum_fn = [](absl::Span<const int32_t> valencies,
+                   absl::Span<const float> vectors,
+                   absl::Span<const float> weights,
+                   absl::Span<float> output) -> absl::Status {
+    const int32_t tile_size = 2;
+    const int32_t max_valency = 3;
+    const int32_t dim = 4;
+    for (int i = 0; i < tile_size; ++i) {
+      int32_t v_count = valencies[i];
+      for (int d = 0; d < dim; ++d) {
+        float sum = 0.0f;
+        for (int v = 0; v < v_count; ++v) {
+          sum += vectors[i * (max_valency * dim) + v * dim + d];
+        }
+        output[i * dim + d] = sum;
+      }
+    }
+    return absl::OkStatus();
+  };
+
+  ASSERT_OK_AND_ASSIGN(
+      auto combiner,
+      CompiledCustomCombiner::CreateFromFunction(sum_fn, options));
+
+  ASSERT_OK_AND_ASSIGN(auto embedding_table,
+                       EmbeddingTable::CreateWithCustomCombiner(
+                           "custom_table", table_array, std::move(combiner)));
+
+  // Batch of 3 samples (tests remainder tile since tile_size=2):
+  // Sample 0: IDs [0, 1] -> [1,2,3,4] + [5,6,7,8] = [6, 8, 10, 12]
+  // Sample 1: Empty [] -> [0, 0, 0, 0]
+  // Sample 2: IDs [2, 3] -> [9,10,11,12] + [13,14,15,16] = [22, 24, 26, 28]
+  std::vector<int32_t> row_splits = {0, 2, 2, 4};
+  std::vector<int64_t> embedding_ids = {0, 1, 2, 3};
+  ASSERT_OK_AND_ASSIGN(FeatureBatchCsrInput feature_batch,
+                       FeatureBatchCsrInput::Create("feature", embedding_ids,
+                                                    row_splits, /*weights=*/{}));
+
+  ASSERT_OK_AND_ASSIGN(
+      Array result,
+      ComputeEmbeddingActivations(feature_batch, *embedding_table));
+
+  EXPECT_EQ(result.GetDType(), DType::kFloat32);
+  EXPECT_THAT(result.ShapeSpan(), ElementsAre(3, 4));
+  EXPECT_THAT(
+      result.AsSpan<float>(),
+      Pointwise(Approx(1e-6f), {6.0f, 8.0f, 10.0f, 12.0f,
+                                0.0f, 0.0f, 0.0f, 0.0f,
+                                22.0f, 24.0f, 26.0f, 28.0f}));
+}
+
+TEST(ComputeActivationsCustomCombinerTest, LargeBatchTileRemainderAndEmptySamples) {
+  // Embedding table: 2 rows of dim 2
+  std::vector<float> table_data = {1.0f, 2.0f, 10.0f, 20.0f};
+  Array table_array(absl::MakeConstSpan(table_data), Shape({2, 2}));
+
+  CompiledCustomCombiner::Options options;
+  options.tile_size = 4;
+  options.max_valency = 2;
+  options.embedding_dim = 2;
+  options.output_dim = 2;
+
+  auto sum_fn = [](absl::Span<const int32_t> valencies,
+                   absl::Span<const float> vectors,
+                   absl::Span<const float> weights,
+                   absl::Span<float> output) -> absl::Status {
+    for (int i = 0; i < 4; ++i) {
+      int32_t v_count = valencies[i];
+      for (int d = 0; d < 2; ++d) {
+        float sum = 0.0f;
+        for (int v = 0; v < v_count; ++v) {
+          sum += vectors[i * 4 + v * 2 + d];
+        }
+        output[i * 2 + d] = sum;
+      }
+    }
+    return absl::OkStatus();
+  };
+
+  ASSERT_OK_AND_ASSIGN(
+      auto combiner,
+      CompiledCustomCombiner::CreateFromFunction(sum_fn, options));
+
+  ASSERT_OK_AND_ASSIGN(auto embedding_table,
+                       EmbeddingTable::CreateWithCustomCombiner(
+                           "custom_table", table_array, std::move(combiner)));
+
+  // Batch of 10 samples (tile_size = 4 -> 3 tiles of 4, 4, 2 samples)
+  std::vector<int32_t> row_splits = {0, 1, 1, 3, 4, 4, 6, 7, 7, 9, 10};
+  std::vector<int64_t> embedding_ids = {0, 0, 1, 1, 0, 1, 0, 1, 0, 1};
+  ASSERT_OK_AND_ASSIGN(FeatureBatchCsrInput feature_batch,
+                       FeatureBatchCsrInput::Create("feature", embedding_ids,
+                                                    row_splits, /*weights=*/{}));
+
+  ASSERT_OK_AND_ASSIGN(
+      Array result,
+      ComputeEmbeddingActivations(feature_batch, *embedding_table));
+
+  EXPECT_THAT(result.ShapeSpan(), ElementsAre(10, 2));
+  // Sample 0: ID 0 -> [1, 2]
+  // Sample 1: Empty -> [0, 0]
+  // Sample 2: ID 0, 1 -> [11, 22]
+  // Sample 3: ID 1 -> [10, 20]
+  // Sample 4: Empty -> [0, 0]
+  // Sample 5: ID 0, 1 -> [11, 22]
+  // Sample 6: ID 0 -> [1, 2]
+  // Sample 7: Empty -> [0, 0]
+  // Sample 8: ID 1, 0 -> [11, 22]
+  // Sample 9: ID 1 -> [10, 20]
+  EXPECT_THAT(
+      result.AsSpan<float>(),
+      Pointwise(Approx(1e-6f), {
+          1.0f, 2.0f,
+          0.0f, 0.0f,
+          11.0f, 22.0f,
+          10.0f, 20.0f,
+          0.0f, 0.0f,
+          11.0f, 22.0f,
+          1.0f, 2.0f,
+          0.0f, 0.0f,
+          11.0f, 22.0f,
+          10.0f, 20.0f,
+      }));
+}
+
+TEST(ComputeActivationsCustomCombinerTest, OutOfBoundsIdReturnsError) {
+  std::vector<float> table_data = {1.0f, 2.0f};
+  Array table_array(absl::MakeConstSpan(table_data), Shape({1, 2}));
+
+  CompiledCustomCombiner::Options options;
+  options.tile_size = 2;
+  options.max_valency = 2;
+  options.embedding_dim = 2;
+  options.output_dim = 2;
+
+  auto dummy_fn = [](absl::Span<const int32_t>, absl::Span<const float>,
+                     absl::Span<const float>, absl::Span<float>) {
+    return absl::OkStatus();
+  };
+
+  ASSERT_OK_AND_ASSIGN(
+      auto combiner,
+      CompiledCustomCombiner::CreateFromFunction(dummy_fn, options));
+
+  ASSERT_OK_AND_ASSIGN(auto embedding_table,
+                       EmbeddingTable::CreateWithCustomCombiner(
+                           "custom_table", table_array, std::move(combiner)));
+
+  std::vector<int32_t> row_splits = {0, 1};
+  std::vector<int64_t> embedding_ids = {5};  // Vocab size is 1 -> OOB!
+  ASSERT_OK_AND_ASSIGN(FeatureBatchCsrInput feature_batch,
+                       FeatureBatchCsrInput::Create("feature", embedding_ids,
+                                                    row_splits, /*weights=*/{}));
+
+  auto result = ComputeEmbeddingActivations(feature_batch, *embedding_table);
+  EXPECT_FALSE(result.ok());
+  EXPECT_EQ(result.status().code(), absl::StatusCode::kInvalidArgument);
+}
 
 }  // namespace
 }  // namespace neptune::data::cpu_embedding

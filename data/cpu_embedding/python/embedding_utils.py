@@ -26,6 +26,11 @@ from data.processor.python import composite_processor_pybind
 from data.processor.python import processor
 from neptune_model._src.processors import composite_processor
 
+CustomCombiner = cpu_embedding_module.CustomCombiner
+export_custom_combiner_to_stablehlo = (
+    cpu_embedding_module.export_custom_combiner_to_stablehlo
+)
+
 
 def build_embedding_lookup(
     name: str,
@@ -63,7 +68,7 @@ def build_embedding_lookup(
       idx for idx in range(len(ordered_keys)) if idx not in sparse_indices
   ]
 
-  # 1. Prepare HostBuffer Packing Modules
+  # Prepare HostBuffer Packing Modules
   pack_ids_module = packing.PackHostBufferVectorModule(
       input_count=len(sparse_indices)
   )
@@ -79,7 +84,7 @@ def build_embedding_lookup(
         input_count=len(sparse_indices)
     )
 
-  # 2. Derive output shapes for Unpack Module
+  # Derive output shapes for Unpack Module
   unpack_output_shapes = []
   for f in feature_specs:
     seq_len = f.get('max_sequence_length', 0)
@@ -107,10 +112,10 @@ def build_embedding_lookup(
   pack_weights_module.initialize(None)
   unpack_module.initialize(None)
 
-  # 3. Construct ExecutionGraph DAG
+  # Construct ExecutionGraph DAG
   graph = composite_processor_pybind.ExecutionGraph()
 
-  # Node 0: Pack IDs
+  # Pack IDs node
   input_edges_ids = [
       composite_processor_pybind.GraphEdge.graph_input(idx)
       for idx in sparse_indices
@@ -119,9 +124,8 @@ def build_embedding_lookup(
       'pack_ids', pack_ids_module.transform, input_edges_ids
   )
 
-  # Node 1: Pack RPs (empty input edges when dense_lookup=True)
+  # Pack RPs node (empty input edges when dense_lookup=True)
   if dense_lookup:
-
     node_1_idx = graph.add_node('pack_rps', pack_rps_module.transform, [])
   else:
     input_edges_rps = [
@@ -132,7 +136,7 @@ def build_embedding_lookup(
         'pack_rps', pack_rps_module.transform, input_edges_rps
     )
 
-  # Node 2: Pack Weights
+  # Pack Weights node
   if dense_lookup:
     node_2_idx = graph.add_node(
         'pack_weights', pack_weights_module.transform, []
@@ -146,7 +150,7 @@ def build_embedding_lookup(
         'pack_weights', pack_weights_module.transform, input_edges_weights
     )
 
-  # Node 3: JCE Lookup
+  # JCE Lookup node
   input_edges_jce = [
       composite_processor_pybind.GraphEdge.node_output(node_0_idx, 0),
       composite_processor_pybind.GraphEdge.node_output(node_1_idx, 0),
@@ -156,7 +160,7 @@ def build_embedding_lookup(
       'jce_lookup', jce_module.transform, input_edges_jce
   )
 
-  # Node 4: Unpack
+  # Unpack node
   input_edges_unpack = [
       composite_processor_pybind.GraphEdge.node_output(node_3_idx, 0)
   ]
