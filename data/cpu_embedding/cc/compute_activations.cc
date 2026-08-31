@@ -228,27 +228,6 @@ absl::StatusOr<Array> AssembleSequenceEmbeddings(
 absl::StatusOr<Array> ComputeEmbeddingActivations(
     const FeatureBatchCsrInput& feature_batch,
     const EmbeddingTable& embedding_table) {
-  if (embedding_table.GetCustomCombiner() != nullptr) {
-    // TODO: Support flexible / generic datatypes in
-    // CustomCombiner.
-    if (embedding_table.GetDType() != DType::kFloat32) {
-      return absl::InvalidArgumentError(
-          "Custom combiners are only supported for Float32 embedding tables.");
-    }
-    Array activations(0.f,
-                      Shape({static_cast<int64_t>(feature_batch.NumSamples()),
-                             embedding_table.EmbeddingDim()}));
-    embedding_table.GetCustomCombiner()(
-        feature_batch.EmbeddingIds().data(),
-        feature_batch.EmbeddingIds().size(), feature_batch.RowPointers().data(),
-        feature_batch.RowPointers().size(), feature_batch.Weights().data(),
-        feature_batch.Weights().size(),
-        embedding_table.AsTensor<float>().data(), embedding_table.VocabSize(),
-        embedding_table.EmbeddingDim(),
-        activations.AsTensor<float, 2>().data());
-    return activations;
-  }
-
   switch (embedding_table.GetDType()) {
     case DType::kFloat32: {
       Array activations(0.f,
@@ -286,20 +265,6 @@ absl::Status ComputeEmbeddingActivations(
     return absl::InvalidArgumentError(absl::StrFormat(
         "Buffer size (%d) does not match the expected size (%d * %d)",
         buffer.size(), num_samples, embedding_table.EmbeddingDim()));
-  }
-
-  if (embedding_table.GetCustomCombiner() != nullptr) {
-    if constexpr (std::is_same_v<T, float>) {
-      embedding_table.GetCustomCombiner()(
-          embedding_ids.data(), embedding_ids.size(), row_pointers.data(),
-          row_pointers.size(), weights.data(), weights.size(),
-          embedding_table.AsTensor<float>().data(), embedding_table.VocabSize(),
-          embedding_table.EmbeddingDim(), buffer.data());
-      return absl::OkStatus();
-    } else {
-      return absl::InvalidArgumentError(
-          "Custom combiners are only supported for Float32 embedding tables.");
-    }
   }
 
   Array::TensorMap<T, 2> activations_tensor(buffer.data(), num_samples,

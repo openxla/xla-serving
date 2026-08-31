@@ -30,7 +30,8 @@ namespace composite {
 absl::StatusOr<std::vector<Asset>> SerializeCpuEmbedding(
     std::string_view dir_path,
     const absl::flat_hash_map<std::string, cpu_embedding::Array>& tables,
-    std::string_view manifest_proto_text);
+    std::string_view manifest_proto_text,
+    const absl::flat_hash_map<std::string, std::string>& custom_combiners = {});
 
 }  // namespace composite
 }  // namespace neptune::data

@@ -14,11 +14,13 @@
 
 """Python wrappers for CPU Embedding lookups."""
 
+import dataclasses
 import tempfile
 from typing import Any, Sequence
 
 from google.protobuf import text_format
 import jax
+from jax import numpy as jnp
 import jaxtyping
 import numpy as np
 
@@ -31,6 +33,53 @@ from data.resource_manager.python import resource_manager
 
 MANIFEST_ASSET_NAME = cpu_embedding_serializer_pybind.MANIFEST_ASSET_NAME
 serialize = cpu_embedding_serializer_pybind.serialize
+
+
+@dataclasses.dataclass
+class CustomCombiner:
+  """Configuration for a custom embedding combiner backed by StableHLO.
+
+  Attributes:
+    combiner_fn: Optional callable for the custom combiner. Takes (valencies,
+      vectors, [weights]) and returns combined activations.
+    max_valency: The maximum number of embedding IDs per sample.
+    num_weights: The number of auxiliary weights per sample (0 if unweighted).
+    tile_size: The batch tile size (default 128).
+    output_dim: The output dimension (if different from embedding_dim).
+    bytecode: Optional serialized StableHLO bytecode.
+    text: Optional textual MLIR/HLO representation.
+    asset_name: Optional external asset name for the combiner.
+  """
+
+  combiner_fn: Any = None
+  max_valency: int = 16
+  num_weights: int = 0
+  tile_size: int = 128
+  output_dim: int | None = None
+  bytecode: bytes | None = None
+  text: str | None = None
+  asset_name: str | None = None
+
+
+def export_custom_combiner_to_stablehlo(
+    combiner_fn: Any,
+    tile_size: int,
+    max_valency: int,
+    embedding_dim: int,
+    num_weights: int = 0,
+) -> bytes:
+  """Traces and exports a JAX combiner function into StableHLO bytecode."""
+  valencies_spec = jax.ShapeDtypeStruct([tile_size], jnp.int32)
+  vectors_spec = jax.ShapeDtypeStruct(
+      [tile_size, max_valency, embedding_dim], jnp.float32
+  )
+  args = [valencies_spec, vectors_spec]
+  if num_weights > 0:
+    weights_spec = jax.ShapeDtypeStruct([tile_size, num_weights], jnp.float32)
+    args.append(weights_spec)
+
+  exported = jax.export.export(jax.jit(combiner_fn))(*args)
+  return exported.mlir_module_serialized
 
 
 class CpuEmbeddingResource:
@@ -82,6 +131,8 @@ class CpuEmbeddingResource:
     manifest.max_cpu_slots = max_cpu_slots
     manifest.block_size = block_size
 
+    custom_combiner_assets: dict[str, str | bytes] = {}
+
     for table_name, data in table_data.items():
       if "/" in table_name or "\\" in table_name or ".." in table_name:
         raise ValueError(
@@ -96,7 +147,46 @@ class CpuEmbeddingResource:
       combine_mode_enum = (
           cpu_embedding_pb2.CpuEmbeddingManifest.EmbeddingTable.CombineMode
       )
-      if mode == "SUM":
+      if isinstance(mode, CustomCombiner):
+        table.combine_mode = combine_mode_enum.CUSTOM
+        custom_spec = table.custom_combiner_spec
+        custom_spec.max_valency = mode.max_valency
+        custom_spec.num_weights = mode.num_weights
+        custom_spec.tile_size = mode.tile_size
+        custom_spec.output_dim = mode.output_dim or int(data.shape[1])
+
+        asset_name = mode.asset_name or f"combiner_{table_name}.mlirbc"
+        if mode.bytecode is not None:
+          custom_combiner_assets[asset_name] = mode.bytecode
+          custom_spec.format = (
+              cpu_embedding_pb2.CustomCombinerSpec.Format.STABLEHLO_BYTECODE
+          )
+          custom_spec.asset_name = asset_name
+        elif mode.text is not None:
+          custom_combiner_assets[asset_name] = mode.text
+          custom_spec.format = (
+              cpu_embedding_pb2.CustomCombinerSpec.Format.STABLEHLO_TEXT
+          )
+          custom_spec.asset_name = asset_name
+        elif mode.combiner_fn is not None:
+          bytecode = export_custom_combiner_to_stablehlo(
+              mode.combiner_fn,
+              tile_size=mode.tile_size,
+              max_valency=mode.max_valency,
+              embedding_dim=int(data.shape[1]),
+              num_weights=mode.num_weights,
+          )
+          custom_combiner_assets[asset_name] = bytecode
+          custom_spec.format = (
+              cpu_embedding_pb2.CustomCombinerSpec.Format.STABLEHLO_BYTECODE
+          )
+          custom_spec.asset_name = asset_name
+        else:
+          raise ValueError(
+              f"CustomCombiner for table '{table_name}' must provide either"
+              " combiner_fn, bytecode, or text."
+          )
+      elif mode == "SUM":
         table.combine_mode = combine_mode_enum.SUM
       elif mode == "MEAN":
         table.combine_mode = combine_mode_enum.MEAN
@@ -121,10 +211,13 @@ class CpuEmbeddingResource:
     self._embedding_dim = first_table_data.shape[1]
 
     # Call C++ Serialization helper!
-    # This automatically writes manifest and table files to temp_dir,
+    # This automatically writes manifest, table, and custom combiner files to temp_dir,
     # returning Asset list!
     self._assets = cpu_embedding_serializer_pybind.serialize(
-        self._temp_dir.name, table_data, text_format.MessageToString(manifest)
+        self._temp_dir.name,
+        table_data,
+        text_format.MessageToString(manifest),
+        custom_combiner_assets,
     )
 
     # Instantiate C++ Resource
