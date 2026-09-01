@@ -1,27 +1,58 @@
 # Neptune LLM Export & Benchmarking Framework
 
-The **Neptune LLM Export Framework** (`neptune_model._src.llm`) provides a
-streamlined pipeline for exporting Large Language Models (LLMs) backed by
-`tpu-inference` into native **Orbax Model** bundles and benchmarking their
-performance across JAX execution, C++ model runner bindings, and gRPC serving
-engines.
+The **Neptune LLM Export** module (`neptune_model._src.llm`) provides a
+framework for exporting Hugging Face Large Language Models (LLMs) backed by
+`tpu-inference` into native **Orbax Model** bundles.
 
-Exported Orbax model bundles embed KerasHub/TF tokenizer pre-processing and
-post-processing graphs alongside compiled XLA/HLO decoding loops,
-enabling low-latency, zero-overhead deployment on **Google Cloud TPU**
-accelerators via Neptune's C++ Model Serving Server
-(`neptune_serving_main_tpu`).
+The exported models embed KerasHub/TF tokenization and de-tokenization as pre
+and post-processing graphs alongside the compiled XLA program, enabling
+deployment on **Google Cloud TPU** accelerators via Neptune's Model Server.
+
+---
+
+## Why Neptune LLM? Static Batching vs. Continuous Batching
+
+Modern LLM serving engines such as **vLLM** and **SGLang** are built around
+continuous batching and dynamic request scheduling designed primarily for
+conversational, multi-turn applications. However, many critical enterprise
+workloads—such as LLM-based recommender, ranking, and scoring models—serve
+**one-off, independent requests** without ongoing multi-turn conversations.
+
+For these workloads, compiling the entire program (prefill and sequential decode
+steps) into a **single static JAX / XLA program** eliminates scheduling
+bottlenecks and minimizes CPU-TPU communication overheads. Under these
+conditions, Neptune's static batching architecture can provide higher throughput
+and lower latency than complex continuous batching engines, for certain cases.
+
+### Workload Characteristics Suited for Static Batching
+
+Static batching is especially well suited for workloads exhibiting one or more
+of the following characteristics:
+
+- **Very Short Generation Length**: Requests generating only a small number of
+  tokens (e.g., 4 to 8 tokens).
+- **Strict Latency Constraints**: Workloads with tight response time budgets
+  (e.g., real-time recommendation, ranking, and retrieval pipelines).
+- **Stateful Sampling (e.g., Beam Search)**: Stateful sampling requires
+  maintaining and synchronizing global hypothesis state across active beams at
+  each generation step. Keeping this state tracking on-chip eliminates
+  host-accelerator synchronization overhead.
+- **Single-Chip Accelerators**: Deployments where the model fits within a single
+  accelerator chip (typically small-to-medium models up to ~3B parameters).
 
 ---
 
 ## 1. Installation & Environment Setup
 
-Install the LLM module dependencies directly using the `llm` optional dependency
-group defined in `pyproject.toml`. This automatically installs `vllm-tpu`
-directly from PyPI along with its TPU execution dependencies:
+It is strongly recommended to use a clean Python virtual environment
+(**Python >= 3.12**):
 
 ```bash
-# Install package with LLM export dependencies
+# 1. Create and activate a Python virtual environment (Python >= 3.12)
+python3.12 -m venv .venv
+source .venv/bin/activate
+
+# 2. Install package with LLM export dependencies
 pip install -e ".[llm]"
 
 # Or with test dependencies:
@@ -100,8 +131,8 @@ Server (`neptune_serving_main_tpu`), which executes the Orbax model bundle on
 Google Cloud TPU via Orbax and IFRT with zero Python runtime overhead.
 
 ### A. Build the C++ Serving Server Binary
-Build the TPU model serving binary using Bazel (enabling TensorFlow tokenization
-support with `--define=ENABLE_TF=1`):
+Build the TPU model serving binary using Bazel (enabling TensorFlow
+tokenization support with `--define=ENABLE_TF=1`):
 
 ```bash
 bazel build -c opt --define=ENABLE_TF=1 //runtime/serving/gcp/server:neptune_serving_main_tpu
@@ -122,7 +153,7 @@ export TPU_LIBRARY_PATH=$(python3 -c "import libtpu; print(libtpu.get_library_pa
   --orbax_grpc_server_platform=tpu
 ```
 
-When the server finishes loading the Orbax model bundle, it prints
+When the server finishes loading the Orbax model bundle, it prints:
 `JAX Serving listening on [::]:8500`.
 
 ### C. Send Requests via Benchmark CLI
@@ -152,7 +183,7 @@ any gRPC-supported language.
 - **Service**: `neptune.serving.PredictionService`
 - **RPC Method**: `Predict` (URI: `/neptune.serving.PredictionService/Predict`)
 - **Request Message**: `neptune.serving.PredictRequest`
-  - `model_spec.name`: Model name matching the server (`--model_name`, e.g. `"qwen3"`).
+  - `model_spec.name`: Model name matching server (`--model_name`, e.g. `"qwen3"`).
   - `model_spec.signature_name`: Serving signature (defaults to `"serving_default"`).
   - `inputs`: `map<string, neptune.HostBufferProto>`.
 - **Response Message**: `neptune.serving.PredictResponse`
@@ -206,7 +237,8 @@ def generate_text(
   elements = [
       raw.decode("utf-8", errors="replace") for raw in out.string_data.elements
   ]
-  return np.array(elements, dtype=object).reshape(list(out.shape.dims)).tolist()
+  dims = list(out.shape.dims)
+  return np.array(elements, dtype=object).reshape(dims).tolist()
 
 
 # --- 2. Candidate Scoring ---
@@ -247,9 +279,8 @@ def score_candidates(
       if scores_buf.dtype.kind == dtype_pb2.DTypeProto.Kind.Value("KIND_F32")
       else np.float64
   )
-  return np.frombuffer(scores_buf.raw_data, dtype=dtype).reshape(
-      list(scores_buf.shape.dims)
-  )
+  dims = list(scores_buf.shape.dims)
+  return np.frombuffer(scores_buf.raw_data, dtype=dtype).reshape(dims)
 ```
 
 ---
@@ -314,19 +345,24 @@ void QueryCandidateScoring(neptune::serving::PredictionService::Stub* stub) {
   neptune::serving::PredictResponse response;
   if (stub->Predict(&context, request, &response).ok()) {
     const auto& scores = response.outputs().at("scores");
-    const float* score_data = reinterpret_cast<const float*>(scores.raw_data().data());
-    std::cout << "Scores: " << score_data[0] << ", " << score_data[1] << std::endl;
+    const float* score_data =
+        reinterpret_cast<const float*>(scores.raw_data().data());
+    std::cout << "Scores: " << score_data[0] << ", " << score_data[1]
+              << std::endl;
   }
 }
 
 int main() {
-  auto channel = grpc::CreateChannel("localhost:8500", grpc::InsecureChannelCredentials());
+  auto channel = grpc::CreateChannel("localhost:8500",
+                                     grpc::InsecureChannelCredentials());
   auto stub = neptune::serving::PredictionService::NewStub(channel);
   QueryTextGeneration(stub.get());
   QueryCandidateScoring(stub.get());
   return 0;
 }
 ```
+
+---
 
 ## 5. Benchmarking Suite (`neptune_model._src.llm.benchmark_llm`)
 
@@ -381,6 +417,12 @@ python3 -m neptune_model._src.llm.benchmark_llm \
 ---
 
 ## 6. Running Unit & Integration Tests
+
+Ensure your virtual environment is active:
+
+```bash
+source .venv/bin/activate
+```
 
 ### Pytest Testing (OSS Setup)
 Run unit tests with pytest:
