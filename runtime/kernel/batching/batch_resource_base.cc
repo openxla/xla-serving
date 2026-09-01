@@ -264,7 +264,10 @@ BatchResourceBase::BatchTask::CreateSplitTask(
   std::unique_ptr<BatchTask> task = CreateDerivedTask();
 
   task->guid = this->guid;
-  task->propagated_context = tsl::Context(tsl::ContextKind::kThread);
+  {
+    tsl::WithContext wc(this->propagated_context);
+    task->propagated_context = tsl::Context(tsl::ContextKind::kThread);
+  }
   task->inputs.reserve(this->inputs.size());
   task->captured_inputs = this->captured_inputs;
   task->context = this->context;
