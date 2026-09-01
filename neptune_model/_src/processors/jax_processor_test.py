@@ -69,12 +69,12 @@ class JaxProcessorTest(test_utils.NptTestCase):
       # input_sig = ((input_tree,), kwargs_tree)
       # input is ShapeDtypeStruct(shape=('b', 1), dtype=float32)
       input_sig = prepared_processor.input_signature
-      self.assertEqual(input_sig[0][0].shape, [None, 1])
+      self.assertEqual(input_sig[0][0].shape, (None, 1))
       self.assertEqual(input_sig[0][0].dtype, shlo_type.ShloDType.f32)
 
     with self.subTest('check_output_signature'):
       output_sig = prepared_processor.output_signature
-      self.assertEqual(output_sig.shape, [None, 1])
+      self.assertEqual(output_sig.shape, (None, 1))
       self.assertEqual(output_sig.dtype, shlo_type.ShloDType.f32)
 
   def test_shlo_function_data_names(self):

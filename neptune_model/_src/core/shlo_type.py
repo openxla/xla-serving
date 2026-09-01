@@ -19,6 +19,7 @@ import dataclasses
 import enum
 from typing import Any, Optional, TypeAlias
 
+import ml_dtypes
 import numpy as np
 
 from neptune_model.protos.xla import xla_data_pb2  # pylint: disable=g-direct-tensorflow-import
@@ -63,7 +64,7 @@ class ShloDType(enum.Enum):  # pylint: disable=missing-class-docstring
 
 
 _NP_DTYPE_TO_SHLO_DTYPE: dict[np.dtype[Any], ShloDType] = {
-    np.dtype(np.bool): ShloDType.bool,
+    np.dtype(np.bool_): ShloDType.bool,
     np.dtype(np.int8): ShloDType.i8,
     np.dtype(np.int16): ShloDType.i16,
     np.dtype(np.int32): ShloDType.i32,
@@ -77,13 +78,24 @@ _NP_DTYPE_TO_SHLO_DTYPE: dict[np.dtype[Any], ShloDType] = {
     np.dtype(np.float64): ShloDType.f64,
     np.dtype(np.complex64): ShloDType.c64,
     np.dtype(np.complex128): ShloDType.c128,
+    # ml_dtypes
+    np.dtype(ml_dtypes.bfloat16): ShloDType.bf16,
+    np.dtype(ml_dtypes.int4): ShloDType.i4,
+    np.dtype(ml_dtypes.uint4): ShloDType.ui4,
+    np.dtype(ml_dtypes.float8_e4m3b11fnuz): ShloDType.f8_e4m3b11fnuz,
+    np.dtype(ml_dtypes.float8_e4m3fn): ShloDType.f8_e4m3fn,
+    np.dtype(ml_dtypes.float8_e4m3fnuz): ShloDType.f8_e4m3fnuz,
+    np.dtype(ml_dtypes.float8_e5m2): ShloDType.f8_e5m2,
+    np.dtype(ml_dtypes.float8_e5m2fnuz): ShloDType.f8_e5m2fnuz,
 }
 
-
 _SHLO_DTYPE_TO_NP_DTYPE = {v: k for k, v in _NP_DTYPE_TO_SHLO_DTYPE.items()}
+_SHLO_DTYPE_TO_NP_DTYPE[ShloDType.str] = np.dtype(np.object_)
 
 
 def np_dtype_to_shlo_dtype(dtype: np.dtype[Any]) -> ShloDType:
+  if dtype.kind in ("U", "S", "O"):
+    return ShloDType.str
   return _NP_DTYPE_TO_SHLO_DTYPE[dtype]
 
 
@@ -101,10 +113,28 @@ class ShloTensorSpec:
     sharding: The sharding of the tensor. None means unspecified sharding.
     layout: The layout of the tensor. None means the default layout is used.
     name: The name of the tensor.
+    default_val: Optional default fallback value for function parameters.
   """
 
   shape: ShloShape
-  dtype: ShloDType
+  dtype: ShloDType | Any
   sharding: Sharding | None = None
   layout: Layout | None = None
   name: str | None = None
+  default_val: Any | None = None
+
+  def __post_init__(self) -> None:
+    if self.shape is not None:
+      object.__setattr__(self, "shape", tuple(self.shape))
+    if not isinstance(self.dtype, ShloDType):
+      raw_dt = self.dtype
+      if hasattr(raw_dt, "as_numpy_dtype"):
+        attr = getattr(raw_dt, "as_numpy_dtype")
+        raw_dt = (
+            attr()
+            if callable(attr) and not isinstance(attr, (type, np.dtype))
+            else attr
+        )
+      np_dt = np.dtype(raw_dt)
+      object.__setattr__(self, "dtype", np_dtype_to_shlo_dtype(np_dt))
+
