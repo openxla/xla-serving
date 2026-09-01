@@ -114,9 +114,12 @@ class TestFailedBatchResource : public BatchResourceBase {
           batcher,
       const BatcherT::QueueOptions& batcher_queue_options,
       std::vector<int32_t> allowed_batch_sizes,
-      tsl::thread::ThreadPool* thread_pool)
+      tsl::thread::ThreadPool* thread_pool,
+      absl::Status failure_status =
+          absl::InternalError("Test failed batch resource"))
       : BatchResourceBase(std::move(batcher), batcher_queue_options,
-                          std::move(allowed_batch_sizes), thread_pool) {}
+                          std::move(allowed_batch_sizes), thread_pool),
+        failure_status_(std::move(failure_status)) {}
 
  protected:
   void ProcessFuncBatchImpl(
@@ -125,8 +128,11 @@ class TestFailedBatchResource : public BatchResourceBase {
       absl::Span<const HostBuffer> inputs,
       std::vector<HostBuffer>* combined_outputs,
       std::function<void(const absl::Status&)> done) const override {
-    done(absl::InternalError("Test failed batch resource"));
+    done(failure_status_);
   }
+
+ private:
+  absl::Status failure_status_;
 };
 
 class TestJsvBatchResource : public JsvBatchResource {
@@ -154,8 +160,9 @@ class TestJsvBatchResource : public JsvBatchResource {
     for (const auto& input : inputs) {
       CHECK(allowed_batch_sizes_.contains(input.shape().dims()[0]));
     }
-    JsvBatchResource::ProcessFuncBatchImpl(last_task, std::move(batch_request_ids),
-                                           inputs, combined_outputs, done);
+    JsvBatchResource::ProcessFuncBatchImpl(last_task,
+                                           std::move(batch_request_ids), inputs,
+                                           combined_outputs, done);
   }
 
  private:
@@ -204,7 +211,8 @@ class TestRaggedBatchResourceBase : public BatchResourceBase {
       CHECK_EQ(inputs[0].shape().dims()[0], batch_size + 1);
       CHECK_EQ(inputs[0].flat<int32_t>()(0), 0);
       for (int i = 1; i < inputs[0].shape().dims()[0]; ++i) {
-        CHECK_GE(inputs[0].flat<int32_t>()(i), inputs[0].flat<int32_t>()(i - 1));
+        CHECK_GE(inputs[0].flat<int32_t>()(i),
+                 inputs[0].flat<int32_t>()(i - 1));
       }
       done(absl::OkStatus());
       return;

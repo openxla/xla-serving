@@ -96,7 +96,6 @@ class BatchResourceBase : public ResourceBase {
     std::vector<HostBuffer> captured_inputs;
     Kernel::ExecuteContext* context;
     int num_outputs;
-    absl::AnyInvocable<void(absl::Status)> done_callback;
 
     // The index of this split, along the 0-th dimension of input from op
     // invocation.
@@ -155,12 +154,32 @@ class BatchResourceBase : public ResourceBase {
     // batch is processed, but is not propagated to the kernel outputs.
     int forced_warmup_batch_size = 0;
 
+    // Note the done callback MUST NOT (although unlikely in practice) attempt
+    // to acquire the queue's lock — e.g., by calling methods like Schedule() on
+    // the same queue — as this may lead to deadlock.
+    void set_done_callback(absl::AnyInvocable<void(absl::Status)> callback) {
+      done_callback = std::move(callback);
+    }
+
    protected:
     virtual std::unique_ptr<BatchTask> CreateDerivedTask() {
       return std::make_unique<BatchTask>();
     }
 
+    void FinishTaskImpl(const absl::Status& status) override {
+      if (!status.ok() && this->status) {
+        this->status->Update(status);
+      }
+      if (this->done_callback) {
+        this->done_callback(this->status->status());
+        // Clear the callback to avoid double deletion.
+        this->done_callback = nullptr;
+      }
+    }
+
    private:
+    absl::AnyInvocable<void(absl::Status)> done_callback;
+
     // Criticality associated with the task.
     ::tsl::criticality::Criticality criticality_val;
   };

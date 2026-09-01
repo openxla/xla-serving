@@ -269,7 +269,7 @@ BatchResourceBase::BatchTask::CreateSplitTask(
   task->captured_inputs = this->captured_inputs;
   task->context = this->context;
   task->num_outputs = this->num_outputs;
-  task->done_callback = std::move(done_callback);
+  task->set_done_callback(std::move(done_callback));
   task->split_index = split_index;
   task->output = this->output;
   task->status = this->status;
@@ -451,11 +451,11 @@ absl::Status BatchResourceBase::RegisterInput(
     // was called. If not, create the `ThreadSafeStatus` and tie the setting
     // of the kernel context's status to this shared status.
     batch_components->status = std::make_shared<ThreadSafeStatus>();
-    batch_components->done_callback = std::move(done_callback);
+    batch_components->set_done_callback(std::move(done_callback));
   } else {
     // Otherwise `RegisterWarmupInputs` was called and already setup the
     // `done_callback` and `status` correctly for this `BatchTask`.
-    batch_components->done_callback = std::move(done_callback);
+    batch_components->set_done_callback(std::move(done_callback));
   }
   batch_components->forced_warmup_batch_size = forced_warmup_batch_size;
 
@@ -831,17 +831,17 @@ absl::Status BatchResourceBase::SplitOutputBuffers(
 void BatchResourceBase::CleanUpFunctionHelper(
     BatchTask& task, const absl::Status& status) const {
   tsl::WithContext wc(task.propagated_context);
-  if (!status.ok()) {
-    if (!absl::StrContains(status.message(),
-                           "Function was cancelled before it was started")) {
-      task.status->Update(status);
-    } else {
-      // Do not propagate this error; Prefer a more helpful error message.
-      LOG(ERROR) << "ERROR!!!! " << status.message();
-    }
+  if (!status.ok() &&
+      absl::StrContains(status.message(),
+                        "Function was cancelled before it was started")) {
+    // Do not propagate this error; Prefer a more helpful error message.
+    LOG(ERROR) << "ERROR!!!! " << status.message();
+    task.FinishTask(absl::OkStatus());
+    return;
   }
-  task.done_callback(task.status->status());
+  task.FinishTask(status);
 }
+
 
 absl::StatusOr<const BatchResourceBase::BatchTask&>
 BatchResourceBase::GetLatestDeadlineTask(const BatchT& batch) const {
@@ -1045,11 +1045,9 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
     int max_batch_size, tsl::thread::ThreadPool* thread_pool,
     std::vector<std::unique_ptr<BatchTask>>* output_tasks, Allocator* allocator,
     std::vector<RaggedInputSpec> ragged_inputs) {
-  BatchTask& input_task = *(*input_task_ptr);
-  const int64_t input_task_size = input_task.size();
+  std::shared_ptr<BatchTask> input_task = std::move(*input_task_ptr);
+  const int64_t input_task_size = input_task->size();
   DCHECK_GT(input_task_size, 0);
-
-  std::shared_ptr<ThreadSafeStatus> shared_status = input_task.status;
 
   const internal::InputSplitMetadata input_split_metadata(
       input_task_size, open_batch_remaining_slot, max_batch_size);
@@ -1059,37 +1057,38 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
 
   std::optional<InputSubtaskInfo> input_subtask_info = std::nullopt;
   std::shared_ptr<BufferMatrix> split_task_output;
-  if (input_task.is_partial) {
+  if (input_task->is_partial) {
     // If the input task is a subtask, we are now performing a recursive split
     // (e.g. to pad multiple high priority tasks). We create a new BufferMatrix
     // to accumulate the outputs of these nested sub-subtasks.
     input_subtask_info =
-        InputSubtaskInfo(input_task.output, input_task.split_index);
+        InputSubtaskInfo(input_task->output, input_task->split_index);
     split_task_output = std::make_shared<BufferMatrix>();
   } else {
     // Top-level task being split for the first time. We can directly use the
     // input task's output buffer to store the output of subtasks.
-    split_task_output = input_task.output;
+    split_task_output = input_task->output;
   }
 
   split_task_output->resize(num_batches);
   for (int i = 0; i < num_batches; ++i) {
-    (*split_task_output)[i].resize(input_task.num_outputs);
+    (*split_task_output)[i].resize(input_task->num_outputs);
   }
 
   // `split_task_done_callback` runs only after all split tasks are
   // complete.
   absl::AnyInvocable<void()> split_task_done_callback =
-      [done_callback = std::move(input_task.done_callback), split_task_output,
-       input_subtask_info, execute_context = input_task.context,
-       num_output = input_task.num_outputs, status = shared_status,
+      [input_task, split_task_output,
+       input_subtask_info, execute_context = input_task->context,
+       num_output = input_task->num_outputs,
        thread_pool = thread_pool, allocator = allocator]() mutable {
         // TODO: Add input_task status check once the eviction is
         // supported. A similar check is in cl/876314593.
-        if (!status->status().ok()) {
-          done_callback(status->status());
+        if (!input_task->status->status().ok()) {
+          input_task->FinishTask(input_task->status->status());
           return;
         }
+        absl::Status final_status = absl::OkStatus();
         for (int i = 0; i < num_output; ++i) {
           // Concat would memcpy each input buffer to one output buffer.
           // TODO: In this context, Concat can be further optimized
@@ -1105,7 +1104,7 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
           absl::StatusOr<HostBuffer> output_buffer =
               Concat(thread_pool, to_concatenate, allocator);
           if (!output_buffer.ok()) {
-            status->Update(output_buffer.status());
+            final_status.Update(output_buffer.status());
             continue;
           }
 
@@ -1127,7 +1126,7 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
                 Value(std::move(*output_buffer)));
           }
         }
-        done_callback(status->status());
+        input_task->FinishTask(final_status);
       };
   IncrementalBarrier barrier(std::move(split_task_done_callback));
 
@@ -1140,7 +1139,7 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
   output_tasks->reserve(num_batches);
   for (int i = 0; i < num_batches; i++) {
     auto callback = barrier.Inc();
-    std::unique_ptr<BatchTask> subtask = input_task.CreateSplitTask(
+    std::unique_ptr<BatchTask> subtask = input_task->CreateSplitTask(
         i, [output_addr = split_task_output, callback = std::move(callback)](
                absl::Status status) mutable { callback(); });
     subtask->output = split_task_output;
@@ -1148,7 +1147,7 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
     output_tasks->push_back(std::move(subtask));
   }
 
-  const int num_input_buffers = input_task.inputs.size();
+  const int num_input_buffers = input_task->inputs.size();
 
   // Splits each input buffer according to `output_task_sizes`, and
   // initializes input of `output_tasks` with split results.
@@ -1164,7 +1163,7 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
     split_buffers.reserve(num_batches);
 
     if (classification.type == kDense) {
-      const HostBuffer& input_buffer = input_task.inputs[i];
+      const HostBuffer& input_buffer = input_task->inputs[i];
       absl::StatusOr<std::vector<HostBuffer>> split_res =
           input_buffer.SplitAlongFirstDimension(output_task_sizes, allocator);
       if (!split_res.ok()) {
@@ -1174,7 +1173,7 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
       }
       split_buffers = std::move(*split_res);
     } else if (classification.type == kRaggedRowSplits) {
-      const HostBuffer& original_splits = input_task.inputs[i];
+      const HostBuffer& original_splits = input_task->inputs[i];
       int64_t current_logical_offset = 0;
       for (int j = 0; j < num_batches; ++j) {
         int64_t split_size = output_task_sizes[j];
@@ -1189,8 +1188,8 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
       }
     } else if (classification.type == kRaggedFlatValues) {
       int splits_index = classification.option->row_splits_index;
-      const HostBuffer& original_splits = input_task.inputs[splits_index];
-      const HostBuffer& original_values = input_task.inputs[i];
+      const HostBuffer& original_splits = input_task->inputs[splits_index];
+      const HostBuffer& original_values = input_task->inputs[i];
 
       int64_t current_logical_offset = 0;
       std::vector<int64_t> val_sizes;
