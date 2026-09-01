@@ -54,8 +54,7 @@ absl::StatusOr<Array> LookupImpl(absl::Span<const int64_t> ids,
 }  // namespace
 
 absl::StatusOr<std::unique_ptr<EmbeddingTable>> EmbeddingTable::Create(
-    absl::string_view name, Array data, enum CombineMode combine_mode,
-    CustomCombinerFn custom_combiner) {
+    absl::string_view name, Array data, enum CombineMode combine_mode) {
   if (data.GetShape().dims.size() != 2) {
     return absl::InvalidArgumentError(absl::StrFormat(
         "Embedding table data must be a 2D array. Got shape: (%s)",
@@ -66,7 +65,7 @@ absl::StatusOr<std::unique_ptr<EmbeddingTable>> EmbeddingTable::Create(
   }
 
   return absl::WrapUnique(
-      new EmbeddingTable(name, std::move(data), combine_mode, custom_combiner));
+      new EmbeddingTable(name, std::move(data), combine_mode));
 }
 
 absl::StatusOr<Array> EmbeddingTable::Lookup(
@@ -83,12 +82,10 @@ absl::StatusOr<Array> EmbeddingTable::Lookup(
 }
 
 EmbeddingTable::EmbeddingTable(absl::string_view name, Array data,
-                               enum CombineMode combine_mode,
-                               CustomCombinerFn custom_combiner)
+                               enum CombineMode combine_mode)
     : name_(name),
       data_(std::move(data)),
-      combine_mode_(combine_mode),
-      custom_combiner_(custom_combiner) {
+      combine_mode_(combine_mode) {
   vocab_size_ = data_.GetShape().dims[0];
   embedding_dim_ = data_.GetShape().dims[1];
 }
