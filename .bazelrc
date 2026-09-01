@@ -86,4 +86,10 @@ build --host_copt=-D_LIBCPP_ENABLE_CXX20_REMOVED_FEATURES=1
 # Neptune Data.
 build --copt=-DPYBIND11_ABSEIL_STATUS_MODULE_PATH=neptune_data.pybind11_abseil.status
 
+# GCS Remote Cache configs (xse-bazel-cache)
+common:remote_cache --remote_cache="https://storage.googleapis.com/xse-bazel-cache/"
+common:remote_cache_readonly --config=remote_cache --remote_upload_local_results=false
+common:remote_cache_readwrite --config=remote_cache --remote_upload_local_results=true --google_default_credentials
+
+
 
