@@ -20,6 +20,7 @@ from google.protobuf import descriptor
 from google.protobuf import message
 from google.protobuf import text_format
 
+from neptune_model.protos import jax_supplemental_pb2
 from neptune_model.cli import constants
 from neptune_model.protos import manifest_pb2
 from neptune_model.protos import orchestration_pb2

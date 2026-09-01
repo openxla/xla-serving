@@ -89,3 +89,18 @@ py_proto_library(
     name = "bundle_orchestration_py_pb2",
     deps = [":bundle_orchestration_proto"],
 )
+
+proto_library(
+    name = "jax_supplemental_proto",
+    srcs = ["jax_supplemental.proto"],
+)
+
+cc_proto_library(
+    name = "jax_supplemental_cc_proto",
+    deps = [":jax_supplemental_proto"],
+)
+
+py_proto_library(
+    name = "jax_supplemental_py_pb2",
+    deps = [":jax_supplemental_proto"],
+)

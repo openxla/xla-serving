@@ -318,6 +318,18 @@ class MainLibTest(test_utils.NptTestCase):
                 module_kept_var_idx: 0
                 module_kept_var_idx: 1
                 module_kept_var_idx: 2
+                supplemental_info {
+                  key: "jax_specific_info"
+                  value {
+                    file_system_location {
+                      string_path: \""""
+        + model_function_name
+        + """_jax_specific_info_supplemental.pb\"
+                    }
+                    mime_type: "application/protobuf; type=neptune_model_jax_supplemental.Function"
+                    version: "0.0.1"
+                  }
+                }
               }
             }
             visibility: PUBLIC

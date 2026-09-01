@@ -30,6 +30,7 @@ from neptune_model._src.core import shlo_type
 from neptune_model._src.core import unstructured_data
 from neptune_model._src.core import value
 from neptune_model._src.jax2npt import constants
+from neptune_model._src.jax2npt import jax_specific_info
 from neptune_model._src.jax2npt import typing
 from neptune_model._src.jax2npt import utils
 from neptune_model.protos import manifest_pb2
@@ -114,11 +115,13 @@ def jax_exported_to_shlo_fn(
   out_shardings_hlo = out_shardings_hlo[:num_user_outputs]
 
   # TODO: properly get the name for the input signature.
-  shlo_in_sig = utils.to_shlo_spec_tree(
-      exported.in_avals,
-      in_shardings_hlo,
-      model_inputs_layout,
-      exported.in_tree,
+  shlo_in_sig, jax_in_sig_refinements = (
+      jax_specific_info._to_shlo_spec_tree_and_refinement_tuple(
+          exported.in_avals,
+          in_shardings_hlo,
+          model_inputs_layout,
+          exported.in_tree,
+      )
   )
   # Since jax.ShapeDtypeStruct does not have a name field, we assign
   # names to output tensors specs when converting them to ShloTensorSpec by
@@ -130,14 +133,28 @@ def jax_exported_to_shlo_fn(
   # JAX model has the output signature like "model_output: ShloTensorSpec(...)",
   # while the following tf data processor has the input signature like
   # "input_model_output: ShloTensorSpec(...)".
-  shlo_out_sig = utils.to_shlo_spec_tree(
-      out_avals,
-      out_shardings_hlo,
-      None,
-      exported.out_tree,
-      name_leaves=True,
+  shlo_out_sig, jax_out_sig_refinements = (
+      jax_specific_info._to_shlo_spec_tree_and_refinement_tuple(
+          out_avals,
+          out_shardings_hlo,
+          None,
+          exported.out_tree,
+          name_leaves=True,
+      )
   )
   supplemental_info_ = {}
+  jax_specific_info_ = jax_specific_info.JaxSpecificInfo(
+      name=exported.fun_name,
+      input_spec_refinements=jax_in_sig_refinements,
+      output_spec_refinements=jax_out_sig_refinements,
+      nr_devices=exported.nr_devices,
+      ordered_effects=exported.ordered_effects,
+      unordered_effects=exported.unordered_effects,
+      disabled_safety_checks=tuple(exported.disabled_safety_checks),
+      uses_shape_polymorphism=exported.uses_global_constants,
+  )
+  supplemental_info_[constants.JAX_SPECIFIC_INFO] = jax_specific_info_
+
   if xla_compile_options_per_platform is not None:
     supplemental_info_[constants.XLA_COMPILE_OPTIONS] = (
         XlaCompileOptionsSupplementalInfo(xla_compile_options_per_platform)

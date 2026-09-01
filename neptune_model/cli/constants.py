@@ -47,6 +47,10 @@ MIME_TYPE_ORBAX_XLA_COMPILE_OPTIONS = (
     'application/protobuf; type=orbax_model_manifest.CompileOptionsProtoMap'
 )
 
+MIME_TYPE_ORBAX_JAX_SUPPLEMENTAL = (
+    'application/protobuf; type=neptune_model_jax_supplemental.Function'
+)
+
 
 WELL_KNOWN_MIME_TYPE_DESCRIPTIONS = {
     MIME_TYPE_MLIR_STABLEHLO: 'MLIR StableHLO',
@@ -60,12 +64,13 @@ WELL_KNOWN_MIME_TYPE_DESCRIPTIONS = {
     MIME_TYPE_ORBAX_PIPELINES: 'Orchestration Pipelines',
     MIME_TYPE_ORBAX_TF_CONCRETE_FUNCTION: 'TensorFlow ConcreteFunction',
     MIME_TYPE_ORBAX_XLA_COMPILE_OPTIONS: 'XLA Compile Options',
+    MIME_TYPE_ORBAX_JAX_SUPPLEMENTAL: 'JAX Supplemental Function',
 }
 
 # Register flags for printing details for some types, typically
 # ones that don't fit into the default details output.
 MIME_TYPE_FLAGS = {
     MIME_TYPE_XLA_COMPILE_OPTIONS: 'xla_compile_options',
+    MIME_TYPE_ORBAX_JAX_SUPPLEMENTAL: 'jax_specific_info',
     MIME_TYPE_ORBAX_XLA_COMPILE_OPTIONS: 'xla_compile_options',
 }
-
