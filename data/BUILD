@@ -107,6 +107,7 @@ genrule(
     name = "stage_neptune_data_pkg",
     srcs = [
         ":neptune_data_core",
+        "__init__.py",
         "@pybind11_abseil//pybind11_abseil:status.so",
         "//data/ops:bucket_pad.py",
         "//data/ops:cpu_embedding.py",
@@ -184,7 +185,7 @@ genrule(
   mkdir -p $(@D)/neptune_data/resource_manager/proto
   mkdir -p $(@D)/neptune_data/pybind11_abseil
 
-  touch $(@D)/neptune_data/__init__.py
+  cp $(location __init__.py) $(@D)/neptune_data/__init__.py
   touch $(@D)/neptune_data/ops/__init__.py
   touch $(@D)/neptune_data/kernels/__init__.py
   touch $(@D)/neptune_data/kernels/bucket_pad/__init__.py
@@ -349,6 +350,7 @@ genrule(
     testonly = 1,
     srcs = [
         ":neptune_data_test_core",
+        "__init__.py",
         "//data/processor/python/examples:add_int_transform_pybind.so",
         "//data/processor/python/examples:add_host_buffer_transform_pybind.so",
         "//data/processor/python/examples:add_two_transform_pybind.so",
@@ -383,7 +385,7 @@ genrule(
     ],
     cmd = """
   mkdir -p $(@D)/neptune_data_test/processor/python/examples
-  touch $(@D)/neptune_data_test/__init__.py
+  cp $(location __init__.py) $(@D)/neptune_data_test/__init__.py
   touch $(@D)/neptune_data_test/processor/__init__.py
   touch $(@D)/neptune_data_test/processor/python/__init__.py
   touch $(@D)/neptune_data_test/processor/python/examples/__init__.py

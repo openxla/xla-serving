@@ -27,13 +27,13 @@ from neptune_model._src.export import jax_model
 from neptune_model._src.export import main_lib
 from neptune_model._src.export import serving_config
 from neptune_model._src.export import tensorflow_model
+from neptune_model.protos import orchestration_pb2
 
-FLAGS = flags.FLAGS
-flags.DEFINE_integer(
+_NUM_REQUEST_FEATURES = flags.DEFINE_integer(
     'num_request_features', 2, 'Number of request features.'
 )
 
-flags.DEFINE_integer(
+_NUM_CANDIDATE_FEATURES = flags.DEFINE_integer(
     'num_candidate_features', 2, 'Number of candidate features.'
 )
 
@@ -43,7 +43,7 @@ def export_model(export_path: str):
 
   rngs = nnx.Rngs(0)
   embedding_layer, model = model_lib.build_model(
-      rngs, FLAGS.num_request_features, FLAGS.num_candidate_features
+      rngs, _NUM_REQUEST_FEATURES.value, _NUM_CANDIDATE_FEATURES.value
   )
 
   model_graph, model_params, model_rest_state = nnx.split(
@@ -55,23 +55,22 @@ def export_model(export_path: str):
         model_graph, params, model_rest_state, copy=True
     )
     return inference_model(inputs)
+
   input_signature = {
       f'request_feature_{i+1}': tf.TensorSpec(shape=(None, 1), dtype=tf.int32)
-      for i in range(FLAGS.num_request_features)
+      for i in range(_NUM_REQUEST_FEATURES.value)
   }
   input_signature.update({
-      f'candidate_feature_{i+1}': tf.TensorSpec(
-          shape=(None, 1), dtype=tf.int32
-      )
-      for i in range(FLAGS.num_candidate_features)
+      f'candidate_feature_{i+1}': tf.TensorSpec(shape=(None, 1), dtype=tf.int32)
+      for i in range(_NUM_CANDIDATE_FEATURES.value)
   })
   input_polyshape = {
       f'request_feature_{i+1}': 'b, _, _'
-      for i in range(FLAGS.num_request_features)
+      for i in range(_NUM_REQUEST_FEATURES.value)
   }
   input_polyshape.update({
       f'candidate_feature_{i+1}': 'b, _, _'
-      for i in range(FLAGS.num_candidate_features)
+      for i in range(_NUM_CANDIDATE_FEATURES.value)
   })
 
   with tempfile.TemporaryDirectory() as tmpdir:
@@ -109,9 +108,12 @@ def export_model(export_path: str):
                       serving_config.ModelCall(
                           model_name='tf_model',
                           method_key='preprocessing',
+                          role=orchestration_pb2.ROLE_PREPROCESSOR,
                       ),
                       serving_config.ModelCall(
-                          model_name='jax_model', method_key='serving_default'
+                          model_name='jax_model',
+                          method_key='serving_default',
+                          role=orchestration_pb2.ROLE_MODEL,
                       ),
                   ]
               ),

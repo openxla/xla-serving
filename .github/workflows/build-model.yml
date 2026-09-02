@@ -56,11 +56,11 @@ jobs:
         run: |
           uv pip install build setuptools wheel grpcio-tools
 
-      - name: Build neptune_data and neptune_data_test wheels
+      - name: Build neptune_data, neptune_data_test, and neptune_model_runner wheels
         env:
           CACHE_CONFIG: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'remote_cache_readwrite' || 'remote_cache_readonly' }}
         run: |
-          bazel build -c opt //data:neptune_data //data:neptune_data_test \
+          bazel build -c opt //data:neptune_data //data:neptune_data_test //runtime/python:neptune_model_runner \
             --@rules_python//python/config_settings:python_version=${{ matrix.python-version }} \
             --config=${CACHE_CONFIG} \
             --output_filter=DONT_MATCH_ANYTHING \
@@ -68,9 +68,9 @@ jobs:
             --show_progress_rate_limit=30 \
             --curses=no
 
-      - name: Install neptune_data and neptune_data_test wheels
+      - name: Install neptune_data, neptune_data_test, and neptune_model_runner wheels
         run: |
-          uv pip install bazel-bin/data/neptune_data*.whl
+          uv pip install bazel-bin/data/neptune_data*.whl bazel-bin/runtime/python/neptune_model_runner*.whl
 
       - name: Build the Neptune Model Wheel
         run: |
@@ -90,6 +90,15 @@ jobs:
           import neptune_model
           print('✅ Successfully imported neptune_model!')
           print(f'📦 Version: {neptune_model.__version__}')
+
+          from neptune_model_runner import model_runner
+          print('✅ Successfully imported neptune_model_runner!')
+
+          import neptune_data
+          print('✅ Successfully imported neptune_data!')
+
+          import neptune_data_test
+          print('✅ Successfully imported neptune_data_test!')
           "
 
       - name: Install Test Dependencies and Run Pytest
@@ -98,12 +107,23 @@ jobs:
           uv pip uninstall triton 2>/dev/null || true
           pytest -v -s --full-trace -n auto neptune_model/
 
+      - name: Run Neptune Examples
+        run: |
+          for example_dir in examples/*; do
+            if [ -d "$example_dir" ] && [ -f "$example_dir/export_test.py" ]; then
+              example_name=$(basename "$example_dir")
+              echo "=== Running test for example: ${example_name} ==="
+              python -m "examples.${example_name}.export_test"
+            fi
+          done
+
       - name: Upload Built Wheels
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: neptune-wheels
           path: |
             bazel-bin/data/neptune_data*.whl
+            bazel-bin/runtime/python/neptune_model_runner*.whl
             dist/*.whl
           retention-days: 1
 
@@ -154,6 +174,9 @@ jobs:
           import neptune_model
           print('✅ Successfully imported neptune_model!')
           print(f'📦 Version: {neptune_model.__version__}')
+
+          from neptune_model_runner import model_runner
+          print('✅ Successfully imported neptune_model_runner!')
           "
 
       - name: Install Test Dependencies and Run Pytest for LLM Module

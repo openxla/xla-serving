@@ -21,8 +21,10 @@ from absl import logging
 from absl.testing import absltest
 from absl.testing import parameterized
 import numpy as np
+
 # Importing `examples.vit` sets KERAS_BACKEND=jax before keras is imported.
 from examples.vit import export
+from neptune_model_runner import model_runner
 
 _SAMPLE_IMAGE_PATH = flags.DEFINE_string(
     'sample_image_path',
@@ -32,15 +34,6 @@ _SAMPLE_IMAGE_PATH = flags.DEFINE_string(
     'predictions — useful for catching accuracy regressions. Skipped when '
     'unset.',
 )
-
-
-def _model_runner(model_path: str):
-  try:
-    from neptune_model_runner import model_runner  # pylint: disable=g-import-not-at-top
-
-    return model_runner.ModelRunner(model_path=model_path)
-  except ImportError:
-    return None
 
 
 class ExportTest(parameterized.TestCase):
@@ -57,12 +50,7 @@ class ExportTest(parameterized.TestCase):
     self.assertTrue(
         os.path.isfile(os.path.join(export_path, 'orchestration.pb'))
     )
-    runner = _model_runner(export_path)
-    if runner is None:
-      logging.warning(
-          'ModelRunner not found, skipping running the exported model'
-      )
-      return
+    runner = model_runner.ModelRunner(model_path=export_path)
 
     test_image = np.random.randn(1, 224, 224, 3).astype(np.float32)
     outputs = runner.signature('serving_default').run_with_dict_return(

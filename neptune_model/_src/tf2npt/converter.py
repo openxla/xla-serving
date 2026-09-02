@@ -407,6 +407,8 @@ def _unwrap_tf_trackables(
   """Unwraps TF trackables from the given PyTree."""
   if isinstance(tf_trackable, Mapping):
     return {k: _unwrap_tf_trackables(v) for k, v in tf_trackable.items()}
+  elif isinstance(tf_trackable, tuple):
+    return tuple(_unwrap_tf_trackables(v) for v in tf_trackable)
   elif isinstance(tf_trackable, Sequence) and not isinstance(
       tf_trackable, (str, bytes)
   ):
@@ -474,7 +476,7 @@ def get_output_signature(
     )
     return flat_specs[0] if len(flat_specs) == 1 else flat_specs
 
-  return jax.tree.map(_map_leaf, fn.structured_outputs)
+  return jax.tree.map(_map_leaf, _unwrap_tf_trackables(fn.structured_outputs))
 
 
 def _to_keyword_only_fn(

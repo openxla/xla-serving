@@ -15,19 +15,10 @@
 """Tests for Neptune export of NNX model."""
 
 import os
-from absl import logging
 from absl.testing import absltest
 import numpy as np
 from examples.nnx_tf import export
-
-
-def _model_runner(model_path: str):
-  try:
-    from neptune_model_runner import model_runner  # pylint: disable=g-import-not-at-top
-
-    return model_runner.ModelRunner(model_path=model_path)
-  except ImportError:
-    return None
+from neptune_model_runner import model_runner
 
 
 class ExportTest(absltest.TestCase):
@@ -41,12 +32,7 @@ class ExportTest(absltest.TestCase):
         os.path.isfile(os.path.join(export_path, 'orchestration.pb'))
     )
 
-    runner = _model_runner(export_path)
-    if runner is None:
-      logging.warning(
-          'ModelRunner not found, skipping running the exported model'
-      )
-      return
+    runner = model_runner.ModelRunner(model_path=export_path)
 
     inputs = {
         'feature_1': np.zeros((2, 1), dtype=np.int32),

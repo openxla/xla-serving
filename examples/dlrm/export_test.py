@@ -20,6 +20,7 @@ from absl.testing import absltest
 
 from examples.dlrm import export
 from examples.dlrm import model as model_lib
+from neptune_model_runner import model_runner
 
 
 class ExportTest(absltest.TestCase):
@@ -28,9 +29,30 @@ class ExportTest(absltest.TestCase):
     export_path = self.create_tempdir().full_path
     export.export_model(export_path)
     self.assertTrue(os.path.exists(export_path))
+    self.assertTrue(os.path.isdir(os.path.join(export_path, 'checkpoint')))
     self.assertTrue(
         os.path.isfile(os.path.join(export_path, 'orchestration.pb'))
     )
+
+    runner = model_runner.ModelRunner(model_path=export_path)
+
+    batch = export.get_synthetic_batch(
+        batch_size=1,
+        valency=model_lib.VALENCY,
+        vocab_sizes=model_lib.VOCAB_SIZES,
+    )
+    runner_inputs = {
+        'dense_features': batch['dense_features'],
+    }
+    for k, v in batch['sparse_features'].items():
+      runner_inputs[k] = v.values.numpy()
+      runner_inputs[f'{k}_1'] = v.row_splits.numpy()
+
+    outputs = runner.signature('serving_default').run_with_dict_return(
+        **runner_inputs
+    )
+    self.assertIn('predictions', outputs)
+    self.assertEqual(outputs['predictions'].shape, (1,))
 
   def test_export_model_custom_embedding_size(self):
     export_path = self.create_tempdir().full_path
