@@ -51,9 +51,7 @@ class BucketPadTransform(transform.ExportableTransform):
     pass
 
   def __call__(self, input_tensor: Any) -> Any:
-    if self._transform is not None:
-      return self._transform(input_tensor)
-    raise RuntimeError("BucketPadTransform is not initialized.")
+    return super().__call__(input_tensor)
 
 
 def bucket_pad(

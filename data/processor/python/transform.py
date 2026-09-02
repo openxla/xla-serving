@@ -30,10 +30,9 @@ class ExportableTransform(abc.ABC):
     pass
 
   def get_output_signature(self, input_signature: Any) -> Any:
-    if self._transform is not None and hasattr(
-        self._transform, "get_output_signature"
-    ):
-      return self._transform.get_output_signature(input_signature)
+    if self._transform is not None:
+      if hasattr(self._transform, "get_output_signature"):
+        return self._transform.get_output_signature(input_signature)
     return input_signature
 
   @property
