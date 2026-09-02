@@ -28,7 +28,7 @@ jobs:
         jax-version: ["newest"]
         # include:
         #   - python-version: "3.10"
-        #     jax-version: "0.4.34"  # keep in sync with minimum version in neptune_model/pyproject.toml
+        #     jax-version: "0.4.35"  # keep in sync with minimum version in neptune_model/pyproject.toml
 
     steps:
       - name: Checkout repository

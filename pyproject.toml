@@ -28,7 +28,7 @@ dependencies = [
     'absl-py',
     'dataclasses-json',
     'etils',
-    'jax >= 0.4.34',
+    'jax >= 0.4.35',
     'jaxlib',
     'jaxtyping',
     'numpy',
