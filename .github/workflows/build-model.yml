@@ -7,14 +7,19 @@ on:
     branches: [ "main" ]
   workflow_dispatch: # Allows you to trigger the run manually from the GitHub UI
 
-permissions: read-all
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   build-and-test:
-    name: "build-model (Python ${{ matrix.python-version }}, jax ${{ matrix.jax-version }})"
+    name: "Build Neptune Model (Python ${{ matrix.python-version }}, jax ${{ matrix.jax-version }})"
     runs-on: linux-x86-n2-16
     container:
-      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest # zizmor: ignore[unpinned-images]
     strategy:
       matrix:
         # TODO(hjswe): Re-enable once the tests are fixed.
@@ -25,15 +30,18 @@ jobs:
         #   - python-version: "3.10"
         #     jax-version: "0.4.34"  # keep in sync with minimum version in neptune_model/pyproject.toml
 
-
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Install uv and Set up Python
-        uses: astral-sh/setup-uv@887a942a15af3a7626099df99e897a18d9e5ab3a # v5.1.0
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           python-version: ${{ matrix.python-version }}
+          enable-cache: auto
+          cache-dependency-glob: |
+            **/pyproject.toml
+            **/setup.py
 
       - name: Create virtual environment
         run: |
@@ -87,5 +95,71 @@ jobs:
       - name: Install Test Dependencies and Run Pytest
         run: |
           uv pip install ".[test,tf,torch]"
-          uv pip uninstall triton
-          pytest -v -s --full-trace neptune_model/
+          uv pip uninstall triton 2>/dev/null || true
+          pytest -v -s --full-trace -n auto neptune_model/
+
+      - name: Upload Built Wheels
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: neptune-wheels
+          path: |
+            bazel-bin/data/neptune_data*.whl
+            dist/*.whl
+          retention-days: 1
+
+  build-and-test-llm:
+    name: "Build Neptune LLM Module (Python ${{ matrix.python-version }}, jax ${{ matrix.jax-version }})"
+    runs-on: linux-x86-n2-16
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest # zizmor: ignore[unpinned-images]
+    needs: build-and-test
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+        jax-version: ["newest"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Install uv and Set up Python
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: auto
+          cache-dependency-glob: |
+            **/pyproject.toml
+            **/setup.py
+
+      - name: Create virtual environment
+        run: |
+          uv venv --clear --python 3.12
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
+
+      - name: Download Built Wheels
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: neptune-wheels
+          path: wheels
+
+      - name: Install Prebuilt Wheels
+        run: |
+          find wheels -name "*.whl" -exec uv pip install {} +
+
+      - name: Verify Package Import
+        run: |
+          cd /tmp
+          python -c "
+          import neptune_model
+          print('✅ Successfully imported neptune_model!')
+          print(f'📦 Version: {neptune_model.__version__}')
+          "
+
+      - name: Install Test Dependencies and Run Pytest for LLM Module
+        env:
+          VLLM_TARGET_DEVICE: tpu
+        run: |
+          uv pip install --pre ".[test]"
+          uv pip uninstall triton 2>/dev/null || true
+          pytest -v -s -n auto neptune_model/_src/llm/

@@ -5,18 +5,20 @@ on:
     branches: [ "main" ] # Triggers automatically when code is merged to main
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 # Set minimal default permissions at workflow level
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
-  # ==========================================
-  # JOB 1: THE SCOUT
-  # ==========================================
   check-version:
     name: Check Version
     runs-on: linux-x86-n2-16
     container:
-      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest # zizmor: ignore[unpinned-images]
 
     # We must explicitly map the step outputs to Job outputs so Job 2 can see them
     outputs:
@@ -25,7 +27,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Detect Version in version.bzl
         id: version_check
@@ -48,29 +50,28 @@ jobs:
             echo "is_new=true" >> $GITHUB_OUTPUT
           fi
 
-  # ==========================================
-  # JOB 2: THE BUILDER
-  # ==========================================
   build-and-publish:
     name: Build and Publish
     runs-on: linux-x86-n2-16
     permissions:
       contents: write # Required to create the GitHub Release
     container:
-      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
-    # 1. Wait for Job 1 to finish
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest # zizmor: ignore[unpinned-images]
     needs: check-version
-    # 2. ONLY run this entire job if Job 1 found a new version
     if: needs.check-version.outputs.is_new == 'true'
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Install uv and Set up Python
-        uses: astral-sh/setup-uv@887a942a15af3a7626099df99e897a18d9e5ab3a # v5.1.0
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           python-version: "3.12"
+          enable-cache: auto
+          cache-dependency-glob: |
+            **/pyproject.toml
+            **/setup.py
 
       - name: Create virtual environment
         run: |
@@ -131,7 +132,7 @@ jobs:
         run: |
           uv pip install ".[test,tf,torch]"
           uv pip uninstall triton
-          pytest neptune_model/
+          pytest -v -n auto neptune_model/
 
       - name: Create GitHub Release
         env:

@@ -1,6 +1,5 @@
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
 # Limit visibility to selected packages.
 package_group(
@@ -72,52 +71,5 @@ cc_library(
         "@neptune//data/kernels/cpu_embedding:cpu_embedding_lookup_transform",
         "@neptune//data/kernels/cpu_embedding:pack_host_buffer_vector_transform",
         "@neptune//data/kernels/cpu_embedding:unpack_host_buffer_vector_transform",
-    ],
-)
-
-py_binary(
-    name = "generate_sandbox_model",
-    testonly = True,
-    srcs = ["generate_sandbox_model.py"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//third_party/py/absl:app",
-        "//third_party/py/orbax/export:obm_export",
-        "//third_party/py/orbax/export:serving_config",
-        "@absl_py//absl/flags",
-        "@neptune//data/kernels/bucket_pad:bucket_pad_transform_pybind",
-        "@neptune//data/kernels/cpu_embedding:cpu_embedding_lookup_transform_pybind",
-        "@neptune//data/kernels/cpu_embedding:cpu_embedding_module",
-        "@neptune//data/kernels/cpu_embedding:pack_host_buffer_vector_transform_pybind",
-        "@neptune//data/kernels/cpu_embedding:unpack_host_buffer_vector_transform_pybind",
-        "@neptune//data/processor/cc/utils:default_value_py_pb2",
-        "@neptune//data/processor/proto:transform_config_py_pb2",
-        "@neptune//data/processor/python:composite_processor_pybind",
-        "@neptune//data/processor/python:processor",
-        "@neptune_pypi//jax",
-        "@neptune_pypi//numpy",
-    ],
-)
-
-py_test(
-    name = "bucket_pad_cpu_embedding_sandbox_py_test",
-    srcs = ["bucket_pad_cpu_embedding_sandbox_test.py"],
-    main = "bucket_pad_cpu_embedding_sandbox_test.py",
-    deps = [
-        "//third_party/py/orbax/export:obm_export",
-        "//third_party/py/orbax/export:serving_config",
-        "@absl_py//absl/testing:absltest",
-        "@neptune//data/kernels/bucket_pad:bucket_pad_transform_pybind",
-        "@neptune//data/kernels/cpu_embedding:cpu_embedding_lookup_transform_pybind",
-        "@neptune//data/kernels/cpu_embedding:cpu_embedding_module",
-        "@neptune//data/kernels/cpu_embedding:pack_host_buffer_vector_transform_pybind",
-        "@neptune//data/kernels/cpu_embedding:unpack_host_buffer_vector_transform_pybind",
-        "@neptune//data/ops:bucket_pad",
-        "@neptune//data/processor/cc/utils:default_value_py_pb2",
-        "@neptune//data/processor/proto:transform_config_py_pb2",
-        "@neptune//data/processor/python:composite_processor_pybind",
-        "@neptune//data/processor/python:processor",
-        "@neptune_pypi//jax",
-        "@neptune_pypi//numpy",
     ],
 )

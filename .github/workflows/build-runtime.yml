@@ -7,23 +7,45 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
-permissions: read-all
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
   build-and-test-runtime:
-    name: "build-runtime"
+    name: "Build Neptune Runtime"
     runs-on: linux-x86-n2-32
     container:
-      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest # zizmor: ignore[unpinned-images]
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Check for runtime changes
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        with:
+          filters: |
+            runtime:
+              - 'runtime/**'
+              - 'protos/**'
+              - '.github/workflows/build-runtime.yml'
+              - '.bazelrc'
+              - 'MODULE.bazel'
+              - 'BUILD'
 
       - name: Setup Bazel
+        if: github.event_name != 'pull_request' || steps.filter.outputs.runtime == 'true'
         uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
 
       - name: Build Neptune Runtime
+        if: github.event_name != 'pull_request' || steps.filter.outputs.runtime == 'true'
         env:
           CACHE_CONFIG: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'remote_cache_readwrite' || 'remote_cache_readonly' }}
         run: |
@@ -35,6 +57,7 @@ jobs:
             --curses=no
 
       - name: Run Runtime Tests
+        if: github.event_name != 'pull_request' || steps.filter.outputs.runtime == 'true'
         env:
           CACHE_CONFIG: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'remote_cache_readwrite' || 'remote_cache_readonly' }}
         run: |
