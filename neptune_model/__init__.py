@@ -18,15 +18,35 @@
 
 import importlib.metadata
 
+from neptune_model._src.core import aot_recompiler
+from neptune_model._src.core import offline_compiler
+from neptune_model._src.export import jax_model
+from neptune_model._src.export import main_lib
+from neptune_model._src.export import serving_config
+from neptune_model._src.export import tensorflow_model
+from neptune_model._src.jax2npt import typing
+
+recompile = aot_recompiler.recompile
+TargetConfig = offline_compiler.TargetConfig
+JaxModel = jax_model.JaxModel
+save = main_lib.save
+ServingConfig = serving_config.ServingConfig
+TensorflowModel = tensorflow_model.TensorflowModel
+ApplyFnBundle = typing.ApplyFnBundle
+
+__all__ = [
+    "ApplyFnBundle",
+    "JaxModel",
+    "ServingConfig",
+    "TargetConfig",
+    "TensorflowModel",
+    "recompile",
+    "save",
+    "serving_config",
+]
+
+
 try:
   __version__ = importlib.metadata.version("neptune-model")
 except importlib.metadata.PackageNotFoundError:
   __version__ = "unknown"
-
-
-from neptune_model._src.export import serving_config
-from neptune_model._src.export.jax_model import JaxModel
-from neptune_model._src.export.main_lib import save
-from neptune_model._src.export.serving_config import ServingConfig
-from neptune_model._src.export.tensorflow_model import TensorflowModel
-from neptune_model._src.jax2npt.typing import ApplyFnBundle

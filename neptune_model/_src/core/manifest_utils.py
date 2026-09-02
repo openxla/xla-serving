@@ -14,13 +14,16 @@
 
 """Utilities for building Manifest proto."""
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 import dataclasses
+import io
+import pathlib
 import re
 from typing import Protocol, TypeGuard
 from absl import logging
 from neptune_model._src.core import constants
 from neptune_model._src.core import device_assignment
+from neptune_model._src.core import file_utils
 from neptune_model._src.core import function
 from neptune_model._src.core import saveable
 from neptune_model._src.core import serializable_function
@@ -29,6 +32,74 @@ from neptune_model._src.core import type_proto_utils
 from neptune_model._src.core import unstructured_data
 from neptune_model._src.core import value
 from neptune_model.protos import manifest_pb2
+
+
+def resolve_relative_path(
+    fsl: manifest_pb2.FileSystemLocation,
+    manifest: manifest_pb2.Manifest,
+) -> str:
+  """Resolves relative file path string from a FileSystemLocation proto."""
+  if not fsl.HasField("string_path") and not fsl.HasField("frequent_path_idx"):
+    raise ValueError(
+        "FileSystemLocation has neither string_path nor frequent_path_idx."
+    )
+  if fsl.HasField("string_path"):
+    return fsl.string_path
+  idx = fsl.frequent_path_idx
+  if idx < 0:
+    raise ValueError(f"Invalid frequent_path_idx {idx} in manifest.")
+  try:
+    return manifest.frequent_paths[idx]
+  except IndexError:
+    raise ValueError(
+        f"Invalid frequent_path_idx {idx} in manifest."
+    ) from None
+
+
+def get_functions(
+    manifest: manifest_pb2.Manifest,
+) -> Iterator[tuple[str, manifest_pb2.Function]]:
+  """Yields (object_name, function) from Manifest TopLevelObjects."""
+  for name, obj in manifest.objects.items():
+    if obj.HasField("function"):
+      yield name, obj.function
+    elif obj.HasField("poly_fn"):
+      num_fns = len(obj.poly_fn.concrete_functions)
+      for i, fn in enumerate(obj.poly_fn.concrete_functions):
+        yield f"{name}_{i}" if num_fns > 1 else name, fn
+
+
+def extract_stablehlo_payload(
+    shlo_proto: manifest_pb2.UnstructuredData,
+    manifest: manifest_pb2.Manifest,
+    source_dir: str,
+    recorded_external_paths: set[str] | None = None,
+) -> bytes:
+  """Extracts StableHLO payload bytes and optionally records external paths."""
+  if shlo_proto.inlined_bytes:
+    return shlo_proto.inlined_bytes
+  if not shlo_proto.HasField("file_system_location"):
+    raise ValueError(
+        "Cannot recompile model: StableHLO payload was stripped in a prior"
+        " AOT-only export."
+    )
+
+  fsl = shlo_proto.file_system_location
+  rel_path = resolve_relative_path(fsl, manifest)
+  if recorded_external_paths is not None:
+    recorded_external_paths.add(rel_path)
+
+  with file_utils.open_file(
+      str(pathlib.Path(source_dir) / rel_path), "rb"
+  ) as f:
+    if fsl.offset_in_byte:
+      f.seek(
+          fsl.offset_in_byte,
+          io.SEEK_END if fsl.offset_in_byte < 0 else io.SEEK_SET,
+      )
+    return (
+        f.read(fsl.size_in_byte) if fsl.HasField("size_in_byte") else f.read()
+    )
 
 
 # Note: Single-device portable executables decouple binary from host device IDs.

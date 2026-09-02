@@ -13,11 +13,12 @@
 # limitations under the License.
 
 from collections.abc import Sequence
-import os
+import pathlib
 import typing
 from typing import Any
 from absl.testing import absltest
 from neptune_model._src.core import device_assignment
+from neptune_model._src.core import file_utils
 from neptune_model._src.core import manifest_utils
 from neptune_model._src.core import serializable_function
 from neptune_model._src.core import shlo_function
@@ -53,8 +54,8 @@ class ManifestUtilsTest(absltest.TestCase):
     file_path = manifest_proto.objects[
         'test_fn'
     ].function.body.other.file_system_location.string_path
-    self.assertEqual(file_path, os.path.join(subfolder, 'test_fn.txt'))
-    full_path = os.path.join(tmp_dir, file_path)
+    self.assertEqual(file_path, str(pathlib.Path(subfolder) / 'test_fn.txt'))
+    full_path = str(pathlib.Path(tmp_dir) / file_path)
     with open(full_path, 'rb') as f:
       self.assertEqual(f.read(), b'test')
 
@@ -164,10 +165,10 @@ class ManifestUtilsTest(absltest.TestCase):
     self.assertLen(fn_obj.body.stable_hlo_body.compiled_executables, 2)
 
     # Verify CPU artifact
-    expected_file_path_cpu = os.path.join(
-        tmp_dir, 'test_fn_cpu_topology_label_pjrt_executable.bin'
+    expected_file_path_cpu = str(
+        pathlib.Path(tmp_dir) / 'test_fn_cpu_topology_label_pjrt_executable.bin'
     )
-    self.assertTrue(os.path.exists(expected_file_path_cpu))
+    self.assertTrue(file_utils.exists(expected_file_path_cpu))
     with open(expected_file_path_cpu, 'rb') as f:
       self.assertEqual(f.read(), b'compiled_bytes_cpu')
 
@@ -201,10 +202,10 @@ class ManifestUtilsTest(absltest.TestCase):
     )
 
     # Verify GPU artifact
-    expected_file_path_gpu = os.path.join(
-        tmp_dir, 'test_fn_gpu_topology_label_pjrt_executable.bin'
+    expected_file_path_gpu = str(
+        pathlib.Path(tmp_dir) / 'test_fn_gpu_topology_label_pjrt_executable.bin'
     )
-    self.assertTrue(os.path.exists(expected_file_path_gpu))
+    self.assertTrue(file_utils.exists(expected_file_path_gpu))
     with open(expected_file_path_gpu, 'rb') as f:
       self.assertEqual(f.read(), b'compiled_bytes_gpu')
 
@@ -271,11 +272,7 @@ class ManifestUtilsTest(absltest.TestCase):
     )
     obm_module = {'poly_fn_obj': [fn0, fn1]}
 
-    def custom_compiler_hook(
-        mlir_bytes: bytes,
-        module_kept_var_idx: Sequence[int],
-        _num_weights: int,
-    ) -> list[manifest_utils.CompiledArtifact]:
+    def custom_compiler_hook(mlir_bytes, module_kept_var_idx, *_):
       label = (
           'bucket0_target'
           if mlir_bytes == b'test_stablehlo_bucket0'
@@ -305,10 +302,11 @@ class ManifestUtilsTest(absltest.TestCase):
         cf0.body.stable_hlo_body.compiled_executables[0].target_topology_label,
         'bucket0_target',
     )
-    file0 = os.path.join(
-        tmp_dir, '__poly_fn_obj_0_bucket0_target_pjrt_executable.bin'
+    file0 = str(
+        pathlib.Path(tmp_dir)
+        / '__poly_fn_obj_0_bucket0_target_pjrt_executable.bin'
     )
-    self.assertTrue(os.path.exists(file0))
+    self.assertTrue(file_utils.exists(file0))
     with open(file0, 'rb') as f:
       self.assertEqual(f.read(), b'compiled_test_stablehlo_bucket0')
 
@@ -319,18 +317,16 @@ class ManifestUtilsTest(absltest.TestCase):
         cf1.body.stable_hlo_body.compiled_executables[0].target_topology_label,
         'bucket1_target',
     )
-    file1 = os.path.join(
-        tmp_dir, '__poly_fn_obj_1_bucket1_target_pjrt_executable.bin'
+    file1 = str(
+        pathlib.Path(tmp_dir)
+        / '__poly_fn_obj_1_bucket1_target_pjrt_executable.bin'
     )
-    self.assertTrue(os.path.exists(file1))
+    self.assertTrue(file_utils.exists(file1))
     with open(file1, 'rb') as f:
       self.assertEqual(f.read(), b'compiled_test_stablehlo_bucket1')
 
   def test_aot_build_manifest_proto_special_character_label_sanitization(self):
-    """Verifies that special characters in function names and labels are
-
-    sanitized in filenames.
-    """
+    """Verifies that special characters in function names/labels are sanitized."""
     tmp_dir = self.create_tempdir().full_path
 
     fn = shlo_function.ShloFunction(
@@ -346,11 +342,7 @@ class ManifestUtilsTest(absltest.TestCase):
     )
     obm_module = {'fn:special/name': fn}
 
-    def custom_compiler_hook(
-        _mlir_bytes: bytes,
-        _module_kept_var_idx: Sequence[int],
-        _num_weights: int,
-    ) -> list[manifest_utils.CompiledArtifact]:
+    def custom_compiler_hook(*_):
       return [
           manifest_utils.CompiledArtifact(
               pjrt_executable_bytes=b'compiled_bytes',
@@ -376,8 +368,8 @@ class ManifestUtilsTest(absltest.TestCase):
         compiled_exec.aot_executable.file_system_location.string_path,
         expected_filename,
     )
-    full_path = os.path.join(tmp_dir, expected_filename)
-    self.assertTrue(os.path.exists(full_path))
+    full_path = str(pathlib.Path(tmp_dir) / expected_filename)
+    self.assertTrue(file_utils.exists(full_path))
     with open(full_path, 'rb') as f:
       self.assertEqual(f.read(), b'compiled_bytes')
 
@@ -386,10 +378,7 @@ class ManifestUtilsTest(absltest.TestCase):
     )
 
   def test_aot_build_manifest_proto_num_weights_forwarding(self):
-    """Verifies that num_weights (derived from data_names) is forwarded to
-
-    compiler hook.
-    """
+    """Verifies that num_weights is forwarded to compiler hook."""
     tmp_dir = self.create_tempdir().full_path
 
     fn = shlo_function.ShloFunction(
@@ -406,14 +395,10 @@ class ManifestUtilsTest(absltest.TestCase):
     )
     obm_module = {'weighted_fn': fn}
 
-    received_weights: list[int] = []
-
-    def custom_compiler_hook(
-        _mlir_bytes: bytes,
-        _module_kept_var_idx: Sequence[int],
-        num_weights: int,
-    ) -> list[manifest_utils.CompiledArtifact]:
-      received_weights.append(num_weights)
+    def custom_compiler_hook(mlir_bytes, module_kept_var_idx, num_weights):
+      self.assertEqual(mlir_bytes, b'test_stablehlo')
+      self.assertEqual(list(module_kept_var_idx), [0, 1, 2])
+      self.assertEqual(num_weights, 3)
       return [
           manifest_utils.CompiledArtifact(
               pjrt_executable_bytes=b'compiled_bytes',
@@ -426,8 +411,6 @@ class ManifestUtilsTest(absltest.TestCase):
     manifest_utils.build_manifest_proto(
         obm_module, tmp_dir, compiler_hook=custom_compiler_hook
     )
-
-    self.assertEqual(received_weights, [3])
 
   def test_include_stablehlo_false_without_artifacts_raises_error(self):
     """Verifies error when include_stablehlo=False without AOT artifacts."""
@@ -443,7 +426,7 @@ class ManifestUtilsTest(absltest.TestCase):
         input_signature={},
         output_signature={},
     )
-    empty_compiler_hook = lambda mlir, idx, num_weights: []
+    empty_compiler_hook = lambda *_: []
 
     with self.assertRaisesRegex(
         ValueError,
@@ -473,7 +456,9 @@ class ManifestUtilsTest(absltest.TestCase):
         output_signature={},
     )
 
-    def valid_compiler_hook(_mlir, idx, _num_weights):
+    def valid_compiler_hook(mlir_bytes, idx, num_weights):
+      self.assertEqual(mlir_bytes, b'module {}')
+      self.assertEqual(num_weights, 0)
       return [
           manifest_utils.CompiledArtifact(
               pjrt_executable_bytes=b'real_pjrt_exec',
@@ -497,6 +482,87 @@ class ManifestUtilsTest(absltest.TestCase):
     self.assertEqual(
         fn_proto.compiled_executables[0].target_topology_label, 'cpu_target'
     )
+
+  def test_resolve_relative_path_string_path(self):
+    fsl = manifest_pb2.FileSystemLocation(string_path='test/path/model.shlo')
+    manifest = manifest_pb2.Manifest()
+    self.assertEqual(
+        manifest_utils.resolve_relative_path(fsl, manifest),
+        'test/path/model.shlo',
+    )
+
+  def test_resolve_relative_path_frequent_path_idx(self):
+    fsl = manifest_pb2.FileSystemLocation(frequent_path_idx=1)
+    manifest = manifest_pb2.Manifest()
+    manifest.frequent_paths.extend(['path0', 'path1', 'path2'])
+    self.assertEqual(
+        manifest_utils.resolve_relative_path(fsl, manifest), 'path1'
+    )
+
+  def test_resolve_relative_path_invalid_frequent_path_idx_raises_error(self):
+    manifest = manifest_pb2.Manifest()
+    manifest.frequent_paths.extend(['path0'])
+    with self.assertRaisesRegex(ValueError, r'Invalid frequent_path_idx 5'):
+      manifest_utils.resolve_relative_path(
+          manifest_pb2.FileSystemLocation(frequent_path_idx=5), manifest
+      )
+    with self.assertRaisesRegex(ValueError, r'Invalid frequent_path_idx -1'):
+      manifest_utils.resolve_relative_path(
+          manifest_pb2.FileSystemLocation(frequent_path_idx=-1), manifest
+      )
+
+  def test_resolve_relative_path_empty_fsl_raises_error(self):
+    manifest = manifest_pb2.Manifest()
+    with self.assertRaisesRegex(
+        ValueError, r'neither string_path nor frequent_path_idx'
+    ):
+      manifest_utils.resolve_relative_path(
+          manifest_pb2.FileSystemLocation(), manifest
+      )
+
+  def test_get_functions_yields_function_and_poly_fn(self):
+    manifest = manifest_pb2.Manifest()
+    manifest.objects['single_fn'].function.visibility = manifest_pb2.PUBLIC
+    poly_fn = manifest.objects['poly_fn'].poly_fn
+    poly_fn.concrete_functions.add().visibility = manifest_pb2.PUBLIC
+    poly_fn.concrete_functions.add().visibility = manifest_pb2.PUBLIC
+
+    fns = list(manifest_utils.get_functions(manifest))
+    fn_names = [name for name, _ in fns]
+    self.assertCountEqual(fn_names, ['single_fn', 'poly_fn_0', 'poly_fn_1'])
+
+  def test_extract_stablehlo_payload_inlined_and_external(self):
+    tmp_dir = self.create_tempdir().full_path
+    manifest = manifest_pb2.Manifest()
+
+    # 1. Inlined payload
+    inlined_proto = manifest_pb2.UnstructuredData(
+        inlined_bytes=b'inlined_bytes'
+    )
+    payload = manifest_utils.extract_stablehlo_payload(
+        inlined_proto, manifest, tmp_dir
+    )
+    self.assertEqual(payload, b'inlined_bytes')
+
+    # 2. External file payload
+    file_path = str(pathlib.Path(tmp_dir) / 'external.shlo')
+    with open(file_path, 'wb') as f:
+      f.write(b'external_bytes')
+
+    external_proto = manifest_pb2.UnstructuredData(
+        file_system_location=manifest_pb2.FileSystemLocation(
+            string_path='external.shlo'
+        )
+    )
+    recorded_paths = set()
+    payload = manifest_utils.extract_stablehlo_payload(
+        external_proto,
+        manifest,
+        tmp_dir,
+        recorded_external_paths=recorded_paths,
+    )
+    self.assertEqual(payload, b'external_bytes')
+    self.assertEqual(recorded_paths, {'external.shlo'})
 
 
 if __name__ == '__main__':
