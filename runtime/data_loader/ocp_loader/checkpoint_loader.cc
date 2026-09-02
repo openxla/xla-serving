@@ -16,6 +16,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -166,16 +167,13 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadCheckpoint(
     if (weight_spec.layout.has_value()) {
       ts_load_spec.layout = weight_spec.layout.value().ToProto();
     }
+    ts_load_spec.memory_kind = weight_spec.memory_kind;
 
     VLOG(3) << "ts_load_spec: " << ts_load_spec;
-    ts_load_specs.push_back(ts_load_spec);
+    ts_load_specs.push_back(std::move(ts_load_spec));
   }
 
   LoadFromTensorstoreExtraOptions opts;
-  if (!weight_specs.empty() && weight_specs[0].memory_kind.has_value()) {
-    opts.memory_kind = weight_specs[0].memory_kind;
-  }
-
   // Assume each weight has a full path
   return LoadFromTensorstore(&client, absl::MakeSpan(ts_load_specs),
                              /*base_dir=*/root_path, opts, checkpoint_type);
