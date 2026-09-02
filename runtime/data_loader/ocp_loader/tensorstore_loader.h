@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
@@ -79,7 +80,8 @@ struct TensorStoreLoadSpec {
         absl::StrJoin(spec.shards, ", "),
         spec.array_name.has_value() ? *spec.array_name : "null",
         spec.layout.has_value() ? spec.layout->DebugString() : "null",
-        spec.memory_kind.has_value() ? spec.memory_kind->value() : "null");
+        spec.memory_kind.has_value() ? absl::StrCat(*spec.memory_kind)
+                                     : "null");
   }
 };
 
