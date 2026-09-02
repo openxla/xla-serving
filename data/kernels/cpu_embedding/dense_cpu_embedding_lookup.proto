@@ -1,0 +1,33 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package neptune.data.composite.transforms.cpu_embedding;
+
+// Configuration arguments for DenseCpuEmbeddingLookupTransform.
+message DenseCpuEmbeddingLookupArgs {
+  // Input feature names corresponding to each dense tensor input.
+  repeated string feature_names = 1;
+
+  // Value used to identify padding tokens to filter out during lookup.
+  optional int64 pad_value = 2;
+
+  // Optional custom output feature names.
+  repeated string output_feature_names = 3;
+
+  // Legacy single feature name field for backward compatibility.
+  optional string feature_name = 4;
+}
+

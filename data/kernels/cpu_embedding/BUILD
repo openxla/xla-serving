@@ -95,6 +95,92 @@ py_proto_library(
     deps = [":cpu_embedding_proto"],
 )
 
+proto_library(
+    name = "dense_cpu_embedding_lookup_proto",
+    srcs = ["dense_cpu_embedding_lookup.proto"],
+)
+
+cc_proto_library(
+    name = "dense_cpu_embedding_lookup_cc_proto",
+    deps = [":dense_cpu_embedding_lookup_proto"],
+)
+
+py_proto_library(
+    name = "dense_cpu_embedding_lookup_py_pb2",
+    deps = [":dense_cpu_embedding_lookup_proto"],
+)
+
+cc_library(
+    name = "dense_cpu_embedding_lookup_transform",
+    srcs = ["dense_cpu_embedding_lookup_transform.cc"],
+    hdrs = ["dense_cpu_embedding_lookup_transform.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
+    deps = [
+        ":cpu_embedding_resource",
+        ":dense_cpu_embedding_lookup_cc_proto",
+        ":safe_int_utils",
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/types:span",
+        "@neptune//data/cpu_embedding/cc:array",
+        "@neptune//data/cpu_embedding/cc:feature_batch_csr_input",
+        "@neptune//data/processor/cc/api:registry",
+        "@neptune//data/processor/cc/api:transform_context",
+        "@neptune//data/processor/cc/api:type_info",
+        "@neptune//data/processor/cc/core:transform",
+        "@neptune//data/processor/proto:transform_config_cc_proto",
+        "@neptune//data/resource_manager/cc:resource",
+        "@neptune//runtime/core:host_buffer",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/tsl/platform:status_macros",
+    ],
+    alwayslink = 1,
+)
+
+cc_test(
+    name = "dense_cpu_embedding_lookup_transform_test",
+    srcs = ["dense_cpu_embedding_lookup_transform_test.cc"],
+    defines = [
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS",
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS",
+    ],
+    deps = [
+        ":cpu_embedding_resource",
+        ":dense_cpu_embedding_lookup_transform",
+        "@abseil-cpp//absl/algorithm:container",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/types:span",
+        "@googletest//:gtest_main",
+        "@neptune//data/cpu_embedding/cc:array",
+        "@neptune//data/cpu_embedding/cc:cpu_embedding_engine",
+        "@neptune//data/cpu_embedding/cc:embedding_table",
+        "@neptune//data/cpu_embedding/cc:feature_spec",
+        "@neptune//data/processor/cc/api:transform_context",
+        "@neptune//data/processor/cc/core:transform",
+        "@neptune//data/resource_manager/cc:asset",
+        "@neptune//data/resource_manager/cc:resource",
+        "@neptune//data/test_utils:status_macros",
+        "@neptune//runtime/core:host_buffer",
+        "@xla//xla/python/ifrt",
+    ],
+)
+
+transform_pybind_library(
+    name = "dense_cpu_embedding_lookup_transform_pybind",
+    srcs = ["dense_cpu_embedding_lookup_transform.cc"],
+    hdrs = ["dense_cpu_embedding_lookup_transform.h"],
+    dynamic_deps = ["@neptune//data:neptune_data_core"],
+    generate_wrappers = False,
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../.."],
+    deps = [
+        ":dense_cpu_embedding_lookup_transform",
+    ],
+)
+
 cc_library(
     name = "cpu_embedding_lookup_transform",
     srcs = ["cpu_embedding_lookup_transform.cc"],
