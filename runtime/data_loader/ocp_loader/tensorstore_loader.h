@@ -62,20 +62,24 @@ struct TensorStoreLoadSpec {
   // The desired layout for the loaded array on devices.
   std::optional<xla::LayoutProto> layout;
 
+  // The desired memory kind for the loaded array on devices (e.g. pinned_host).
+  std::optional<xla::ifrt::MemoryKind> memory_kind;
+
   template <typename Sink>
   friend void AbslStringify(Sink& sink, const TensorStoreLoadSpec& spec) {
     absl::Format(
         &sink,
         "TensorStoreLoadSpec(json_ts_spec_string=%s, op_sharding=%s, "
         "per_shard_shape=[%s], global_shape=[%s], dtype=%d, shards=[%s], "
-        "array_name=%s, layout=%s)",
+        "array_name=%s, layout=%s, memory_kind=%s)",
         spec.json_ts_spec_string,
         spec.op_sharding.has_value() ? spec.op_sharding->DebugString() : "null",
         absl::StrJoin(spec.per_shard_shape, ", "),
         absl::StrJoin(spec.global_shape, ", "), spec.dtype,
         absl::StrJoin(spec.shards, ", "),
         spec.array_name.has_value() ? *spec.array_name : "null",
-        spec.layout.has_value() ? spec.layout->DebugString() : "null");
+        spec.layout.has_value() ? spec.layout->DebugString() : "null",
+        spec.memory_kind.has_value() ? spec.memory_kind->value() : "null");
   }
 };
 

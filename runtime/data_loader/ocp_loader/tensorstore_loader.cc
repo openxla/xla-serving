@@ -284,7 +284,8 @@ absl::StatusOr<xla::ifrt::ArrayRef> TensorStoreLoader::LoadSingleArray(
         ifrt_client_->MakeArrayFromHostBuffer(
             data.get(), ifrt_dtype, xla::ifrt::Shape(per_shard_shape),
             /*byte_stride=*/std::nullopt,
-            xla::ifrt::SingleDeviceSharding::Create(dest_device, memory_kind_),
+            xla::ifrt::SingleDeviceSharding::Create(
+                dest_device, spec.memory_kind.value_or(memory_kind_)),
             std::move(layout_ref),
             xla::ifrt::Client::HostBufferSemantics::kImmutableOnlyDuringCall,
             {}));
