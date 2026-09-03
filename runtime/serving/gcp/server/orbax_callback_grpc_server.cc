@@ -18,6 +18,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/cleanup/cleanup.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
@@ -334,19 +335,6 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
   return reactor;
 }
 
-absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>>
-OrbaxCallbackGrpcServer::RunPredictInternal(
-    const neptune::serving::PredictRequest& request,
-    absl::string_view pipeline_name, const neptune::RunOptions& run_options) {
-  TF_ASSIGN_OR_RETURN(
-      auto input_with_names,
-      PrepareInputs(request, pipeline_name, interpreter_.get()));
-
-  return interpreter_->RunWithMapReturn(
-      pipeline_name, /*positional_inputs=*/{}, input_with_names,
-      run_options);
-}
-
 absl::Status OrbaxCallbackGrpcServer::Warmup(absl::string_view model_path) {
   std::string warmup_path =
       absl::StrCat(model_path, "/", kWarmupRequestsRelativePath);
@@ -374,8 +362,15 @@ absl::Status OrbaxCallbackGrpcServer::Warmup(absl::string_view model_path) {
   neptune::RunOptions run_options;  // Default options, no deadline.
   bool clean_eof = false;
   neptune::serving::PredictionLog prediction_log;
-  // TODO: Evaluate if parallelizing the warmup can speed up
-  // server startup.
+  // Dispatch every warmup request onto the async execution path up front, so
+  // they all run concurrently (matching how live traffic is served) instead
+  // of one at a time. This also warms up the concurrent-scheduling path
+  // itself, not just individual kernels.
+  struct WarmupTask {
+    std::string pipeline_name;
+    tsl::Future<absl::flat_hash_map<std::string, neptune::Value>> future;
+  };
+  std::vector<WarmupTask> warmup_tasks;
   while (google::protobuf::util::ParseDelimitedFromZeroCopyStream(
       &prediction_log, &array_input, &clean_eof)) {
     if (!prediction_log.has_predict_log()) {
@@ -388,19 +383,35 @@ absl::Status OrbaxCallbackGrpcServer::Warmup(absl::string_view model_path) {
         request.model_spec().signature_name().empty()
             ? absl::string_view(kDefaultServingSignatureDefKey)
             : absl::string_view(request.model_spec().signature_name());
-    absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>> warmup_status =
-        RunPredictInternal(request, pipeline_name, run_options);
-    if (!warmup_status.ok()) {
+    absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>>
+        input_with_names =
+            PrepareInputs(request, pipeline_name, interpreter_.get());
+    if (!input_with_names.ok()) {
       LOG(ERROR) << "Warmup failed for pipeline '" << pipeline_name
-                 << "': " << warmup_status.status();
-      return warmup_status.status();
+                 << "': " << input_with_names.status();
+      return input_with_names.status();
     }
+    warmup_tasks.push_back({
+        .pipeline_name = std::string(pipeline_name),
+        .future = interpreter_->RunAsyncWithMapReturn(
+            pipeline_name, /*positional_inputs=*/{},
+            std::move(*input_with_names), run_options),
+    });
     prediction_log.Clear();
   }
 
   if (!clean_eof) {
     return absl::DataLossError(
         "Failed to parse warmup file (truncated or corrupt)");
+  }
+
+  for (WarmupTask& task : warmup_tasks) {
+    absl::Status status = task.future.Await().status();
+    if (!status.ok()) {
+      LOG(ERROR) << "Warmup failed for pipeline '" << task.pipeline_name
+                 << "': " << status;
+      return status;
+    }
   }
 
   LOG(INFO) << "Warmup completed successfully.";
