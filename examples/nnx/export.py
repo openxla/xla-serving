@@ -80,7 +80,7 @@ def export_model(export_path: str, dtype: jnp.dtype = jnp.float32):
                   'feature_3': 'b, _',
                   'feature_4': 'b, _',
               },
-              jax_export_kwargs={'platforms': ['cpu', 'tpu']},
+              jax_export_kwargs={'platforms': ['cpu', 'cuda', 'tpu']},
           ),
           params=ckpt_params,
       ),
