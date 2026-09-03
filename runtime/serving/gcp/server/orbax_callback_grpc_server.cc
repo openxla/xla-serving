@@ -272,17 +272,14 @@ OrbaxCallbackGrpcServer::InFlightRequestCounter::InFlightRequestCounter(
     : gauge_cell_(in_flight_predict_gauge->GetCell(std::string(model_name))) {}
 
 int OrbaxCallbackGrpcServer::InFlightRequestCounter::Increment() {
-  // memory_order_relaxed suffices: the count only feeds the
-  // max_predict_queue_depth_ limit check below and is never used to make any
-  // other data's writes visible across threads.
-  int count = count_.fetch_add(1, std::memory_order_relaxed) + 1;
-  gauge_cell_->Set(count);
-  return count;
+  absl::MutexLock lock(mu_);
+  gauge_cell_->Set(++count_);
+  return count_;
 }
 
 void OrbaxCallbackGrpcServer::InFlightRequestCounter::Decrement() {
-  int count = count_.fetch_sub(1, std::memory_order_relaxed) - 1;
-  gauge_cell_->Set(count);
+  absl::MutexLock lock(mu_);
+  gauge_cell_->Set(--count_);
 }
 
 grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
