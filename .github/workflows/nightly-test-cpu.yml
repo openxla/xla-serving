@@ -1,0 +1,174 @@
+name: Nightly Serving Test (CPU)
+
+on:
+  schedule:
+    # Run nightly at 07:00 UTC (3 hours after nightly image push at 04:00 UTC)
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+    inputs:
+      image:
+        description: 'Docker image to test'
+        required: false
+        default: 'gcr.io/neptune-serving-engine/cpu-jax-only:nightly'
+        type: string
+      release_tag:
+        description: 'GitHub Release tag for wheels (leave empty for latest release)'
+        required: false
+        default: ''
+        type: string
+      runner:
+        description: 'Runner label to run on'
+        required: false
+        default: 'linux-x86-n2-16'
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  nightly-test-cpu:
+    name: Nightly Serving Test (CPU)
+    runs-on: ${{ inputs.runner || 'linux-x86-n2-16' }}
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest # zizmor: ignore[unpinned-images]
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Configure Git Safe Directory
+        run: |
+          git config --global --add safe.directory /__w/neptune/neptune
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          git config --global --add safe.directory "*"
+
+      - name: Install Crane
+        run: |
+          if ! command -v crane > /dev/null 2>&1; then
+            echo "Installing crane..."
+            mkdir -p "$HOME/.local/bin"
+            curl -sL https://github.com/google/go-containerregistry/releases/download/v0.20.2/go-containerregistry_Linux_x86_64.tar.gz | tar -xz -C "$HOME/.local/bin" crane
+            chmod +x "$HOME/.local/bin/crane"
+            echo "$HOME/.local/bin" >> $GITHUB_PATH
+          fi
+
+      - name: Authenticate to Container Registry
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          if command -v gcloud > /dev/null 2>&1; then
+            gcloud auth configure-docker gcr.io --quiet || true
+            gcloud auth print-access-token | crane auth login -u oauth2accesstoken --password-stdin gcr.io || true
+          fi
+
+      - name: Extract Serving Image
+        env:
+          IMAGE: ${{ inputs.image || 'gcr.io/neptune-serving-engine/cpu-jax-only:nightly' }}
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "Extracting Docker image: ${IMAGE}"
+          mkdir -p /tmp/neptune-serving
+          crane export "${IMAGE}" - | tar -xf - -C /tmp/neptune-serving
+          echo "Verifying serving binary..."
+          ls -la /tmp/neptune-serving/runtime/serving/gcp/server/neptune_serving_main_cpu
+          test -x /tmp/neptune-serving/runtime/serving/gcp/server/neptune_serving_main_cpu
+
+      - name: Install uv and Set up Python
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          python-version: "3.12"
+
+      - name: Create virtual environment
+        run: |
+          uv venv --python 3.12
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
+
+      - name: Download Neptune Wheels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          git config --global --add safe.directory /__w/neptune/neptune || true
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}" || true
+          git config --global --add safe.directory "*" || true
+          mkdir -p wheels
+          if [ -n "${RELEASE_TAG}" ]; then
+            echo "Downloading wheels from release: ${RELEASE_TAG} (repo: ${GH_REPO})"
+            gh release download "${RELEASE_TAG}" --repo "${GH_REPO}" --pattern "*.whl" --dir wheels
+          else
+            echo "Downloading wheels from latest release (repo: ${GH_REPO})"
+            gh release download --repo "${GH_REPO}" --pattern "*.whl" --dir wheels
+          fi
+          ls -la wheels/
+
+      - name: Install Neptune Wheels and Test Dependencies
+        run: |
+          echo "Installing downloaded wheels..."
+          uv pip install wheels/*.whl
+          # Install JAX (CPU), Flax (for examples.nnx), and grpcio
+          uv pip install "jax[cpu]" flax grpcio
+
+      - name: Export NNX Example Model
+        run: |
+          mkdir -p /tmp/exported_model
+          rm -rf /tmp/test_workspace && mkdir -p /tmp/test_workspace
+          cp -r examples /tmp/test_workspace/
+          cd /tmp/test_workspace
+          python3 -m examples.nnx.run_export --export_path=/tmp/exported_model
+          ls -la /tmp/exported_model
+
+      - name: Start Neptune CPU Server and Run End-to-End Prediction Test
+        run: |
+          echo "Starting Neptune Serving CPU binary..."
+          /tmp/neptune-serving/runtime/serving/gcp/server/neptune_serving_main_cpu \
+            --model_name=nnx \
+            --model_path=/tmp/exported_model \
+            --use_insecure_grpc_credentials=true \
+            --port=8500 > /tmp/neptune-serving.log 2>&1 &
+          SERVER_PID=$!
+          echo "SERVER_PID=${SERVER_PID}" >> $GITHUB_ENV
+          echo "Started Neptune server with PID ${SERVER_PID}"
+
+          echo "Waiting for Neptune server to be ready..."
+          READY=false
+          for i in $(seq 1 30); do
+            if grep -q "JAX Serving listening on" /tmp/neptune-serving.log 2>/dev/null; then
+              echo "Neptune server is ready after ${i}s!"
+              READY=true
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "${READY}" != "true" ]; then
+            echo "Neptune server failed to start within 30s. Server logs:"
+            cat /tmp/neptune-serving.log || true
+            exit 1
+          fi
+
+          echo "Running prediction test against CPU serving endpoint..."
+          python3 /tmp/test_workspace/examples/nnx/test_prediction_client.py \
+            --server_address=localhost:8500 \
+            --model_name=nnx \
+            --signature_name=serving_default \
+            --batch_size=4 \
+            --timeout=30
+
+      - name: Clean up Server
+        if: always()
+        run: |
+          if [ -f /tmp/neptune-serving.log ]; then
+            echo "=== Neptune Serving Logs ==="
+            cat /tmp/neptune-serving.log
+          fi
+          if [ -n "${SERVER_PID}" ]; then
+            kill -9 "${SERVER_PID}" 2>/dev/null || true
+          fi
