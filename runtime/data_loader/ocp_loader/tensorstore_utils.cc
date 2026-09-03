@@ -295,6 +295,9 @@ absl::StatusOr<tensorstore::DataType> ToTensorStoreDType(
     case xla::ifrt::DType::kF8E5M2FNUZ:
       return tensorstore::DataType(
           tensorstore::dtype_v<tensorstore::dtypes::float8_e5m2fnuz_t>);
+    case xla::ifrt::DType::kF8E8M0FNU:
+      return tensorstore::DataType(
+          tensorstore::dtype_v<tensorstore::dtypes::float8_e8m0fnu_t>);
     case xla::ifrt::DType::kF4E2M1FN:
       return tensorstore::DataType(
           tensorstore::dtype_v<tensorstore::dtypes::float4_e2m1fn_t>);
