@@ -34,6 +34,7 @@
 #include "runtime/interpreter/interpreter.h"  // from @neptune
 #include "runtime/interpreter/run_options.h"  // from @neptune
 #include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/tsl/lib/monitoring/gauge.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
 namespace neptune {
@@ -82,7 +83,8 @@ class OrbaxCallbackGrpcServer final
         checkpoint_loader_thread_pool_(
             std::move(checkpoint_loader_thread_pool)),
         interpreter_(std::move(interpreter)),
-        max_predict_queue_depth_(max_predict_queue_depth) {}
+        max_predict_queue_depth_(max_predict_queue_depth),
+        in_flight_predict_count_(model_name_) {}
 
   static absl::StatusOr<std::unique_ptr<OrbaxCallbackGrpcServer>> Create(
       absl::string_view model_name, absl::string_view model_path,
@@ -105,19 +107,21 @@ class OrbaxCallbackGrpcServer final
   static constexpr int kThreadPoolNumThreads = 16;
 
   // Thread-safe count of concurrent in-flight Predict requests, used to
-  // enforce `max_predict_queue_depth_`. `memory_order_relaxed` suffices for
-  // both operations: the count only feeds a numeric limit check and is never
-  // used to make any other data's writes visible across threads.
+  // enforce `max_predict_queue_depth_` and reported live via a
+  // `tsl::monitoring::Gauge` (labeled by `model_name`) so the effect of
+  // `max_predict_queue_depth_` can be validated directly against loadtest
+  // dashboards.
   class InFlightRequestCounter {
    public:
+    explicit InFlightRequestCounter(absl::string_view model_name);
+
     // Returns the count after incrementing.
-    int Increment() {
-      return count_.fetch_add(1, std::memory_order_relaxed) + 1;
-    }
-    void Decrement() { count_.fetch_sub(1, std::memory_order_relaxed); }
+    int Increment();
+    void Decrement();
 
    private:
     std::atomic<int> count_{0};
+    tsl::monitoring::GaugeCell<int64_t>* gauge_cell_;
   };
 
   std::string model_name_;

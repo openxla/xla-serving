@@ -105,6 +105,10 @@ auto* const request_latency_metric = tsl::monitoring::Sampler<3>::New(
      "rpc_method", "status"},
     tsl::monitoring::Buckets::Explicit(kRequestLatencyBuckets));
 
+auto* const in_flight_predict_gauge = tsl::monitoring::Gauge<int64_t, 1>::New(
+    "/neptune/external/serving/in_flight_predict_count",
+    "Current number of in-flight Predict requests.", "model_name");
+
 #if ENABLE_TF == 1
 tensorflow::tfrt_stub::SavedModel::Options GetSavedModelOptions(
     const OrbaxCallbackGrpcServerOptions& server_options) {
@@ -261,6 +265,24 @@ OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
       TF_RETURN_IF_ERROR(server->Warmup(model_path));
     }
     return server;
+}
+
+OrbaxCallbackGrpcServer::InFlightRequestCounter::InFlightRequestCounter(
+    absl::string_view model_name)
+    : gauge_cell_(in_flight_predict_gauge->GetCell(std::string(model_name))) {}
+
+int OrbaxCallbackGrpcServer::InFlightRequestCounter::Increment() {
+  // memory_order_relaxed suffices: the count only feeds the
+  // max_predict_queue_depth_ limit check below and is never used to make any
+  // other data's writes visible across threads.
+  int count = count_.fetch_add(1, std::memory_order_relaxed) + 1;
+  gauge_cell_->Set(count);
+  return count;
+}
+
+void OrbaxCallbackGrpcServer::InFlightRequestCounter::Decrement() {
+  int count = count_.fetch_sub(1, std::memory_order_relaxed) - 1;
+  gauge_cell_->Set(count);
 }
 
 grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
