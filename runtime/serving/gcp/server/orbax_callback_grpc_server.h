@@ -15,16 +15,17 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_ORBAX_CALLBACK_GRPC_SERVER_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_ORBAX_CALLBACK_GRPC_SERVER_H_
 
-#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
 
+#include "absl/base/thread_annotations.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "include/grpcpp/server_context.h"  // from @grpc
 #include "include/grpcpp/support/server_callback.h"  // from @grpc
 #include "protos/grpc/get_model_metadata.pb.h"  // from @neptune
@@ -34,6 +35,7 @@
 #include "runtime/interpreter/interpreter.h"  // from @neptune
 #include "runtime/interpreter/run_options.h"  // from @neptune
 #include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/tsl/lib/monitoring/gauge.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
 namespace neptune {
@@ -82,7 +84,8 @@ class OrbaxCallbackGrpcServer final
         checkpoint_loader_thread_pool_(
             std::move(checkpoint_loader_thread_pool)),
         interpreter_(std::move(interpreter)),
-        max_predict_queue_depth_(max_predict_queue_depth) {}
+        max_predict_queue_depth_(max_predict_queue_depth),
+        in_flight_predict_count_(model_name_) {}
 
   static absl::StatusOr<std::unique_ptr<OrbaxCallbackGrpcServer>> Create(
       absl::string_view model_name, absl::string_view model_path,
@@ -105,19 +108,26 @@ class OrbaxCallbackGrpcServer final
   static constexpr int kThreadPoolNumThreads = 16;
 
   // Thread-safe count of concurrent in-flight Predict requests, used to
-  // enforce `max_predict_queue_depth_`. `memory_order_relaxed` suffices for
-  // both operations: the count only feeds a numeric limit check and is never
-  // used to make any other data's writes visible across threads.
+  // enforce `max_predict_queue_depth_` and reported live via a
+  // `tsl::monitoring::Gauge` (labeled by `model_name`) so the effect of
+  // `max_predict_queue_depth_` can be validated directly against loadtest
+  // dashboards. `mu_` guards both the count and the gauge update together,
+  // so the two never observably disagree: without it, a thread whose
+  // increment/decrement is stale (but not yet published) could publish
+  // after a later, more-current update and leave the gauge stuck on a wrong
+  // value until the next call happens to correct it.
   class InFlightRequestCounter {
    public:
+    explicit InFlightRequestCounter(absl::string_view model_name);
+
     // Returns the count after incrementing.
-    int Increment() {
-      return count_.fetch_add(1, std::memory_order_relaxed) + 1;
-    }
-    void Decrement() { count_.fetch_sub(1, std::memory_order_relaxed); }
+    int Increment() ABSL_LOCKS_EXCLUDED(mu_);
+    void Decrement() ABSL_LOCKS_EXCLUDED(mu_);
 
    private:
-    std::atomic<int> count_{0};
+    absl::Mutex mu_;
+    int count_ ABSL_GUARDED_BY(mu_) = 0;
+    tsl::monitoring::GaugeCell<int64_t>* gauge_cell_;
   };
 
   std::string model_name_;

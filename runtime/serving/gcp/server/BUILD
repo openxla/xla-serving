@@ -152,6 +152,7 @@ JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS = [
     "@abseil-cpp//absl/status",
     "@abseil-cpp//absl/status:statusor",
     "@abseil-cpp//absl/strings",
+    "@abseil-cpp//absl/synchronization",
     "@abseil-cpp//absl/time",
     "@grpc//:grpc++",
     "@neptune//runtime/core:host_buffer",
