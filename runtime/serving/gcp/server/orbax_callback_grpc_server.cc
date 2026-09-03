@@ -213,6 +213,14 @@ OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
   int thread_pool_num_threads = options.thread_pool_num_threads > 0
                                     ? options.thread_pool_num_threads
                                     : tsl::port::MaxParallelism();
+  int max_predict_queue_depth;
+  if (options.max_predict_queue_depth > 0) {
+    max_predict_queue_depth = options.max_predict_queue_depth;
+  } else if (options.max_predict_queue_depth == 0) {
+    max_predict_queue_depth = 4 * thread_pool_num_threads;
+  } else {
+    max_predict_queue_depth = -1;  // Backpressure disabled.
+  }
   auto execute_worker_thread_pool = std::make_unique<tsl::thread::ThreadPool>(
       tsl::Env::Default(), tsl::ThreadOptions(), "OrbaxExecutionThreadPool",
       thread_pool_num_threads);
@@ -248,7 +256,7 @@ OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
         model_name, std::move(interpreter), client,
         std::move(execute_worker_thread_pool),
         std::move(computation_thread_pool),
-        std::move(checkpoint_loader_thread_pool));
+        std::move(checkpoint_loader_thread_pool), max_predict_queue_depth);
     if (options.warmup_server) {
       TF_RETURN_IF_ERROR(server->Warmup(model_path));
     }
@@ -281,6 +289,18 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
     return reactor;
   }
 
+  int in_flight = in_flight_predict_count_.Increment();
+  if (max_predict_queue_depth_ >= 0 && in_flight > max_predict_queue_depth_) {
+    in_flight_predict_count_.Decrement();
+    absl::Status status = absl::ResourceExhaustedError(absl::StrCat(
+        "Too many in-flight Predict requests (limit: ",
+        max_predict_queue_depth_,
+        "); rejecting immediately instead of queueing."));
+    record_metrics(status);
+    reactor->Finish(ToGrpcStatus(status));
+    return reactor;
+  }
+
   absl::string_view pipeline_name =
       request->model_spec().signature_name().empty()
           ? absl::string_view(kDefaultServingSignatureDefKey)
@@ -291,6 +311,7 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
       input_with_names =
           PrepareInputs(*request, pipeline_name, interpreter_.get());
   if (!input_with_names.ok()) {
+    in_flight_predict_count_.Decrement();
     record_metrics(input_with_names.status());
     reactor->Finish(ToGrpcStatus(input_with_names.status()));
     return reactor;
@@ -299,6 +320,7 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
   absl::StatusOr<neptune::KernelIODataType> output_data_type =
       interpreter_->GetModelOutputDataType(pipeline_name);
   if (!output_data_type.ok()) {
+    in_flight_predict_count_.Decrement();
     record_metrics(output_data_type.status());
     reactor->Finish(ToGrpcStatus(output_data_type.status()));
     return reactor;
@@ -318,6 +340,7 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
        pipeline_name = std::string(pipeline_name)](
           absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>>
               output_with_names) {
+        in_flight_predict_count_.Decrement();
         if (!output_with_names.ok()) {
           record_metrics(output_with_names.status());
           reactor->Finish(ToGrpcStatus(output_with_names.status()));
