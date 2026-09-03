@@ -47,23 +47,25 @@
 #include "xla/tsl/lib/monitoring/counter.h"  // from @xla
 #include "xla/tsl/lib/monitoring/sampler.h"  // from @xla
 #include "xla/tsl/platform/file_system.h"  // from @xla
+#include "tsl/platform/cpu_info.h"  // from @tsl
 #if ENABLE_TF == 1
   #include "runtime/tensorflow/tf_compatible_interpreter_create_options.h"  // from @neptune
 #else
   #include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
 #endif
-#include "runtime/tensorflow/utils/tf_to_host_buffer.h"  // from @neptune
+#include "runtime/serving/gcp/server/flags.h"  // from @neptune
 #include "runtime/serving/gcp/server/grpc_status_utils.h"  // from @neptune
-#include "xla/pjrt/pjrt_api.h"  // from @xla
 #include "runtime/serving/gcp/server/ifrt_client_creator.h"  // from @neptune
+#include "runtime/tensorflow/utils/tf_to_host_buffer.h"  // from @neptune
+#include "xla/pjrt/pjrt_api.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
+#include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "tensorflow/core/framework/tensor.h"  // from @org_tensorflow
-#include "runtime/serving/gcp/server/flags.h"  // from @neptune
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
 namespace neptune {
@@ -130,7 +132,54 @@ tensorflow::tfrt_stub::SavedModel::Options GetSavedModelOptions(
 
 #endif
 
+absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>> PrepareInputs(
+    const neptune::serving::PredictRequest& request,
+    absl::string_view pipeline_name, neptune::Interpreter* interpreter) {
+  TF_ASSIGN_OR_RETURN(neptune::KernelIODataType input_data_type,
+                      interpreter->GetModelInputDataType(pipeline_name));
+  bool input_expects_tensor =
+      (input_data_type == neptune::KernelIODataType::kTensor);
 
+  absl::flat_hash_map<std::string, neptune::Value> input_with_names;
+  input_with_names.reserve(request.inputs().size());
+  for (const auto& [name, host_buffer_proto] : request.inputs()) {
+    TF_ASSIGN_OR_RETURN(neptune::HostBuffer host_buffer,
+                        neptune::HostBuffer::FromProto(host_buffer_proto));
+    if (input_expects_tensor) {
+      TF_ASSIGN_OR_RETURN(tensorflow::Tensor tensor, ToTFTensor(host_buffer));
+      input_with_names[name] = neptune::Value(std::move(tensor));
+    } else {
+      input_with_names[name] = neptune::Value(std::move(host_buffer));
+    }
+  }
+  return input_with_names;
+}
+
+absl::Status ConvertOutputsToResponse(
+    absl::flat_hash_map<std::string, neptune::Value> output_with_names,
+    bool output_is_tensor, absl::string_view pipeline_name,
+    absl::string_view model_name, neptune::serving::PredictResponse* response) {
+  tsl::profiler::TraceMe traceme_serialization("ConvertOutputs");
+  for (auto& [name, value] : output_with_names) {
+    absl::StatusOr<neptune::HostBuffer> host_buffer;
+    if (output_is_tensor) {
+      host_buffer = ToHostBuffer(value.Get<tensorflow::Tensor>());
+    } else {
+      host_buffer = value.Get<neptune::HostBuffer>();
+    }
+    if (!host_buffer.ok()) {
+      return host_buffer.status();
+    }
+    HostBufferProto host_buffer_proto =
+        HostBuffer::ToHostBufferProto(std::move(*host_buffer));
+    (*response->mutable_outputs())[name] = std::move(host_buffer_proto);
+  }
+
+  response->mutable_model_spec()->set_name(std::string(model_name));
+  response->mutable_model_spec()->set_signature_name(
+      std::string(pipeline_name));
+  return absl::OkStatus();
+}
 
 }  // namespace
 
@@ -161,12 +210,15 @@ OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
   LOG(INFO) << "Orbax Server initialized for Orbax platform: " << orbax_platform
             << " (Device count: " << client->device_count() << ")";
 
+  int thread_pool_num_threads = options.thread_pool_num_threads > 0
+                                    ? options.thread_pool_num_threads
+                                    : tsl::port::MaxParallelism();
   auto execute_worker_thread_pool = std::make_unique<tsl::thread::ThreadPool>(
       tsl::Env::Default(), tsl::ThreadOptions(), "OrbaxExecutionThreadPool",
-      kThreadPoolNumThreads);
+      thread_pool_num_threads);
   auto computation_thread_pool = std::make_unique<tsl::thread::ThreadPool>(
       tsl::Env::Default(), tsl::ThreadOptions(), "OrbaxComputationThreadPool",
-      kThreadPoolNumThreads);
+      thread_pool_num_threads);
   auto checkpoint_loader_thread_pool =
       std::make_unique<tsl::thread::ThreadPool>(
           tsl::Env::Default(), tsl::ThreadOptions(),
@@ -211,19 +263,20 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
   grpc::ServerUnaryReactor* reactor = context->DefaultReactor();
 
   absl::Time start_time = absl::Now();
-  absl::Status status = absl::OkStatus();
 
-  auto record_metrics_on_exit = absl::MakeCleanup([&]() {
+  auto record_metrics = [this, start_time](const absl::Status& status) {
     double latency_ms = absl::ToDoubleMilliseconds(absl::Now() - start_time);
     std::string status_str = absl::StatusCodeToString(status.code());
     request_count_metric->GetCell(model_name_, "Predict", status_str)
         ->IncrementBy(1);
     request_latency_metric->GetCell(model_name_, "Predict", status_str)
         ->Add(latency_ms);
-  });
+  };
 
   if (interpreter_ == nullptr) {
-    status = absl::FailedPreconditionError("Interpreter not initialized.");
+    absl::Status status =
+        absl::FailedPreconditionError("Interpreter not initialized.");
+    record_metrics(status);
     reactor->Finish(ToGrpcStatus(status));
     return reactor;
   }
@@ -234,48 +287,50 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
           : absl::string_view(request->model_spec().signature_name());
   VLOG(1) << "Using pipeline name: '" << pipeline_name << "'";
 
-  neptune::RunOptions run_options;
-  run_options.deadline = absl::FromChrono(context->deadline());
-
-  absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>> output_with_names =
-      RunPredictInternal(*request, pipeline_name, run_options);
-  if (!output_with_names.ok()) {
-    status = output_with_names.status();
-    reactor->Finish(ToGrpcStatus(status));
+  absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>>
+      input_with_names =
+          PrepareInputs(*request, pipeline_name, interpreter_.get());
+  if (!input_with_names.ok()) {
+    record_metrics(input_with_names.status());
+    reactor->Finish(ToGrpcStatus(input_with_names.status()));
     return reactor;
   }
+
   absl::StatusOr<neptune::KernelIODataType> output_data_type =
       interpreter_->GetModelOutputDataType(pipeline_name);
   if (!output_data_type.ok()) {
-    status = output_data_type.status();
-    reactor->Finish(ToGrpcStatus(status));
+    record_metrics(output_data_type.status());
+    reactor->Finish(ToGrpcStatus(output_data_type.status()));
     return reactor;
   }
   bool output_is_tensor = (*output_data_type == neptune::KernelIODataType::kTensor);
 
-  {
-    tsl::profiler::TraceMe traceme_serialization("ConvertOutputs");
-    for (const auto& [name, value] : *output_with_names) {
-      absl::StatusOr<neptune::HostBuffer> host_buffer;
-      if (output_is_tensor) {
-         host_buffer = ToHostBuffer(value.Get<tensorflow::Tensor>());
-      } else {
-        host_buffer = value.Get<neptune::HostBuffer>();
-      }
-      if (!host_buffer.ok()) {
-        status = host_buffer.status();
-        reactor->Finish(ToGrpcStatus(status));
-        return reactor;
-      }
-      HostBufferProto host_buffer_proto =
-          HostBuffer::ToHostBufferProto(std::move(*host_buffer));
-      (*response->mutable_outputs())[name] = std::move(host_buffer_proto);
-    }
-  }
+  neptune::RunOptions run_options;
+  run_options.deadline = absl::FromChrono(context->deadline());
 
-  response->mutable_model_spec()->set_name(model_name_);
-  response->mutable_model_spec()->set_signature_name(pipeline_name);
-  reactor->Finish(grpc::Status::OK);
+  tsl::Future<absl::flat_hash_map<std::string, neptune::Value>> future =
+      interpreter_->RunAsyncWithMapReturn(
+          pipeline_name, /*positional_inputs=*/{}, std::move(*input_with_names),
+          run_options);
+
+  future.OnReady(
+      [this, reactor, response, record_metrics, output_is_tensor,
+       pipeline_name = std::string(pipeline_name)](
+          absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>>
+              output_with_names) {
+        if (!output_with_names.ok()) {
+          record_metrics(output_with_names.status());
+          reactor->Finish(ToGrpcStatus(output_with_names.status()));
+          return;
+        }
+
+        absl::Status conversion_status = ConvertOutputsToResponse(
+            std::move(*output_with_names), output_is_tensor, pipeline_name,
+            model_name_, response);
+        record_metrics(conversion_status);
+        reactor->Finish(ToGrpcStatus(conversion_status));
+      });
+
   return reactor;
 }
 
@@ -283,23 +338,9 @@ absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>>
 OrbaxCallbackGrpcServer::RunPredictInternal(
     const neptune::serving::PredictRequest& request,
     absl::string_view pipeline_name, const neptune::RunOptions& run_options) {
-  TF_ASSIGN_OR_RETURN(neptune::KernelIODataType input_data_type,
-                      interpreter_->GetModelInputDataType(pipeline_name));
-  bool input_expects_tensor =
-      (input_data_type == neptune::KernelIODataType::kTensor);
-
-  absl::flat_hash_map<std::string, neptune::Value> input_with_names;
-  input_with_names.reserve(request.inputs().size());
-  for (const auto& [name, host_buffer_proto] : request.inputs()) {
-    TF_ASSIGN_OR_RETURN(neptune::HostBuffer host_buffer,
-                        neptune::HostBuffer::FromProto(host_buffer_proto));
-    if (input_expects_tensor) {
-      TF_ASSIGN_OR_RETURN(tensorflow::Tensor tensor, ToTFTensor(host_buffer));
-      input_with_names[name] = neptune::Value(std::move(tensor));
-    } else {
-      input_with_names[name] = neptune::Value(std::move(host_buffer));
-    }
-  }
+  TF_ASSIGN_OR_RETURN(
+      auto input_with_names,
+      PrepareInputs(request, pipeline_name, interpreter_.get()));
 
   return interpreter_->RunWithMapReturn(
       pipeline_name, /*positional_inputs=*/{}, input_with_names,

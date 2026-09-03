@@ -170,6 +170,7 @@ JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS = [
     "@xla//xla/pjrt:pjrt_api",
     "@xla//xla/python/ifrt",
     "@xla//xla/python/pjrt_ifrt",
+    "@xla//xla/tsl/concurrency:future",
     "@xla//xla/tsl/platform:env",
     "@xla//xla/tsl/platform:errors",
     "@xla//xla/tsl/platform:statusor",

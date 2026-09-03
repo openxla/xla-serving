@@ -47,6 +47,7 @@ struct OrbaxCallbackGrpcServerOptions {
   bool sink_in_invariant_ops = true;
   int64_t cost_threshold = 10000;
   bool warmup_server = false;
+  int thread_pool_num_threads = 0;
 };
 
 class OrbaxCallbackGrpcServer final

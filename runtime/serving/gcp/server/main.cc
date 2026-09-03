@@ -77,6 +77,9 @@ ABSL_FLAG(int, max_receive_message_size,
           "Maximum size of a received message.");
 ABSL_FLAG(int, max_send_message_size, -1,  // Unlimited, matches gRPC default
           "Maximum size of a send message.");
+ABSL_FLAG(int, thread_pool_num_threads, 0,
+          "Number of threads for server execution thread pool. If 0, defaults "
+          "to 4.");
 
 void RunServer() {
   std::string server_address = absl::StrCat("[::]:", absl::GetFlag(FLAGS_port));
@@ -91,6 +94,8 @@ void RunServer() {
   options.sink_in_invariant_ops = absl::GetFlag(FLAGS_sink_in_invariant_ops);
   options.cost_threshold = absl::GetFlag(FLAGS_cost_threshold);
   options.warmup_server = absl::GetFlag(FLAGS_warmup_server);
+  options.thread_pool_num_threads =
+      absl::GetFlag(FLAGS_thread_pool_num_threads);
 
   LOG(INFO) << "Server address: " << server_address;
   auto service_or = neptune::serving::OrbaxCallbackGrpcServer::Create(
