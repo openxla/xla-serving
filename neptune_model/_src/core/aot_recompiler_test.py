@@ -19,51 +19,16 @@ import pathlib
 from absl.testing import absltest
 from absl.testing import parameterized
 import jax
-from jax.experimental import topologies
-import jax.numpy as jnp
 
 from neptune_model._src.core import aot_recompiler
 from neptune_model._src.core import constants
 from neptune_model._src.core import file_utils
 from neptune_model._src.core import offline_compiler
 from neptune_model._src.core import persistence_lib
-from neptune_model._src.export import jax_model
-from neptune_model._src.export import main_lib
-from neptune_model._src.export import serving_config
+from neptune_model._src.core import test_utils
 
 
-def _create_neptune_model(
-    export_path: str,
-    *,
-    save_shlo_to_file: bool = False,
-) -> str:
-  """Exports a Neptune model with genuine JAX math (sin(x) + w)."""
-
-  def forward(params, inputs):
-    return {"out": jnp.sin(inputs["x"]) + params["w"]}
-
-  params = {"w": jnp.array([[1.0, 2.0], [3.0, 4.0]], dtype=jnp.float32)}
-  spec = jax.ShapeDtypeStruct((2, 2), jnp.float32)
-
-  bundle = jax_model.ApplyFnBundle(apply_fn=forward)
-  model = jax_model.JaxModel(
-      apply_fn_bundle=bundle, params=params, name="model"
-  )
-  cfg = serving_config.ServingConfig(
-      serving_signature="serving_default",
-      input_signature={"x": spec},
-  )
-
-  main_lib.save(
-      models=model,
-      export_path=export_path,
-      serving_configs=[cfg],
-      save_shlo_to_file=save_shlo_to_file,
-  )
-  return export_path
-
-
-class AotRecompilerTest(parameterized.TestCase):
+class AotRecompilerTest(test_utils.NptTestCase):
 
   def setUp(self):
     super().setUp()
@@ -104,33 +69,6 @@ class AotRecompilerTest(parameterized.TestCase):
     )
     self.assertEqual((base, target), expected)
 
-  # TODO: Remove skip once jaxlib >= 0.11.2 is deployed.
-  def _get_topology_desc(
-      self, topology_name: str, platform: str
-  ) -> topologies.TopologyDescription:
-    """Safely retrieves topology descriptor or skips if plugin is missing."""
-    try:
-      return topologies.get_topology_desc(topology_name, platform=platform)
-    except (NotImplementedError, RuntimeError) as e:
-      self.skipTest(
-          f"{platform.upper()} topology support not installed in this binary:"
-          f" {e}"
-      )
-
-  # TODO: Remove skip once jaxlib >= 0.11.2 is deployed.
-  def _get_serialized_topology(
-      self, topology_name: str, platform: str
-  ) -> bytes:
-    """Retrieves serialized topology bytes or skips if unsupported."""
-    topo = self._get_topology_desc(topology_name, platform=platform)
-    try:
-      return topo.serialize()
-    except (AttributeError, RuntimeError) as e:
-      self.skipTest(
-          f"{platform.upper()} topology serialization not supported in this"
-          f" binary: {e}"
-      )
-
   # ---------------------------------------------------------------------------
   # 2. Parameterized Multi-Platform Deviceless Recompilation Tests
   # ---------------------------------------------------------------------------
@@ -159,17 +97,21 @@ class AotRecompilerTest(parameterized.TestCase):
       self, platform: str, topology_name: str, needs_autotune_db: bool
   ):
     """Verifies deviceless AOT recompilation across CUDA and TPU."""
-    serialized_topo = self._get_serialized_topology(
+    serialized_topo = test_utils.get_serialized_topology(
         topology_name, platform=platform
     )
 
-    input_model = _create_neptune_model(
+    input_model = test_utils.create_test_neptune_model(
         str(pathlib.Path(self.temp_dir) / "models" / "linear_model_input")
     )
     output_base = str(
         pathlib.Path(self.temp_dir) / "models" / "linear_model_out"
     )
-    autotune_db = self.create_tempdir().full_path if needs_autotune_db else None
+    autotune_db = (
+        test_utils.create_sample_autotune_dir(self.create_tempdir().full_path)
+        if needs_autotune_db
+        else None
+    )
 
     config = offline_compiler.TargetConfig(
         target_topology_label=f"{platform}_target",
@@ -199,26 +141,25 @@ class AotRecompilerTest(parameterized.TestCase):
     self.assertIsInstance(exec_body.executable_version, bytes)
     self.assertEqual(list(exec_body.aot_kept_var_idx), [0, 1])
 
-    bin_path = str(
-        pathlib.Path(out_dir)
-        / exec_body.aot_executable.file_system_location.string_path
-    )
-    self.assertTrue(file_utils.exists(bin_path))
-    with file_utils.open_file(bin_path, "rb") as f:
-      bin_bytes = f.read()
-    self.assertNotEmpty(bin_bytes)
+    self.assert_compiled_executable_valid(out_dir, exec_body)
 
   def test_deviceless_multi_target_recompile(self):
     """Verifies multi-target recompilation across 3 heterogeneous targets."""
-    input_model = _create_neptune_model(
+    input_model = test_utils.create_test_neptune_model(
         str(pathlib.Path(self.temp_dir) / "models" / "vit_model_input")
     )
     output_base = str(pathlib.Path(self.temp_dir) / "models" / "vit_model_out")
 
-    serialized_tpu = self._get_serialized_topology("df:2x2", platform="tpu")
-    serialized_cuda = self._get_serialized_topology("h100=8", platform="cuda")
+    serialized_tpu = test_utils.get_serialized_topology(
+        "df:2x2", platform="tpu"
+    )
+    serialized_cuda = test_utils.get_serialized_topology(
+        "h100=8", platform="cuda"
+    )
 
-    autotune_dir = self.create_tempdir().full_path
+    autotune_dir = test_utils.create_sample_autotune_dir(
+        self.create_tempdir().full_path
+    )
     configs = [
         offline_compiler.TargetConfig(
             target_topology_label="tpu_slice_1",
@@ -258,20 +199,14 @@ class AotRecompilerTest(parameterized.TestCase):
     self.assertEqual(labels, {"tpu_slice_1", "tpu_slice_2", "cuda_target"})
 
     for exec_body in fn.body.stable_hlo_body.compiled_executables:
-      bin_path = str(
-          pathlib.Path(out_dir)
-          / exec_body.aot_executable.file_system_location.string_path
-      )
-      self.assertTrue(file_utils.exists(bin_path))
-      with file_utils.open_file(bin_path, "rb") as f:
-        self.assertNotEmpty(f.read())
+      self.assert_compiled_executable_valid(out_dir, exec_body)
 
   def test_attached_cpu_hardware_recompile(self):
     """Verifies attached recompilation on physical CPU hardware."""
     devices = jax.devices("cpu")
     self.assertNotEmpty(devices, "CPU hardware must be present.")
 
-    input_model = _create_neptune_model(
+    input_model = test_utils.create_test_neptune_model(
         str(pathlib.Path(self.temp_dir) / "models/cpu_attached_in")
     )
     output_base = str(pathlib.Path(self.temp_dir) / "models/cpu_attached_out")
@@ -298,12 +233,9 @@ class AotRecompilerTest(parameterized.TestCase):
   @parameterized.parameters("cuda", "tpu")
   def test_attached_hardware_recompile(self, platform: str):
     """Verifies attached recompilation when physical accelerator is present."""
-    try:
-      jax.devices(platform)
-    except (RuntimeError, ValueError) as e:
-      self.skipTest(f"Requires attached {platform.upper()} hardware: {e}")
+    test_utils.require_attached_hardware(platform)
 
-    input_model = _create_neptune_model(
+    input_model = test_utils.create_test_neptune_model(
         str(pathlib.Path(self.temp_dir) / "models" / f"{platform}_attached_in")
     )
     output_base = str(
@@ -339,7 +271,7 @@ class AotRecompilerTest(parameterized.TestCase):
   )
   def test_strip_stablehlo_payload(self, save_shlo_to_file: bool):
     """Verifies stripping of inlined and external StableHLO payloads."""
-    input_model = _create_neptune_model(
+    input_model = test_utils.create_test_neptune_model(
         str(pathlib.Path(self.temp_dir) / "models" / "dlrm_model_input"),
         save_shlo_to_file=save_shlo_to_file,
     )
@@ -367,7 +299,7 @@ class AotRecompilerTest(parameterized.TestCase):
     self.assertLen(fn.body.stable_hlo_body.compiled_executables, 1)
 
   def test_auto_timestamp_and_overwrite_succeeds(self):
-    input_model = _create_neptune_model(
+    input_model = test_utils.create_test_neptune_model(
         str(pathlib.Path(self.temp_dir) / "models" / "linear_model_base")
     )
     output_base = str(
@@ -408,7 +340,7 @@ class AotRecompilerTest(parameterized.TestCase):
   def test_recompile_replaces_existing_target_label_and_cleans_up_old_binary(
       self,
   ):
-    input_model = _create_neptune_model(
+    input_model = test_utils.create_test_neptune_model(
         str(pathlib.Path(self.temp_dir) / "models" / "vit_model_input")
     )
     output_base = str(pathlib.Path(self.temp_dir) / "models" / "vit_model_out")
@@ -451,7 +383,7 @@ class AotRecompilerTest(parameterized.TestCase):
     self.assertEqual(labels, ["cpu_target_secondary", "cpu_target"])
 
   def test_recompile_poly_fn_with_multiple_concrete_functions(self):
-    input_model = _create_neptune_model(
+    input_model = test_utils.create_test_neptune_model(
         str(pathlib.Path(self.temp_dir) / "models" / "poly_model_input")
     )
     manifest = persistence_lib.load(input_model)
@@ -494,7 +426,7 @@ class AotRecompilerTest(parameterized.TestCase):
   # ---------------------------------------------------------------------------
 
   def test_overwrite_collision_raises_error(self):
-    input_model = _create_neptune_model(
+    input_model = test_utils.create_test_neptune_model(
         str(pathlib.Path(self.temp_dir) / "models" / "linear_collision_in")
     )
     output_base = str(
@@ -517,7 +449,7 @@ class AotRecompilerTest(parameterized.TestCase):
       )
 
   def test_unversioned_path_collision_raises_error(self):
-    input_model = _create_neptune_model(
+    input_model = test_utils.create_test_neptune_model(
         str(pathlib.Path(self.temp_dir) / "models" / "linear_unversioned_in")
     )
     output_path = str(pathlib.Path(self.temp_dir) / "models" / "custom_export")
@@ -537,7 +469,7 @@ class AotRecompilerTest(parameterized.TestCase):
       )
 
   def test_preexisting_tmp_directory_cleanup_succeeds(self):
-    input_model = _create_neptune_model(
+    input_model = test_utils.create_test_neptune_model(
         str(pathlib.Path(self.temp_dir) / "models" / "linear_tmp_in")
     )
     output_base = str(pathlib.Path(self.temp_dir) / "models" / "linear_tmp_out")
@@ -562,7 +494,7 @@ class AotRecompilerTest(parameterized.TestCase):
     self.assertFalse(file_utils.exists(stale_tmp))
 
   def test_valid_frequent_path_index_resolution(self):
-    input_model = _create_neptune_model(
+    input_model = test_utils.create_test_neptune_model(
         str(pathlib.Path(self.temp_dir) / "models" / "valid_frequent_in"),
         save_shlo_to_file=True,
     )
@@ -596,7 +528,7 @@ class AotRecompilerTest(parameterized.TestCase):
     self.assertTrue(file_utils.exists(out_dir))
 
   def test_stripped_input_model_raises_error(self):
-    input_model = _create_neptune_model(
+    input_model = test_utils.create_test_neptune_model(
         str(pathlib.Path(self.temp_dir) / "models" / "stripped_input")
     )
     # Manually strip StableHLO to simulate an AOT-only input model
@@ -627,7 +559,7 @@ class AotRecompilerTest(parameterized.TestCase):
       )
 
   def test_identical_input_output_paths_raises_error(self):
-    input_model = _create_neptune_model(
+    input_model = test_utils.create_test_neptune_model(
         str(pathlib.Path(self.temp_dir) / "models" / "identical_in")
     )
     config = offline_compiler.TargetConfig(
@@ -656,7 +588,7 @@ class AotRecompilerTest(parameterized.TestCase):
       )
 
   def test_empty_target_configs_raises_value_error(self):
-    input_model = _create_neptune_model(
+    input_model = test_utils.create_test_neptune_model(
         str(pathlib.Path(self.temp_dir) / "models" / "empty_configs_in")
     )
     with self.assertRaisesRegex(ValueError, "target_configs must not be empty"):
@@ -667,7 +599,7 @@ class AotRecompilerTest(parameterized.TestCase):
       )
 
   def test_invalid_frequent_path_index_raises_value_error(self):
-    input_model = _create_neptune_model(
+    input_model = test_utils.create_test_neptune_model(
         str(pathlib.Path(self.temp_dir) / "models" / "invalid_idx_in"),
         save_shlo_to_file=True,
     )
@@ -708,7 +640,7 @@ class AotRecompilerTest(parameterized.TestCase):
       )
 
   def test_file_system_location_empty_raises_value_error(self):
-    input_model = _create_neptune_model(
+    input_model = test_utils.create_test_neptune_model(
         str(pathlib.Path(self.temp_dir) / "models" / "empty_fsl_in"),
         save_shlo_to_file=True,
     )
