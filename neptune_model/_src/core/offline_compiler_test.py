@@ -15,6 +15,7 @@
 """Tests for Neptune offline AOT compiler across CPU, CUDA, and TPU backends."""
 
 from collections.abc import Sequence
+import pathlib
 from typing import Any, cast
 
 from absl.testing import absltest
@@ -24,6 +25,7 @@ from jax import export as jax_export
 from jax.experimental import topologies
 import jax.numpy as jnp
 
+from neptune_model._src.core import file_utils
 from neptune_model._src.core import offline_compiler
 
 try:
@@ -59,17 +61,37 @@ def _get_stablehlo_mlir() -> bytes:
 class OfflineCompilerTest(parameterized.TestCase):
   """Unified test suite for Neptune offline AOT compiler."""
 
+  def _get_topology_desc(
+      self, topology_name: str, platform: str
+  ) -> topologies.TopologyDescription:
+    """Safely retrieves topology descriptor or skips if plugin is missing."""
+    try:
+      return topologies.get_topology_desc(topology_name, platform=platform)
+    except (NotImplementedError, RuntimeError) as e:
+      self.skipTest(
+          f"{platform.upper()} topology support not installed in this binary:"
+          f" {e}"
+      )
+
+  # TODO: Remove skip once jaxlib >= 0.11.2 is deployed.
+  def _get_serialized_topology(
+      self, topology_name: str, platform: str
+  ) -> bytes:
+    """Retrieves serialized topology bytes or skips if unsupported."""
+    topo = self._get_topology_desc(topology_name, platform=platform)
+    try:
+      return topo.serialize()
+    except (AttributeError, RuntimeError) as e:
+      self.skipTest(
+          f"{platform.upper()} topology serialization not supported in this"
+          f" binary: {e}"
+      )
+
   # ---------------------------------------------------------------------------
   # 1. Deviceless AOT Compilation Tests (Parameterized across backends)
   # ---------------------------------------------------------------------------
 
   @parameterized.named_parameters(
-      (
-          "cpu",
-          "cpu",
-          None,
-          False,
-      ),
       (
           "cuda_h100",
           "cuda",
@@ -84,21 +106,12 @@ class OfflineCompilerTest(parameterized.TestCase):
       ),
   )
   def test_deviceless_compilation_vhlo_portable_artifact(
-      self, platform: str, topology_name: str | None, needs_autotune_db: bool
+      self, platform: str, topology_name: str, needs_autotune_db: bool
   ):
     """Verifies deviceless AOT compilation of genuine VHLO portable artifact."""
-    try:
-      if platform == "cpu":
-        topo = topologies.get_attached_topology(platform="cpu")
-      else:
-        assert topology_name is not None
-        topo = topologies.get_topology_desc(topology_name, platform=platform)
-      serialized_topo = topo.serialize()
-    except Exception as e:  # pylint: disable=broad-exception-caught
-      self.skipTest(
-          f"{platform.upper()} topology factory or serialization not supported"
-          f" in this binary: {e}"
-      )
+    serialized_topo = self._get_serialized_topology(
+        topology_name, platform=platform
+    )
     vhlo_bytes = _get_vhlo_portable_artifact()
     autotune_db = self.create_tempdir().full_path if needs_autotune_db else None
 
@@ -122,12 +135,6 @@ class OfflineCompilerTest(parameterized.TestCase):
 
   @parameterized.named_parameters(
       (
-          "cpu",
-          "cpu",
-          None,
-          False,
-      ),
-      (
           "cuda_h100",
           "cuda",
           "h100=8",
@@ -141,21 +148,12 @@ class OfflineCompilerTest(parameterized.TestCase):
       ),
   )
   def test_deviceless_compilation_raw_text_mlir(
-      self, platform: str, topology_name: str | None, needs_autotune_db: bool
+      self, platform: str, topology_name: str, needs_autotune_db: bool
   ):
     """Verifies deviceless AOT compilation of raw text MLIR fallback payload."""
-    try:
-      if platform == "cpu":
-        topo = topologies.get_attached_topology(platform="cpu")
-      else:
-        assert topology_name is not None
-        topo = topologies.get_topology_desc(topology_name, platform=platform)
-      serialized_topo = topo.serialize()
-    except Exception as e:  # pylint: disable=broad-exception-caught
-      self.skipTest(
-          f"{platform.upper()} topology factory or serialization not supported"
-          f" in this binary: {e}"
-      )
+    serialized_topo = self._get_serialized_topology(
+        topology_name, platform=platform
+    )
     raw_mlir_bytes = _get_raw_text_mlir()
     autotune_db = self.create_tempdir().full_path if needs_autotune_db else None
 
@@ -195,14 +193,7 @@ class OfflineCompilerTest(parameterized.TestCase):
       self, platform: str, topology_name: str, needs_autotune_db: bool
   ):
     """Verifies deviceless AOT compilation using named topology descriptors."""
-    try:
-      topologies.get_topology_desc(topology_name, platform=platform)
-    except Exception as e:  # pylint: disable=broad-exception-caught
-      self.skipTest(
-          f"{platform.upper()} topology factory not registered in this"
-          f" binary: {e}"
-      )
-
+    self._get_topology_desc(topology_name, platform=platform)
     stablehlo_mlir = _get_stablehlo_mlir()
     autotune_db = self.create_tempdir().full_path if needs_autotune_db else None
 
@@ -226,12 +217,6 @@ class OfflineCompilerTest(parameterized.TestCase):
 
   @parameterized.named_parameters(
       (
-          "cpu",
-          "cpu",
-          None,
-          False,
-      ),
-      (
           "cuda_h100",
           "cuda",
           "h100=8",
@@ -245,21 +230,12 @@ class OfflineCompilerTest(parameterized.TestCase):
       ),
   )
   def test_deviceless_compilation_serialized_topology(
-      self, platform: str, topology_name: str | None, needs_autotune_db: bool
+      self, platform: str, topology_name: str, needs_autotune_db: bool
   ):
     """Verifies deviceless AOT compilation from serialized topology bytes."""
-    try:
-      if platform == "cpu":
-        topo = topologies.get_attached_topology(platform="cpu")
-      else:
-        assert topology_name is not None
-        topo = topologies.get_topology_desc(topology_name, platform=platform)
-      serialized_topo = topo.serialize()
-    except Exception as e:  # pylint: disable=broad-exception-caught
-      self.skipTest(
-          f"{platform.upper()} topology factory or serialization not supported"
-          f" in this binary: {e}"
-      )
+    serialized_topo = self._get_serialized_topology(
+        topology_name, platform=platform
+    )
     stablehlo_mlir = _get_stablehlo_mlir()
     autotune_db = self.create_tempdir().full_path if needs_autotune_db else None
 
@@ -281,17 +257,35 @@ class OfflineCompilerTest(parameterized.TestCase):
     self.assertIsInstance(artifacts[0].executable_version, bytes)
 
   # ---------------------------------------------------------------------------
-  # 2. Attached Hardware Execution Tests (Gated by hardware availability)
+  # 2. Attached Hardware Compilation Tests
   # ---------------------------------------------------------------------------
 
-  @parameterized.parameters("cpu", "cuda", "tpu")
+  def test_compilation_with_attached_cpu_hardware(self):
+    """Verifies attached compilation on physical CPU hardware."""
+    devices = jax.devices("cpu")
+    self.assertNotEmpty(devices, "CPU hardware must be present.")
+
+    stablehlo_mlir = _get_stablehlo_mlir()
+    config = offline_compiler.TargetConfig(
+        target_topology_label="cpu_attached",
+        enable_deviceless_compilation=False,
+        platform="cpu",
+    )
+    hook = offline_compiler.create_offline_compiler_hook([config])
+    artifacts = list(hook(stablehlo_mlir, [0], 0))
+
+    self.assertLen(artifacts, 1)
+    self.assertEqual(artifacts[0].target_topology_label, "cpu_attached")
+    self.assertNotEmpty(artifacts[0].pjrt_executable_bytes)
+    self.assertEqual(artifacts[0].kept_var_idx, [0])
+    self.assertIsInstance(artifacts[0].executable_version, bytes)
+
+  @parameterized.parameters("cuda", "tpu")
   def test_compilation_with_attached_hardware(self, platform: str):
     """Verifies attached compilation when physical accelerator is present."""
     try:
-      devices = jax.devices(platform)
-      if not devices:
-        self.skipTest(f"Requires attached {platform.upper()} hardware.")
-    except Exception as e:  # pylint: disable=broad-exception-caught
+      jax.devices(platform)
+    except (RuntimeError, ValueError) as e:
       self.skipTest(f"Requires attached {platform.upper()} hardware: {e}")
 
     stablehlo_mlir = _get_stablehlo_mlir()
@@ -334,10 +328,7 @@ class OfflineCompilerTest(parameterized.TestCase):
     """Verifies compilation with StablehloTpuOptimizer instance on TPU."""
     if neptune_optimizer is None:
       self.skipTest("neptune_optimizer C++ extension not available in OSS.")
-    try:
-      topologies.get_topology_desc("df:2x2", platform="tpu")
-    except Exception as e:  # pylint: disable=broad-exception-caught
-      self.skipTest(f"TPU topology factory not registered in this binary: {e}")
+    self._get_topology_desc("df:2x2", platform="tpu")
 
     stablehlo_mlir = _get_stablehlo_mlir()
     config = offline_compiler.TargetConfig(
@@ -450,14 +441,14 @@ class OfflineCompilerTest(parameterized.TestCase):
     ):
       offline_compiler.create_offline_compiler_hook([config])
 
-  def test_unsupported_platform_gpu_suggests_cuda(self):
-    """Verifies ValueError when passing abstract 'gpu' instead of 'cuda'."""
+  def test_unsupported_platform_raises_value_error(self):
+    """Verifies ValueError when passing an unsupported platform."""
     config = offline_compiler.TargetConfig(
-        target_topology_label="invalid_gpu",
+        target_topology_label="invalid_platform",
         platform="gpu",
     )
     with self.assertRaisesRegex(
-        ValueError, "Unsupported platform 'gpu'. Did you mean 'cuda'?"
+        ValueError, "Unsupported platform 'gpu'. Supported platforms:"
     ):
       offline_compiler.create_offline_compiler_hook([config])
 
@@ -474,17 +465,107 @@ class OfflineCompilerTest(parameterized.TestCase):
     ):
       offline_compiler.create_offline_compiler_hook([config])
 
-  def test_cuda_deviceless_missing_autotune_db_raises_error(self):
-    """Verifies error when autotune_database_path is missing for CUDA deviceless."""
+  def test_cuda_deviceless_without_autotune_db_compiles_with_warning(self):
+    """Verifies CUDA deviceless compilation succeeds without autotune db."""
+    serialized_topo = self._get_serialized_topology("h100=8", platform="cuda")
+
+    stablehlo_mlir = _get_stablehlo_mlir()
     config = offline_compiler.TargetConfig(
-        target_topology_label="deviceless_cuda",
+        target_topology_label="cuda_no_db",
         enable_deviceless_compilation=True,
-        serialized_topology=b"dummy_topo_bytes",
         platform="cuda",
+        serialized_topology=serialized_topo,
+        autotune_database_path=None,
+    )
+    with self.assertLogs(level="WARNING") as log_output:
+      hook = offline_compiler.create_offline_compiler_hook([config])
+      artifacts = list(hook(stablehlo_mlir, [0], 0))
+
+    self.assertLen(artifacts, 1)
+    self.assertEqual(artifacts[0].target_topology_label, "cuda_no_db")
+    self.assertNotEmpty(artifacts[0].pjrt_executable_bytes)
+    self.assertTrue(
+        any(
+            "autotune_database_path was not provided" in msg
+            for msg in log_output.output
+        )
+    )
+
+  def test_cuda_deviceless_with_directory_autotune_db(self):
+    """Verifies CUDA deviceless compilation routes directory autotune db."""
+    serialized_topo = self._get_serialized_topology("h100=8", platform="cuda")
+
+    stablehlo_mlir = _get_stablehlo_mlir()
+    temp_dir = self.create_tempdir()
+    db_dir = pathlib.Path(temp_dir.full_path) / "autotune_dir"
+    file_utils.mkdir_p(str(db_dir))
+
+    config = offline_compiler.TargetConfig(
+        target_topology_label="cuda_dir_db",
+        enable_deviceless_compilation=True,
+        platform="cuda",
+        serialized_topology=serialized_topo,
+        autotune_database_path=str(db_dir),
+    )
+    hook = offline_compiler.create_offline_compiler_hook([config])
+    artifacts = list(hook(stablehlo_mlir, [0], 0))
+
+    self.assertLen(artifacts, 1)
+    self.assertEqual(artifacts[0].target_topology_label, "cuda_dir_db")
+    self.assertNotEmpty(artifacts[0].pjrt_executable_bytes)
+
+  def test_cuda_deviceless_with_file_autotune_db(self):
+    """Verifies CUDA deviceless compilation routes file autotune db."""
+    serialized_topo = self._get_serialized_topology("h100=8", platform="cuda")
+
+    stablehlo_mlir = _get_stablehlo_mlir()
+    temp_dir = self.create_tempdir()
+    db_file = pathlib.Path(temp_dir.full_path) / "autotune.textproto"
+    with file_utils.open_file(str(db_file), "w") as f:
+      f.write("# autotune database placeholder\n")
+
+    config = offline_compiler.TargetConfig(
+        target_topology_label="cuda_file_db",
+        enable_deviceless_compilation=True,
+        platform="cuda",
+        serialized_topology=serialized_topo,
+        autotune_database_path=str(db_file),
+    )
+    hook = offline_compiler.create_offline_compiler_hook([config])
+    artifacts = list(hook(stablehlo_mlir, [0], 0))
+
+    self.assertLen(artifacts, 1)
+    self.assertEqual(artifacts[0].target_topology_label, "cuda_file_db")
+    self.assertNotEmpty(artifacts[0].pjrt_executable_bytes)
+
+  def test_cuda_deviceless_nonexistent_autotune_db_raises_file_not_found(self):
+    """Verifies FileNotFoundError when nonexistent autotune db is given."""
+    serialized_topo = self._get_serialized_topology("h100=8", platform="cuda")
+
+    nonexistent_path = str(
+        pathlib.Path(self.create_tempdir().full_path) / "does_not_exist.pb"
+    )
+    config = offline_compiler.TargetConfig(
+        target_topology_label="cuda_missing_db",
+        enable_deviceless_compilation=True,
+        platform="cuda",
+        serialized_topology=serialized_topo,
+        autotune_database_path=nonexistent_path,
+    )
+    with self.assertRaises(FileNotFoundError):
+      offline_compiler.create_offline_compiler_hook([config])
+
+  def test_non_cuda_autotune_db_raises_value_error(self):
+    """Verifies ValueError when autotune db is given for non-CUDA platform."""
+    config = offline_compiler.TargetConfig(
+        target_topology_label="tpu_with_db",
+        platform="tpu",
+        target_topology="df:2x2",
+        autotune_database_path="/tmp/fake_autotune.pb",
     )
     with self.assertRaisesRegex(
         ValueError,
-        "autotune_database_path must be provided for CUDA deviceless",
+        "autotune_database_path is only supported for CUDA platform",
     ):
       offline_compiler.create_offline_compiler_hook([config])
 

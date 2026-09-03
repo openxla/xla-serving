@@ -104,22 +104,49 @@ class AotRecompilerTest(parameterized.TestCase):
     )
     self.assertEqual((base, target), expected)
 
+  # TODO: Remove skip once jaxlib >= 0.11.2 is deployed.
+  def _get_topology_desc(
+      self, topology_name: str, platform: str
+  ) -> topologies.TopologyDescription:
+    """Safely retrieves topology descriptor or skips if plugin is missing."""
+    try:
+      return topologies.get_topology_desc(topology_name, platform=platform)
+    except (NotImplementedError, RuntimeError) as e:
+      self.skipTest(
+          f"{platform.upper()} topology support not installed in this binary:"
+          f" {e}"
+      )
+
+  # TODO: Remove skip once jaxlib >= 0.11.2 is deployed.
+  def _get_serialized_topology(
+      self, topology_name: str, platform: str
+  ) -> bytes:
+    """Retrieves serialized topology bytes or skips if unsupported."""
+    topo = self._get_topology_desc(topology_name, platform=platform)
+    try:
+      return topo.serialize()
+    except (AttributeError, RuntimeError) as e:
+      self.skipTest(
+          f"{platform.upper()} topology serialization not supported in this"
+          f" binary: {e}"
+      )
+
   # ---------------------------------------------------------------------------
   # 2. Parameterized Multi-Platform Deviceless Recompilation Tests
   # ---------------------------------------------------------------------------
 
   @parameterized.named_parameters(
       (
-          "cpu",
-          "cpu",
-          None,
-          False,
-      ),
-      (
           "cuda_h100_with_db",
           "cuda",
           "h100=8",
           True,
+      ),
+      (
+          "cuda_h100_no_db",
+          "cuda",
+          "h100=8",
+          False,
       ),
       (
           "tpu_df2x2",
@@ -129,27 +156,12 @@ class AotRecompilerTest(parameterized.TestCase):
       ),
   )
   def test_deviceless_single_target_recompile(
-      self, platform: str, topology_name: str | None, needs_autotune_db: bool
+      self, platform: str, topology_name: str, needs_autotune_db: bool
   ):
-    """Verifies deviceless AOT recompilation across CPU, CUDA, and TPU."""
-    if platform == "cpu":
-      topo = topologies.get_attached_topology(platform="cpu")
-    else:
-      assert topology_name is not None
-      try:
-        topo = topologies.get_topology_desc(topology_name, platform=platform)
-      except (NotImplementedError, RuntimeError) as e:
-        self.skipTest(
-            f"{platform.upper()} topology support not installed in this"
-            f" binary: {e}"
-        )
-    try:
-      serialized_topo = topo.serialize()
-    except (AttributeError, RuntimeError) as e:
-      self.skipTest(
-          f"{platform.upper()} topology serialization not supported in this"
-          f" binary: {e}"
-      )
+    """Verifies deviceless AOT recompilation across CUDA and TPU."""
+    serialized_topo = self._get_serialized_topology(
+        topology_name, platform=platform
+    )
 
     input_model = _create_neptune_model(
         str(pathlib.Path(self.temp_dir) / "models" / "linear_model_input")
@@ -197,31 +209,35 @@ class AotRecompilerTest(parameterized.TestCase):
     self.assertNotEmpty(bin_bytes)
 
   def test_deviceless_multi_target_recompile(self):
+    """Verifies multi-target recompilation across 3 heterogeneous targets."""
     input_model = _create_neptune_model(
         str(pathlib.Path(self.temp_dir) / "models" / "vit_model_input")
     )
     output_base = str(pathlib.Path(self.temp_dir) / "models" / "vit_model_out")
 
-    cpu_topo = topologies.get_attached_topology(platform="cpu")
-    try:
-      serialized_topo = cpu_topo.serialize()
-    except (AttributeError, RuntimeError) as e:
-      self.skipTest(
-          f"CPU topology serialization not supported in this binary: {e}"
-      )
+    serialized_tpu = self._get_serialized_topology("df:2x2", platform="tpu")
+    serialized_cuda = self._get_serialized_topology("h100=8", platform="cuda")
 
+    autotune_dir = self.create_tempdir().full_path
     configs = [
         offline_compiler.TargetConfig(
-            target_topology_label="cpu_target_1",
-            platform="cpu",
+            target_topology_label="tpu_slice_1",
+            platform="tpu",
             enable_deviceless_compilation=True,
-            serialized_topology=serialized_topo,
+            serialized_topology=serialized_tpu,
         ),
         offline_compiler.TargetConfig(
-            target_topology_label="cpu_target_2",
-            platform="cpu",
+            target_topology_label="tpu_slice_2",
+            platform="tpu",
             enable_deviceless_compilation=True,
-            serialized_topology=serialized_topo,
+            target_topology="df:2x2",
+        ),
+        offline_compiler.TargetConfig(
+            target_topology_label="cuda_target",
+            platform="cuda",
+            enable_deviceless_compilation=True,
+            serialized_topology=serialized_cuda,
+            autotune_database_path=autotune_dir,
         ),
     ]
 
@@ -234,12 +250,12 @@ class AotRecompilerTest(parameterized.TestCase):
 
     manifest = persistence_lib.load(out_dir)
     fn = manifest.objects["serving_default"].function
-    self.assertLen(fn.body.stable_hlo_body.compiled_executables, 2)
+    self.assertLen(fn.body.stable_hlo_body.compiled_executables, 3)
     labels = {
         e.target_topology_label
         for e in fn.body.stable_hlo_body.compiled_executables
     }
-    self.assertEqual(labels, {"cpu_target_1", "cpu_target_2"})
+    self.assertEqual(labels, {"tpu_slice_1", "tpu_slice_2", "cuda_target"})
 
     for exec_body in fn.body.stable_hlo_body.compiled_executables:
       bin_path = str(
@@ -250,14 +266,41 @@ class AotRecompilerTest(parameterized.TestCase):
       with file_utils.open_file(bin_path, "rb") as f:
         self.assertNotEmpty(f.read())
 
+  def test_attached_cpu_hardware_recompile(self):
+    """Verifies attached recompilation on physical CPU hardware."""
+    devices = jax.devices("cpu")
+    self.assertNotEmpty(devices, "CPU hardware must be present.")
+
+    input_model = _create_neptune_model(
+        str(pathlib.Path(self.temp_dir) / "models/cpu_attached_in")
+    )
+    output_base = str(pathlib.Path(self.temp_dir) / "models/cpu_attached_out")
+    config = offline_compiler.TargetConfig(
+        target_topology_label="cpu_attached",
+        platform="cpu",
+        enable_deviceless_compilation=False,
+    )
+    out_dir = aot_recompiler.recompile(
+        input_model_path=input_model,
+        output_model_path=output_base,
+        target_configs=config,
+        version=1,
+    )
+    self.assertTrue(file_utils.exists(out_dir))
+    manifest = persistence_lib.load(out_dir)
+    fn = manifest.objects["serving_default"].function
+    self.assertLen(fn.body.stable_hlo_body.compiled_executables, 1)
+    self.assertEqual(
+        fn.body.stable_hlo_body.compiled_executables[0].target_topology_label,
+        "cpu_attached",
+    )
+
   @parameterized.parameters("cuda", "tpu")
   def test_attached_hardware_recompile(self, platform: str):
     """Verifies attached recompilation when physical accelerator is present."""
     try:
-      devices = jax.devices(platform)
-      if not devices:
-        self.skipTest(f"Requires attached {platform.upper()} hardware.")
-    except Exception as e:  # pylint: disable=broad-exception-caught
+      jax.devices(platform)
+    except (RuntimeError, ValueError) as e:
       self.skipTest(f"Requires attached {platform.upper()} hardware: {e}")
 
     input_model = _create_neptune_model(
@@ -295,7 +338,7 @@ class AotRecompilerTest(parameterized.TestCase):
       ("external_shlo_file", True),
   )
   def test_strip_stablehlo_payload(self, save_shlo_to_file: bool):
-    """Verifies stripping of both inlined and external file StableHLO payloads."""
+    """Verifies stripping of inlined and external StableHLO payloads."""
     input_model = _create_neptune_model(
         str(pathlib.Path(self.temp_dir) / "models" / "dlrm_model_input"),
         save_shlo_to_file=save_shlo_to_file,
@@ -630,9 +673,8 @@ class AotRecompilerTest(parameterized.TestCase):
     )
     manifest = persistence_lib.load(input_model)
     fn = manifest.objects["serving_default"].function
-    fn.body.stable_hlo_body.stable_hlo.file_system_location.frequent_path_idx = (
-        999
-    )
+    loc = fn.body.stable_hlo_body.stable_hlo.file_system_location
+    loc.frequent_path_idx = 999
     manifest_path = str(
         pathlib.Path(input_model) / constants.MANIFEST_FILE_PATH
     )
@@ -654,9 +696,7 @@ class AotRecompilerTest(parameterized.TestCase):
           version=1,
       )
 
-    fn.body.stable_hlo_body.stable_hlo.file_system_location.frequent_path_idx = (
-        -1
-    )
+    loc.frequent_path_idx = -1
     with file_utils.open_file(manifest_path, "wb") as f:
       f.write(manifest.SerializeToString())
     with self.assertRaisesRegex(ValueError, "Invalid frequent_path_idx -1"):

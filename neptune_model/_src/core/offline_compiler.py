@@ -27,9 +27,8 @@ from jax.interpreters import mlir
 
 import jaxlib
 
-from neptune_model._src.core import (
-    manifest_utils,
-)
+from neptune_model._src.core import file_utils
+from neptune_model._src.core import manifest_utils
 
 try:
   from neptune.runtime.python import optimizer as neptune_optimizer  # pylint: disable=g-import-not-at-top
@@ -83,34 +82,101 @@ class TargetConfig:
   compile_options: Any = None
 
 
-def _validate_target_config(config: TargetConfig) -> TargetConfig:
+def _validate_target_config(config: TargetConfig) -> None:
   """Validates a single TargetConfig instance fail-fast upfront."""
   platform = config.platform.lower().strip()
+
+  # 1. Platform validation
   if platform not in _SUPPORTED_PLATFORMS:
-    if platform == "gpu":
-      raise ValueError(
-          f"Unsupported platform '{config.platform}'. Did you mean 'cuda'?"
-          " Neptune requires concrete platform names (e.g. 'cuda', 'tpu',"
-          " 'cpu')."
-      )
     raise ValueError(
         f"Unsupported platform '{config.platform}'. Supported platforms:"
         f" {sorted(_SUPPORTED_PLATFORMS)}"
     )
 
-  if config.enable_deviceless_compilation:
-    if config.serialized_topology is None and config.target_topology is None:
+  # 2. Deviceless topology requirement
+  if config.enable_deviceless_compilation and not (
+      config.serialized_topology or config.target_topology
+  ):
+    raise ValueError(
+        f"Deviceless compilation for platform '{platform}' requires either"
+        " `serialized_topology` or `target_topology`."
+    )
+
+  # 3. Autotune database validation
+  if config.autotune_database_path:
+    if platform != "cuda":
       raise ValueError(
-          f"Deviceless compilation for platform '{platform}' requires either"
-          " `serialized_topology` or `target_topology`."
+          "autotune_database_path is only supported for CUDA platform, but"
+          f" got platform '{platform}'."
       )
-    if platform == "cuda" and not config.autotune_database_path:
-      raise ValueError(
-          "autotune_database_path must be provided for CUDA deviceless"
-          " compilation to guarantee determinism."
+    if not file_utils.exists(config.autotune_database_path):
+      raise FileNotFoundError(
+          "Autotune database path does not exist:"
+          f" {config.autotune_database_path}"
+      )
+  elif platform == "cuda" and config.enable_deviceless_compilation:
+    logging.warning(
+        "autotune_database_path was not provided for CUDA deviceless"
+        " compilation. XLA will fallback to internal heuristics/cost-models"
+        " which may not be deterministic or optimal in production."
+    )
+
+
+def _resolve_topology(config: TargetConfig) -> topologies.TopologyDescription:
+  """Resolves topology description from serialized bytes, name, or hardware."""
+  platform = config.platform.lower().strip()
+  if not config.enable_deviceless_compilation:
+    return topologies.get_attached_topology(platform=platform)
+  if config.serialized_topology is not None:
+    return topologies.TopologyDescription.deserialize(
+        config.serialized_topology
+    )
+  if config.target_topology is not None:
+    return topologies.get_topology_desc(
+        config.target_topology, platform=platform
+    )
+  raise ValueError(
+      f"Deviceless compilation for platform '{platform}' requires either"
+      " `serialized_topology` or `target_topology`."
+  )
+
+
+def _build_compile_options(
+    config: TargetConfig,
+    device_count: int,
+) -> jaxlib.xla_client.CompileOptions:
+  """Constructs and configures XLA CompileOptions for target topology."""
+  compile_options = (
+      copy.deepcopy(config.compile_options)
+      if config.compile_options is not None
+      else jaxlib.xla_client.CompileOptions()
+  )
+
+  # Portable executable policy
+  if config.compile_portable_executable is not None:
+    compile_options.compile_portable_executable = (
+        config.compile_portable_executable
+    )
+  elif device_count == 1:
+    # Single-device targets default to portable executables (omitting device
+    # assignment) so the runtime can dynamically schedule across cores via
+    # serving_core_selector. Multi-device meshes require explicit SPMD
+    # assignments and are rejected by runtime if portable.
+    compile_options.compile_portable_executable = True
+
+  # Autotune database routing
+  if config.autotune_database_path:
+    debug_options = compile_options.executable_build_options.debug_options
+    if file_utils.isdir(config.autotune_database_path):
+      debug_options.xla_gpu_per_fusion_autotune_cache_dir = (
+          config.autotune_database_path
+      )
+    else:
+      debug_options.xla_gpu_load_autotune_results_from = (
+          config.autotune_database_path
       )
 
-  return config
+  return compile_options
 
 
 def _get_compile_fn(
@@ -181,7 +247,8 @@ def create_offline_compiler_hook(
   if not target_configs:
     raise ValueError("target_configs must not be empty.")
 
-  validated_configs = [_validate_target_config(cfg) for cfg in target_configs]
+  for cfg in target_configs:
+    _validate_target_config(cfg)
 
   def compiler_hook(
       mlir_module_serialized: bytes,
@@ -192,16 +259,13 @@ def create_offline_compiler_hook(
       raise ValueError("mlir_module_serialized must not be empty.")
 
     logging.info(
-        "Offline compiler hook triggered for %d configs", len(validated_configs)
+        "Offline compiler hook triggered for %d configs", len(target_configs)
     )
 
-    for config in validated_configs:
+    for config in target_configs:
       target_topology_label = config.target_topology_label
       enable_deviceless_compilation = config.enable_deviceless_compilation
       platform = config.platform.lower().strip()
-      serialized_topology = config.serialized_topology
-      target_topology_name = config.target_topology
-      autotune_database_path = config.autotune_database_path
 
       logging.info(
           "Compiling for topology '%s' on platform '%s'",
@@ -210,23 +274,7 @@ def create_offline_compiler_hook(
       )
 
       # 1. Topology Resolution Phase
-      if enable_deviceless_compilation:
-        if serialized_topology is not None:
-          topology = topologies.TopologyDescription.deserialize(
-              serialized_topology
-          )
-        elif target_topology_name is not None:
-          topology = topologies.get_topology_desc(
-              target_topology_name, platform=platform
-          )
-        else:
-          raise ValueError(
-              f"Deviceless compilation for platform '{platform}' requires"
-              " either `serialized_topology` or `target_topology`."
-          )
-      else:
-        topology = topologies.get_attached_topology(platform=platform)
-
+      topology = _resolve_topology(config)
       if not topology.devices:
         raise RuntimeError(
             f"No devices found for target topology on platform '{platform}'"
@@ -253,23 +301,7 @@ def create_offline_compiler_hook(
             raise ValueError(f"Failed to parse MLIR module: {e}") from e
 
         # 4. Compile Options Configuration
-        if config.compile_options is not None:
-          compile_options = copy.deepcopy(config.compile_options)
-        else:
-          compile_options = jaxlib.xla_client.CompileOptions()
-
-        if config.compile_portable_executable is not None:
-          compile_options.compile_portable_executable = (
-              config.compile_portable_executable
-          )
-        elif platform != "cpu" and len(topology.devices) <= 1:
-          compile_options.compile_portable_executable = True
-
-        if autotune_database_path:
-          debug_options = compile_options.executable_build_options.debug_options
-          debug_options.xla_gpu_per_fusion_autotune_cache_dir = (
-              autotune_database_path
-          )
+        compile_options = _build_compile_options(config, len(topology.devices))
 
         # 5. Compilation Phase
         client = topology.devices[0].client
