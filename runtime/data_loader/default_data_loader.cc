@@ -49,6 +49,7 @@
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
+#include "xla/python/ifrt/memory.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
@@ -157,11 +158,16 @@ struct LoadOrbaxCheckpointTask {
           continue;
         }
         used_weight_names.push_back(std::string(weight_name));
+        std::optional<xla::ifrt::MemoryKind> memory_kind = std::nullopt;
+        if (weight_spec->placement == Placement::kHost) {
+          memory_kind = xla::ifrt::MemoryKind("pinned_host");
+        }
         used_weight_array_specs.push_back(neptune::ArraySpec{
             .dtype = weight_spec->dtype,
             .shape = ToIfrtShape(weight_spec->shape),
             .sharding = weight_spec->sharding.ToProto(),
             .layout = weight_spec->layout,
+            .memory_kind = std::move(memory_kind),
         });
       }
 
@@ -505,20 +511,17 @@ absl::StatusOr<DataLoader::LoadResult> DefaultDataLoader::Load(
         device_data, weight_names, weight_specs, ifrt_loaded_variable_registry_,
         checkpoint_path, ifrt_client_.get(), checkpoint_loader_thread_pool_));
   } else {
-    // If assigned devices are not provided, we will load the checkpoints to
-    // all devices.
-    // TODO: This path is not used yet, but will soon be used in
-    // cl/816939381.
-    for (size_t i = 0; i < ifrt_client_->addressable_devices().size(); ++i) {
-      TF_ASSIGN_OR_RETURN(xla::ifrt::Device * device,
-                          ifrt_client_->LookupDevice(xla::ifrt::DeviceId(i)));
+    // If assigned devices are not provided (e.g., portable execution), we load
+    // the checkpoints across all addressable devices.
+    for (xla::ifrt::Device* device : ifrt_client_->addressable_devices()) {
+      const int device_id = device->Id().value();
       TF_ASSIGN_OR_RETURN(xla::ifrt::DeviceListRef device_list,
                           ifrt_client_->MakeDeviceList({device}));
       const DeviceData device_data = {.device_list = device_list,
-                                      .device_ids = {static_cast<int>(i)}};
+                                      .device_ids = {device_id}};
       for (auto& weight_spec : weight_specs) {
         if (weight_spec.has_value()) {
-          weight_spec->sharding = xla::HloSharding::SingleDevice(i);
+          weight_spec->sharding = xla::HloSharding::SingleDevice(device_id);
         }
       }
       TF_RETURN_IF_ERROR(RegisterAndLoadCheckpoints(
