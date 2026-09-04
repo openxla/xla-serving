@@ -34,6 +34,7 @@ jobs:
           filters: |
             runtime:
               - 'runtime/**'
+              - 'data/**'
               - 'protos/**'
               - '.github/workflows/build-runtime.yml'
               - '.bazelrc'
@@ -49,7 +50,7 @@ jobs:
         env:
           CACHE_CONFIG: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'remote_cache_readwrite' || 'remote_cache_readonly' }}
         run: |
-          bazel build -c opt //runtime/... \
+          bazel build -c opt //runtime/... //data/... \
             --config=${CACHE_CONFIG} \
             --output_filter=DONT_MATCH_ANYTHING \
             --ui_event_filters=-warning \
@@ -61,7 +62,7 @@ jobs:
         env:
           CACHE_CONFIG: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'remote_cache_readwrite' || 'remote_cache_readonly' }}
         run: |
-          bazel test -c opt --test_output=errors //runtime/... \
+          bazel test -c opt --test_output=errors //runtime/... //data/... \
             --config=${CACHE_CONFIG} \
             --output_filter=DONT_MATCH_ANYTHING \
             --ui_event_filters=-warning \
