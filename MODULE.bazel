@@ -329,17 +329,3 @@ single_version_override(
     ],
     version = "20260526.0",
 )
-
-single_version_override(
-    module_name = "pybind11_abseil",
-    patch_strip = 1,
-    patches = [
-        # status.so and ok_status_singleton.so are plain cc_binary targets
-        # (not pybind_extension), so they miss the macOS
-        # "-undefined dynamic_lookup" linkopt needed to leave CPython
-        # symbols unresolved until the module is loaded into the
-        # interpreter.
-        "//third_party/pybind11_abseil:macos_undefined_dynamic_lookup.patch",
-    ],
-    version = "202402.0",
-)

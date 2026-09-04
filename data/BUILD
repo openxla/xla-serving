@@ -199,76 +199,72 @@ genrule(
   touch $(@D)/neptune_data/resource_manager/proto/__init__.py
   touch $(@D)/neptune_data/pybind11_abseil/__init__.py
 
-  # `sed -i` requires a backup-suffix argument on BSD/macOS sed but not on
-  # GNU sed, so neither form is portable across both on its own.
-  sedi() { sed -i.bak "$$1" "$$2" && rm -f "$$2.bak"; }
-
   cp $(location :neptune_data_core) $(@D)/neptune_data/libneptune_data_core.so
   cp $(location //data/ops:bucket_pad.py) $(@D)/neptune_data/ops/bucket_pad.py
-  sedi 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/ops/bucket_pad.py
+  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/ops/bucket_pad.py
   cp $(location //data/ops:cpu_embedding.py) $(@D)/neptune_data/ops/cpu_embedding.py
-  sedi 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/ops/cpu_embedding.py
+  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/ops/cpu_embedding.py
   cp $(location //data/ops:packing.py) $(@D)/neptune_data/ops/packing.py
-  sedi 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/ops/packing.py
+  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/ops/packing.py
   cp $(location //data/kernels/bucket_pad:bucket_pad_transform_pybind.so) $(@D)/neptune_data/kernels/bucket_pad/bucket_pad_transform_pybind.so
   for f in $(locations //data/kernels/bucket_pad:bucket_pad_transform_py_pb2); do
     if [[ $$f == *bucket_pad_transform_pb2.py ]]; then
       cp $$f $(@D)/neptune_data/kernels/bucket_pad/bucket_pad_transform_pb2.py
-      sedi 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/bucket_pad/bucket_pad_transform_pb2.py
-      sedi 's/data\\.kernels\\.bucket_pad/neptune_data\\.kernels\\.bucket_pad/g' $(@D)/neptune_data/kernels/bucket_pad/bucket_pad_transform_pb2.py
+      sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/bucket_pad/bucket_pad_transform_pb2.py
+      sed -i 's/data\\.kernels\\.bucket_pad/neptune_data\\.kernels\\.bucket_pad/g' $(@D)/neptune_data/kernels/bucket_pad/bucket_pad_transform_pb2.py
     fi
   done
   cp $(location //data/kernels/cpu_embedding:cpu_embedding_module.py) $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_module.py
-  sedi 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_module.py
+  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_module.py
   cp $(location //data/kernels/cpu_embedding:cpu_embedding_lookup_transform_pybind.so) $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_lookup_transform_pybind.so
   cp $(location //data/kernels/cpu_embedding:cpu_embedding_resource_pybind.so) $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_resource_pybind.so
   cp $(location //data/kernels/cpu_embedding:cpu_embedding_serializer_pybind.so) $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_serializer_pybind.so
   for f in $(locations //data/kernels/cpu_embedding:cpu_embedding_py_pb2); do
     if [[ $$f == *cpu_embedding_pb2.py ]]; then
       cp $$f $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.py
-      sedi 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.py
-      sedi 's/data\\.kernels\\.cpu_embedding/neptune_data\\.kernels\\.cpu_embedding/g' $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.py
+      sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.py
+      sed -i 's/data\\.kernels\\.cpu_embedding/neptune_data\\.kernels\\.cpu_embedding/g' $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.py
     fi
   done
   cp $(location //data/kernels/cpu_embedding:dense_cpu_embedding_lookup_transform_pybind.so) $(@D)/neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_transform_pybind.so
   for f in $(locations //data/kernels/cpu_embedding:dense_cpu_embedding_lookup_py_pb2); do
     if [[ $$f == *dense_cpu_embedding_lookup_pb2.py ]]; then
       cp $$f $(@D)/neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py
-      sedi 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py
-      sedi 's/data\\.kernels\\.cpu_embedding/neptune_data\\.kernels\\.cpu_embedding/g' $(@D)/neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py
+      sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py
+      sed -i 's/data\\.kernels\\.cpu_embedding/neptune_data\\.kernels\\.cpu_embedding/g' $(@D)/neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py
     fi
   done
   cp $(location //data/kernels/cpu_embedding:pack_host_buffer_vector_module.py) $(@D)/neptune_data/kernels/cpu_embedding/pack_host_buffer_vector_module.py
-  sedi 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/pack_host_buffer_vector_module.py
+  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/pack_host_buffer_vector_module.py
   cp $(location //data/kernels/cpu_embedding:pack_host_buffer_vector_transform_pybind.so) $(@D)/neptune_data/kernels/cpu_embedding/pack_host_buffer_vector_transform_pybind.so
   cp $(location //data/kernels/cpu_embedding:unpack_host_buffer_vector_module.py) $(@D)/neptune_data/kernels/cpu_embedding/unpack_host_buffer_vector_module.py
-  sedi 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/unpack_host_buffer_vector_module.py
+  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/unpack_host_buffer_vector_module.py
   cp $(location //data/kernels/cpu_embedding:unpack_host_buffer_vector_transform_pybind.so) $(@D)/neptune_data/kernels/cpu_embedding/unpack_host_buffer_vector_transform_pybind.so
   cp $(location //data/processor/python:composite_processor_pybind.so) $(@D)/neptune_data/processor/python/composite_processor_pybind.so
   cp $(location //data/processor/python:transform.py) $(@D)/neptune_data/processor/python/transform.py
-  sedi 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/processor/python/transform.py
+  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/processor/python/transform.py
   for f in $(locations //data/processor/proto:transform_config_py_pb2); do
     if [[ $$f == *transform_config_pb2.py ]]; then
       cp $$f $(@D)/neptune_data/processor/proto/transform_config_pb2.py
-      sedi 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/processor/proto/transform_config_pb2.py
-      sedi 's/data\\.processor\\.proto/neptune_data\\.processor\\.proto/g' $(@D)/neptune_data/processor/proto/transform_config_pb2.py
+      sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/processor/proto/transform_config_pb2.py
+      sed -i 's/data\\.processor\\.proto/neptune_data\\.processor\\.proto/g' $(@D)/neptune_data/processor/proto/transform_config_pb2.py
     fi
   done
   for f in $(locations //data/processor/cc/utils:default_value_py_pb2); do
     if [[ $$f == *default_value_pb2.py ]]; then
       cp $$f $(@D)/neptune_data/processor/cc/utils/default_value_pb2.py
-      sedi 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/processor/cc/utils/default_value_pb2.py
-      sedi 's/data\\.processor\\.cc\\.utils/neptune_data\\.processor\\.cc\\.utils/g' $(@D)/neptune_data/processor/cc/utils/default_value_pb2.py
+      sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/processor/cc/utils/default_value_pb2.py
+      sed -i 's/data\\.processor\\.cc\\.utils/neptune_data\\.processor\\.cc\\.utils/g' $(@D)/neptune_data/processor/cc/utils/default_value_pb2.py
     fi
   done
   cp $(location //data/resource_manager/python:resource_manager.py) $(@D)/neptune_data/resource_manager/python/resource_manager.py
-  sedi 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/resource_manager/python/resource_manager.py
+  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/resource_manager/python/resource_manager.py
   cp $(location //data/resource_manager/python:resource_manager_pybind.so) $(@D)/neptune_data/resource_manager/python/resource_manager_pybind.so
   for f in $(locations //data/resource_manager/proto:resource_manager_py_pb2); do
     if [[ $$f == *resource_manager_pb2.py ]]; then
       cp $$f $(@D)/neptune_data/resource_manager/proto/resource_manager_pb2.py
-      sedi 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/resource_manager/proto/resource_manager_pb2.py
-      sedi 's/data\\.resource_manager\\.proto/neptune_data\\.resource_manager\\.proto/g' $(@D)/neptune_data/resource_manager/proto/resource_manager_pb2.py
+      sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/resource_manager/proto/resource_manager_pb2.py
+      sed -i 's/data\\.resource_manager\\.proto/neptune_data\\.resource_manager\\.proto/g' $(@D)/neptune_data/resource_manager/proto/resource_manager_pb2.py
     fi
   done
   cp $(location @pybind11_abseil//pybind11_abseil:status.so) $(@D)/neptune_data/pybind11_abseil/status.so

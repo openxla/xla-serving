@@ -10,13 +10,6 @@ common --@rules_ml_toolchain//common:static_libcxx=true
 # by libraries like XNNPACK.
 common --repo_env=LLVM_VERSION=21
 
-# Apple Clang >=16 (Xcode CLT) hard-errors on aligned new/delete for the
-# Bazel-default -mmacosx-version-min=10.11; over-aligned XLA types (e.g.
-# xla::Literal) need aligned allocation, which requires macOS >=10.13.
-# arm64 macOS requires >=11.0 anyway, so use that as the floor.
-build --macos_minimum_os=11.0
-build --host_macos_minimum_os=11.0
-
 common --define=PREFIX=/usr
 common --define=LIBDIR=$(PREFIX)/lib
 common --define=INCLUDEDIR=$(PREFIX)/include
