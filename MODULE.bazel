@@ -112,6 +112,10 @@ archive_override(
     patch_strip = 1,
     patches = [
         "//third_party/tensorflow:where_op_gpu.patch",
+        # Newer Clang (e.g. Apple Clang 21) requires the `template`
+        # disambiguator for these member-template calls; older compilers
+        # accepted them without it.
+        "//third_party/tensorflow:register_span_template_keyword.patch",
     ],
     strip_prefix = "tensorflow-bf9294b7ddba0380f22c85cfb87310f586747059",
     urls = ["https://github.com/tensorflow/tensorflow/archive/bf9294b7ddba0380f22c85cfb87310f586747059.zip"],
