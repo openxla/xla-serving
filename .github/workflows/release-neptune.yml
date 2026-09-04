@@ -40,6 +40,10 @@ concurrency:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   # ---------------------------------------------------------------------------
   # Phase 1: Build Wheels & Run Full Verification Matrix
@@ -77,18 +81,27 @@ jobs:
           TARGET_COMMIT=$(git rev-parse HEAD)
           echo "Target commit SHA: ${TARGET_COMMIT}"
 
-          # Detect version from input or version.bzl
-          if [ -n "${INPUT_VERSION}" ]; then
-            CLEAN_VERSION="${INPUT_VERSION#v}"
-          else
-            CLEAN_VERSION=$(python3 -c "import re; print(re.search(r'''VERSION\s*=\s*['\"]([^'\"]+)['\"]''', open('version.bzl').read()).group(1))")
-          fi
+          CLEAN_VERSION=$(python3 -c '
+          import os, re, sys
 
-          # Validate version format (SemVer)
-          if ! [[ "${CLEAN_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
-            echo "❌ Error: Invalid version format '${CLEAN_VERSION}'. Must follow SemVer (e.g. 0.0.10 or 0.1.0-rc1)."
-            exit 1
-          fi
+          raw_version = os.environ.get("INPUT_VERSION", "").strip()
+          if raw_version:
+              v = raw_version.lstrip("v")
+          else:
+              try:
+                  content = open("version.bzl").read()
+                  m = re.search(r"""VERSION\s*=\s*[\x27"]([^\x27"]+)[\x27"]""", content)
+                  if not m:
+                      sys.exit("Error: Could not find VERSION in version.bzl")
+                  v = m.group(1).lstrip("v")
+              except Exception as e:
+                  sys.exit(f"Error reading version.bzl: {e}")
+
+          if not re.match(r"^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$", v):
+              sys.exit(f"Error: Invalid version format {v!r}. Must follow SemVer (e.g. 0.0.10 or 0.1.0-rc1).")
+
+          print(v)
+          ')
 
           TAG_NAME="v${CLEAN_VERSION}"
           echo "Target release tag: ${TAG_NAME}"
@@ -124,22 +137,15 @@ jobs:
 
       - name: Setup Bazel
         uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
+        with:
+          repository-cache: true
 
       - name: Install Python Build Dependencies
         run: uv pip install build setuptools wheel grpcio-tools
 
       - name: Test and Build Data & Runner Wheels
         run: |
-          bazel test -c opt //data/... \
-            --@rules_python//python/config_settings:python_version=3.12 \
-            --config=remote_cache_readonly \
-            --output_filter=DONT_MATCH_ANYTHING \
-            --ui_event_filters=-warning \
-            --show_progress_rate_limit=30 \
-            --curses=no
-
-          bazel build -c opt //data:neptune_data //data:neptune_data_test //runtime/python:neptune_model_runner \
-            --@rules_python//python/config_settings:python_version=3.12 \
+          bazel test -c opt --test_output=errors //data/... //runtime/python:neptune_model_runner \
             --config=remote_cache_readonly \
             --output_filter=DONT_MATCH_ANYTHING \
             --ui_event_filters=-warning \
