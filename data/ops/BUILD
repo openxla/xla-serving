@@ -9,7 +9,12 @@ py_library(
     srcs = ["cpu_embedding.py"],
     visibility = ["//visibility:public"],
     deps = [
+        "@neptune//data/kernels/cpu_embedding:cpu_embedding_lookup_transform_pybind",
         "@neptune//data/kernels/cpu_embedding:cpu_embedding_module",
+        "@neptune//data/kernels/cpu_embedding:dense_cpu_embedding_lookup_transform_pybind",
+        "@neptune//data/processor/python:composite_processor_pybind",
+        "@neptune//data/processor/python:transform",
+        "@neptune_pypi//jax",
     ],
 )
 
@@ -20,6 +25,7 @@ py_test(
         ":cpu_embedding",
         "@absl_py//absl/testing:absltest",
         "@neptune//data/kernels/cpu_embedding:cpu_embedding_serializer_pybind",
+        "@neptune//data/kernels/cpu_embedding:unpack_host_buffer_vector_module",
         "@neptune//data/processor/python:composite_processor_pybind",
         "@neptune_pypi//jax",
         "@neptune_pypi//numpy",

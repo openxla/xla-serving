@@ -25,10 +25,16 @@ from data.processor.python import transform
 class UnpackHostBufferVectorModule(transform.ExportableTransform):
   """Python wrapper for C++ UnpackHostBufferVectorTransform."""
 
-  def __init__(self, output_count: int, output_shapes: Sequence[Sequence[int]]):
+  def __init__(
+      self,
+      output_count: int,
+      output_shapes: Sequence[Sequence[int]],
+      dtype: Any = jax.numpy.float32,
+  ):
     super().__init__()
     self._output_count = output_count
     self._output_shapes = [list(s) for s in output_shapes]
+    self._dtype = dtype
 
   def initialize(self, input_signature: Any) -> None:
     self._transform = unpack_host_buffer_vector_transform_pybind.UnpackHostBufferVectorTransform(
@@ -36,7 +42,10 @@ class UnpackHostBufferVectorModule(transform.ExportableTransform):
     )
 
   def get_output_signature(self, input_signature: Any) -> Any:
-    return [
-        jax.ShapeDtypeStruct(shape=tuple(shape), dtype=jax.numpy.float32)
+    specs = [
+        jax.ShapeDtypeStruct(shape=tuple(shape), dtype=self._dtype)
         for shape in self._output_shapes
     ]
+    if len(specs) == 1:
+      return specs[0]
+    return specs

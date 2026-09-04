@@ -57,6 +57,10 @@ cc_shared_library(
         "//data/kernels/cpu_embedding:cpu_embedding_lookup_transform",
         "//data/kernels/cpu_embedding:cpu_embedding_resource",
         "//data/kernels/cpu_embedding:cpu_embedding_serializer",
+        "//data/kernels/cpu_embedding:dense_cpu_embedding_lookup_cc_proto",
+        "//data/kernels/cpu_embedding:dense_cpu_embedding_lookup_transform",
+        "//data/kernels/cpu_embedding:pack_host_buffer_vector_transform",
+        "//data/kernels/cpu_embedding:unpack_host_buffer_vector_transform",
         "//data/processor/cc/core:composite_processor",
         "//data/processor/cc/core:transform",
         "//data/processor/cc/core/graph:execution_graph",
@@ -106,6 +110,7 @@ genrule(
         "@pybind11_abseil//pybind11_abseil:status.so",
         "//data/ops:bucket_pad.py",
         "//data/ops:cpu_embedding.py",
+        "//data/ops:packing.py",
         "//data/kernels/bucket_pad:bucket_pad_transform_pybind.so",
         "//data/kernels/bucket_pad:bucket_pad_transform_py_pb2",
         "//data/kernels/cpu_embedding:cpu_embedding_module.py",
@@ -113,6 +118,12 @@ genrule(
         "//data/kernels/cpu_embedding:cpu_embedding_resource_pybind.so",
         "//data/kernels/cpu_embedding:cpu_embedding_serializer_pybind.so",
         "//data/kernels/cpu_embedding:cpu_embedding_py_pb2",
+        "//data/kernels/cpu_embedding:dense_cpu_embedding_lookup_transform_pybind.so",
+        "//data/kernels/cpu_embedding:dense_cpu_embedding_lookup_py_pb2",
+        "//data/kernels/cpu_embedding:pack_host_buffer_vector_module.py",
+        "//data/kernels/cpu_embedding:pack_host_buffer_vector_transform_pybind.so",
+        "//data/kernels/cpu_embedding:unpack_host_buffer_vector_module.py",
+        "//data/kernels/cpu_embedding:unpack_host_buffer_vector_transform_pybind.so",
         "//data/processor/python:composite_processor_pybind.so",
         "//data/processor/python:transform.py",
         "//data/processor/proto:transform_config_py_pb2",
@@ -127,6 +138,7 @@ genrule(
         "neptune_data/ops/__init__.py",
         "neptune_data/ops/bucket_pad.py",
         "neptune_data/ops/cpu_embedding.py",
+        "neptune_data/ops/packing.py",
         "neptune_data/kernels/__init__.py",
         "neptune_data/kernels/bucket_pad/__init__.py",
         "neptune_data/kernels/bucket_pad/bucket_pad_transform_pybind.so",
@@ -137,6 +149,12 @@ genrule(
         "neptune_data/kernels/cpu_embedding/cpu_embedding_resource_pybind.so",
         "neptune_data/kernels/cpu_embedding/cpu_embedding_serializer_pybind.so",
         "neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.py",
+        "neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_transform_pybind.so",
+        "neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py",
+        "neptune_data/kernels/cpu_embedding/pack_host_buffer_vector_module.py",
+        "neptune_data/kernels/cpu_embedding/pack_host_buffer_vector_transform_pybind.so",
+        "neptune_data/kernels/cpu_embedding/unpack_host_buffer_vector_module.py",
+        "neptune_data/kernels/cpu_embedding/unpack_host_buffer_vector_transform_pybind.so",
         "neptune_data/processor/__init__.py",
         "neptune_data/processor/python/__init__.py",
         "neptune_data/processor/python/composite_processor_pybind.so",
@@ -186,6 +204,8 @@ genrule(
   sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/ops/bucket_pad.py
   cp $(location //data/ops:cpu_embedding.py) $(@D)/neptune_data/ops/cpu_embedding.py
   sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/ops/cpu_embedding.py
+  cp $(location //data/ops:packing.py) $(@D)/neptune_data/ops/packing.py
+  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/ops/packing.py
   cp $(location //data/kernels/bucket_pad:bucket_pad_transform_pybind.so) $(@D)/neptune_data/kernels/bucket_pad/bucket_pad_transform_pybind.so
   for f in $(locations //data/kernels/bucket_pad:bucket_pad_transform_py_pb2); do
     if [[ $$f == *bucket_pad_transform_pb2.py ]]; then
@@ -206,6 +226,20 @@ genrule(
       sed -i 's/data\\.kernels\\.cpu_embedding/neptune_data\\.kernels\\.cpu_embedding/g' $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.py
     fi
   done
+  cp $(location //data/kernels/cpu_embedding:dense_cpu_embedding_lookup_transform_pybind.so) $(@D)/neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_transform_pybind.so
+  for f in $(locations //data/kernels/cpu_embedding:dense_cpu_embedding_lookup_py_pb2); do
+    if [[ $$f == *dense_cpu_embedding_lookup_pb2.py ]]; then
+      cp $$f $(@D)/neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py
+      sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py
+      sed -i 's/data\\.kernels\\.cpu_embedding/neptune_data\\.kernels\\.cpu_embedding/g' $(@D)/neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py
+    fi
+  done
+  cp $(location //data/kernels/cpu_embedding:pack_host_buffer_vector_module.py) $(@D)/neptune_data/kernels/cpu_embedding/pack_host_buffer_vector_module.py
+  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/pack_host_buffer_vector_module.py
+  cp $(location //data/kernels/cpu_embedding:pack_host_buffer_vector_transform_pybind.so) $(@D)/neptune_data/kernels/cpu_embedding/pack_host_buffer_vector_transform_pybind.so
+  cp $(location //data/kernels/cpu_embedding:unpack_host_buffer_vector_module.py) $(@D)/neptune_data/kernels/cpu_embedding/unpack_host_buffer_vector_module.py
+  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/unpack_host_buffer_vector_module.py
+  cp $(location //data/kernels/cpu_embedding:unpack_host_buffer_vector_transform_pybind.so) $(@D)/neptune_data/kernels/cpu_embedding/unpack_host_buffer_vector_transform_pybind.so
   cp $(location //data/processor/python:composite_processor_pybind.so) $(@D)/neptune_data/processor/python/composite_processor_pybind.so
   cp $(location //data/processor/python:transform.py) $(@D)/neptune_data/processor/python/transform.py
   sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/processor/python/transform.py
@@ -245,9 +279,13 @@ py_library(
         "neptune_data/kernels/cpu_embedding/__init__.py",
         "neptune_data/kernels/cpu_embedding/cpu_embedding_module.py",
         "neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.py",
+        "neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py",
+        "neptune_data/kernels/cpu_embedding/pack_host_buffer_vector_module.py",
+        "neptune_data/kernels/cpu_embedding/unpack_host_buffer_vector_module.py",
         "neptune_data/ops/__init__.py",
         "neptune_data/ops/bucket_pad.py",
         "neptune_data/ops/cpu_embedding.py",
+        "neptune_data/ops/packing.py",
         "neptune_data/processor/__init__.py",
         "neptune_data/processor/cc/__init__.py",
         "neptune_data/processor/cc/utils/__init__.py",
@@ -268,6 +306,9 @@ py_library(
         "neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.pyi",
         "neptune_data/kernels/cpu_embedding/cpu_embedding_resource_pybind.so",
         "neptune_data/kernels/cpu_embedding/cpu_embedding_serializer_pybind.so",
+        "neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_transform_pybind.so",
+        "neptune_data/kernels/cpu_embedding/pack_host_buffer_vector_transform_pybind.so",
+        "neptune_data/kernels/cpu_embedding/unpack_host_buffer_vector_transform_pybind.so",
         "neptune_data/libneptune_data_core.so",
         "neptune_data/processor/proto/transform_config_pb2.pyi",
         "neptune_data/processor/python/composite_processor_pybind.so",
