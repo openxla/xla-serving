@@ -113,6 +113,7 @@ py_wheel(
         "@rules_python//python/config_settings:is_python_3.12": "cp312",
     }),
     strip_path_prefixes = ["runtime/python"],
+    tags = ["manual"],
     version = VERSION,
     deps = [
         ":neptune_model_runner_pkg",
