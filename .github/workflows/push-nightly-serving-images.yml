@@ -1,0 +1,144 @@
+name: Push Nightly Neptune Serving Images
+
+on:
+  schedule:
+    # Run nightly at 04:00 UTC (8 PM PST / 9 PM PDT)
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Primary Docker tag to push'
+        required: false
+        default: 'nightly'
+        type: string
+      add_date_tag:
+        description: 'Also tag with date (nightly-YYYYMMDD)'
+        required: false
+        default: true
+        type: boolean
+      add_latest_tag:
+        description: 'Also tag as latest'
+        required: false
+        default: false
+        type: boolean
+      variant:
+        description: 'Image variant to build and push'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - 'all'
+          - 'cpu-jax-only'
+          - 'cpu-jax-with-tf'
+          - 'gpu-jax-cuda12'
+          - 'gpu-jax-cuda12-with-tf'
+          - 'gpu-jax-cuda13'
+          - 'gpu-jax-cuda13-with-tf'
+          - 'tpu-jax-only'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  push-serving-images:
+    name: "Push ${{ matrix.variant.name }}"
+    runs-on: linux-x86-n2-32
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest # zizmor: ignore[unpinned-images]
+    strategy:
+      fail-fast: false
+      matrix:
+        variant:
+          - id: cpu-jax-only
+            name: "CPU JAX"
+            target: "//runtime/serving/gcp/server:neptune_serving_pusher"
+            flags: "-c opt"
+            repository: "gcr.io/neptune-serving-engine/cpu-jax-only"
+          - id: cpu-jax-with-tf
+            name: "CPU JAX + TF"
+            target: "//runtime/serving/gcp/server:neptune_serving_pusher"
+            flags: "-c opt --define ENABLE_TF=1"
+            repository: "gcr.io/neptune-serving-engine/cpu-jax-with-tf"
+          - id: gpu-jax-cuda12
+            name: "CUDA 12 JAX"
+            target: "//runtime/serving/gcp/server:neptune_serving_pusher_gpu"
+            flags: "-c opt --config=cuda_v12 --verbose_failures"
+            repository: "gcr.io/neptune-serving-engine/gpu-jax-cuda12"
+          - id: gpu-jax-cuda12-with-tf
+            name: "CUDA 12 JAX + TF"
+            target: "//runtime/serving/gcp/server:neptune_serving_pusher_gpu"
+            flags: "-c opt --config=cuda_v12 --define ENABLE_TF=1 --verbose_failures"
+            repository: "gcr.io/neptune-serving-engine/gpu-jax-cuda12-with-tf"
+          - id: gpu-jax-cuda13
+            name: "CUDA 13 JAX"
+            target: "//runtime/serving/gcp/server:neptune_serving_pusher_gpu"
+            flags: "-c opt --config=cuda_v13 --verbose_failures"
+            repository: "gcr.io/neptune-serving-engine/gpu-jax-cuda13"
+          - id: gpu-jax-cuda13-with-tf
+            name: "CUDA 13 JAX + TF"
+            target: "//runtime/serving/gcp/server:neptune_serving_pusher_gpu"
+            flags: "-c opt --config=cuda_v13 --define ENABLE_TF=1 --verbose_failures"
+            repository: "gcr.io/neptune-serving-engine/gpu-jax-cuda13-with-tf"
+          - id: tpu-jax-only
+            name: "TPU JAX"
+            target: "//runtime/serving/gcp/server:neptune_serving_pusher_tpu"
+            flags: "-c opt"
+            repository: "gcr.io/neptune-serving-engine/tpu-jax-only"
+
+
+
+    steps:
+      - name: Checkout repository
+        if: github.event_name != 'workflow_dispatch' || inputs.variant == 'all' || inputs.variant == matrix.variant.id
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Setup Bazel
+        if: github.event_name != 'workflow_dispatch' || inputs.variant == 'all' || inputs.variant == matrix.variant.id
+        uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
+
+      - name: Configure Docker Authentication
+        if: github.event_name != 'workflow_dispatch' || inputs.variant == 'all' || inputs.variant == matrix.variant.id
+        run: gcloud auth configure-docker gcr.io --quiet
+
+      - name: Build and Push Docker Image
+        if: github.event_name != 'workflow_dispatch' || inputs.variant == 'all' || inputs.variant == matrix.variant.id
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          ADD_DATE_TAG: ${{ inputs.add_date_tag }}
+          ADD_LATEST_TAG: ${{ inputs.add_latest_tag }}
+          CACHE_CONFIG: ${{ github.ref == 'refs/heads/main' && 'remote_cache_readwrite' || 'remote_cache_readonly' }}
+          FLAGS: ${{ matrix.variant.flags }}
+          TARGET: ${{ matrix.variant.target }}
+          REPOSITORY: ${{ matrix.variant.repository }}
+        run: |
+          TAG_ARGS=()
+          PRIMARY_TAG="${INPUT_TAG:-nightly}"
+          TAG_ARGS+=("--tag=${PRIMARY_TAG}")
+
+          if [ "${EVENT_NAME}" = "schedule" ] || [ "${ADD_DATE_TAG}" = "true" ]; then
+            DATE_TAG="nightly-$(date -u +%Y%m%d)"
+            TAG_ARGS+=("--tag=${DATE_TAG}")
+          fi
+
+          if [ "${ADD_LATEST_TAG}" = "true" ]; then
+            TAG_ARGS+=("--tag=latest")
+          fi
+
+          # shellcheck disable=SC2086
+          bazel run ${FLAGS} \
+            --config="${CACHE_CONFIG}" \
+            --local_ram_resources=80000 \
+            --output_filter=DONT_MATCH_ANYTHING \
+            --show_progress_rate_limit=30 \
+            --curses=no \
+            "${TARGET}" -- \
+            --repository="${REPOSITORY}" \
+            "${TAG_ARGS[@]}"
