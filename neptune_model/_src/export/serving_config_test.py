@@ -305,6 +305,26 @@ class ServingConfigTest(parameterized.TestCase):
           ),
           r"num_batch_threads` must be at least 1",
       ),
+      (
+          "priority_aware_invalid_max_queue_depth_negative",
+          False,
+          orchestration_pb2.BatchOptions(
+              max_batch_size=8,
+              max_enqueued_batches=1,
+              priority_batching_policy=(
+                  orchestration_pb2.BatchOptions.PRIORITY_AWARE
+              ),
+              priority_aware_batching_options=(
+                  orchestration_pb2.BatchOptions.PriorityAwareBatchingOptions(
+                      max_queue_depth=-1,
+                  )
+              ),
+          ),
+          (
+              r"`priority_aware_batching_options.max_queue_depth` must be"
+              r" non-negative"
+          ),
+      ),
   )
   def test_batch_options_invalid(
       self, is_low_priority, options, error_regex, disable_splitting=False

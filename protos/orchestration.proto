@@ -392,6 +392,20 @@ message BatchOptions {
 
   // Controls the internal queue batching strategy.
   PriorityBatchingPolicy priority_batching_policy = 12;
+
+  // Options for priority-aware batching. Effective when
+  // priority_batching_policy is set to PRIORITY_AWARE.
+  message PriorityAwareBatchingOptions {
+    // The maximum sum of task sizes to enqueue. Must be non-negative.
+    int32 max_queue_depth = 1;
+
+    // If true, the priority aware batch queue will resplit tasks into smaller
+    // subtasks if needed.
+    bool enable_task_resplit = 2;
+  }
+
+  // Configuration options for priority-aware batching.
+  PriorityAwareBatchingOptions priority_aware_batching_options = 13;
 }
 
 message MetadataForBatching {

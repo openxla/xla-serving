@@ -274,6 +274,21 @@ class ServingConfig:
           is_low_priority_batch_options=True,
       )
 
+    if (
+        self.batch_options.priority_batching_policy
+        == orchestration_pb2.BatchOptions.PRIORITY_AWARE
+        and self.batch_options.HasField("priority_aware_batching_options")
+    ):
+      priority_aware_batching_options = (
+          self.batch_options.priority_aware_batching_options
+      )
+      if priority_aware_batching_options.max_queue_depth < 0:
+        raise ValueError(
+            "`priority_aware_batching_options.max_queue_depth` must be"
+            " non-negative. Got:"
+            f" {priority_aware_batching_options.max_queue_depth}"
+        )
+
 
 def _validate_batch_options(
     max_batch_size: int,
