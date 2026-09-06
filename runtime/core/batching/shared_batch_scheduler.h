@@ -297,14 +297,16 @@ class SharedBatchScheduler
   explicit SharedBatchScheduler(const Options& options);
 
  private:
-  void GetNextWorkItem_Locked(internal::Queue<TaskType>** queue_for_batch_out,
-                              BatchTaskUniquePtr* batch_to_process_out)
+  void GetNextLegacyWorkItem_Locked(
+      internal::Queue<TaskType>** queue_for_batch_out,
+      BatchTaskUniquePtr* batch_to_process_out)
       TF_EXCLUSIVE_LOCKS_REQUIRED(mu_);
 
   // The code executed in 'batch_threads_'. Obtains a batch to process from the
-  // queue pointed to by 'next_queue_to_schedule_', and processes it. If that
-  // queue declines to provide a batch to process, moves onto the next queue. If
-  // no queues provide a batch to process, just sleeps briefly and exits.
+  // queue pointed to by 'next_legacy_queue_to_schedule_', and processes it. If
+  // that queue declines to provide a batch to process, moves onto the next
+  // queue. If no queues provide a batch to process, just sleeps briefly and
+  // exits.
   void ThreadLogic();
 
   // Called by `AddQueue`.
@@ -321,16 +323,17 @@ class SharedBatchScheduler
   // A list of queues. (We use std::list instead of std::vector to ensure that
   // iterators are not invalidated by adding/removing elements. It also offers
   // efficient removal of elements from the middle.)
-  using QueueList = std::list<std::unique_ptr<internal::Queue<TaskType>>>;
+  using LegacyQueueList = std::list<std::unique_ptr<internal::Queue<TaskType>>>;
 
   // All "active" queues, i.e. ones that either:
   //  - have not been removed, or
   //  - have been removed but are not yet empty.
-  QueueList queues_ ABSL_GUARDED_BY(mu_);
+  LegacyQueueList legacy_queues_ ABSL_GUARDED_BY(mu_);
 
-  // An iterator over 'queues_', pointing to the queue from which the next
-  // available batch thread should grab work.
-  typename QueueList::iterator next_queue_to_schedule_ ABSL_GUARDED_BY(mu_);
+  // An iterator over 'legacy_queues_', pointing to the queue from which the
+  // next available batch thread should grab work.
+  typename LegacyQueueList::iterator next_legacy_queue_to_schedule_
+      ABSL_GUARDED_BY(mu_);
 
   // Used by idle batch threads to wait for work to enter the system. Notified
   // whenever a batch becomes schedulable.
@@ -613,11 +616,11 @@ class Queue {
 // A RAII-style object that points to a Queue and implements
 // the BatchScheduler API. To be handed out to clients who call AddQueue().
 template <typename TaskType>
-class QueueHandle : public BatchScheduler<TaskType> {
+class LegacyQueueHandle : public BatchScheduler<TaskType> {
  public:
-  QueueHandle(std::shared_ptr<SharedBatchScheduler<TaskType>> scheduler,
-              Queue<TaskType>* queue);
-  ~QueueHandle() override;
+  LegacyQueueHandle(std::shared_ptr<SharedBatchScheduler<TaskType>> scheduler,
+                    Queue<TaskType>* queue);
+  ~LegacyQueueHandle() override;
 
   absl::Status Schedule(std::unique_ptr<TaskType>* task) override;
   size_t NumEnqueuedTasks() const override;
@@ -633,8 +636,8 @@ class QueueHandle : public BatchScheduler<TaskType> {
   // least until this class's destructor closes it.
   Queue<TaskType>* queue_;
 
-  QueueHandle(const QueueHandle&) = delete;
-  void operator=(const QueueHandle&) = delete;
+  LegacyQueueHandle(const LegacyQueueHandle&) = delete;
+  void operator=(const LegacyQueueHandle&) = delete;
 };
 
 }  // namespace internal
@@ -669,7 +672,7 @@ SharedBatchScheduler<TaskType>::~SharedBatchScheduler() {
   for (;;) {
     {
       absl::MutexLock l(mu_);
-      if (queues_.empty()) {
+      if (legacy_queues_.empty()) {
         break;
       }
     }
@@ -747,13 +750,13 @@ absl::Status SharedBatchScheduler<TaskType>::AddQueueAfterRewritingOptions(
           options, options_.env, process_batch_callback,
           schedulable_batch_callback));
   auto handle = std::unique_ptr<BatchScheduler<TaskType>>(
-      new internal::QueueHandle<TaskType>(this->shared_from_this(),
-                                          internal_queue.get()));
+      new internal::LegacyQueueHandle<TaskType>(this->shared_from_this(),
+                                                internal_queue.get()));
   {
     absl::MutexLock l(mu_);
-    queues_.push_back(std::move(internal_queue));
-    if (next_queue_to_schedule_ == queues_.end()) {
-      next_queue_to_schedule_ = queues_.begin();
+    legacy_queues_.push_back(std::move(internal_queue));
+    if (next_legacy_queue_to_schedule_ == legacy_queues_.end()) {
+      next_legacy_queue_to_schedule_ = legacy_queues_.begin();
     }
   }
   *queue = std::move(handle);
@@ -762,7 +765,8 @@ absl::Status SharedBatchScheduler<TaskType>::AddQueueAfterRewritingOptions(
 
 template <typename TaskType>
 SharedBatchScheduler<TaskType>::SharedBatchScheduler(const Options& options)
-    : options_(options), next_queue_to_schedule_(queues_.end()) {
+    : options_(options),
+      next_legacy_queue_to_schedule_(legacy_queues_.end()) {
   // Kick off the batch threads.
   PeriodicFunction::Options periodic_fn_options;
   periodic_fn_options.thread_name_prefix =
@@ -782,57 +786,59 @@ bool SharedBatchScheduler<TaskType>::BatchExists(
 }
 
 template <typename TaskType>
-void SharedBatchScheduler<TaskType>::GetNextWorkItem_Locked(
+void SharedBatchScheduler<TaskType>::GetNextLegacyWorkItem_Locked(
     internal::Queue<TaskType>** queue_for_batch_out,
     BatchTaskUniquePtr* batch_to_process_out) {
   BatchTaskUniquePtr batch_to_process;
   internal::Queue<TaskType>* queue_for_batch = nullptr;
   std::optional<typename internal::Queue<TaskType>::BatchPriorityKey>
       batch_priority_key;
-  const int num_queues = queues_.size();
+  const int num_queues = legacy_queues_.size();
   for (int num_queues_tried = 0;
        !BatchExists(batch_to_process) && num_queues_tried < num_queues;
        ++num_queues_tried) {
-    DCHECK(next_queue_to_schedule_ != queues_.end());
+    DCHECK(next_legacy_queue_to_schedule_ != legacy_queues_.end());
 
     // If a closed queue responds to ScheduleBatch() with nullptr, the queue
     // will never yield any further batches so we can drop it. To avoid a
     // race, we take a snapshot of the queue's closedness state *before*
     // calling ScheduleBatch().
-    const bool queue_closed = (*next_queue_to_schedule_)->closed();
+    const bool queue_closed = (*next_legacy_queue_to_schedule_)->closed();
 
     bool queue_has_work = false;
 
     if (options_.rank_queues) {
-      auto key = (*next_queue_to_schedule_)->PeekBatchPriority();
+      auto key = (*next_legacy_queue_to_schedule_)->PeekBatchPriority();
       queue_has_work = key.has_value();
       if (key.has_value() && (!batch_priority_key.has_value() ||
                               key.value() < batch_priority_key.value())) {
         batch_priority_key = key;
-        queue_for_batch = next_queue_to_schedule_->get();
+        queue_for_batch = next_legacy_queue_to_schedule_->get();
       }
     } else {
-      // Ask '*next_queue_to_schedule_' if it wants us to process a batch.
-      batch_to_process = (*next_queue_to_schedule_)->ScheduleBatch();
+      // Ask '*next_legacy_queue_to_schedule_' if it wants us to process a batch.
+      batch_to_process = (*next_legacy_queue_to_schedule_)->ScheduleBatch();
       queue_has_work = BatchExists(batch_to_process);
 
       if (queue_has_work) {
-        queue_for_batch = next_queue_to_schedule_->get();
+        queue_for_batch = next_legacy_queue_to_schedule_->get();
       }
     }
 
-    // Advance 'next_queue_to_schedule_'.
-    if (queue_closed && (*next_queue_to_schedule_)->IsEmpty() &&
+    // Advance 'next_legacy_queue_to_schedule_'.
+    if (queue_closed && (*next_legacy_queue_to_schedule_)->IsEmpty() &&
         !queue_has_work) {
       // We've encountered a closed queue with no work to do. Drop it.
-      DCHECK_NE(queue_for_batch, next_queue_to_schedule_->get());
-      next_queue_to_schedule_ = queues_.erase(next_queue_to_schedule_);
+      DCHECK_NE(queue_for_batch, next_legacy_queue_to_schedule_->get());
+      next_legacy_queue_to_schedule_ =
+          legacy_queues_.erase(next_legacy_queue_to_schedule_);
     } else {
-      ++next_queue_to_schedule_;
+      ++next_legacy_queue_to_schedule_;
     }
-    if (next_queue_to_schedule_ == queues_.end() && !queues_.empty()) {
+    if (next_legacy_queue_to_schedule_ == legacy_queues_.end() &&
+        !legacy_queues_.empty()) {
       // We've hit the end. Wrap to the first queue.
-      next_queue_to_schedule_ = queues_.begin();
+      next_legacy_queue_to_schedule_ = legacy_queues_.begin();
     }
   }
 
@@ -853,12 +859,12 @@ void SharedBatchScheduler<TaskType>::ThreadLogic() {
   {
     absl::MutexLock l(mu_);
     while (true) {
-      GetNextWorkItem_Locked(&queue_for_batch, &batch_to_process);
+      GetNextLegacyWorkItem_Locked(&queue_for_batch, &batch_to_process);
       if (BatchExists(batch_to_process)) break;
       // We couldn't find any work to do. Wait until a new batch becomes
       // schedulable, or some time has elapsed, before checking again.
       schedulable_batch_cv_.WaitWithTimeout(&mu_, absl::Milliseconds(1));
-      if (queues_.empty()) return;
+      if (legacy_queues_.empty()) return;
     }
   }
 
@@ -1526,28 +1532,29 @@ TaskQueue<TaskType>& Queue<TaskType>::GetLowPriorityTaskQueue() {
 }
 
 template <typename TaskType>
-QueueHandle<TaskType>::QueueHandle(
+LegacyQueueHandle<TaskType>::LegacyQueueHandle(
     std::shared_ptr<SharedBatchScheduler<TaskType>> scheduler,
     Queue<TaskType>* queue)
     : scheduler_(scheduler), queue_(queue) {}
 
 template <typename TaskType>
-QueueHandle<TaskType>::~QueueHandle() {
+LegacyQueueHandle<TaskType>::~LegacyQueueHandle() {
   queue_->CloseAndWaitUntilEmpty();
 }
 
 template <typename TaskType>
-absl::Status QueueHandle<TaskType>::Schedule(std::unique_ptr<TaskType>* task) {
+absl::Status LegacyQueueHandle<TaskType>::Schedule(
+    std::unique_ptr<TaskType>* task) {
   return queue_->Schedule(task);
 }
 
 template <typename TaskType>
-size_t QueueHandle<TaskType>::NumEnqueuedTasks() const {
+size_t LegacyQueueHandle<TaskType>::NumEnqueuedTasks() const {
   return queue_->NumEnqueuedTasks();
 }
 
 template <typename TaskType>
-size_t QueueHandle<TaskType>::SchedulingCapacity() const {
+size_t LegacyQueueHandle<TaskType>::SchedulingCapacity() const {
   return queue_->SchedulingCapacity();
 }
 
