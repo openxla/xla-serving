@@ -26,10 +26,12 @@ import rich
 import typer
 
 from neptune_model.cli import constants
+from neptune_model.cli import recompile
 from neptune_model.cli import show
 
 cli = typer.Typer(pretty_exceptions_enable=False)
 cli.command(name='show')(show.show)
+cli.command(name='recompile')(recompile.recompile)
 
 
 @cli.command()

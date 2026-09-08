@@ -140,11 +140,14 @@ ConvertArgsKwargsToInputs(nb::args args, nb::kwargs kwargs,
 // `Signature` is beingused.
 class ModelRunner : public std::enable_shared_from_this<ModelRunner> {
  public:
-  static std::shared_ptr<ModelRunner> Create(absl::string_view model_name,
-                                             absl::string_view model_path,
-                                             absl::string_view platform = "") {
+  static std::shared_ptr<ModelRunner> Create(
+      absl::string_view model_name, absl::string_view model_path,
+      absl::string_view platform = "",
+      absl::string_view target_topology_label = "",
+      bool allow_jit_fallback_for_aot = false) {
     return std::shared_ptr<ModelRunner>(
-        new ModelRunner(model_name, model_path, platform));
+        new ModelRunner(model_name, model_path, platform, target_topology_label,
+                        allow_jit_fallback_for_aot));
   }
 
   // Signature is a wrapper of `neptune::Interpreter` exposed to Python for
@@ -193,16 +196,21 @@ class ModelRunner : public std::enable_shared_from_this<ModelRunner> {
 
  private:
   ModelRunner(absl::string_view model_name, absl::string_view model_path,
-              absl::string_view platform) {
+              absl::string_view platform,
+              absl::string_view target_topology_label,
+              bool allow_jit_fallback_for_aot) {
     LOG(INFO) << "Using ModelRunner to load model '" << model_name
               << "' from: " << model_path;
-    ThrowIfError(Initialize(model_name, model_path, platform),
+    ThrowIfError(Initialize(model_name, model_path, platform,
+                            target_topology_label, allow_jit_fallback_for_aot),
                  "Failed to initialize ModelRunner");
   }
 
   absl::Status Initialize(absl::string_view model_name,
                           absl::string_view model_path,
-                          absl::string_view platform);
+                          absl::string_view platform,
+                          absl::string_view target_topology_label,
+                          bool allow_jit_fallback_for_aot);
   static constexpr int kThreadPoolNumThreads = 16;
   std::unique_ptr<tsl::thread::ThreadPool> execute_worker_thread_pool_;
   std::shared_ptr<xla::ifrt::Client> client_;
@@ -215,7 +223,9 @@ class ModelRunner : public std::enable_shared_from_this<ModelRunner> {
 
 absl::Status ModelRunner::Initialize(absl::string_view model_name,
                                      absl::string_view model_path,
-                                     absl::string_view platform) {
+                                     absl::string_view platform,
+                                     absl::string_view target_topology_label,
+                                     bool allow_jit_fallback_for_aot) {
   std::string platform_str(platform);
   if (platform_str.empty()) {
     platform_str = "cpu";
@@ -254,6 +264,8 @@ absl::Status ModelRunner::Initialize(absl::string_view model_name,
   create_options->host_ifrt_client = host_ifrt_client_;
   create_options->platform_name = platform_str;
   create_options->computation_thread_pool = computation_thread_pool_.get();
+  create_options->target_topology_label = std::string(target_topology_label);
+  create_options->allow_jit_fallback_for_aot = allow_jit_fallback_for_aot;
   TF_ASSIGN_OR_RETURN(interpreter_,
                       neptune::Interpreter::Create(std::move(create_options)));
   return absl::OkStatus();
@@ -362,7 +374,8 @@ NB_MODULE(model_runner, m) {
   nb::class_<ModelRunner>(m, "ModelRunner")
       .def(nb::new_(&ModelRunner::Create),
            nb::arg("model_name") = "called_from_python", nb::arg("model_path"),
-           nb::arg("platform") = "")
+           nb::arg("platform") = "", nb::arg("target_topology_label") = "",
+           nb::arg("allow_jit_fallback_for_aot") = false)
       .def("ifrt_platform_name", &ModelRunner::IfrtPlatformName,
            "Gets the platform name (e.g. 'cpu', 'tpu') of the IFRT client.")
       .def("ifrt_device_count", &ModelRunner::IfrtDeviceCount,
