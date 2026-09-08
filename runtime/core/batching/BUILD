@@ -27,6 +27,7 @@ cc_library(
     name = "shared_batch_scheduler",
     hdrs = [
         "fifo_queue.h",
+        "priority_aware_queue.h",
         "queue_base.h",
         "shared_batch_scheduler.h",
     ],

@@ -76,6 +76,9 @@ class BatchTask {
     return tsl::criticality::Criticality::kCritical;
   }
 
+  // Returns true if this task is a subtask produced by splitting a larger task.
+  virtual bool is_subtask() const { return false; }
+
   // Called when the task is finished, either successfully or with an error.
   //
   // BatchScheduler guarantees that this method is invoked exactly once for each

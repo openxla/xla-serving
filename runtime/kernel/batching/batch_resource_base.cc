@@ -830,7 +830,6 @@ absl::Status BatchResourceBase::SplitOutputBuffers(
 
 void BatchResourceBase::CleanUpFunctionHelper(
     BatchTask& task, const absl::Status& status) const {
-  tsl::WithContext wc(task.propagated_context);
   if (!status.ok() &&
       absl::StrContains(status.message(),
                         "Function was cancelled before it was started")) {

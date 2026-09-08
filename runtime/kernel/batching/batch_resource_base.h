@@ -150,6 +150,9 @@ class BatchResourceBase : public ResourceBase {
       return criticality_val;
     };
 
+    // Returns true if this task is a split subtask.
+    bool is_subtask() const override { return is_partial; }
+
     // If nonzero, make a batch of this size entirely out of padding. This
     // batch is processed, but is not propagated to the kernel outputs.
     int forced_warmup_batch_size = 0;
@@ -167,6 +170,7 @@ class BatchResourceBase : public ResourceBase {
     }
 
     void FinishTaskImpl(const absl::Status& status) override {
+      tsl::WithContext wc(this->propagated_context);
       if (!status.ok() && this->status) {
         this->status->Update(status);
       }
