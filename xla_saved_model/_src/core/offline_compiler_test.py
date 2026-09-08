@@ -64,7 +64,6 @@ class OfflineCompilerTest(parameterized.TestCase):
 
     config = offline_compiler.TargetConfig(
         target_topology_label=f"{platform}_vhlo_artifact",
-        enable_deviceless_compilation=True,
         platform=platform,
         serialized_topology=serialized_topo,
         autotune_database_path=autotune_db,
@@ -106,7 +105,6 @@ class OfflineCompilerTest(parameterized.TestCase):
 
     config = offline_compiler.TargetConfig(
         target_topology_label=f"{platform}_raw_text_mlir",
-        enable_deviceless_compilation=True,
         platform=platform,
         serialized_topology=serialized_topo,
         autotune_database_path=autotune_db,
@@ -146,7 +144,6 @@ class OfflineCompilerTest(parameterized.TestCase):
 
     config = offline_compiler.TargetConfig(
         target_topology_label=f"{platform}_{topology_name}_named",
-        enable_deviceless_compilation=True,
         platform=platform,
         target_topology=topology_name,
         autotune_database_path=autotune_db,
@@ -188,7 +185,6 @@ class OfflineCompilerTest(parameterized.TestCase):
 
     config = offline_compiler.TargetConfig(
         target_topology_label=f"{platform}_serialized",
-        enable_deviceless_compilation=True,
         platform=platform,
         serialized_topology=serialized_topo,
         autotune_database_path=autotune_db,
@@ -215,7 +211,6 @@ class OfflineCompilerTest(parameterized.TestCase):
     stablehlo_mlir = test_utils.get_stablehlo_mlir()
     config = offline_compiler.TargetConfig(
         target_topology_label="cpu_attached",
-        enable_deviceless_compilation=False,
         platform="cpu",
     )
     hook = offline_compiler.create_offline_compiler_hook([config])
@@ -235,7 +230,6 @@ class OfflineCompilerTest(parameterized.TestCase):
     stablehlo_mlir = test_utils.get_stablehlo_mlir()
     config = offline_compiler.TargetConfig(
         target_topology_label=f"{platform}_attached",
-        enable_deviceless_compilation=False,
         platform=platform,
     )
     hook = offline_compiler.create_offline_compiler_hook([config])
@@ -258,7 +252,6 @@ class OfflineCompilerTest(parameterized.TestCase):
     stablehlo_mlir = test_utils.get_stablehlo_mlir()
     config = offline_compiler.TargetConfig(
         target_topology_label="cpu_opt",
-        enable_deviceless_compilation=False,
         platform="cpu",
         optimizer=neptune_optimizer.StablehloOptimizer(),
     )
@@ -277,7 +270,6 @@ class OfflineCompilerTest(parameterized.TestCase):
     stablehlo_mlir = test_utils.get_stablehlo_mlir()
     config = offline_compiler.TargetConfig(
         target_topology_label="tpu_opt",
-        enable_deviceless_compilation=True,
         platform="tpu",
         target_topology="df:2x2",
         optimizer=neptune_optimizer.StablehloTpuOptimizer(),
@@ -301,7 +293,6 @@ class OfflineCompilerTest(parameterized.TestCase):
 
     config = offline_compiler.TargetConfig(
         target_topology_label="cpu_callable_opt",
-        enable_deviceless_compilation=False,
         platform="cpu",
         optimizer=custom_optimizer,
     )
@@ -323,12 +314,10 @@ class OfflineCompilerTest(parameterized.TestCase):
     target_configs = [
         offline_compiler.TargetConfig(
             target_topology_label="target_1",
-            enable_deviceless_compilation=False,
             platform="cpu",
         ),
         offline_compiler.TargetConfig(
             target_topology_label="target_2",
-            enable_deviceless_compilation=False,
             platform="cpu",
         ),
     ]
@@ -359,7 +348,6 @@ class OfflineCompilerTest(parameterized.TestCase):
     """Verifies ValueError when passing invalid MLIR module bytes."""
     config = offline_compiler.TargetConfig(
         target_topology_label="cpu_target",
-        enable_deviceless_compilation=False,
         platform="cpu",
     )
     hook = offline_compiler.create_offline_compiler_hook([config])
@@ -396,18 +384,27 @@ class OfflineCompilerTest(parameterized.TestCase):
     ):
       offline_compiler.create_offline_compiler_hook([config])
 
-  def test_deviceless_missing_topology_spec_raises_error(self):
-    """Verifies error when no topology specification is provided."""
-    config = offline_compiler.TargetConfig(
-        target_topology_label="deviceless_tpu",
-        enable_deviceless_compilation=True,
-        platform="tpu",
+  def test_target_config_is_deviceless_deduction(self):
+    """Verifies is_deviceless is auto-deduced from topology presence."""
+    cfg_attached = offline_compiler.TargetConfig(
+        target_topology_label="cpu_attached",
+        platform="cpu",
     )
-    with self.assertRaisesRegex(
-        ValueError,
-        "Deviceless compilation for platform 'tpu' requires either",
-    ):
-      offline_compiler.create_offline_compiler_hook([config])
+    self.assertFalse(cfg_attached.is_deviceless)
+
+    cfg_named = offline_compiler.TargetConfig(
+        target_topology_label="tpu_named",
+        platform="tpu",
+        target_topology="df:2x2",
+    )
+    self.assertTrue(cfg_named.is_deviceless)
+
+    cfg_serialized = offline_compiler.TargetConfig(
+        target_topology_label="cuda_serialized",
+        platform="cuda",
+        serialized_topology=b"serialized_bytes",
+    )
+    self.assertTrue(cfg_serialized.is_deviceless)
 
   def test_cuda_deviceless_without_autotune_db_compiles_with_warning(self):
     """Verifies CUDA deviceless compilation succeeds without autotune db."""
@@ -418,7 +415,6 @@ class OfflineCompilerTest(parameterized.TestCase):
     stablehlo_mlir = test_utils.get_stablehlo_mlir()
     config = offline_compiler.TargetConfig(
         target_topology_label="cuda_no_db",
-        enable_deviceless_compilation=True,
         platform="cuda",
         serialized_topology=serialized_topo,
         autotune_database_path=None,
@@ -450,7 +446,6 @@ class OfflineCompilerTest(parameterized.TestCase):
 
     config = offline_compiler.TargetConfig(
         target_topology_label="cuda_dir_db",
-        enable_deviceless_compilation=True,
         platform="cuda",
         serialized_topology=serialized_topo,
         autotune_database_path=db_dir,
@@ -475,7 +470,6 @@ class OfflineCompilerTest(parameterized.TestCase):
 
     config = offline_compiler.TargetConfig(
         target_topology_label="cuda_file_db",
-        enable_deviceless_compilation=True,
         platform="cuda",
         serialized_topology=serialized_topo,
         autotune_database_path=db_file,
@@ -498,7 +492,6 @@ class OfflineCompilerTest(parameterized.TestCase):
     )
     config = offline_compiler.TargetConfig(
         target_topology_label="cuda_missing_db",
-        enable_deviceless_compilation=True,
         platform="cuda",
         serialized_topology=serialized_topo,
         autotune_database_path=nonexistent_path,
@@ -544,7 +537,6 @@ class OfflineCompilerTest(parameterized.TestCase):
     bad_opt = cast(Any, lambda mlir, idx: "non_bytes_return")
     config = offline_compiler.TargetConfig(
         target_topology_label="cpu_target",
-        enable_deviceless_compilation=False,
         platform="cpu",
         optimizer=bad_opt,
     )
@@ -559,7 +551,6 @@ class OfflineCompilerTest(parameterized.TestCase):
     stablehlo_mlir = test_utils.get_stablehlo_mlir()
     config = offline_compiler.TargetConfig(
         target_topology_label="cpu_target",
-        enable_deviceless_compilation=False,
         platform="cpu",
         optimizer=cast(Any, "invalid_optimizer_type"),
     )
@@ -573,7 +564,6 @@ class OfflineCompilerTest(parameterized.TestCase):
     """Verifies ValueError when num_weights is negative."""
     config = offline_compiler.TargetConfig(
         target_topology_label="cpu_target",
-        enable_deviceless_compilation=False,
         platform="cpu",
         optimizer=lambda mlir, idx: mlir,
     )

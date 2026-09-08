@@ -433,12 +433,3 @@ pytest -s xla_saved_model/_src/llm/export_llm_test.py
 pytest -s xla_saved_model/_src/llm/benchmark_llm_test.py
 pytest -s xla_saved_model/_src/llm/tpu_inference/tpu_exporter_test.py
 ```
-
-<!-- copybara:strip_begin -->
-### Google3 / Blaze Testing
-Run the full LLM test suite using `blaze`:
-
-```bash
-SKYBUILD=1 blaze test //third_party/neptune/xla_saved_model/_src/llm/...
-```
-<!-- copybara:strip_end -->
