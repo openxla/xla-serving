@@ -107,7 +107,7 @@ absl::StatusOr<nlohmann::json> BuildKvstoreTspec(
     bool use_ocdbt,
     const std::optional<std::variant<int, std::string>>& process_id) {
   std::string default_driver = std::string(kDefaultDriver);
-  
+
   // TODO: Consider using tensorflow/tsl/platform/file_system.h to
   // replace `std::filesystem`.
   std::string normalized_directory =
