@@ -80,6 +80,13 @@ ABSL_FLAG(int, max_send_message_size, -1,  // Unlimited, matches gRPC default
 ABSL_FLAG(int, thread_pool_num_threads, 0,
           "Number of threads for server execution thread pool. If 0, defaults "
           "to 4.");
+ABSL_FLAG(int, max_predict_queue_depth, -1,
+          "Maximum number of concurrent in-flight Predict requests before new "
+          "ones are rejected with RESOURCE_EXHAUSTED instead of being queued. "
+          "If negative (default), backpressure is disabled (unbounded queue "
+          "depth). If 0, defaults to 4x thread_pool_num_threads (or 4x CPU "
+          "count if that is also unset). If positive, used as the explicit "
+          "limit.");
 
 void RunServer() {
   std::string server_address = absl::StrCat("[::]:", absl::GetFlag(FLAGS_port));
@@ -96,6 +103,8 @@ void RunServer() {
   options.warmup_server = absl::GetFlag(FLAGS_warmup_server);
   options.thread_pool_num_threads =
       absl::GetFlag(FLAGS_thread_pool_num_threads);
+  options.max_predict_queue_depth =
+      absl::GetFlag(FLAGS_max_predict_queue_depth);
 
   LOG(INFO) << "Server address: " << server_address;
   auto service_or = neptune::serving::OrbaxCallbackGrpcServer::Create(

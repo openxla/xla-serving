@@ -15,6 +15,7 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_ORBAX_CALLBACK_GRPC_SERVER_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_ORBAX_CALLBACK_GRPC_SERVER_H_
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -48,6 +49,12 @@ struct OrbaxCallbackGrpcServerOptions {
   int64_t cost_threshold = 10000;
   bool warmup_server = false;
   int thread_pool_num_threads = 0;
+  // Maximum number of concurrent in-flight Predict requests before new ones
+  // are rejected with RESOURCE_EXHAUSTED. If negative (default), backpressure
+  // is disabled (unbounded queue depth). If 0, defaults to 4x
+  // thread_pool_num_threads (or 4x CPU count if that is also unset). If
+  // positive, used as the explicit limit.
+  int max_predict_queue_depth = -1;
 };
 
 class OrbaxCallbackGrpcServer final
@@ -66,14 +73,16 @@ class OrbaxCallbackGrpcServer final
       std::shared_ptr<xla::ifrt::Client> client,
       std::unique_ptr<tsl::thread::ThreadPool> execute_worker_thread_pool,
       std::unique_ptr<tsl::thread::ThreadPool> computation_thread_pool,
-      std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool)
+      std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool,
+      int max_predict_queue_depth)
       : model_name_(model_name),
         client_(client),
         execute_worker_thread_pool_(std::move(execute_worker_thread_pool)),
         computation_thread_pool_(std::move(computation_thread_pool)),
         checkpoint_loader_thread_pool_(
             std::move(checkpoint_loader_thread_pool)),
-        interpreter_(std::move(interpreter)) {}
+        interpreter_(std::move(interpreter)),
+        max_predict_queue_depth_(max_predict_queue_depth) {}
 
   static absl::StatusOr<std::unique_ptr<OrbaxCallbackGrpcServer>> Create(
       absl::string_view model_name, absl::string_view model_path,
@@ -95,12 +104,30 @@ class OrbaxCallbackGrpcServer final
  private:
   static constexpr int kThreadPoolNumThreads = 16;
 
+  // Thread-safe count of concurrent in-flight Predict requests, used to
+  // enforce `max_predict_queue_depth_`. `memory_order_relaxed` suffices for
+  // both operations: the count only feeds a numeric limit check and is never
+  // used to make any other data's writes visible across threads.
+  class InFlightRequestCounter {
+   public:
+    // Returns the count after incrementing.
+    int Increment() {
+      return count_.fetch_add(1, std::memory_order_relaxed) + 1;
+    }
+    void Decrement() { count_.fetch_sub(1, std::memory_order_relaxed); }
+
+   private:
+    std::atomic<int> count_{0};
+  };
+
   std::string model_name_;
   std::shared_ptr<xla::ifrt::Client> client_;
   std::unique_ptr<tsl::thread::ThreadPool> execute_worker_thread_pool_;
   std::unique_ptr<tsl::thread::ThreadPool> computation_thread_pool_;
   std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool_;
   std::unique_ptr<neptune::Interpreter> interpreter_;
+  int max_predict_queue_depth_;
+  InFlightRequestCounter in_flight_predict_count_;
 
   absl::Status Warmup(absl::string_view model_path);
 
