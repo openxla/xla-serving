@@ -131,10 +131,14 @@ genrule(
         "//data/resource_manager/python:resource_manager.py",
         "//data/resource_manager/python:resource_manager_pybind.so",
         "//data/resource_manager/proto:resource_manager_py_pb2",
+        "//data/cpu_embedding/python:embedding_utils.py",
     ],
     outs = [
         "neptune_data/__init__.py",
         "neptune_data/libneptune_data_core.so",
+        "neptune_data/cpu_embedding/__init__.py",
+        "neptune_data/cpu_embedding/python/__init__.py",
+        "neptune_data/cpu_embedding/python/embedding_utils.py",
         "neptune_data/ops/__init__.py",
         "neptune_data/ops/bucket_pad.py",
         "neptune_data/ops/cpu_embedding.py",
@@ -268,6 +272,11 @@ genrule(
     fi
   done
   cp $(location @pybind11_abseil//pybind11_abseil:status.so) $(@D)/neptune_data/pybind11_abseil/status.so
+  mkdir -p $(@D)/neptune_data/cpu_embedding/python
+  touch $(@D)/neptune_data/cpu_embedding/__init__.py
+  touch $(@D)/neptune_data/cpu_embedding/python/__init__.py
+  cp $(location //data/cpu_embedding/python:embedding_utils.py) $(@D)/neptune_data/cpu_embedding/python/embedding_utils.py
+  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/cpu_embedding/python/embedding_utils.py
   """,
 )
 
@@ -275,6 +284,9 @@ py_library(
     name = "neptune_data_pkg",
     srcs = [
         "neptune_data/__init__.py",
+        "neptune_data/cpu_embedding/__init__.py",
+        "neptune_data/cpu_embedding/python/__init__.py",
+        "neptune_data/cpu_embedding/python/embedding_utils.py",
         "neptune_data/kernels/__init__.py",
         "neptune_data/kernels/cpu_embedding/__init__.py",
         "neptune_data/kernels/cpu_embedding/cpu_embedding_module.py",
