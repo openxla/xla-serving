@@ -14,4 +14,4 @@
 
 """Single source of truth version for Neptune packages."""
 
-VERSION = "0.0.10"
+VERSION = "0.0.11"
