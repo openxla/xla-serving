@@ -209,7 +209,7 @@ class LLMModelWrapper:
         if sampling_method == llm_config.SamplingMethod.GREEDY:
           next_token_step = sampling.greedy_sample(step_logits)
         elif sampling_method == llm_config.SamplingMethod.TOP_K:
-          split_keys = jax.vmap(jax.random.split)(keys)
+          split_keys = jax.vmap(jax.random.split)(keys)  # pyrefly: ignore[bad-argument-type]
           keys = split_keys[:, 0, :]
           step_key = split_keys[:, 1, :]
           next_token_step = jax.vmap(

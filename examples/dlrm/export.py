@@ -72,7 +72,7 @@ def get_synthetic_batch(batch_size, valency=None, vocab_sizes=None):
 
   sparse_features = {}
 
-  for i, rename_me in enumerate(valency):  # pyrefly: ignore[bad-argument-type]
+  for i, rename_me in enumerate(valency):  # pyrefly: ignore[bad-argument-type, not-iterable]
     sparse_features[str(i)] = np.random.randint(
         low=0,
         high=vocab_sizes[i],  # pyrefly: ignore[unsupported-operation]
