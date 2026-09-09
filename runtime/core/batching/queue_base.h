@@ -30,6 +30,7 @@
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
+#include "absl/synchronization/notification.h"  // from @abseil-cpp
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
 #include "runtime/core/batching/shared_batch_scheduler.h"  // from @neptune
 #include "xla/tsl/platform/env.h"  // from @xla
@@ -183,6 +184,13 @@ class QueueBase {
   // Incremented in ScheduleBatch() and decremented in ProcessBatch().
   int num_batches_being_processed_ ABSL_GUARDED_BY(mu_) = 0;
 
+  // Used by CloseAndWaitUntilEmpty() to wait until the queue is empty, for
+  // the case in which the queue is not empty when CloseAndWaitUntilEmpty()
+  // starts. When ProcessBatch() dequeues the last batch and makes the queue
+  // empty, if 'empty_notification_' is non-null it calls
+  // 'empty_notification_->Notify()'.
+  absl::Notification* empty_notification_ ABSL_GUARDED_BY(mu_) = nullptr;
+
   QueueBase(const QueueBase&) = delete;
   QueueBase& operator=(const QueueBase&) = delete;
 };
@@ -271,6 +279,9 @@ void QueueBase<TaskType>::ProcessBatch(std::unique_ptr<Batch<TaskType>> batch) {
   {
     absl::MutexLock l(mu_);
     --num_batches_being_processed_;
+    if (empty_notification_ != nullptr && IsEmptyInternal()) {
+      empty_notification_->Notify();
+    }
   }
 }
 
@@ -282,12 +293,18 @@ bool QueueBase<TaskType>::IsEmpty() const {
 
 template <typename TaskType>
 void QueueBase<TaskType>::CloseAndWaitUntilEmpty() {
-  absl::MutexLock l(mu_);
-  closed_ = true;
-  auto is_empty = [this]() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_) {
-    return IsEmptyInternal();
-  };
-  mu_.Await(absl::Condition(&is_empty));
+  absl::Notification empty;
+  {
+    absl::MutexLock l(mu_);
+    closed_ = true;
+    if (IsEmptyInternal()) {
+      empty.Notify();
+    } else {
+      // Arrange for ProcessBatch() to notify when the queue becomes empty.
+      empty_notification_ = &empty;
+    }
+  }
+  empty.WaitForNotification();
 }
 
 template <typename TaskType>
