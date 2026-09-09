@@ -22,9 +22,11 @@ from typing import Any, Optional, TypeAlias
 import ml_dtypes
 import numpy as np
 
+from neptune_model.protos import type_pb2
 from neptune_model.protos.xla import xla_data_pb2  # pylint: disable=g-direct-tensorflow-import
 
 
+Placement: TypeAlias = type_pb2.Placement
 Sharding: TypeAlias = xla_data_pb2.OpSharding
 Layout: TypeAlias = xla_data_pb2.LayoutProto
 ShloDimSize: TypeAlias = Optional[int]
@@ -114,6 +116,7 @@ class ShloTensorSpec:
     layout: The layout of the tensor. None means the default layout is used.
     name: The name of the tensor.
     default_val: Optional default fallback value for function parameters.
+    placement: Optional placement enum (e.g. type_pb2.HOST or type_pb2.DEVICE).
   """
 
   shape: ShloShape
@@ -122,6 +125,7 @@ class ShloTensorSpec:
   layout: Layout | None = None
   name: str | None = None
   default_val: Any | None = None
+  placement: Placement | None = None
 
   def __post_init__(self) -> None:
     if self.shape is not None:
@@ -137,4 +141,3 @@ class ShloTensorSpec:
         )
       np_dt = np.dtype(raw_dt)
       object.__setattr__(self, "dtype", np_dtype_to_shlo_dtype(np_dt))
-

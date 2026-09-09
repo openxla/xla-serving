@@ -36,6 +36,7 @@ from neptune_model._src.core import unstructured_data
 from neptune_model._src.jax2npt import constants
 from neptune_model.protos import jax_supplemental_pb2
 from neptune_model.protos import manifest_pb2
+from neptune_model.protos import type_pb2
 from neptune_model.protos.jax_supplemental_pb2 import DimensionSizeRefinement
 from neptune_model.protos.jax_supplemental_pb2 import DTypeRefinement
 from neptune_model.protos.jax_supplemental_pb2 import ShapeDTypeRefinement
@@ -370,6 +371,7 @@ def _to_shlo_tensor_spec_and_refinement(
     aval: jax.core.AbstractValue,
     sharding: Any,
     layout: jax_layout.Layout | None = None,
+    placement: type_pb2.Placement = type_pb2.PLACEMENT_UNSPECIFIED,
 ) -> tuple[shlo_type.ShloTensorSpec, ShapeDTypeRefinementPair]:
   """Gets a `ShloTensorSpec` and a `ShapeDTypeRefinement` from a `ShapedArray`.
 
@@ -377,6 +379,7 @@ def _to_shlo_tensor_spec_and_refinement(
     aval: a JAX `ShapedArray`.
     sharding: the sharding of the `ShapedArray`.
     layout: the layout of the tensor.
+    placement: the placement enum of the tensor.
 
   Returns:
     A `ShloTensorSpec` and a `ShapeDTypeRefinement`.
@@ -392,6 +395,9 @@ def _to_shlo_tensor_spec_and_refinement(
       dtype=shlo_dtype,
       sharding=sharding,
       layout=xla_layout_proto,
+      placement=(
+          placement if placement != type_pb2.PLACEMENT_UNSPECIFIED else None
+      ),
   )
   return spec, (shape_refinement, dtype_refinement)
 
@@ -400,17 +406,24 @@ def _to_flat_shlo_specs_and_refinements(
     avals: Sequence[jax.core.AbstractValue],
     shardings: Sequence[Any],
     layouts: Sequence[jax_layout.Layout] | None = None,
+    placements: Sequence[type_pb2.Placement] | None = None,
 ) -> tuple[
     tuple[shlo_type.ShloTensorSpec, ...],
     tuple[ShapeDTypeRefinementPair, ...] | None,
 ]:
   """Converts a sequence of avals to a tuple of ShloTensorSpecs."""
+  effective_placements = (
+      placements
+      if placements
+      else (type_pb2.PLACEMENT_UNSPECIFIED,) * len(avals)
+  )
   specs_and_refinements = tuple(
       map(
           _to_shlo_tensor_spec_and_refinement,
           avals,
           shardings,
           layouts if layouts is not None else [None] * len(avals),
+          effective_placements,
       )
   )
   specs, refinements = unzip2(specs_and_refinements)
@@ -424,11 +437,12 @@ def _to_shlo_spec_tree_and_refinement_tuple(
     shardings: Sequence[Any],
     layouts: Sequence[jax_layout.Layout] | None = None,
     tree_def: jax.tree_util.PyTreeDef | None = None,
+    placements: Sequence[type_pb2.Placement] | None = None,
     name_leaves: bool = False,
 ) -> tuple[jaxtyping.PyTree, tuple[ShapeDTypeRefinementPair, ...] | None]:
   """Converts a sequence of avals to a tree of ShloTensorSpecs."""
   flat, refinements = _to_flat_shlo_specs_and_refinements(
-      avals, shardings, layouts
+      avals, shardings, layouts, placements
   )
   if tree_def is None:
     flat: jaxtyping.PyTree  # a tuple is also a tree

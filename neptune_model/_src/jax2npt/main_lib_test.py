@@ -30,6 +30,7 @@ from neptune_model._src.core import test_utils
 from neptune_model._src.jax2npt import main_lib
 from neptune_model._src.test_utils import jax_mnist
 from neptune_model.protos import manifest_pb2
+from neptune_model.protos import type_pb2
 
 os.environ['XLA_FLAGS'] = '--xla_force_host_platform_device_count=8'
 
@@ -37,10 +38,10 @@ os.environ['XLA_FLAGS'] = '--xla_force_host_platform_device_count=8'
 def _get_shape_dtype_struct(param):
   """Returns a pytree of `jax.ShapeDtypeStruct`."""
 
-  def _get_shape_dtype_struct(x):
+  def _get_leaf_struct(x):
     return jax.ShapeDtypeStruct(x.shape, x.dtype)
 
-  return jax.tree_util.tree_map(_get_shape_dtype_struct, param)
+  return jax.tree_util.tree_map(_get_leaf_struct, param)
 
 
 class MainLibTest(test_utils.NptTestCase):
@@ -473,6 +474,50 @@ class MainLibTest(test_utils.NptTestCase):
         os.listdir(checkpoint_abs_path),
         f"Checkpoint directory '{checkpoint_abs_path}' is empty.",
     )
+
+  def test_host_placement_e2e(self):
+    def _jax_model_fn(params, x):
+      return jnp.dot(x, params['w'])
+
+    devices = mesh_utils.create_device_mesh((4, 2))
+    mesh = jax_sharding.Mesh(devices, ('x', 'y'))
+    host_sharding = jax_sharding.NamedSharding(
+        mesh, jax_sharding.PartitionSpec('x'), memory_kind='pinned_host'
+    )
+    device_sharding = jax_sharding.NamedSharding(
+        mesh, jax_sharding.PartitionSpec('x')
+    )
+
+    params = {'w': jnp.zeros((4, 4), dtype=jnp.float32)}
+    in_shardings = ({'w': host_sharding}, device_sharding)
+    model_fn = jax.jit(_jax_model_fn, in_shardings=in_shardings)
+
+    input_args_spec = jax.ShapeDtypeStruct((4, 4), jnp.float32)
+    params_args_spec = _get_shape_dtype_struct(params)
+
+    obm_shlo_fn = main_lib.convert(
+        model_fn,
+        (params_args_spec, input_args_spec),
+        {},
+        jax_export_kwargs={'platforms': ['cpu']},
+    )
+
+    shlo_params_spec = obm_shlo_fn.input_signature[0][0]['w']
+    self.assertEqual(shlo_params_spec.placement, type_pb2.HOST)
+
+    save_dir_path = self.create_tempdir().full_path
+    obm_module = {'model_fn': obm_shlo_fn}
+    npt_core.save(
+        obm_module,
+        save_dir_path,
+        npt_core.SaveOptions(version=2),
+    )
+
+    manifest_proto = npt_core.load(save_dir_path)
+    fn_sig = manifest_proto.objects['model_fn'].function.signature
+    input_tuple = fn_sig.input.tuple.elements[0].tuple.elements[0]
+    w_type = input_tuple.dict.string_to_type['w'].leaf.tensor_type
+    self.assertEqual(w_type.placement, type_pb2.HOST)
 
 
 if __name__ == '__main__':

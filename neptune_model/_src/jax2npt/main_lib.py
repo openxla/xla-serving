@@ -106,13 +106,20 @@ def jax_exported_to_shlo_fn(
       _get_op_sharding(nsd, aval)
       for nsd, aval in zip(in_named_shardings, exported.in_avals)
   ])
+  in_placements = tuple(
+      utils.sharding_to_placement(nsd) for nsd in in_named_shardings
+  )
   out_shardings_hlo = tuple([
       _get_op_sharding(nsd, aval)
       for nsd, aval in zip(out_named_shardings, exported.out_avals)
   ])
+  out_placements = tuple(
+      utils.sharding_to_placement(nsd) for nsd in out_named_shardings
+  )
   num_user_outputs = exported.out_tree.num_leaves
   out_avals = exported.out_avals[:num_user_outputs]
   out_shardings_hlo = out_shardings_hlo[:num_user_outputs]
+  out_placements = out_placements[:num_user_outputs]
 
   # TODO: properly get the name for the input signature.
   shlo_in_sig, jax_in_sig_refinements = (
@@ -121,6 +128,7 @@ def jax_exported_to_shlo_fn(
           in_shardings_hlo,
           model_inputs_layout,
           exported.in_tree,
+          placements=in_placements,
       )
   )
   # Since jax.ShapeDtypeStruct does not have a name field, we assign
@@ -139,6 +147,7 @@ def jax_exported_to_shlo_fn(
           out_shardings_hlo,
           None,
           exported.out_tree,
+          placements=out_placements,
           name_leaves=True,
       )
   )

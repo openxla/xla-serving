@@ -100,6 +100,26 @@ class ShloTensorSpecToTensorTypeProtoTest(
     tensor_proto.placement = type_pb2.PLACEMENT_UNSPECIFIED
     self.assertEqual(tensor_proto.placement, type_pb2.PLACEMENT_UNSPECIFIED)
 
+  def test_to_tensor_type_proto_with_placement(self):
+    spec = shlo_type.ShloTensorSpec(
+        shape=(4, 2),
+        dtype=shlo_type.ShloDType.f32,
+        placement=type_pb2.HOST,
+    )
+    tensor_proto = type_proto_utils.to_tensor_type_proto(spec)
+    self.assertEqual(tensor_proto.placement, type_pb2.HOST)
+
+  def test_placement_bidirectional_roundtrip(self):
+    for placement in (type_pb2.HOST, type_pb2.DEVICE):
+      spec = shlo_type.ShloTensorSpec(
+          shape=(4, 2),
+          dtype=shlo_type.ShloDType.f32,
+          placement=placement,
+      )
+      tensor_proto = type_proto_utils.to_tensor_type_proto(spec)
+      restored_spec = type_proto_utils._from_tensor_type_proto(tensor_proto)
+      self.assertEqual(restored_spec.placement, placement)
+
 
 class ShloTensorSpecPyTreeToTypeProtoTest(
     test_utils.NptTestCase, parameterized.TestCase

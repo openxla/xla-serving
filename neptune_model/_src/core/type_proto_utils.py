@@ -84,6 +84,8 @@ def to_tensor_type_proto(
     tensor_type_proto.sharding.CopyFrom(spec.sharding)
   if spec.layout:
     tensor_type_proto.layout.CopyFrom(spec.layout)
+  if spec.placement:
+    tensor_type_proto.placement = spec.placement
   return tensor_type_proto
 
 
@@ -163,11 +165,17 @@ def _from_tensor_type_proto(
       if manifest_tensor_type.HasField("layout")
       else None
   )
+  placement = (
+      manifest_tensor_type.placement
+      if manifest_tensor_type.HasField("placement")
+      else None
+  )
   return shlo_type.ShloTensorSpec(
       shape=_from_shape_proto(manifest_tensor_type.shape),
       dtype=to_shlo_dtype(manifest_tensor_type.dtype),
       sharding=sharding,
       layout=layout,
+      placement=placement,
   )
 
 

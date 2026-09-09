@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for utils."""
+"""Unit tests for jax2npt utility functions and placement helpers."""
 
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -22,6 +22,7 @@ import jax.numpy as jnp
 import numpy as np
 from neptune_model._src.core import shlo_type
 from neptune_model._src.jax2npt import utils
+from neptune_model.protos import type_pb2
 from neptune_model.protos.xla import xla_data_pb2  # pylint: disable=g-direct-tensorflow-import
 
 
@@ -247,6 +248,47 @@ class UtilsTest(parameterized.TestCase):
           [0],
       )
       print(shlo_tensor_specs)
+
+  def test_sharding_to_placement(self):
+    self.assertEqual(
+        utils.sharding_to_placement(None),
+        type_pb2.PLACEMENT_UNSPECIFIED,
+    )
+    mesh = jax.sharding.Mesh(np.array(jax.devices()[:1]), ('x',))
+    device_sharding = jax.sharding.NamedSharding(
+        mesh, jax.sharding.PartitionSpec('x')
+    )
+    self.assertEqual(
+        utils.sharding_to_placement(device_sharding),
+        type_pb2.PLACEMENT_UNSPECIFIED,
+    )
+    host_sharding = jax.sharding.NamedSharding(
+        mesh, jax.sharding.PartitionSpec('x'), memory_kind='pinned_host'
+    )
+    self.assertEqual(
+        utils.sharding_to_placement(host_sharding),
+        type_pb2.HOST,
+    )
+
+  def test_to_shlo_tensor_spec_with_pinned_host(self):
+    mesh = jax.sharding.Mesh(np.array(jax.devices()[:1]), ('x',))
+    host_sharding = jax.sharding.NamedSharding(
+        mesh, jax.sharding.PartitionSpec('x'), memory_kind='pinned_host'
+    )
+    struct = jax.ShapeDtypeStruct((4, 4), jnp.float32, sharding=host_sharding)
+    shlo_spec = utils.to_shlo_tensor_spec(struct)
+    self.assertEqual(shlo_spec.placement, type_pb2.HOST)
+    self.assertEqual(shlo_spec.shape, (4, 4))
+
+  def test_to_shlo_tensor_spec_with_device_sharding(self):
+    mesh = jax.sharding.Mesh(np.array(jax.devices()[:1]), ('x',))
+    device_sharding = jax.sharding.NamedSharding(
+        mesh, jax.sharding.PartitionSpec('x')
+    )
+    struct = jax.ShapeDtypeStruct((4, 4), jnp.float32, sharding=device_sharding)
+    shlo_spec = utils.to_shlo_tensor_spec(struct)
+    self.assertIsNone(shlo_spec.placement)
+    self.assertEqual(shlo_spec.shape, (4, 4))
 
 
 if __name__ == '__main__':

@@ -154,6 +154,14 @@ class ShloTypeTest(parameterized.TestCase):
         shlo_type.np_dtype_to_shlo_dtype(np_dtype_val), expected_shlo_dtype
     )
 
+  def test_shlo_tensor_spec_with_placement(self):
+    spec = shlo_type.ShloTensorSpec(
+        shape=(2, 3),
+        dtype=shlo_type.ShloDType.f32,
+        placement=shlo_type.Placement.HOST,
+    )
+    self.assertEqual(spec.placement, shlo_type.Placement.HOST)
+
 
 if __name__ == "__main__":
   absltest.main()

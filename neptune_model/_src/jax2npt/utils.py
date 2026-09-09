@@ -31,6 +31,7 @@ from neptune_model._src.core import shlo_type
 from neptune_model._src.export import constants
 from neptune_model._src.jax2npt import typing  # pylint: disable=unused-import
 from neptune_model.protos import manifest_pb2  # pylint: disable=unused-import
+from neptune_model.protos import type_pb2
 from neptune_model.protos.xla import xla_data_pb2  # pylint: disable=g-direct-tensorflow-import
 
 
@@ -47,6 +48,15 @@ def get_physical_dtype(dtype) -> shlo_type.ShloDType | None:  # pylint: disable=
     return shlo_type.np_dtype_to_shlo_dtype(_jax_physical_dtype(dtype))
   except TypeError:
     return None
+
+
+def sharding_to_placement(
+    sharding: jax.sharding.Sharding | None,
+) -> type_pb2.Placement:
+  """Converts a JAX sharding to a Neptune Placement."""
+  if sharding is not None and sharding.memory_kind == "pinned_host":
+    return type_pb2.HOST
+  return type_pb2.PLACEMENT_UNSPECIFIED
 
 
 def assert_not_in_jax_transformation():
@@ -253,6 +263,7 @@ def _to_shlo_tensor_spec(
     aval: jax.core.AbstractValue,
     sharding: Any,
     layout: jax_layout.Layout | None = None,
+    placement: type_pb2.Placement = type_pb2.PLACEMENT_UNSPECIFIED,
 ) -> shlo_type.ShloTensorSpec:
   """Gets a `ShloTensorSpec` from a `ShapedArray`.
 
@@ -260,6 +271,7 @@ def _to_shlo_tensor_spec(
     aval: a JAX `ShapedArray`.
     sharding: the sharding of the `ShapedArray`.
     layout: the layout of the tensor.
+    placement: the placement of the tensor.
 
   Returns:
     A `ShloTensorSpec`.
@@ -275,6 +287,9 @@ def _to_shlo_tensor_spec(
       dtype=shlo_dtype,
       sharding=sharding,
       layout=xla_layout_proto,
+      placement=(
+          placement if placement != type_pb2.PLACEMENT_UNSPECIFIED else None
+      ),
   )
   return spec
 
@@ -283,14 +298,21 @@ def _to_flat_shlo_specs(
     avals: Sequence[jax.core.AbstractValue],
     shardings: Sequence[Any],
     layouts: Sequence[jax_layout.Layout] | None = None,
+    placements: Sequence[type_pb2.Placement] | None = None,
 ) -> tuple[shlo_type.ShloTensorSpec, ...]:
   """Converts a sequence of avals to a tuple of ShloTensorSpecs."""
+  effective_placements = (
+      placements
+      if placements
+      else (type_pb2.PLACEMENT_UNSPECIFIED,) * len(avals)
+  )
   specs = tuple(
       map(
           _to_shlo_tensor_spec,
           avals,
           shardings,
           layouts if layouts is not None else [None] * len(avals),
+          effective_placements,
       )
   )
   return specs
@@ -301,10 +323,11 @@ def to_shlo_spec_tree(
     shardings: Sequence[Any],
     layouts: Sequence[jax_layout.Layout] | None = None,
     tree_def: jax.tree_util.PyTreeDef | None = None,
+    placements: Sequence[type_pb2.Placement] | None = None,
     name_leaves: bool = False,
 ) -> jaxtyping.PyTree[shlo_type.ShloTensorSpec]:
   """Converts a sequence of avals to a tree of ShloTensorSpecs."""
-  flat = _to_flat_shlo_specs(avals, shardings, layouts)
+  flat = _to_flat_shlo_specs(avals, shardings, layouts, placements)
   if tree_def is None:
     flat: jaxtyping.PyTree[shlo_type.ShloTensorSpec]  # a tuple is also a tree
     jax_tree = flat
@@ -337,8 +360,15 @@ def to_jax_spec(tree: jaxtyping.PyTree) -> jaxtyping.PyTree:
         dtype = shlo_type.shlo_dtype_to_np_dtype(x.dtype)
       else:
         dtype = x.dtype
-      shape = tuple(str(s) if s is None else s for s in x.shape)
-      return jax.ShapeDtypeStruct(shape, dtype)
+      sharding = getattr(x, "sharding", None)
+      shape_dims = []
+      for s in x.shape:
+        if s is None:
+          shape_dims.append(str(s))
+        else:
+          shape_dims.append(s)
+      shape = tuple(shape_dims)
+      return jax.ShapeDtypeStruct(shape, dtype, sharding=sharding)
     except Exception as err:
       raise ValueError(
           f"Failed to convert {x!r} to jax.ShapeDtypeStruct"
@@ -381,8 +411,15 @@ def to_shlo_tensor_spec(
         np_dtype = np.dtype(x.dtype.as_numpy_dtype())
       else:
         np_dtype = np.dtype(x.dtype)
+      sharding = getattr(x, "sharding", None)
+      p = sharding_to_placement(sharding) if sharding else None
+      placement = p if p and p != type_pb2.PLACEMENT_UNSPECIFIED else None
       return shlo_type.ShloTensorSpec(
-          x.shape, shlo_type.np_dtype_to_shlo_dtype(np_dtype), name=name
+          x.shape,
+          shlo_type.np_dtype_to_shlo_dtype(np_dtype),
+          sharding=None,
+          placement=placement,
+          name=name,
       )
     except Exception as err:
       raise ValueError(f"Failed to convert {x!r} to ShloTensorSpec") from err
