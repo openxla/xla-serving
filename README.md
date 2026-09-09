@@ -105,6 +105,13 @@ inputs = {
 outputs = runner.signature('serving_default').run_with_dict_return(**inputs)
 ```
 
+## Ahead-Of-Time (AOT) Model Recompilation
+
+Neptune supports Ahead-Of-Time precompilation to eliminate online JIT latency
+and protect host container memory. See the
+[AOT User Guide](docs/aot_user_guide.md) and
+[AOT Benchmark](examples/aot_benchmark/README.md) for full details.
+
 ## Docker images for GRPC Server
 
 ### CPU
@@ -184,7 +191,7 @@ docker run   --net=host   --ulimit memlock=-1  \
  --model_path /tmp/model  \
  --model_name nnx \
  --orbax_grpc_server_platform cpu \
- --port=8501
+ --port=8500 \
  --use_insecure_grpc_credentials=true
 ```
 

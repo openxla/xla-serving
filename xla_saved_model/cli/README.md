@@ -65,3 +65,20 @@ xsm-cli show /path/to/model --details serving_default --xla_compile_options
 ```bash
 xsm-cli version
 ```
+
+### 6. Recompile Models Ahead-Of-Time (AOT)
+
+Precompile model functions for a target platform ahead of serving time:
+
+```bash
+xsm-cli recompile \
+    --input-model-path=/path/to/exported_model \
+    --output-model-path=/path/to/aot_model \
+    --platform=cpu \
+    --target-topology-label="cpu_target"
+
+# Optional: Pass --strip-stablehlo to minimize artifact size.
+```
+
+See the [AOT User Guide](../../docs/aot_user_guide.md) for full details on
+multi-platform recompilation, Docker serving, and autotune databases.
