@@ -62,10 +62,6 @@ def recompile(
             help="Target topology label identifier saved in the manifest.",
         ),
     ],
-    enable_deviceless_compilation: bool = typer.Option(
-        True,
-        help="Whether to compile devicelessly without attached hardware.",
-    ),
     serialized_topology: str | None = typer.Option(
         None,
         help=(
@@ -128,7 +124,6 @@ def recompile(
   target_config = offline_compiler.TargetConfig(
       target_topology_label=target_topology_label,
       platform=platform.strip().lower(),
-      enable_deviceless_compilation=enable_deviceless_compilation,
       serialized_topology=serialized_topology_bytes,
       autotune_database_path=autotune_database_path,
       target_topology=target_topology,
@@ -148,5 +143,6 @@ def recompile(
       ValueError,
       FileNotFoundError,
       FileExistsError,
+      RuntimeError,
   ) as e:
     _bail(str(e))
