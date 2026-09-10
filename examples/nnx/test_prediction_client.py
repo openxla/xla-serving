@@ -18,9 +18,9 @@ import argparse
 import grpc
 import numpy as np
 
-from neptune_model.protos.grpc import host_buffer_pb2
-from neptune_model.protos.grpc import predict_pb2
-from neptune_model.protos.xla.python.ifrt import dtype_pb2
+from xla_saved_model.protos.grpc import host_buffer_pb2
+from xla_saved_model.protos.grpc import predict_pb2
+from xla_saved_model.protos.xla.python.ifrt import dtype_pb2
 
 
 def make_host_buffer(arr: np.ndarray) -> host_buffer_pb2.HostBufferProto:

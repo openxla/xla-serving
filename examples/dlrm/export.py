@@ -26,11 +26,11 @@ import orbax.checkpoint as ocp
 import tensorflow as tf
 
 from examples.dlrm import model as model_lib
-from neptune_model._src.export import jax_model
-from neptune_model._src.export import main_lib
-from neptune_model._src.export import serving_config
-from neptune_model._src.export import tensorflow_model
-from neptune_model.protos import orchestration_pb2
+from xla_saved_model.protos import orchestration_pb2
+from xla_saved_model._src.export import jax_model
+from xla_saved_model._src.export import main_lib
+from xla_saved_model._src.export import serving_config
+from xla_saved_model._src.export import tensorflow_model
 
 FLAGS = flags.FLAGS
 

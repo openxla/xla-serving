@@ -33,13 +33,13 @@ from neptune_data.processor.proto import transform_config_pb2
 from neptune_data.processor.python import composite_processor_pybind
 from neptune_data.resource_manager.python import resource_manager_pybind
 from examples.dlrm import model_jce as model_lib
-from neptune_model._src import assets2npt
-from neptune_model._src.core import shlo_type
-from neptune_model._src.export import jax_model
-from neptune_model._src.export import main_lib
-from neptune_model._src.export import serving_config
-from neptune_model._src.processors import processor
-from neptune_model.protos import orchestration_pb2
+from xla_saved_model.protos import orchestration_pb2
+from xla_saved_model._src import assets2xsm
+from xla_saved_model._src.core import shlo_type
+from xla_saved_model._src.export import jax_model
+from xla_saved_model._src.export import main_lib
+from xla_saved_model._src.export import serving_config
+from xla_saved_model._src.processors import processor
 
 
 def get_synthetic_batch(

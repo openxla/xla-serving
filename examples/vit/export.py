@@ -18,14 +18,15 @@ Importing this module (via ``examples.vit``) sets ``KERAS_BACKEND=jax``
 before keras is loaded; see ``examples/vit/__init__.py``.
 """
 
-from neptune_model._src.export import jax_model
-from neptune_model._src.export import main_lib
-from neptune_model._src.export import serving_config
 import jax
 import jax.numpy as jnp
 import keras
 import keras_hub
 import numpy as np
+
+from xla_saved_model._src.export import jax_model
+from xla_saved_model._src.export import main_lib
+from xla_saved_model._src.export import serving_config
 
 
 DEFAULT_MODEL_PRESET = 'vit_base_patch16_224_imagenet'

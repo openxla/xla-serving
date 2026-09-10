@@ -23,9 +23,9 @@ import jax.numpy as jnp
 from orbax import checkpoint as ocp
 
 from examples.nnx import model as nnx_model
-from neptune_model._src.export import jax_model
-from neptune_model._src.export import main_lib
-from neptune_model._src.export import serving_config
+from xla_saved_model._src.export import jax_model
+from xla_saved_model._src.export import main_lib
+from xla_saved_model._src.export import serving_config
 
 
 def export_model(export_path: str, dtype: jnp.dtype = jnp.float32):

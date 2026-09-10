@@ -23,10 +23,10 @@ import jax.numpy as jnp
 import orbax.checkpoint as ocp
 
 from examples.nnx import model as nnx_model
-from neptune_model._src.export import jax_model
-from neptune_model._src.export import main_lib
-from neptune_model._src.export import serving_config
-from neptune_model.protos import orchestration_pb2
+from xla_saved_model.protos import orchestration_pb2
+from xla_saved_model._src.export import jax_model
+from xla_saved_model._src.export import main_lib
+from xla_saved_model._src.export import serving_config
 
 
 def export_model(export_path: str):

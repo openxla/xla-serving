@@ -20,7 +20,7 @@ LRMs, encoder-heavy LLMs.
 
 ## Python Development
 
-A `neptune_model` Python library provides an API for exporting models that can
+A `xla_saved_model` Python library provides an API for exporting models that can
 run on NSE.
 
 ### Prerequisites
@@ -31,7 +31,7 @@ run on NSE.
 
 ### Installation
 
-To work on `neptune_model` you can install the package in editable mode with
+To work on `xla_saved_model` you can install the package in editable mode with
 development/test dependencies.
 
 ```bash
@@ -41,7 +41,7 @@ pip install -e .[tf,test]
 Run tests using `pytest`:
 
 ```bash
-pytest neptune_model/
+pytest xla_saved_model/
 ```
 
 Run example model exports with `python -m`:
@@ -57,11 +57,11 @@ Build and install a wheel with `python -m build`:
 pip install --upgrade build
 python -m build --wheel
 
-pip install dist/neptune_model-*.whl
+pip install dist/xla_saved_model-*.whl
 
 # Use [tf] tag if you want TensorFlow preprocessor support:
 
-wheel=(dist/neptune_model-*.whl)
+wheel=(dist/xla_saved_model-*.whl)
 pip install "${wheel}[tf]"
 ```
 
@@ -244,7 +244,7 @@ Running warmup requests avoids "cold start" latency spikes for the first few cli
 #### Prerequisites
 The model directory must contain a pre-generated warmup file at `assets.extra/neptune_serving_warmup_requests`.
 
-This file can be generated during model export by passing warmup examples to `neptune_model.save(..., warmup_examples=...)`.
+This file can be generated during model export by passing warmup examples to `xla_saved_model.save(..., warmup_examples=...)`.
 
 Note that the warmup examples must follow the input specification (input names, shapes, and data types) of the corresponding serving signature.
 
@@ -252,11 +252,11 @@ Here is an example of exporting a model with warmup requests:
 
 ```python
 import numpy as np
-import neptune_model
+import xla_saved_model
 
 # Assume you have a JaxModel instance `model` and your ServingConfig `serving_config`
 model = ...
-serving_config = neptune_model.ServingConfig(
+serving_config = xla_saved_model.ServingConfig(
     serving_signature="serving_default",
     # ... other config options ...
 )
@@ -274,7 +274,7 @@ warmup_examples = {
     ],
 }
 
-neptune_model.save(
+xla_saved_model.save(
     model=model,
     export_path="/path/to/export_dir",
     serving_configs=[serving_config],
@@ -304,18 +304,18 @@ bazel run //runtime/serving/gcp/server:neptune_serving_main -- \
   --warmup_server=false
 ```
 
-## Neptune Model Export Migration Guide
+## XLA SavedModel Export Migration Guide
 
-With the release of `TensorflowModel` and explicit orchestration pipelines, several APIs in `neptune_model` have been updated to support exporting multiple models (such as JAX models combined with TensorFlow preprocessing and postprocessing) and complex multi-stage pipelines.
+With the release of `TensorflowModel` and explicit orchestration pipelines, several APIs in `xla_saved_model` have been updated to support exporting multiple models (such as JAX models combined with TensorFlow preprocessing and postprocessing) and complex multi-stage pipelines.
 
 ### Key Changes
 
 1. **Model Containers (`JaxModel` and `TensorflowModel`)**:
-   - `neptune_model.save()` accepts a sequence of user-level model containers (`Sequence[Model] | Model`).
+   - `xla_saved_model.save()` accepts a sequence of user-level model containers (`Sequence[Model] | Model`).
      - `JaxModel`: Encapsulates JAX functions and related shared variables (mesh, model parameters).
      - `TensorflowModel`: Encapsulates TensorFlow functions and trackable resources. Currently, at most one `TensorflowModel` instance is supported per export bundle.
    - When exporting multiple models, explicitly assign unique names to your model containers (e.g., `name='jax_model'`, `name='tf_model'`). If only a single model is exported, naming is optional as it will be assigned a default name.
-   - Pass a sequence of models `[model1, model2, ...]` to `neptune_model.save()`.
+   - Pass a sequence of models `[model1, model2, ...]` to `xla_saved_model.save()`.
 
 2. **Explicit Orchestration (`ServingConfig.orchestration`)**:
    - Fixed processing pipeline structures (`processor.SequentialProcessing` and `TfProcessor`) are replaced by explicit `ServingConfig.orchestration` configurations using `ModelCall` objects.
@@ -329,18 +329,18 @@ With the release of `TensorflowModel` and explicit orchestration pipelines, seve
 Suppose you have an existing export script that uses JAX with TensorFlow preprocessing and postprocessing under the previous API:
 
 ```python
-import neptune_model
-from neptune_model import processor
-from neptune_model import tf_processor
+import xla_saved_model
+from xla_saved_model import processor
+from xla_saved_model import tf_processor
 
-neptune_model.save(
+xla_saved_model.save(
     export_path=export_path,
-    models=neptune_model.JaxModel(
+    models=xla_saved_model.JaxModel(
         apply_fn_bundle=apply_fn_bundle,
         params=model_params,
     ),
     serving_configs=[
-        neptune_model.ServingConfig(
+        xla_saved_model.ServingConfig(
             serving_signature='serving_default',
             input_signature=input_signature,
             processing=processor.SequentialProcessing(
@@ -371,7 +371,7 @@ Follow these 4 steps to convert this script to the new API:
    - Instead of creating individual `TfProcessor` objects inside `SequentialProcessing`, create a single `TensorflowModel` container holding your preprocessing and postprocessing functions.
    - Bind any required trackable resources (such as embedding tables) directly to `trackable_resources`:
      ```python
-     tf_proc_model = neptune_model.TensorflowModel(
+     tf_proc_model = xla_saved_model.TensorflowModel(
          name='tf_model',
          tf_functions={
              'preprocessing': embedding_layer,
@@ -386,10 +386,10 @@ Follow these 4 steps to convert this script to the new API:
 
 3. **Replace `SequentialProcessing` with Explicit `Orchestration`**:
    - In your `ServingConfig`, remove `processing=processor.SequentialProcessing(...)`.
-   - Define `orchestration=neptune_model.serving_config.Orchestration(model_calls=[...])`, where each `ModelCall` references a model by `model_name`, specifies the function via `method_key`, and assigns `role=orchestration_pb2.ROLE_MODEL` (other role types are not required).
+   - Define `orchestration=xla_saved_model.serving_config.Orchestration(model_calls=[...])`, where each `ModelCall` references a model by `model_name`, specifies the function via `method_key`, and assigns `role=orchestration_pb2.ROLE_MODEL` (other role types are not required).
 
 4. **Pass the Sequence of Models to `save()`**:
-   - Update `neptune_model.save()` to take the list of model containers: `[tf_proc_model, jax_model]`.
+   - Update `xla_saved_model.save()` to take the list of model containers: `[tf_proc_model, jax_model]`.
 
 ---
 
@@ -398,11 +398,11 @@ Follow these 4 steps to convert this script to the new API:
 After applying the steps above, the converted script using `TensorflowModel` and `Orchestration` is:
 
 ```python
-import neptune_model
-from neptune_model.protos import orchestration_pb2
+import xla_saved_model
+from xla_saved_model.protos import orchestration_pb2
 
 # 1. Bundle TensorFlow pre/post-processing functions and trackable resources
-tf_proc_model = neptune_model.TensorflowModel(
+tf_proc_model = xla_saved_model.TensorflowModel(
     name='tf_model',
     tf_functions={
         'preprocessing': embedding_layer,
@@ -412,32 +412,32 @@ tf_proc_model = neptune_model.TensorflowModel(
 )
 
 # 2. Define your JAX model with a unique name
-jm = neptune_model.JaxModel(
+jm = xla_saved_model.JaxModel(
     apply_fn_bundle=apply_fn_bundle,
     params=model_params,
     name='jax_model',
 )
 
 # 3. Pass all models as a sequence and explicitly define the orchestration pipeline
-neptune_model.save(
+xla_saved_model.save(
     [tf_proc_model, jm],
     export_path=export_path,
     serving_configs=[
-        neptune_model.ServingConfig(
+        xla_saved_model.ServingConfig(
             serving_signature='serving_default',
             input_signature=input_signature,
-            orchestration=neptune_model.serving_config.Orchestration(
+            orchestration=xla_saved_model.serving_config.Orchestration(
                 model_calls=[
-                    neptune_model.serving_config.ModelCall(
+                    xla_saved_model.serving_config.ModelCall(
                         model_name='tf_model',
                         method_key='preprocessing',
                     ),
-                    neptune_model.serving_config.ModelCall(
+                    xla_saved_model.serving_config.ModelCall(
                         model_name='jax_model',
                         method_key='serving_default',
                         role=orchestration_pb2.ROLE_MODEL,
                     ),
-                    neptune_model.serving_config.ModelCall(
+                    xla_saved_model.serving_config.ModelCall(
                         model_name='tf_model',
                         method_key='postprocessing',
                     ),
