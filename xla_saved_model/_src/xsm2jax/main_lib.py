@@ -18,10 +18,14 @@ from typing import Any, List, Sequence, Tuple
 
 import jax
 import jax.extend as jex
+import jaxtyping
 import numpy as np
 
 from xla_saved_model.protos import jax_supplemental_pb2
 from xla_saved_model._src import core as xsm
+from xla_saved_model._src.jax2xsm import typing as xsm_typing
+
+ApplyFn = xsm_typing.ApplyFn
 
 
 def _deserialize_disabled_safety_check(disabled_check):  # pylint: disable=missing-function-docstring
@@ -326,11 +330,75 @@ def _to_jax_shaped_array(
   return jax.core.ShapedArray(_to_jax_shape(shape, scope), dtype)
 
 
-def xsm_functions_to_jax_function(
+def _validate_arg_count(
+    exported: jax.export.Exported, expected_count: int = 2
+) -> None:
+  """Validates that an Exported function takes the expected number of arguments."""
+  dummy_leaves = [0] * exported.in_tree.num_leaves
+  unflattened = exported.in_tree.unflatten(dummy_leaves)
+  if (
+      isinstance(unflattened, tuple)
+      and len(unflattened) == 2
+      and isinstance(unflattened[1], dict)
+  ):
+    # Standard JAX export structure: ((arg0, arg1, ...), kwargs)
+    num_args = len(unflattened[0])
+  elif isinstance(unflattened, tuple):
+    num_args = len(unflattened)
+  else:
+    num_args = 1
+
+  if num_args != expected_count:
+    raise ValueError(
+        "ExportedApplyFn expects an Exported function taking exactly"
+        f" {expected_count} arguments (params, inputs), but got {num_args}"
+        " arguments."
+    )
+
+
+class ExportedApplyFn:
+  """A callable wrapper around `jax.export.Exported` acting as an `ApplyFn`.
+
+  Delegates `__call__` to `exported.call` while preserving access
+  to all attributes and methods of the underlying `Exported` object.
+  """
+
+  def __init__(self, exported: jax.export.Exported):
+    if not isinstance(exported, jax.export.Exported):
+      raise TypeError(
+          "ExportedApplyFn expects a jax.export.Exported object, got"
+          f" {type(exported).__name__}."
+      )
+    _validate_arg_count(exported)
+    self._exported = exported
+
+  def __call__(
+      self,
+      params: jaxtyping.PyTree,
+      inputs: jaxtyping.PyTree,
+  ) -> jaxtyping.PyTree:
+    return self._exported.call(params, inputs)
+
+  @property
+  def exported(self) -> jax.export.Exported:
+    """Returns the underlying JAX `Exported` object."""
+    return self._exported
+
+  def __getattr__(self, name: str) -> Any:
+    return getattr(self._exported, name)
+
+  def __repr__(self) -> str:
+    return f"ExportedApplyFn({self._exported!r})"
+
+  def __str__(self) -> str:
+    return str(self._exported)
+
+
+def xsm_fn_to_apply_fn(
     manifest_function: xsm.manifest_pb2.Function,
     jax_supplemental_function: jax_supplemental_pb2.Function,
-) -> jax.export.Exported:
-  """Converts an XSE function and its supplemental to a JAX `Exported`.
+) -> ApplyFn:
+  """Converts an XSE function and its supplemental to a JAX `ApplyFn`.
 
   Note that Jax `effects` only for things like debug printing and debug
   assertions and should be turned off when model exporting.
@@ -341,7 +409,8 @@ def xsm_functions_to_jax_function(
       the supplemental of `manifest_function`.
 
   Returns:
-    A JAX `Exported` object.
+    A JAX `ApplyFn` (wrapped in `ExportedApplyFn`) that can be called directly
+    as `fn(params, inputs)`.
   """
   in_treedef, in_avals, in_shardings_hlo = _restore_spec(
       manifest_function.signature,
@@ -397,8 +466,4 @@ def xsm_functions_to_jax_function(
       _out_named_shardings=(None,) * len(out_avals),
   )
 
-  return exported
-
-
-# Backward-compatibility alias.
-npt_functions_to_jax_function = xsm_functions_to_jax_function
+  return ExportedApplyFn(exported)

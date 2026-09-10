@@ -14,10 +14,12 @@
 
 """xsm2jax module for converting XLA SavedModels back to JAX."""
 
-from xla_saved_model._src.xsm2jax.main_lib import xsm_functions_to_jax_function
+from xla_saved_model._src.xsm2jax.main_lib import ApplyFn
+from xla_saved_model._src.xsm2jax.main_lib import ExportedApplyFn
+from xla_saved_model._src.xsm2jax.main_lib import xsm_fn_to_apply_fn
 
 __all__ = [
-    "xsm_functions_to_jax_function",
+    "ApplyFn",
+    "ExportedApplyFn",
+    "xsm_fn_to_apply_fn",
 ]
-
-npt_functions_to_jax_function = xsm_functions_to_jax_function

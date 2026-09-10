@@ -1,6 +1,9 @@
 """Tests for reconstructing JAX function from XSE serialization protos."""
 
 import os
+
+os.environ['XLA_FLAGS'] = '--xla_force_host_platform_device_count=8'
+
 from typing import Sequence
 
 from absl.testing import absltest
@@ -254,7 +257,7 @@ class XsmToJaxTest(parameterized.TestCase):
           str(dim), str(expected_dim), f'The {i}-th dimension size is wrong.'
       )
 
-  def test_xsm_functions_to_jax_function_simple_jax_e2e(self):
+  def test_xsm_fn_to_apply_fn_simple_jax_e2e(self):
     def jax_model_fn(params, x):
       return 2 * params * x
 
@@ -308,24 +311,28 @@ class XsmToJaxTest(parameterized.TestCase):
       jax_supplemental_proto.ParseFromString(f.read())
 
     # Deserialize the jax function and compare results from the 2 jax functions.
-    deserialized_jax_exported = xsm_to_jax.xsm_functions_to_jax_function(
+    deserialized_apply_function = xsm_to_jax.xsm_fn_to_apply_fn(
         loaded_npt_function,
         jax_supplemental_proto,
     )
 
     test_input = jnp.array(7.0)
 
-    result_from_deserialized_jax_call = deserialized_jax_exported.call(
+    # Test calling with (params, inputs)
+    result_from_deserialized_apply_fn = deserialized_apply_function(
         jax_params, test_input
     )
     result_from_original_jax_call = jax_model_fn(jax_params, test_input)
 
     self.assertEqual(
-        result_from_deserialized_jax_call, result_from_original_jax_call
+        result_from_deserialized_apply_fn, result_from_original_jax_call
     )
-    self.assertEqual(result_from_deserialized_jax_call, 35.0)
+    self.assertEqual(result_from_deserialized_apply_fn, 35.0)
+    self.assertIsInstance(
+        deserialized_apply_function.exported, jax.export.Exported
+    )
 
-  def test_xsm_functions_to_jax_function_mnist(self):
+  def test_xsm_fn_to_apply_fn_mnist(self):
     os.environ['XLA_FLAGS'] = '--xla_force_host_platform_device_count=8'
 
     model = jax_mnist.JaxMnist()
@@ -410,7 +417,7 @@ class XsmToJaxTest(parameterized.TestCase):
       jax_supplemental_proto.ParseFromString(f.read())
 
     # Deserialize the jax function and compare results from the 2 jax functions.
-    deserialized_jax_exported = xsm_to_jax.xsm_functions_to_jax_function(
+    deserialized_apply_function = xsm_to_jax.xsm_fn_to_apply_fn(
         loaded_npt_function,
         jax_supplemental_proto,
     )
@@ -432,16 +439,72 @@ class XsmToJaxTest(parameterized.TestCase):
     )
 
     result_from_original_jax_call = model_apply_fn(params, test_input_data)
-    result_from_deserialized_jax_call = deserialized_jax_exported.call(
+    result_from_deserialized_apply_fn = deserialized_apply_function(
         jax.device_put(restored_params, params_sharding_spec),
         test_input_data,
     )
 
     self.assertTrue(
         jnp.array_equal(
-            result_from_deserialized_jax_call, result_from_original_jax_call
+            result_from_deserialized_apply_fn,
+            result_from_original_jax_call,
         )
     )
+
+  def test_exported_apply_fn(self):
+    def simple_fn(params, inputs):
+      return inputs * params['w']
+
+    exported = jax.export.export(jax.jit(simple_fn))(
+        {'w': jax.core.ShapedArray((), jnp.float32)},
+        jax.core.ShapedArray((2,), jnp.float32),
+    )
+
+    # Test ExportedApplyFn wrapper on an Exported object
+    apply_fn = xsm_to_jax.ExportedApplyFn(exported)
+    self.assertIsInstance(apply_fn, xsm_to_jax.ExportedApplyFn)
+    self.assertIs(apply_fn.exported, exported)
+    self.assertEqual(apply_fn.fun_name, exported.fun_name)
+    self.assertEqual(apply_fn.in_tree, exported.in_tree)
+    self.assertEqual(apply_fn.out_tree, exported.out_tree)
+
+    # Test calling with (params, inputs)
+    params = {'w': jnp.float32(2.0)}
+    arg = jnp.array([1.0, 2.0], dtype=jnp.float32)
+    self.assertTrue(
+        jnp.array_equal(apply_fn(params, arg), jnp.array([2.0, 4.0]))
+    )
+
+    # Test repr and str
+    self.assertIn('ExportedApplyFn', repr(apply_fn))
+    self.assertEqual(str(apply_fn), str(exported))
+
+  def test_exported_apply_fn_invalid_arg_count(self):
+    # 1 argument function
+    exported_1_arg = jax.export.export(jax.jit(lambda x: x * 2.0))(
+        jax.core.ShapedArray((), jnp.float32)
+    )
+    with self.assertRaisesRegex(
+        ValueError, 'taking exactly 2 arguments.*got 1'
+    ):
+      xsm_to_jax.ExportedApplyFn(exported_1_arg)
+
+    # 3 arguments function
+    exported_3_arg = jax.export.export(jax.jit(lambda a, b, c: a + b + c))(
+        jax.core.ShapedArray((), jnp.float32),
+        jax.core.ShapedArray((), jnp.float32),
+        jax.core.ShapedArray((), jnp.float32),
+    )
+    with self.assertRaisesRegex(
+        ValueError, 'taking exactly 2 arguments.*got 3'
+    ):
+      xsm_to_jax.ExportedApplyFn(exported_3_arg)
+
+  def test_exported_apply_fn_invalid_type(self):
+    with self.assertRaisesRegex(
+        TypeError, 'expects a jax.export.Exported object, got str'
+    ):
+      xsm_to_jax.ExportedApplyFn('not an Exported object')
 
 
 if __name__ == '__main__':
