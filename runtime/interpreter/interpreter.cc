@@ -91,6 +91,8 @@
 #include "tsl/platform/blocking_counter.h"  // from @tsl
 #include "tsl/platform/context.h"  // from @tsl
 #include "tsl/platform/path.h"  // from @tsl
+#include "tsl/profiler/lib/traceme.h"  // from @tsl
+#include "tsl/profiler/lib/traceme_encode.h"  // from @tsl
 
 ABSL_FLAG(bool, jsv_enable_parallel_loading_pipelines, true,
           "When set to true, load the pipelines in parallel.");
@@ -1527,6 +1529,14 @@ absl::StatusOr<std::vector<Value>> Interpreter::Run(
   run_options.request_id = GenerateNextRequestId();
   VLOG(2) << "Interpreter::Run: pipeline_name=" << pipeline_name
           << ", model_name=" << create_options_->model_name;
+
+  // Mark this scope as a user-defined request root ("_r": -1) so Xprof can
+  // correctly identify inference sessions and provide latency breakdowns.
+  // This is extremely low overhead when tracing is disabled because TraceMe
+  // only checks an atomic flag and skips evaluating the lambda.
+  tsl::profiler::TraceMe trace_me([&]() {
+    return tsl::profiler::TraceMeEncode("Interpreter::Run", {{"_r", -1}});
+  });
 
   std::optional<neptune::ScopedStreamCallback> scoped_stream_callback;
   if (run_options.streamed_output_callback != nullptr &&

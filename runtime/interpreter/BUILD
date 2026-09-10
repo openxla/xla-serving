@@ -214,6 +214,8 @@ cc_library(
         "@tsl//tsl/platform:blocking_counter",
         "@tsl//tsl/platform:context",
         "@tsl//tsl/platform:path",
+        "@tsl//tsl/profiler/lib:traceme",
+        "@tsl//tsl/profiler/lib:traceme_encode",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/python/ifrt",
         "@xla//xla/python/ifrt:serdes",
