@@ -78,6 +78,45 @@ absl::string_view MixedPriorityBatchingPolicyToString(
   return "unknown_mixed_priority_batching_policy";
 }
 
+absl::StatusOr<PriorityBatchingPolicy> GetPriorityBatchingPolicy(
+    BatchOptions::PriorityBatchingPolicy priority_batching_policy) {
+  switch (priority_batching_policy) {
+    case BatchOptions::PRIORITY_BATCHING_POLICY_UNSPECIFIED:
+    case BatchOptions::STRICT_FIFO:
+      return PriorityBatchingPolicy::kStrictFifo;
+    case BatchOptions::PRIORITY_AWARE:
+      return PriorityBatchingPolicy::kPriorityAware;
+    default:
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Unsupported priority batching policy: ", priority_batching_policy));
+  }
+}
+
+absl::string_view PriorityBatchingPolicyToString(
+    PriorityBatchingPolicy policy) {
+  switch (policy) {
+    case PriorityBatchingPolicy::kStrictFifo:
+      return kStrictFifoAttrValue;
+    case PriorityBatchingPolicy::kPriorityAware:
+      return kPriorityAwareAttrValue;
+  }
+  return "unknown_priority_batching_policy";
+}
+
+absl::StatusOr<PriorityAwareBatchingOptions> GetPriorityAwareBatchingOptions(
+    const BatchOptions::PriorityAwareBatchingOptions& options) {
+  if (options.max_queue_depth() < 0) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("`priority_aware_batching_options.max_queue_depth` must "
+                     "be non-negative, but got: ",
+                     options.max_queue_depth()));
+  }
+  return PriorityAwareBatchingOptions{
+      .max_queue_depth = static_cast<size_t>(options.max_queue_depth()),
+      .enable_task_resplit = options.enable_task_resplit(),
+  };
+}
+
 absl::string_view CriticalityToString(
     tsl::criticality::Criticality criticality) {
   switch (criticality) {

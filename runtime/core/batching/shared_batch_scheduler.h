@@ -278,16 +278,12 @@ class SharedBatchScheduler
     MixedPriorityBatchingPolicy mixed_priority_batching_policy =
         MixedPriorityBatchingPolicy::kLowPriorityPaddingWithMaxBatchSize;
 
-    // Options for priority aware batching.
-    // Used iff PriorityBatchingPolicy is set to PRIORITY_AWARE.
-    struct PriorityAwareBatchingOptions {
-      // The maximum sum of task sizes to enqueue. Default is 0, which means the
-      // limit is not set.
-      size_t max_queue_depth = 0;
-      // If true, the priority aware batch queue will resplit tasks into smaller
-      // subtasks if needed.
-      bool enable_task_resplit = false;
-    };
+    // Controls the internal queue batching strategy.
+    PriorityBatchingPolicy priority_batching_policy =
+        PriorityBatchingPolicy::kStrictFifo;
+
+    // Options for priority aware batching. Used iff priority_batching_policy is
+    // set to PriorityBatchingPolicy::kPriorityAware.
     PriorityAwareBatchingOptions priority_aware_batching_options;
 
     // The allocator for allocating memory for HostBuffer. The default allocator

@@ -324,6 +324,9 @@ absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
       MixedPriorityBatchingPolicy mixed_priority_batching_policy,
       GetMixedPriorityBatchingPolicy(
           batch_options.mixed_priority_batching_policy()));
+  TF_ASSIGN_OR_RETURN(
+      PriorityBatchingPolicy priority_batching_policy,
+      GetPriorityBatchingPolicy(batch_options.priority_batching_policy()));
 
   BatchRunnerOpOptions batch_runner_op_options = {
       .input_signature = std::move(input_signature),
@@ -345,6 +348,7 @@ absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
           !batch_options.disable_large_batch_splitting() && !has_streaming,
       .batch_padding_policy = std::move(batch_padding_policy_string),
       .mixed_priority_batching_policy = mixed_priority_batching_policy,
+      .priority_batching_policy = priority_batching_policy,
       .allocator = create_options->allocator,
       .ragged_inputs =
           [&]() {
@@ -375,6 +379,12 @@ absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
         std::vector<int32_t>{
             low_priority_batch_options.allowed_batch_sizes().begin(),
             low_priority_batch_options.allowed_batch_sizes().end()};
+  }
+  if (batch_options.has_priority_aware_batching_options()) {
+    TF_ASSIGN_OR_RETURN(
+        batch_runner_op_options.priority_aware_batching_options,
+        GetPriorityAwareBatchingOptions(
+            batch_options.priority_aware_batching_options()));
   }
 
   return CreateBatchRunnerOp(std::move(batched_kernels),

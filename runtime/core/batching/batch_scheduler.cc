@@ -38,4 +38,15 @@ absl::StatusOr<MixedPriorityBatchingPolicy> GetMixedPriorityBatchingPolicy(
       "Unknown mixed priority batching policy: %s", attr_value));
 }
 
+absl::StatusOr<PriorityBatchingPolicy> GetPriorityBatchingPolicy(
+    absl::string_view attr_value) {
+  if (attr_value == kStrictFifoAttrValue) {
+    return PriorityBatchingPolicy::kStrictFifo;
+  } else if (attr_value == kPriorityAwareAttrValue) {
+    return PriorityBatchingPolicy::kPriorityAware;
+  }
+  return absl::InvalidArgumentError(
+      absl::StrFormat("Unknown priority batching policy: %s", attr_value));
+}
+
 }  // namespace neptune
