@@ -53,6 +53,7 @@
 #else
   #include "runtime/interpreter/interpreter_create_options.h"  // from @xla_serving
 #endif
+#include "protos/grpc/model_server_config.pb.h"  // from @xla_serving
 #include "runtime/serving/gcp/server/flags.h"  // from @xla_serving
 #include "runtime/serving/gcp/server/grpc_status_utils.h"  // from @xla_serving
 #include "runtime/serving/gcp/server/ifrt_client_creator.h"  // from @xla_serving
@@ -183,10 +184,43 @@ absl::Status ConvertOutputsToResponse(
 
 }  // namespace
 
+OrbaxCallbackGrpcServer::OrbaxCallbackGrpcServer(
+    absl::flat_hash_map<std::string, std::shared_ptr<ModelEntry>> models,
+    std::shared_ptr<xla::ifrt::Client> client,
+    std::unique_ptr<tsl::thread::ThreadPool> execute_worker_thread_pool,
+    std::unique_ptr<tsl::thread::ThreadPool> computation_thread_pool,
+    std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool)
+    : client_(std::move(client)),
+      execute_worker_thread_pool_(std::move(execute_worker_thread_pool)),
+      computation_thread_pool_(std::move(computation_thread_pool)),
+      checkpoint_loader_thread_pool_(std::move(checkpoint_loader_thread_pool)),
+      models_(std::move(models)) {}
+
+OrbaxCallbackGrpcServer::OrbaxCallbackGrpcServer(
+    absl::string_view model_name, std::unique_ptr<xla_serving::Interpreter> interpreter,
+    std::shared_ptr<xla::ifrt::Client> client,
+    std::unique_ptr<tsl::thread::ThreadPool> execute_worker_thread_pool,
+    std::unique_ptr<tsl::thread::ThreadPool> computation_thread_pool,
+    std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool)
+    : client_(std::move(client)),
+      execute_worker_thread_pool_(std::move(execute_worker_thread_pool)),
+      computation_thread_pool_(std::move(computation_thread_pool)),
+      checkpoint_loader_thread_pool_(std::move(checkpoint_loader_thread_pool)) {
+  auto entry = std::make_shared<ModelEntry>();
+  entry->name = std::string(model_name);
+  entry->interpreter = std::move(interpreter);
+  models_[entry->name] = std::move(entry);
+}
+
 absl::StatusOr<std::unique_ptr<OrbaxCallbackGrpcServer>>
-OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
-                                absl::string_view model_path,
+OrbaxCallbackGrpcServer::Create(const ModelServerConfig& config,
                                 const OrbaxCallbackGrpcServerOptions& options) {
+  if (!config.has_model_config_list() ||
+      config.model_config_list().configs().empty()) {
+    return absl::InvalidArgumentError(
+        "ModelServerConfig must contain a non-empty model_config_list.");
+  }
+
   std::string orbax_platform = absl::GetFlag(FLAGS_orbax_grpc_server_platform);
   LOG(INFO) << "Creating Orbax Server for Orbax platform: " << orbax_platform;
   std::string pjrt_platform = orbax_platform;
@@ -223,36 +257,86 @@ OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
       std::make_unique<tsl::thread::ThreadPool>(
           tsl::Env::Default(), tsl::ThreadOptions(),
           "OrbaxCheckpointLoaderThreadPool", kThreadPoolNumThreads);
-  #if ENABLE_TF == 1
+
+  absl::flat_hash_map<std::string, std::shared_ptr<ModelEntry>> models;
+  for (const auto& model_config : config.model_config_list().configs()) {
+    const std::string& model_name = model_config.name();
+    const std::string& model_path = model_config.base_path();
+    if (model_name.empty()) {
+      return absl::InvalidArgumentError("ModelConfig name must not be empty.");
+    }
+    if (model_path.empty()) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("ModelConfig base_path must not be empty for model '",
+                       model_name, "'."));
+    }
+    if (models.contains(model_name)) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Duplicate model name '", model_name, "' in ModelServerConfig."));
+    }
+
+#if ENABLE_TF == 1
     auto create_options =
         std::make_unique<xla_serving::TfCompatibleInterpreterCreateOptions>();
     create_options->tfrt_options.saved_model_options =
         GetSavedModelOptions(options);
 #else
-  auto create_options = std::make_unique<xla_serving::InterpreterCreateOptions>();
+    auto create_options = std::make_unique<xla_serving::InterpreterCreateOptions>();
 #endif
-
     create_options->checkpoint_loader_thread_pool =
         checkpoint_loader_thread_pool.get();
     create_options->model_name = model_name;
+    // TODO: Support model versioning.
     create_options->model_version = 0;
     create_options->model_path = model_path;
-  create_options->execute_worker_thread_pool = execute_worker_thread_pool.get();
+    create_options->execute_worker_thread_pool =
+        execute_worker_thread_pool.get();
     create_options->ifrt_client = client;
     create_options->computation_thread_pool = computation_thread_pool.get();
     create_options->platform_name = orbax_platform;
+
+    // TODO: Support loading and warming up models concurrently.
     std::unique_ptr<xla_serving::Interpreter> interpreter;
     TF_ASSIGN_OR_RETURN(interpreter,
                         xla_serving::Interpreter::Create(std::move(create_options)));
-    auto server = std::make_unique<OrbaxCallbackGrpcServer>(
-        model_name, std::move(interpreter), client,
-        std::move(execute_worker_thread_pool),
-        std::move(computation_thread_pool),
-        std::move(checkpoint_loader_thread_pool));
-    if (options.warmup_server) {
-      TF_RETURN_IF_ERROR(server->Warmup(model_path));
+
+    auto entry = std::make_shared<ModelEntry>();
+    entry->name = model_name;
+    entry->path = model_path;
+    entry->interpreter = std::move(interpreter);
+    auto [_, inserted] = models.insert({model_name, std::move(entry)});
+    if (!inserted) {
+      return absl::AlreadyExistsError(
+          absl::StrCat("Duplicate model name '", model_name,
+                       "' in ModelServerConfig."));
     }
-    return server;
+  }
+
+  auto server = std::make_unique<OrbaxCallbackGrpcServer>(
+      std::move(models), client, std::move(execute_worker_thread_pool),
+      std::move(computation_thread_pool),
+      std::move(checkpoint_loader_thread_pool));
+
+  if (options.warmup_server) {
+    for (const auto& model_config : config.model_config_list().configs()) {
+      auto it = server->models_.find(model_config.name());
+      if (it != server->models_.end()) {
+        TF_RETURN_IF_ERROR(server->Warmup(*it->second));
+      }
+    }
+  }
+  return server;
+}
+
+absl::StatusOr<std::unique_ptr<OrbaxCallbackGrpcServer>>
+OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
+                                absl::string_view model_path,
+                                const OrbaxCallbackGrpcServerOptions& options) {
+  ModelServerConfig config;
+  auto* model_config = config.mutable_model_config_list()->add_configs();
+  model_config->set_name(std::string(model_name));
+  model_config->set_base_path(std::string(model_path));
+  return Create(config, options);
 }
 
 grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
@@ -264,16 +348,44 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
 
   absl::Time start_time = absl::Now();
 
-  auto record_metrics = [this, start_time](const absl::Status& status) {
+  std::string model_name(request->model_spec().name());
+  if (model_name.empty()) {
+    if (models_.size() == 1) {
+      model_name = models_.begin()->first;
+    } else {
+      absl::Status status = absl::InvalidArgumentError(
+          "Model name not specified in request, and server has multiple "
+          "models loaded.");
+      double latency_ms = absl::ToDoubleMilliseconds(absl::Now() - start_time);
+      std::string status_str = absl::StatusCodeToString(status.code());
+      request_count_metric->GetCell("", "Predict", status_str)->IncrementBy(1);
+      request_latency_metric->GetCell("", "Predict", status_str)
+          ->Add(latency_ms);
+      reactor->Finish(ToGrpcStatus(status));
+      return reactor;
+    }
+  }
+
+  auto record_metrics = [start_time, model_name](const absl::Status& status) {
     double latency_ms = absl::ToDoubleMilliseconds(absl::Now() - start_time);
     std::string status_str = absl::StatusCodeToString(status.code());
-    request_count_metric->GetCell(model_name_, "Predict", status_str)
+    request_count_metric->GetCell(model_name, "Predict", status_str)
         ->IncrementBy(1);
-    request_latency_metric->GetCell(model_name_, "Predict", status_str)
+    request_latency_metric->GetCell(model_name, "Predict", status_str)
         ->Add(latency_ms);
   };
 
-  if (interpreter_ == nullptr) {
+  auto it = models_.find(model_name);
+  if (it == models_.end()) {
+    absl::Status status = absl::NotFoundError(
+        absl::StrCat("Model not found: '", model_name, "'"));
+    record_metrics(status);
+    reactor->Finish(ToGrpcStatus(status));
+    return reactor;
+  }
+
+  const auto& model_entry = it->second;
+  if (model_entry->interpreter == nullptr) {
     absl::Status status =
         absl::FailedPreconditionError("Interpreter not initialized.");
     record_metrics(status);
@@ -288,8 +400,8 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
   VLOG(1) << "Using pipeline name: '" << pipeline_name << "'";
 
   absl::StatusOr<absl::flat_hash_map<std::string, xla_serving::Value>>
-      input_with_names =
-          PrepareInputs(*request, pipeline_name, interpreter_.get());
+      input_with_names = PrepareInputs(*request, pipeline_name,
+                                       model_entry->interpreter.get());
   if (!input_with_names.ok()) {
     record_metrics(input_with_names.status());
     reactor->Finish(ToGrpcStatus(input_with_names.status()));
@@ -297,7 +409,7 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
   }
 
   absl::StatusOr<xla_serving::KernelIODataType> output_data_type =
-      interpreter_->GetModelOutputDataType(pipeline_name);
+      model_entry->interpreter->GetModelOutputDataType(pipeline_name);
   if (!output_data_type.ok()) {
     record_metrics(output_data_type.status());
     reactor->Finish(ToGrpcStatus(output_data_type.status()));
@@ -309,12 +421,12 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
   run_options.deadline = absl::FromChrono(context->deadline());
 
   tsl::Future<absl::flat_hash_map<std::string, xla_serving::Value>> future =
-      interpreter_->RunAsyncWithMapReturn(
+      model_entry->interpreter->RunAsyncWithMapReturn(
           pipeline_name, /*positional_inputs=*/{}, std::move(*input_with_names),
           run_options);
 
   future.OnReady(
-      [this, reactor, response, record_metrics, output_is_tensor,
+      [reactor, response, record_metrics, output_is_tensor, model_name,
        pipeline_name = std::string(pipeline_name)](
           absl::StatusOr<absl::flat_hash_map<std::string, xla_serving::Value>>
               output_with_names) {
@@ -326,7 +438,7 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
 
         absl::Status conversion_status = ConvertOutputsToResponse(
             std::move(*output_with_names), output_is_tensor, pipeline_name,
-            model_name_, response);
+            model_name, response);
         record_metrics(conversion_status);
         reactor->Finish(ToGrpcStatus(conversion_status));
       });
@@ -336,24 +448,24 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
 
 absl::StatusOr<absl::flat_hash_map<std::string, xla_serving::Value>>
 OrbaxCallbackGrpcServer::RunPredictInternal(
-    const xla_serving::serving::PredictRequest& request,
+    const ModelEntry& model_entry, const xla_serving::serving::PredictRequest& request,
     absl::string_view pipeline_name, const xla_serving::RunOptions& run_options) {
   TF_ASSIGN_OR_RETURN(
       auto input_with_names,
-      PrepareInputs(request, pipeline_name, interpreter_.get()));
+      PrepareInputs(request, pipeline_name, model_entry.interpreter.get()));
 
-  return interpreter_->RunWithMapReturn(
-      pipeline_name, /*positional_inputs=*/{}, input_with_names,
-      run_options);
+  return model_entry.interpreter->RunWithMapReturn(
+      pipeline_name, /*positional_inputs=*/{}, input_with_names, run_options);
 }
 
-absl::Status OrbaxCallbackGrpcServer::Warmup(absl::string_view model_path) {
+absl::Status OrbaxCallbackGrpcServer::Warmup(const ModelEntry& model_entry) {
   std::string warmup_path =
-      absl::StrCat(model_path, "/", kWarmupRequestsRelativePath);
+      absl::StrCat(model_entry.path, "/", kWarmupRequestsRelativePath);
   tsl::Env* env = tsl::Env::Default();
   TF_RETURN_IF_ERROR(env->FileExists(warmup_path));
 
-  LOG(INFO) << "Running warmup from " << warmup_path;
+  LOG(INFO) << "Running warmup for model '" << model_entry.name << "' from "
+            << warmup_path;
 
   std::unique_ptr<tsl::RandomAccessFile> file;
   TF_RETURN_IF_ERROR(env->NewRandomAccessFile(warmup_path, &file));
@@ -389,9 +501,10 @@ absl::Status OrbaxCallbackGrpcServer::Warmup(absl::string_view model_path) {
             ? absl::string_view(kDefaultServingSignatureDefKey)
             : absl::string_view(request.model_spec().signature_name());
     absl::StatusOr<absl::flat_hash_map<std::string, xla_serving::Value>> warmup_status =
-        RunPredictInternal(request, pipeline_name, run_options);
+        RunPredictInternal(model_entry, request, pipeline_name, run_options);
     if (!warmup_status.ok()) {
-      LOG(ERROR) << "Warmup failed for pipeline '" << pipeline_name
+      LOG(ERROR) << "Warmup failed for model '" << model_entry.name
+                 << "' pipeline '" << pipeline_name
                  << "': " << warmup_status.status();
       return warmup_status.status();
     }
@@ -403,7 +516,8 @@ absl::Status OrbaxCallbackGrpcServer::Warmup(absl::string_view model_path) {
         "Failed to parse warmup file (truncated or corrupt)");
   }
 
-  LOG(INFO) << "Warmup completed successfully.";
+  LOG(INFO) << "Warmup completed successfully for model '" << model_entry.name
+            << "'.";
   return absl::OkStatus();
 }
 
@@ -417,9 +531,10 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::GetModelMetadata(
   absl::Time start_time = absl::Now();
   absl::Status status = absl::OkStatus();
 
-  std::string target_model_name =
-      interpreter_ != nullptr ? std::string(interpreter_->GetModelName())
-                              : model_name_;
+  std::string target_model_name(request->model_spec().name());
+  if (target_model_name.empty() && models_.size() == 1) {
+    target_model_name = models_.begin()->first;
+  }
 
   auto record_metrics_on_exit = absl::MakeCleanup([&]() {
     double latency_ms = absl::ToDoubleMilliseconds(absl::Now() - start_time);
@@ -432,16 +547,18 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::GetModelMetadata(
         ->Add(latency_ms);
   });
 
-  if (interpreter_ == nullptr) {
-    status = absl::FailedPreconditionError("Interpreter not initialized.");
+  auto it = models_.find(target_model_name);
+  if (it == models_.end()) {
+    status = absl::NotFoundError(
+        absl::StrCat("Model not found or model name mismatch: [",
+                     request->model_spec().name(), "]"));
     reactor->Finish(ToGrpcStatus(status));
     return reactor;
   }
 
-  if (request->model_spec().name() != interpreter_->GetModelName()) {
-    status = absl::FailedPreconditionError(
-        absl::StrCat("Model name mismatch: got [", request->model_spec().name(),
-                     "] but expected [", interpreter_->GetModelName(), "]"));
+  const auto& model_entry = it->second;
+  if (model_entry->interpreter == nullptr) {
+    status = absl::FailedPreconditionError("Interpreter not initialized.");
     reactor->Finish(ToGrpcStatus(status));
     return reactor;
   }
@@ -451,7 +568,7 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::GetModelMetadata(
           ? absl::string_view(kDefaultServingSignatureDefKey)
           : absl::string_view(request->model_spec().signature_name());
 
-  auto pipeline_or = interpreter_->GetPipelineProto(signature_name);
+  auto pipeline_or = model_entry->interpreter->GetPipelineProto(signature_name);
   if (!pipeline_or.ok()) {
     status = pipeline_or.status();
     reactor->Finish(ToGrpcStatus(pipeline_or.status()));
@@ -460,6 +577,9 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::GetModelMetadata(
   const auto& pipeline = pipeline_or.value();
 
   response->mutable_model_spec()->CopyFrom(request->model_spec());
+  if (response->model_spec().name().empty()) {
+    response->mutable_model_spec()->set_name(target_model_name);
+  }
 
   for (const auto& field : request->metadata_field()) {
     if (field == "signature_def") {

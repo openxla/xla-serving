@@ -177,6 +177,7 @@ JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS = [
     "@org_tensorflow//tensorflow/core/framework:tensor",
     "@org_tensorflow//tensorflow/core:lib",
     "@tsl//tsl/profiler/lib:traceme",
+    "@xla_serving//protos/grpc:model_server_config_cc_proto",
 ] + select({
     ":enable_tf": [
         "@xla_serving//runtime/tensorflow:tf_compatible_interpreter_create_options",

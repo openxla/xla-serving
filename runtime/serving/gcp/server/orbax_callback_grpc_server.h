@@ -27,6 +27,7 @@
 #include "include/grpcpp/server_context.h"  // from @grpc
 #include "include/grpcpp/support/server_callback.h"  // from @grpc
 #include "protos/grpc/get_model_metadata.pb.h"  // from @xla_serving
+#include "protos/grpc/model_server_config.pb.h"  // from @xla_serving
 #include "protos/grpc/predict.pb.h"  // from @xla_serving
 #include "protos/grpc/prediction_service.grpc.pb.h"  // from @xla_serving
 #include "runtime/core/value.h"  // from @xla_serving
@@ -54,6 +55,12 @@ class OrbaxCallbackGrpcServer final
 
     : public xla_serving::serving::PredictionService::CallbackService {
  public:
+  struct ModelEntry {
+    std::string name;
+    std::string path;
+    std::unique_ptr<xla_serving::Interpreter> interpreter;
+  };
+
   OrbaxCallbackGrpcServer(OrbaxCallbackGrpcServer&& other) = default;
   OrbaxCallbackGrpcServer& operator=(OrbaxCallbackGrpcServer&& other) = default;
 
@@ -61,20 +68,29 @@ class OrbaxCallbackGrpcServer final
   OrbaxCallbackGrpcServer& operator=(const OrbaxCallbackGrpcServer&) = delete;
 
   OrbaxCallbackGrpcServer(
+      absl::flat_hash_map<std::string, std::shared_ptr<ModelEntry>> models,
+      std::shared_ptr<xla::ifrt::Client> client,
+      std::unique_ptr<tsl::thread::ThreadPool> execute_worker_thread_pool,
+      std::unique_ptr<tsl::thread::ThreadPool> computation_thread_pool,
+      std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool);
+
+  // Backward-compatible constructor for a single model.
+  OrbaxCallbackGrpcServer(
       absl::string_view model_name,
       std::unique_ptr<xla_serving::Interpreter> interpreter,
       std::shared_ptr<xla::ifrt::Client> client,
       std::unique_ptr<tsl::thread::ThreadPool> execute_worker_thread_pool,
       std::unique_ptr<tsl::thread::ThreadPool> computation_thread_pool,
-      std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool)
-      : model_name_(model_name),
-        client_(client),
-        execute_worker_thread_pool_(std::move(execute_worker_thread_pool)),
-        computation_thread_pool_(std::move(computation_thread_pool)),
-        checkpoint_loader_thread_pool_(
-            std::move(checkpoint_loader_thread_pool)),
-        interpreter_(std::move(interpreter)) {}
+      std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool);
 
+  // Creates an OrbaxCallbackGrpcServer from a ModelServerConfig.
+  static absl::StatusOr<std::unique_ptr<OrbaxCallbackGrpcServer>> Create(
+      const ModelServerConfig& config,
+      const OrbaxCallbackGrpcServerOptions& options =
+          OrbaxCallbackGrpcServerOptions());
+
+  // Creates an OrbaxCallbackGrpcServer for a single model
+  // (backward-compatible).
   static absl::StatusOr<std::unique_ptr<OrbaxCallbackGrpcServer>> Create(
       absl::string_view model_name, absl::string_view model_path,
       const OrbaxCallbackGrpcServerOptions& options =
@@ -95,17 +111,17 @@ class OrbaxCallbackGrpcServer final
  private:
   static constexpr int kThreadPoolNumThreads = 16;
 
-  std::string model_name_;
   std::shared_ptr<xla::ifrt::Client> client_;
   std::unique_ptr<tsl::thread::ThreadPool> execute_worker_thread_pool_;
   std::unique_ptr<tsl::thread::ThreadPool> computation_thread_pool_;
   std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool_;
-  std::unique_ptr<xla_serving::Interpreter> interpreter_;
+  absl::flat_hash_map<std::string, std::shared_ptr<ModelEntry>> models_;
 
-  absl::Status Warmup(absl::string_view model_path);
+  absl::Status Warmup(const ModelEntry& model_entry);
 
   absl::StatusOr<absl::flat_hash_map<std::string, xla_serving::Value>>
-  RunPredictInternal(const xla_serving::serving::PredictRequest& request,
+  RunPredictInternal(const ModelEntry& model_entry,
+                     const xla_serving::serving::PredictRequest& request,
                      absl::string_view pipeline_name,
                      const xla_serving::RunOptions& run_options);
 };
