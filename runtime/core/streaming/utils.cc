@@ -48,17 +48,17 @@
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 constexpr absl::string_view kNeptuneStreamOpName = "neptune_stream";
 constexpr absl::string_view kBackendConfigAttr = "mhlo.backend_config";
 constexpr absl::string_view kOutputNamesAttr = "output_names";
 
-bool ContainsNeptuneStream(mlir::Operation* op);
+bool ContainsStreamingOp(mlir::Operation* op);
 
-bool ContainsNeptuneStreamImpl(mlir::Operation* op,
-                               absl::flat_hash_set<mlir::Operation*>& visited) {
+bool ContainsStreamingOpImpl(mlir::Operation* op,
+                             absl::flat_hash_set<mlir::Operation*>& visited) {
   if (visited.contains(op)) return false;
   visited.insert(op);
 
@@ -74,7 +74,7 @@ bool ContainsNeptuneStreamImpl(mlir::Operation* op,
     mlir::ModuleOp module = call_op->getParentOfType<mlir::ModuleOp>();
     auto called_func =
         module.lookupSymbol<mlir::func::FuncOp>(call_op.getCallee());
-    if (called_func && ContainsNeptuneStreamImpl(called_func, visited)) {
+    if (called_func && ContainsStreamingOpImpl(called_func, visited)) {
       return true;
     }
   }
@@ -94,7 +94,7 @@ bool ContainsNeptuneStreamImpl(mlir::Operation* op,
       mlir::ModuleOp module = call_op->getParentOfType<mlir::ModuleOp>();
       auto called_func =
           module.lookupSymbol<mlir::func::FuncOp>(call_op.getCallee());
-      if (called_func && ContainsNeptuneStreamImpl(called_func, visited)) {
+      if (called_func && ContainsStreamingOpImpl(called_func, visited)) {
         found = true;
         return;
       }
@@ -340,7 +340,7 @@ absl::Status PropagateBlock(
       }
     } else if (auto while_op =
                    llvm::dyn_cast<mlir::stablehlo::WhileOp>(current_op)) {
-      if (ContainsNeptuneStream(while_op)) {
+      if (ContainsStreamingOp(while_op)) {
         TF_ASSIGN_OR_RETURN(
             auto new_while_op,
             PropagateThroughWhile(builder, while_op, value_in_block[block],
@@ -348,20 +348,20 @@ absl::Status PropagateBlock(
         next_op = new_while_op->getNextNode();
       }
     } else if (auto if_op = llvm::dyn_cast<mlir::stablehlo::IfOp>(current_op)) {
-      if (ContainsNeptuneStream(if_op)) {
+      if (ContainsStreamingOp(if_op)) {
         TF_RETURN_IF_ERROR(PropagateThroughIf(builder, if_op,
                                               value_in_block[block],
                                               value_in_block, mutated_funcs));
       }
     } else if (auto case_op =
                    llvm::dyn_cast<mlir::stablehlo::CaseOp>(current_op)) {
-      if (ContainsNeptuneStream(case_op)) {
+      if (ContainsStreamingOp(case_op)) {
         TF_RETURN_IF_ERROR(PropagateThroughCase(builder, case_op,
                                                 value_in_block[block],
                                                 value_in_block, mutated_funcs));
       }
     } else if (auto call_op = llvm::dyn_cast<mlir::func::CallOp>(current_op)) {
-      if (ContainsNeptuneStream(call_op)) {
+      if (ContainsStreamingOp(call_op)) {
         TF_RETURN_IF_ERROR(PropagateCall(builder, call_op,
                                          value_in_block[block], value_in_block,
                                          mutated_funcs));
@@ -374,16 +374,16 @@ absl::Status PropagateBlock(
   return absl::OkStatus();
 }
 
-bool ContainsNeptuneStream(mlir::Operation* op) {
+bool ContainsStreamingOp(mlir::Operation* op) {
   absl::flat_hash_set<mlir::Operation*> visited;
-  return ContainsNeptuneStreamImpl(op, visited);
+  return ContainsStreamingOpImpl(op, visited);
 }
 
 }  // namespace
 
 absl::Status PropagateStreamingStepId(mlir::ModuleOp module, bool is_batched) {
   if (VLOG_IS_ON(1)) {
-    neptune::DumpMlirOpToFile("module_before_step_id_propagation", module);
+    xla_serving::DumpMlirOpToFile("module_before_step_id_propagation", module);
   }
   mlir::func::FuncOp main_func =
       module.lookupSymbol<mlir::func::FuncOp>("main");
@@ -394,7 +394,7 @@ absl::Status PropagateStreamingStepId(mlir::ModuleOp module, bool is_batched) {
   }
 
   // Check if neptune_stream exists at all before mutating the entry function.
-  if (!ContainsNeptuneStream(main_func)) {
+  if (!ContainsStreamingOp(main_func)) {
     LOG(INFO) << "[PropagateStreamingStepId] Does not contain neptune_stream!";
     return absl::OkStatus();
   }
@@ -455,18 +455,18 @@ absl::Status PropagateStreamingStepId(mlir::ModuleOp module, bool is_batched) {
                                     value_in_block, mutated_funcs));
 
   if (VLOG_IS_ON(1)) {
-    neptune::DumpMlirOpToFile("module_after_step_id_propagation", module);
+    xla_serving::DumpMlirOpToFile("module_after_step_id_propagation", module);
   }
 
   return absl::OkStatus();
 }
 
-absl::StatusOr<neptune::HostBuffer> CreateRequestIdsBuffer(int64_t batch_size,
+absl::StatusOr<xla_serving::HostBuffer> CreateRequestIdsBuffer(int64_t batch_size,
                                                        int32_t request_id) {
   xla::ifrt::Shape shape({batch_size});
   xla::ifrt::DType dtype{xla::ifrt::DType::Kind::kS32};
 
-  neptune::HostBuffer host_buffer(dtype, shape);
+  xla_serving::HostBuffer host_buffer(dtype, shape);
   int32_t* data = reinterpret_cast<int32_t*>(host_buffer.base());
 
   for (int64_t i = 0; i < batch_size; ++i) {
@@ -476,24 +476,24 @@ absl::StatusOr<neptune::HostBuffer> CreateRequestIdsBuffer(int64_t batch_size,
   return host_buffer;
 }
 
-absl::StatusOr<neptune::HostBuffer> CreateScalarRequestIdBuffer(
+absl::StatusOr<xla_serving::HostBuffer> CreateScalarRequestIdBuffer(
     int32_t request_id) {
   xla::ifrt::Shape shape({});
   xla::ifrt::DType dtype{xla::ifrt::DType::Kind::kS32};
 
-  neptune::HostBuffer host_buffer(dtype, shape);
+  xla_serving::HostBuffer host_buffer(dtype, shape);
   *reinterpret_cast<int32_t*>(host_buffer.base()) = request_id;
 
   return host_buffer;
 }
 
-absl::StatusOr<neptune::HostBuffer> CreateRequestIdsBuffer(
+absl::StatusOr<xla_serving::HostBuffer> CreateRequestIdsBuffer(
     absl::Span<const int32_t> request_ids) {
   int64_t batch_size = request_ids.size();
   xla::ifrt::Shape shape({batch_size});
   xla::ifrt::DType dtype{xla::ifrt::DType::Kind::kS32};
 
-  neptune::HostBuffer host_buffer(dtype, shape);
+  xla_serving::HostBuffer host_buffer(dtype, shape);
   int32_t* data = reinterpret_cast<int32_t*>(host_buffer.base());
 
   for (int64_t i = 0; i < batch_size; ++i) {
@@ -503,4 +503,4 @@ absl::StatusOr<neptune::HostBuffer> CreateRequestIdsBuffer(
   return host_buffer;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

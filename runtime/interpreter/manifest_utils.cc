@@ -61,7 +61,7 @@
 #include "xla/xla_data.pb.h"  // from @xla
 #include "tsl/platform/path.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
 using type::Dict;
 using type::StringTypePairs;
@@ -139,7 +139,7 @@ GetElementsFromSequence(const neptune_model_type::Type& type) {
 
 // Returns true if the `type` matches the args-kwargs ([(), {}]) pattern.
 bool IsArgsKwargsPattern(const neptune_model_type::Type& type) {
-  // TODO: consider using a tree structure (e.g. `neptune::type::Type`)
+  // TODO: consider using a tree structure (e.g. `xla_serving::type::Type`)
   // to first translate `neptune_model_type::Type` to this tree structure to
   // simplify the logic.
   if (!IsSequence(type)) {
@@ -861,4 +861,4 @@ absl::Status ValidateCompiledExecutable(
   return absl::OkStatus();
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

@@ -35,7 +35,7 @@
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "tsl/platform/path.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 namespace composite {
 
 absl::StatusOr<std::unique_ptr<Kernel>>
@@ -112,4 +112,4 @@ static const bool kUnused = []() {
 }();
 
 }  // namespace composite
-}  // namespace neptune
+}  // namespace xla_serving

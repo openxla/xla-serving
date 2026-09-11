@@ -32,7 +32,7 @@
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 namespace {
 
@@ -89,4 +89,4 @@ absl::StatusOr<std::unique_ptr<StableHlo>> StableHlo::Create(
   return absl::WrapUnique(new StableHlo(std::move(specs)));
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

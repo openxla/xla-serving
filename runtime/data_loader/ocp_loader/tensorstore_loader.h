@@ -35,7 +35,7 @@
 #include "xla/xla_data.pb.h"  // from @xla
 #include "tensorstore/context.h"  // from @tensorstore
 
-namespace neptune {
+namespace xla_serving {
 
 // Loads an Array from tensorstore.
 struct TensorStoreLoadSpec {
@@ -124,6 +124,6 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadFromTensorstore(
     absl::string_view base_dir, LoadFromTensorstoreExtraOptions opts,
     CheckpointType checkpoint_type);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_LOADER_H_

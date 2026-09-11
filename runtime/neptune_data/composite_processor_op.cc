@@ -30,7 +30,7 @@
 #include "runtime/kernel/kernel.h"  // from @neptune
 #include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
 
-namespace neptune {
+namespace xla_serving {
 namespace composite {
 
 CompositeProcessorOp::CompositeProcessorOp(
@@ -69,18 +69,18 @@ absl::Status CompositeProcessorOp::RunInternal(ExecuteContext& context) {
   std::vector<neptune::data::composite::api::Value> converted_inputs;
   converted_inputs.reserve(context.inputs.size());
   for (const auto& input : context.inputs) {
-    if (!input.IsType<neptune::HostBuffer>()) {
+    if (!input.IsType<xla_serving::HostBuffer>()) {
       return absl::InvalidArgumentError(
           "Input to CompositeProcessorOp is not a HostBuffer");
     }
     // Should still be zero-copy as HostBuffer as copying a HostBuffer
     // does not copy the underlying buffer.
     // TODO: Ideally we merge jax_data::composite::api::Value
-    //                    back into neptune::Value, as incrementing an atomic
+    //                    back into xla_serving::Value, as incrementing an atomic
     //                    ref counter is not as cheap as moving the underlying
     //                    HostBuffer.
     converted_inputs.push_back(
-        neptune::data::composite::api::Value(input.Get<neptune::HostBuffer>()));
+        neptune::data::composite::api::Value(input.Get<xla_serving::HostBuffer>()));
   }
 
   jax_data_context.inputs = absl::MakeSpan(converted_inputs);
@@ -91,16 +91,16 @@ absl::Status CompositeProcessorOp::RunInternal(ExecuteContext& context) {
   }
 
   for (auto& output : jax_data_context.outputs) {
-    if (!output.IsType<neptune::HostBuffer>()) {
+    if (!output.IsType<xla_serving::HostBuffer>()) {
       return absl::InternalError(
           "Output of CompositeProcessor is not a HostBuffer");
     }
     context.outputs.push_back(
-        neptune::Value(std::move(output.Get<neptune::HostBuffer>())));
+        xla_serving::Value(std::move(output.Get<xla_serving::HostBuffer>())));
   }
 
   return absl::OkStatus();
 }
 
 }  // namespace composite
-}  // namespace neptune
+}  // namespace xla_serving

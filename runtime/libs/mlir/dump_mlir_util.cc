@@ -45,7 +45,7 @@
 
 using llvm::raw_ostream;
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 struct NameCounts {
@@ -219,4 +219,4 @@ std::string GetDumpDirFromEnvVar() {
   }
   return result;
 }
-}  // namespace neptune
+}  // namespace xla_serving

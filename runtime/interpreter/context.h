@@ -29,7 +29,7 @@
 #include "runtime/interpreter/clock.h"  // from @neptune
 #include "runtime/interpreter/run_options.h"  // from @neptune
 
-namespace neptune {
+namespace xla_serving {
 
 struct CancellationContext {
   const Clock* clock = RealClock::Get();
@@ -65,6 +65,6 @@ struct RunContext {
   }
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_CONTEXT_H_

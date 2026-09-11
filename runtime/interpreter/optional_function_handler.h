@@ -25,7 +25,7 @@
 #include "runtime/kernel/kernel.h"  // from @neptune
 #include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
 
-namespace neptune {
+namespace xla_serving {
 
 // An interface to handle optional (non-StableHLO) functions.
 class OptionalFunctionHandler {
@@ -50,6 +50,6 @@ class OptionalFunctionHandler {
       bool post_data_conversion) const = 0;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_OPTIONAL_FUNCTION_HANDLER_H_

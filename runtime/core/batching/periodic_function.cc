@@ -24,7 +24,7 @@
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 
 PeriodicFunction::PeriodicFunction(absl::AnyInvocable<void()> function,
                                    const int64_t interval_micros,
@@ -101,4 +101,4 @@ void PeriodicFunction::RunLoop(const int64_t start) {
   }
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

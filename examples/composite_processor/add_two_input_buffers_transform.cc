@@ -34,8 +34,8 @@ AddTwoInputBuffersTransform::Create() {
   return std::make_unique<AddTwoInputBuffersTransform>();
 }
 
-absl::StatusOr<neptune::HostBuffer> AddTwoInputBuffersTransform::operator()(
-    neptune::HostBuffer in_buffer1, neptune::HostBuffer in_buffer2) {
+absl::StatusOr<xla_serving::HostBuffer> AddTwoInputBuffersTransform::operator()(
+    xla_serving::HostBuffer in_buffer1, xla_serving::HostBuffer in_buffer2) {
   if (in_buffer1.shape() != in_buffer2.shape()) {
     return absl::InvalidArgumentError("Input buffers must have the same shape");
   }
@@ -43,8 +43,8 @@ absl::StatusOr<neptune::HostBuffer> AddTwoInputBuffersTransform::operator()(
       in_buffer1.dtype().kind() != xla::ifrt::DType::kS32) {
     return absl::InvalidArgumentError("Input buffers must have the same dtype");
   }
-  neptune::HostBuffer out_buffer =
-      neptune::HostBuffer(in_buffer1.dtype(), in_buffer1.shape());
+  xla_serving::HostBuffer out_buffer =
+      xla_serving::HostBuffer(in_buffer1.dtype(), in_buffer1.shape());
 
   int64_t num_elements = in_buffer1.shape().num_elements();
   const int* data1 = static_cast<const int*>(in_buffer1.base());

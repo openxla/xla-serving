@@ -19,7 +19,7 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "include/grpcpp/support/status.h"  // from @grpc
 
-namespace neptune {
+namespace xla_serving {
 namespace serving {
 
 grpc::Status ToGrpcStatus(const absl::Status& status) {
@@ -87,4 +87,4 @@ grpc::Status ToGrpcStatus(const absl::Status& status) {
 }
 
 }  // namespace serving
-}  // namespace neptune
+}  // namespace xla_serving

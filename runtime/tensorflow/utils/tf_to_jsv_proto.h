@@ -20,9 +20,9 @@
 #include "protos/grpc/predict.pb.h"  // from @neptune
 #include "tensorflow/core/framework/tensor.pb.h"  // from @org_tensorflow
 
-namespace neptune {
+namespace xla_serving {
 
-absl::StatusOr<neptune::HostBufferProto> FromTfTensorProto(
+absl::StatusOr<xla_serving::HostBufferProto> FromTfTensorProto(
     const tensorflow::TensorProto& tf_tensor_proto);
 
 }

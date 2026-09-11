@@ -47,7 +47,7 @@
 #include "xla/xla_data.pb.h"  // from @xla
 
 // TODO: Add unit tests for this file.
-namespace neptune {
+namespace xla_serving {
 
 namespace {
 
@@ -460,4 +460,4 @@ void LoadedStableHlo::ReleaseAllModules() {
   }
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

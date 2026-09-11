@@ -29,7 +29,7 @@
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/file_system.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // Configuration options for creating a StableHloRunner from pre-compiled AOT
 // executables.
@@ -77,6 +77,6 @@ class AotStableHloRunner : public StableHloRunner {
   friend class StableHloRunnerTestPeer;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_AOT_STABLEHLO_RUNNER_H_

@@ -43,7 +43,7 @@
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 namespace internal {
 
 // A priority-aware task queue for SharedBatchScheduler.
@@ -480,6 +480,6 @@ bool PriorityAwareQueue<TaskType>::IsOpenBatchSchedulable() const {
 }
 
 }  // namespace internal
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_BATCHING_PRIORITY_AWARE_QUEUE_H_

@@ -20,7 +20,7 @@
 #include "protos/type.pb.h"  // from @neptune
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 absl::StatusOr<xla::PrimitiveType> ToPrimitiveType(
     neptune_model_type::DType type) {
@@ -69,4 +69,4 @@ absl::StatusOr<xla::PrimitiveType> ToPrimitiveType(
   }
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

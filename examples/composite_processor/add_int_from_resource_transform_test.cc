@@ -95,7 +95,7 @@ TEST(AddIntFromResourceTransformTest, ExecuteWithNullResourceFails) {
   auto transform = std::move(transform_or).value();
 
   xla::ifrt::Shape shape({2});
-  neptune::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32), shape);
+  xla_serving::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32), shape);
   int* input_data = static_cast<int*>(input.base());
   input_data[0] = 1;
   input_data[1] = 2;
@@ -125,7 +125,7 @@ TEST(AddIntFromResourceTransformTest, ExecuteWithNonNullResourceSucceeds) {
   auto transform = std::move(transform_or).value();
 
   xla::ifrt::Shape shape({2});
-  neptune::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32), shape);
+  xla_serving::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32), shape);
   int* input_data = static_cast<int*>(input.base());
   input_data[0] = 1;
   input_data[1] = 2;
@@ -162,7 +162,7 @@ TEST(AddIntFromResourceTransformTest, ExecuteWithWrongDtypeFails) {
 
   xla::ifrt::Shape shape({2});
   // Use float instead of int.
-  neptune::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32), shape);
+  xla_serving::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32), shape);
   float* input_data = static_cast<float*>(input.base());
   input_data[0] = 1.0f;
   input_data[1] = 2.0f;

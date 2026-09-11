@@ -25,7 +25,7 @@
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "xla/tsl/framework/serving_device_selector.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // Wrapper of a `tsl::ServingDeviceSelector`. Responsible for core selection
 // during IFRT TPU execution.
@@ -50,6 +50,6 @@ class ServingCoreSelector {
       ABSL_GUARDED_BY(execution_counter_mu_);
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_SERVING_CORE_SELECTOR_SERVING_CORE_SELECTOR_H_

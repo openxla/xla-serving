@@ -31,7 +31,7 @@
 #include "runtime/tensorflow/tf_compatible_interpreter_create_options.h"  // from @neptune
 #include "runtime/tensorflow/tf_saved_model_runner.h"  // from @neptune
 
-namespace neptune {
+namespace xla_serving {
 
 // An implementation of `OptionalFunctionHandler` that can handle TensorFlow
 // functions. `pre_data_conversion` and `post_data_conversion` are used to
@@ -79,6 +79,6 @@ class TfCompatibleOptionalFunctionHandlerFactory
     return std::make_unique<TfCompatibleOptionalFunctionHandler>();
   }
 };
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_TF_COMPATIBLE_OPTIONAL_FUNCTION_HANDLER_H_

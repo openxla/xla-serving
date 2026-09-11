@@ -81,7 +81,7 @@
 ABSL_FLAG(bool, jsv_support_batching_for_ragged_inputs, false,
           "Whether to support composite types in batching.");
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 using BufferMatrix = BatchResourceBase::BufferMatrix;
@@ -1339,4 +1339,4 @@ void BatchResourceBase::RecordBatchDelayMetrics(
   }
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

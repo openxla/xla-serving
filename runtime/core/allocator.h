@@ -17,7 +17,7 @@
 
 #include <cstddef>
 
-namespace neptune {
+namespace xla_serving {
 
 // An interface for allocating memory.
 class Allocator {
@@ -33,6 +33,6 @@ class Allocator {
   virtual ~Allocator() = default;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_ALLOCATOR_H_

@@ -53,11 +53,11 @@ using ResourceManagerPtr = const ::neptune::data::ResourceManager* absl_nonnull;
 constexpr int kCompositeProcessorConfigVersion = 1;
 
 api::ShapeInferenceValue GetSpecFromValue(const api::Value& val) {
-  if (val.IsType<neptune::HostBuffer>()) {
-    const auto& hb = val.Get<neptune::HostBuffer>();
+  if (val.IsType<xla_serving::HostBuffer>()) {
+    const auto& hb = val.Get<xla_serving::HostBuffer>();
     return api::HostBufferSpec{hb.dtype(), hb.shape()};
-  } else if (val.IsType<std::vector<neptune::HostBuffer>>()) {
-    const auto& vec = val.Get<std::vector<neptune::HostBuffer>>();
+  } else if (val.IsType<std::vector<xla_serving::HostBuffer>>()) {
+    const auto& vec = val.Get<std::vector<xla_serving::HostBuffer>>();
     api::ShapeInferenceValue::SpecList list;
     list.reserve(vec.size());
     for (const auto& hb : vec) {

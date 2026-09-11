@@ -17,7 +17,7 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 
-namespace neptune {
+namespace xla_serving {
 
 absl::Status StablehloOptimizer::Optimize(const Args& args,
                                           mlir::ModuleOp module) {
@@ -25,4 +25,4 @@ absl::Status StablehloOptimizer::Optimize(const Args& args,
   return absl::OkStatus();
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

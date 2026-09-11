@@ -32,7 +32,7 @@
 #include "tsl/platform/thread_annotations.h"  // from @tsl
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
 const absl::string_view kLowPriorityPaddingWithMaxBatchSizeAttrValue =
     "low_priority_padding_with_max_batch_size";
@@ -592,6 +592,6 @@ void Batch<TaskType>::TryTrimToNewSize(
   size_ = new_size;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_BATCH_SCHEDULER_H_

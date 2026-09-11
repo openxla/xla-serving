@@ -26,7 +26,7 @@
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 absl::Status IfrtLoadedVariableRegistry::TryRegisterLoadedVariable(
     const Key& key, LoadedVariableConstructor&& loaded_variable_constructor) {
@@ -67,4 +67,4 @@ IfrtLoadedVariableRegistry::GetLoadedVariable(const Key& key) const {
   return it->second;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

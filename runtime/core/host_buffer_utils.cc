@@ -29,7 +29,7 @@
 #include "tsl/platform/bfloat16.h"  // from @tsl
 #include "tsl/platform/tstring.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 std::optional<int64_t> GetByteSizeOrDie(xla::ifrt::DType dtype) {
@@ -172,4 +172,4 @@ void AppendRecursive(std::string* out, xla::ifrt::DType dtype, const void* data,
   }
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

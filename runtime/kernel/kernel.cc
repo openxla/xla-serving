@@ -36,7 +36,7 @@
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 absl::Status CancellableKernel::Run(ExecuteContext& context) {
   if (context.run_context.cancellation_context.IsCancelled()) {
@@ -142,4 +142,4 @@ absl::StatusOr<std::unique_ptr<Kernel>> KernelRegistry::Create(
   return it->second(context);
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

@@ -23,7 +23,7 @@
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
 #include "xla/tsl/platform/criticality.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 using neptune_model_orchestration::BatchOptions;
 
@@ -48,6 +48,6 @@ absl::string_view MixedPriorityBatchingPolicyToString(
 absl::string_view CriticalityToString(
     tsl::criticality::Criticality criticality);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_BATCH_OPTIONS_UTILS_H_

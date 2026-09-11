@@ -21,7 +21,7 @@
 #include "runtime/kernel/stablehlo_runner_op.h"  // from @neptune
 #include "xla/tsl/platform/errors.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 absl::Status RegisterBuiltinKernels(KernelRegistry& registry) {
   TF_RETURN_IF_ERROR(registry.Register("Identity", IdentityKernel::Create));
@@ -31,4 +31,4 @@ absl::Status RegisterBuiltinKernels(KernelRegistry& registry) {
   return absl::OkStatus();
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

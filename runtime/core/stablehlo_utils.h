@@ -35,7 +35,7 @@
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 enum class Placement { kHost = 0, kDevice = 1 };
 
@@ -173,6 +173,6 @@ absl::Status InputShapeEqual(ArgShape stablehlo_input_shape,
 // function for anything else.
 xla::ifrt::Shape ToIfrtShape(const ArgShape& shape);
 
-};  // namespace neptune
+};  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_STABLEHLO_UTILS_H_

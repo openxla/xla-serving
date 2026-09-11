@@ -26,7 +26,7 @@
 #include "tensorflow/core/tfrt/runtime/work_queue_interface.h"  // from @org_tensorflow
 #include "include/tfrt/host_context/task_function.h"  // from @tf_runtime
 
-namespace neptune {
+namespace xla_serving {
 
 using tensorflow::tfrt_stub::WorkQueueInterface;
 
@@ -63,6 +63,6 @@ class TfrtThreadPool : public ThreadPoolInterface {
   tensorflow::tfrt_stub::WorkQueueInterface* underlying_work_queue_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_TFRT_THREAD_POOL_H_

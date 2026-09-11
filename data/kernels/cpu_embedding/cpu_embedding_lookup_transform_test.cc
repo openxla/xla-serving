@@ -94,22 +94,22 @@ TEST(CpuEmbeddingLookupTransformTest, Execute) {
   std::vector<int32_t> rp_vec = {0, 1, 3};
   std::vector<float> w_vec = {1.0, 0.5, 0.5};
 
-  neptune::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS64),
+  xla_serving::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS64),
                          xla::ifrt::Shape({3}));
   absl::c_copy(ids_vec, reinterpret_cast<int64_t*>(ids_hb.base()));
 
-  neptune::HostBuffer rp_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer rp_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                         xla::ifrt::Shape({3}));
   absl::c_copy(rp_vec, reinterpret_cast<int32_t*>(rp_hb.base()));
 
-  neptune::HostBuffer w_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+  xla_serving::HostBuffer w_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                        xla::ifrt::Shape({3}));
   absl::c_copy(w_vec, reinterpret_cast<float*>(w_hb.base()));
 
   std::vector<api::Value> inputs;
-  inputs.push_back(api::Value(std::vector<neptune::HostBuffer>{std::move(ids_hb)}));
-  inputs.push_back(api::Value(std::vector<neptune::HostBuffer>{std::move(rp_hb)}));
-  inputs.push_back(api::Value(std::vector<neptune::HostBuffer>{std::move(w_hb)}));
+  inputs.push_back(api::Value(std::vector<xla_serving::HostBuffer>{std::move(ids_hb)}));
+  inputs.push_back(api::Value(std::vector<xla_serving::HostBuffer>{std::move(rp_hb)}));
+  inputs.push_back(api::Value(std::vector<xla_serving::HostBuffer>{std::move(w_hb)}));
 
   api::ExecuteContext context;
   context.inputs = inputs;
@@ -119,9 +119,9 @@ TEST(CpuEmbeddingLookupTransformTest, Execute) {
 
   // 5. Verify Outputs
   ASSERT_EQ(context.outputs.size(), 1);
-  auto out_vector = context.outputs[0].Get<std::vector<neptune::HostBuffer>>();
+  auto out_vector = context.outputs[0].Get<std::vector<xla_serving::HostBuffer>>();
   ASSERT_EQ(out_vector.size(), 1);
-  neptune::HostBuffer out_hb = out_vector[0];
+  xla_serving::HostBuffer out_hb = out_vector[0];
   EXPECT_EQ(out_hb.dtype().kind(), xla::ifrt::DType::Kind::kF32);
   EXPECT_EQ(out_hb.shape(), xla::ifrt::Shape({2, 3}));
 
@@ -167,15 +167,15 @@ TEST(CpuEmbeddingLookupTransformTest, DenseExecute) {
   // Row 0: look up IDs [0, 1]
   // Row 1: look up IDs [1, 0]
   std::vector<int32_t> ids_vec = {0, 1, 1, 0};
-  neptune::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                          xla::ifrt::Shape({2, 2}));
   absl::c_copy(ids_vec, reinterpret_cast<int32_t*>(ids_hb.base()));
 
   std::vector<api::Value> dense_inputs;
   dense_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(ids_hb)}));
-  dense_inputs.push_back(api::Value(std::vector<neptune::HostBuffer>{}));
-  dense_inputs.push_back(api::Value(std::vector<neptune::HostBuffer>{}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(ids_hb)}));
+  dense_inputs.push_back(api::Value(std::vector<xla_serving::HostBuffer>{}));
+  dense_inputs.push_back(api::Value(std::vector<xla_serving::HostBuffer>{}));
 
   api::ExecuteContext context;
   context.inputs = dense_inputs;
@@ -185,9 +185,9 @@ TEST(CpuEmbeddingLookupTransformTest, DenseExecute) {
 
   // 5. Verify Outputs
   ASSERT_EQ(context.outputs.size(), 1);
-  auto out_vector = context.outputs[0].Get<std::vector<neptune::HostBuffer>>();
+  auto out_vector = context.outputs[0].Get<std::vector<xla_serving::HostBuffer>>();
   ASSERT_EQ(out_vector.size(), 1);
-  neptune::HostBuffer out_hb = out_vector[0];
+  xla_serving::HostBuffer out_hb = out_vector[0];
   EXPECT_EQ(out_hb.dtype().kind(), xla::ifrt::DType::Kind::kF32);
   EXPECT_EQ(out_hb.shape(), xla::ifrt::Shape({2, 3}));
 
@@ -251,15 +251,15 @@ TEST(CpuEmbeddingLookupTransformTest, MultiLookupSuccess) {
   std::vector<int32_t> rpA = {0, 1, 3};
   std::vector<float> wA = {1.0, 0.5, 0.5};
 
-  neptune::HostBuffer hb_idsA(xla::ifrt::DType(xla::ifrt::DType::Kind::kS64),
+  xla_serving::HostBuffer hb_idsA(xla::ifrt::DType(xla::ifrt::DType::Kind::kS64),
                           xla::ifrt::Shape({3}));
   absl::c_copy(idsA, reinterpret_cast<int64_t*>(hb_idsA.base()));
 
-  neptune::HostBuffer hb_rpA(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer hb_rpA(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                          xla::ifrt::Shape({3}));
   absl::c_copy(rpA, reinterpret_cast<int32_t*>(hb_rpA.base()));
 
-  neptune::HostBuffer hb_wA(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+  xla_serving::HostBuffer hb_wA(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                         xla::ifrt::Shape({3}));
   absl::c_copy(wA, reinterpret_cast<float*>(hb_wA.base()));
 
@@ -268,25 +268,25 @@ TEST(CpuEmbeddingLookupTransformTest, MultiLookupSuccess) {
   std::vector<int32_t> rpB = {0, 2};
   std::vector<float> wB = {0.5, 0.5};
 
-  neptune::HostBuffer hb_idsB(xla::ifrt::DType(xla::ifrt::DType::Kind::kS64),
+  xla_serving::HostBuffer hb_idsB(xla::ifrt::DType(xla::ifrt::DType::Kind::kS64),
                           xla::ifrt::Shape({2}));
   absl::c_copy(idsB, reinterpret_cast<int64_t*>(hb_idsB.base()));
 
-  neptune::HostBuffer hb_rpB(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer hb_rpB(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                          xla::ifrt::Shape({2}));
   absl::c_copy(rpB, reinterpret_cast<int32_t*>(hb_rpB.base()));
 
-  neptune::HostBuffer hb_wB(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+  xla_serving::HostBuffer hb_wB(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                         xla::ifrt::Shape({2}));
   absl::c_copy(wB, reinterpret_cast<float*>(hb_wB.base()));
 
   std::vector<api::Value> inputs;
   inputs.push_back(api::Value(
-      std::vector<neptune::HostBuffer>{std::move(hb_idsA), std::move(hb_idsB)}));
+      std::vector<xla_serving::HostBuffer>{std::move(hb_idsA), std::move(hb_idsB)}));
   inputs.push_back(api::Value(
-      std::vector<neptune::HostBuffer>{std::move(hb_rpA), std::move(hb_rpB)}));
+      std::vector<xla_serving::HostBuffer>{std::move(hb_rpA), std::move(hb_rpB)}));
   inputs.push_back(api::Value(
-      std::vector<neptune::HostBuffer>{std::move(hb_wA), std::move(hb_wB)}));
+      std::vector<xla_serving::HostBuffer>{std::move(hb_wA), std::move(hb_wB)}));
 
   api::ExecuteContext context;
   context.inputs = std::move(inputs);
@@ -294,11 +294,11 @@ TEST(CpuEmbeddingLookupTransformTest, MultiLookupSuccess) {
   // 4. Execute
   EXPECT_OK(transform->Execute(context));
   ASSERT_EQ(context.outputs.size(), 1);
-  auto out_vector = context.outputs[0].Get<std::vector<neptune::HostBuffer>>();
+  auto out_vector = context.outputs[0].Get<std::vector<xla_serving::HostBuffer>>();
   ASSERT_EQ(out_vector.size(), 2);
 
   // 5. Verify Table A Output
-  neptune::HostBuffer outA = std::move(out_vector[0]);
+  xla_serving::HostBuffer outA = std::move(out_vector[0]);
   EXPECT_EQ(outA.shape(), xla::ifrt::Shape({2, 3}));
   const float* dataA = reinterpret_cast<const float*>(outA.base());
   std::vector<float> vecA(dataA, dataA + 6);
@@ -306,7 +306,7 @@ TEST(CpuEmbeddingLookupTransformTest, MultiLookupSuccess) {
                                 FloatEq(2.5), FloatEq(3.5), FloatEq(4.5)));
 
   // 6. Verify Table B Output
-  neptune::HostBuffer outB = std::move(out_vector[1]);
+  xla_serving::HostBuffer outB = std::move(out_vector[1]);
   EXPECT_EQ(outB.shape(), xla::ifrt::Shape({1, 3}));
   const float* dataB = reinterpret_cast<const float*>(outB.base());
   std::vector<float> vecB(dataB, dataB + 3);
@@ -339,24 +339,24 @@ TEST(CpuEmbeddingLookupTransformTest, ScalarRowPointersFails) {
   std::vector<int64_t> ids_vec = {0};
   std::vector<float> w_vec = {1.0};
 
-  neptune::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS64),
+  xla_serving::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS64),
                          xla::ifrt::Shape({1}));
   absl::c_copy(ids_vec, reinterpret_cast<int64_t*>(ids_hb.base()));
 
-  neptune::HostBuffer rp_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer rp_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                         xla::ifrt::Shape({}));
   int32_t rp_val = 0;
   absl::c_copy(absl::MakeConstSpan(&rp_val, 1),
                reinterpret_cast<int32_t*>(rp_hb.base()));
 
-  neptune::HostBuffer w_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+  xla_serving::HostBuffer w_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                        xla::ifrt::Shape({1}));
   absl::c_copy(w_vec, reinterpret_cast<float*>(w_hb.base()));
 
   std::vector<api::Value> inputs;
-  inputs.push_back(api::Value(std::vector<neptune::HostBuffer>{std::move(ids_hb)}));
-  inputs.push_back(api::Value(std::vector<neptune::HostBuffer>{std::move(rp_hb)}));
-  inputs.push_back(api::Value(std::vector<neptune::HostBuffer>{std::move(w_hb)}));
+  inputs.push_back(api::Value(std::vector<xla_serving::HostBuffer>{std::move(ids_hb)}));
+  inputs.push_back(api::Value(std::vector<xla_serving::HostBuffer>{std::move(rp_hb)}));
+  inputs.push_back(api::Value(std::vector<xla_serving::HostBuffer>{std::move(w_hb)}));
 
   api::ExecuteContext context;
   context.inputs = inputs;
@@ -554,15 +554,15 @@ TEST(CpuEmbeddingLookupTransformTest, DenseExecuteIntegerOverflowFails) {
                            /*dense_lookup=*/true));
 
   void* dummy_ptr = reinterpret_cast<void*>(0x100000000);
-  neptune::HostBuffer ids_hb(
+  xla_serving::HostBuffer ids_hb(
       dummy_ptr, xla::ifrt::DType(xla::ifrt::DType::Kind::kS64),
       xla::ifrt::Shape({2000000, 2000}), std::nullopt, nullptr);
 
   std::vector<api::Value> dense_inputs;
   dense_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(ids_hb)}));
-  dense_inputs.push_back(api::Value(std::vector<neptune::HostBuffer>{}));
-  dense_inputs.push_back(api::Value(std::vector<neptune::HostBuffer>{}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(ids_hb)}));
+  dense_inputs.push_back(api::Value(std::vector<xla_serving::HostBuffer>{}));
+  dense_inputs.push_back(api::Value(std::vector<xla_serving::HostBuffer>{}));
 
   api::ExecuteContext context;
   context.inputs = dense_inputs;
@@ -585,15 +585,15 @@ TEST(CpuEmbeddingLookupTransformTest, DenseExecuteBatchSizeOverflowFails) {
                            /*dense_lookup=*/true));
 
   void* dummy_ptr = reinterpret_cast<void*>(0x100000000);
-  neptune::HostBuffer ids_hb(
+  xla_serving::HostBuffer ids_hb(
       dummy_ptr, xla::ifrt::DType(xla::ifrt::DType::Kind::kS64),
       xla::ifrt::Shape({2147483648LL, 1}), std::nullopt, nullptr);
 
   std::vector<api::Value> dense_inputs;
   dense_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(ids_hb)}));
-  dense_inputs.push_back(api::Value(std::vector<neptune::HostBuffer>{}));
-  dense_inputs.push_back(api::Value(std::vector<neptune::HostBuffer>{}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(ids_hb)}));
+  dense_inputs.push_back(api::Value(std::vector<xla_serving::HostBuffer>{}));
+  dense_inputs.push_back(api::Value(std::vector<xla_serving::HostBuffer>{}));
 
   api::ExecuteContext context;
   context.inputs = dense_inputs;
@@ -659,15 +659,15 @@ TEST(CpuEmbeddingLookupTransformTest, ExecuteInvalidIdTypeReturnsError) {
 
   // 3. Prepare Inputs: 1D ID tensor with FLOAT data!
   std::vector<float> ids_vec = {0.0};
-  neptune::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+  xla_serving::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                          xla::ifrt::Shape({1, 1}));
   absl::c_copy(ids_vec, reinterpret_cast<float*>(ids_hb.base()));
 
   std::vector<api::Value> test_inputs;
   test_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(ids_hb)}));
-  test_inputs.push_back(api::Value(std::vector<neptune::HostBuffer>{}));
-  test_inputs.push_back(api::Value(std::vector<neptune::HostBuffer>{}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(ids_hb)}));
+  test_inputs.push_back(api::Value(std::vector<xla_serving::HostBuffer>{}));
+  test_inputs.push_back(api::Value(std::vector<xla_serving::HostBuffer>{}));
   api::ExecuteContext context;
   context.inputs = test_inputs;
 
@@ -699,25 +699,25 @@ TEST(CpuEmbeddingLookupTransformTest,
                            /*dense_lookup=*/false));
 
   std::vector<int32_t> ids_vec = {0, 1};
-  neptune::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                          xla::ifrt::Shape({2}));
   absl::c_copy(ids_vec, reinterpret_cast<int32_t*>(ids_hb.base()));
 
   std::vector<int32_t> rp_vec = {0};
-  neptune::HostBuffer rp_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer rp_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                         xla::ifrt::Shape({1}));
   absl::c_copy(rp_vec, reinterpret_cast<int32_t*>(rp_hb.base()));
 
-  neptune::HostBuffer weights_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+  xla_serving::HostBuffer weights_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                              xla::ifrt::Shape({0}));
 
   std::vector<api::Value> test_inputs;
   test_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(ids_hb)}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(ids_hb)}));
   test_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(rp_hb)}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(rp_hb)}));
   test_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(weights_hb)}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(weights_hb)}));
   api::ExecuteContext context;
   context.inputs = test_inputs;
 
@@ -751,25 +751,25 @@ TEST(CpuEmbeddingLookupTransformTest,
                            /*dense_lookup=*/false));
 
   std::vector<int32_t> ids_vec = {0, 1};
-  neptune::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                          xla::ifrt::Shape({2}));
   absl::c_copy(ids_vec, reinterpret_cast<int32_t*>(ids_hb.base()));
 
   std::vector<int32_t> rp_vec = {1, 2};
-  neptune::HostBuffer rp_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer rp_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                         xla::ifrt::Shape({2}));
   absl::c_copy(rp_vec, reinterpret_cast<int32_t*>(rp_hb.base()));
 
-  neptune::HostBuffer weights_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+  xla_serving::HostBuffer weights_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                              xla::ifrt::Shape({0}));
 
   std::vector<api::Value> test_inputs;
   test_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(ids_hb)}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(ids_hb)}));
   test_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(rp_hb)}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(rp_hb)}));
   test_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(weights_hb)}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(weights_hb)}));
   api::ExecuteContext context;
   context.inputs = test_inputs;
 
@@ -802,25 +802,25 @@ TEST(CpuEmbeddingLookupTransformTest,
                            /*dense_lookup=*/false));
 
   std::vector<int32_t> ids_vec = {0, 1};
-  neptune::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                          xla::ifrt::Shape({2}));
   absl::c_copy(ids_vec, reinterpret_cast<int32_t*>(ids_hb.base()));
 
   std::vector<int32_t> rp_vec = {0, 3};
-  neptune::HostBuffer rp_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer rp_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                         xla::ifrt::Shape({2}));
   absl::c_copy(rp_vec, reinterpret_cast<int32_t*>(rp_hb.base()));
 
-  neptune::HostBuffer weights_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+  xla_serving::HostBuffer weights_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                              xla::ifrt::Shape({0}));
 
   std::vector<api::Value> test_inputs;
   test_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(ids_hb)}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(ids_hb)}));
   test_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(rp_hb)}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(rp_hb)}));
   test_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(weights_hb)}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(weights_hb)}));
   api::ExecuteContext context;
   context.inputs = test_inputs;
 
@@ -853,25 +853,25 @@ TEST(CpuEmbeddingLookupTransformTest, ExecuteRowPointersNotSortedReturnsError) {
                            /*dense_lookup=*/false));
 
   std::vector<int32_t> ids_vec = {0, 1};
-  neptune::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                          xla::ifrt::Shape({2}));
   absl::c_copy(ids_vec, reinterpret_cast<int32_t*>(ids_hb.base()));
 
   std::vector<int32_t> rp_vec_unsorted = {0, 3, 2};
-  neptune::HostBuffer rp_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer rp_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                         xla::ifrt::Shape({3}));
   absl::c_copy(rp_vec_unsorted, reinterpret_cast<int32_t*>(rp_hb.base()));
 
-  neptune::HostBuffer weights_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+  xla_serving::HostBuffer weights_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                              xla::ifrt::Shape({0}));
 
   std::vector<api::Value> test_inputs;
   test_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(ids_hb)}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(ids_hb)}));
   test_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(rp_hb)}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(rp_hb)}));
   test_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(weights_hb)}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(weights_hb)}));
   api::ExecuteContext context;
   context.inputs = test_inputs;
 
@@ -903,27 +903,27 @@ TEST(CpuEmbeddingLookupTransformTest, ExecuteWeightsSizeMismatchReturnsError) {
                            /*dense_lookup=*/false));
 
   std::vector<int32_t> ids_vec = {0, 1};
-  neptune::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                          xla::ifrt::Shape({2}));
   absl::c_copy(ids_vec, reinterpret_cast<int32_t*>(ids_hb.base()));
 
   std::vector<int32_t> rp_vec = {0, 2};
-  neptune::HostBuffer rp_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer rp_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                         xla::ifrt::Shape({2}));
   absl::c_copy(rp_vec, reinterpret_cast<int32_t*>(rp_hb.base()));
 
   std::vector<float> weights_vec = {1.0f, 1.0f, 1.0f};
-  neptune::HostBuffer weights_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+  xla_serving::HostBuffer weights_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                              xla::ifrt::Shape({3}));
   absl::c_copy(weights_vec, reinterpret_cast<float*>(weights_hb.base()));
 
   std::vector<api::Value> test_inputs;
   test_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(ids_hb)}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(ids_hb)}));
   test_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(rp_hb)}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(rp_hb)}));
   test_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(weights_hb)}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(weights_hb)}));
   api::ExecuteContext context;
   context.inputs = test_inputs;
 
@@ -955,15 +955,15 @@ TEST(CpuEmbeddingLookupTransformTest, ExecuteNegativeEmbeddingIdReturnsError) {
                            /*dense_lookup=*/true));
 
   std::vector<int32_t> ids_vec = {-1};
-  neptune::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                          xla::ifrt::Shape({1, 1}));
   absl::c_copy(ids_vec, reinterpret_cast<int32_t*>(ids_hb.base()));
 
   std::vector<api::Value> test_inputs;
   test_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(ids_hb)}));
-  test_inputs.push_back(api::Value(std::vector<neptune::HostBuffer>{}));
-  test_inputs.push_back(api::Value(std::vector<neptune::HostBuffer>{}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(ids_hb)}));
+  test_inputs.push_back(api::Value(std::vector<xla_serving::HostBuffer>{}));
+  test_inputs.push_back(api::Value(std::vector<xla_serving::HostBuffer>{}));
   api::ExecuteContext context;
   context.inputs = test_inputs;
 
@@ -996,15 +996,15 @@ TEST(CpuEmbeddingLookupTransformTest,
                            /*dense_lookup=*/true));
 
   std::vector<int32_t> ids_vec = {2};
-  neptune::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                          xla::ifrt::Shape({1, 1}));
   absl::c_copy(ids_vec, reinterpret_cast<int32_t*>(ids_hb.base()));
 
   std::vector<api::Value> test_inputs;
   test_inputs.push_back(
-      api::Value(std::vector<neptune::HostBuffer>{std::move(ids_hb)}));
-  test_inputs.push_back(api::Value(std::vector<neptune::HostBuffer>{}));
-  test_inputs.push_back(api::Value(std::vector<neptune::HostBuffer>{}));
+      api::Value(std::vector<xla_serving::HostBuffer>{std::move(ids_hb)}));
+  test_inputs.push_back(api::Value(std::vector<xla_serving::HostBuffer>{}));
+  test_inputs.push_back(api::Value(std::vector<xla_serving::HostBuffer>{}));
   api::ExecuteContext context;
   context.inputs = test_inputs;
 

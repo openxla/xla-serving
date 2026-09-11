@@ -51,7 +51,7 @@
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 #include "tsl/profiler/lib/traceme_encode.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
 void JsvBatchResource::ProcessFuncBatchImpl(
     const BatchResourceBase::BatchTask& propagated_task,
@@ -221,4 +221,4 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateBatchRunnerOp(
                                          std::move(output_signature));
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

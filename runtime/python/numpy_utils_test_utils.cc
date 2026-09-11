@@ -43,43 +43,43 @@ namespace {
 // Adds one to each element in the tensor.
 xla::nb_numpy_ndarray TensorAddOne(nb::handle arg) {
   auto array = xla::nb_numpy_ndarray::ensure(arg);
-  tensorflow::Tensor tensor = neptune::ToTFTensor(array);
+  tensorflow::Tensor tensor = xla_serving::ToTFTensor(array);
   auto flat = tensor.flat<float>();
   for (int i = 0; i < flat.size(); ++i) {
     flat(i) += 1.0;
   }
-  return neptune::ToNbArray(tensor);
+  return xla_serving::ToNbArray(tensor);
 }
 
 // Multiplies each element in the host buffer by two.
 xla::nb_numpy_ndarray HostBufferTimesTwo(nb::handle arg) {
   auto array = xla::nb_numpy_ndarray::ensure(arg);
-  neptune::HostBuffer host_buffer = neptune::ToHostBuffer(array);
+  xla_serving::HostBuffer host_buffer = xla_serving::ToHostBuffer(array);
   auto flat = host_buffer.flat<float>();
   for (int i = 0; i < flat.size(); ++i) {
     flat(i) *= 2.0;
   }
-  return neptune::ToNbArray(host_buffer);
+  return xla_serving::ToNbArray(host_buffer);
 }
 
 // Converts a numpy array to a tensor and back.
 xla::nb_numpy_ndarray TensorRoundTrip(nb::handle arg) {
   auto array = xla::nb_numpy_ndarray::ensure(arg);
-  tensorflow::Tensor tensor = neptune::ToTFTensor(array);
-  return neptune::ToNbArray(tensor);
+  tensorflow::Tensor tensor = xla_serving::ToTFTensor(array);
+  return xla_serving::ToNbArray(tensor);
 }
 
 // String tensor to int tensor.
 xla::nb_numpy_ndarray StringArrayGetLength(nb::handle arg) {
   auto array = xla::nb_numpy_ndarray::ensure(arg);
-  tensorflow::Tensor tensor = neptune::ToTFTensor(array);
+  tensorflow::Tensor tensor = xla_serving::ToTFTensor(array);
   tensorflow::Tensor int_tensor(tensorflow::DT_INT32, tensor.shape());
   auto flat = int_tensor.flat<int32_t>();
   for (int i = 0; i < flat.size(); ++i) {
     flat(i) =
         static_cast<int32_t>(tensor.flat<tensorflow::tstring>()(i).size());
   }
-  return neptune::ToNbArray(int_tensor);
+  return xla_serving::ToNbArray(int_tensor);
 }
 
 // Wraps linear data in a Column-Major HostBuffer and converts it to NbArray.
@@ -96,8 +96,8 @@ xla::nb_numpy_ndarray ColMajorHostBufferToNbArray(nb::handle arg) {
   // Dim 1 stride: 8 bytes
   std::optional<absl::InlinedVector<int64_t, 4>> strides =
       absl::InlinedVector<int64_t, 4>{4, 8};
-  neptune::HostBuffer host_buffer(data, dtype, shape, strides, nullptr);
-  return neptune::ToNbArray(host_buffer);
+  xla_serving::HostBuffer host_buffer(data, dtype, shape, strides, nullptr);
+  return xla_serving::ToNbArray(host_buffer);
 }
 
 // Convert numpy array to HostBuffer with tracking allocator, check for
@@ -105,7 +105,7 @@ xla::nb_numpy_ndarray ColMajorHostBufferToNbArray(nb::handle arg) {
 xla::nb_numpy_ndarray HostBufferRoundTripWithSentinelCheck(nb::handle arg) {
   auto array = xla::nb_numpy_ndarray::ensure(arg);
 
-  struct TrackingAllocator : public neptune::Allocator {
+  struct TrackingAllocator : public xla_serving::Allocator {
     void* ptr = nullptr;
     size_t size = 0;
     bool overwritten = false;
@@ -133,8 +133,8 @@ xla::nb_numpy_ndarray HostBufferRoundTripWithSentinelCheck(nb::handle arg) {
   TrackingAllocator allocator;
   xla::nb_numpy_ndarray result;
   {
-    neptune::HostBuffer host_buffer = neptune::ToHostBuffer(array, &allocator);
-    result = neptune::ToNbArray(host_buffer);
+    xla_serving::HostBuffer host_buffer = xla_serving::ToHostBuffer(array, &allocator);
+    result = xla_serving::ToNbArray(host_buffer);
   }
 
   if (allocator.overwritten) {

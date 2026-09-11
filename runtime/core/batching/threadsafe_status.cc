@@ -19,7 +19,7 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 const absl::Status& ThreadSafeStatus::status() const& {
   absl::MutexLock lock(mutex_);
   return status_;
@@ -47,4 +47,4 @@ void ThreadSafeStatus::Update(absl::Status&& new_status) {
   absl::MutexLock lock(mutex_);
   status_.Update(std::forward<absl::Status>(new_status));
 }
-}  // namespace neptune
+}  // namespace xla_serving

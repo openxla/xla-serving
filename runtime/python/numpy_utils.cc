@@ -52,7 +52,7 @@
 
 namespace nb = ::nanobind;
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 struct PyDecrefDeleter {
@@ -70,7 +70,7 @@ void ThrowIfError(const absl::Status& status, absl::string_view msg) {
 
 // Converts a `tensorflow::DataType` to an `xla::nb_dtype`.
 absl::StatusOr<xla::nb_dtype> ToNbDtype(tensorflow::DataType dtype) {
-  TF_ASSIGN_OR_RETURN(xla::ifrt::DType ifrt_dtype, neptune::ToIfrtDType(dtype));
+  TF_ASSIGN_OR_RETURN(xla::ifrt::DType ifrt_dtype, xla_serving::ToIfrtDType(dtype));
   return xla::IfrtDtypeToNbDtype(ifrt_dtype);
 }
 
@@ -78,7 +78,7 @@ absl::StatusOr<xla::nb_dtype> ToNbDtype(tensorflow::DataType dtype) {
 absl::StatusOr<tensorflow::DataType> ToTfDtype(xla::nb_dtype nb_dtype) {
   TF_ASSIGN_OR_RETURN(xla::ifrt::DType ifrt_dtype,
                       xla::DtypeToIfRtDType(nb_dtype));
-  return neptune::ToTensorDataType(ifrt_dtype);
+  return xla_serving::ToTensorDataType(ifrt_dtype);
 }
 
 // Gets a string view from a Python unicode object.
@@ -114,7 +114,7 @@ absl::StatusOr<absl::string_view> GetStringViewFromPyObject(PyObject* obj) {
 
 // Gets elements from a numpy array.
 absl::Status GetElementsFromNumpyArray(PyArrayObject* py_array_obj,
-                                       neptune::TTypes<tsl::tstring>::Flat flat) {
+                                       xla_serving::TTypes<tsl::tstring>::Flat flat) {
   auto iter = Safe_PyObjectPtr(
       PyArray_IterNew(reinterpret_cast<PyObject*>(py_array_obj)));
 
@@ -139,7 +139,7 @@ absl::Status GetElementsFromNumpyArray(PyArrayObject* py_array_obj,
 
 // Converts tsl::string to numpy array.
 absl::Status ConvertStringToPyArray(PyArrayObject* py_array_obj,
-                                    neptune::TTypes<const tsl::tstring>::Flat flat,
+                                    xla_serving::TTypes<const tsl::tstring>::Flat flat,
                                     int num_elements) {
   nb::object iter =
       nb::steal(PyArray_IterNew(reinterpret_cast<PyObject*>(py_array_obj)));
@@ -196,7 +196,7 @@ absl::Status FillStringNumpyArrayFromTensor(
 
 // Fills a HostBuffer with string type from a `xla::nb_numpy_ndarray`.
 absl::Status FillHostBufferFromStringNumpyArray(
-    const xla::nb_numpy_ndarray& numpy_array, neptune::HostBuffer& host_buffer) {
+    const xla::nb_numpy_ndarray& numpy_array, xla_serving::HostBuffer& host_buffer) {
   if (numpy_array.size() != host_buffer.shape().num_elements()) {
     return absl::InternalError(
         "The number of elements in the ndarray and HostBuffer do not match.");
@@ -211,7 +211,7 @@ absl::Status FillHostBufferFromStringNumpyArray(
 
 // Fills a `xla::nb_numpy_ndarray` with string type from a HostBuffer.
 absl::Status FillStringNumpyArrayFromHostBuffer(
-    const neptune::HostBuffer& host_buffer, xla::nb_numpy_ndarray& numpy_array) {
+    const xla_serving::HostBuffer& host_buffer, xla::nb_numpy_ndarray& numpy_array) {
   int num_elements = host_buffer.shape().num_elements();
   if (num_elements != numpy_array.size()) {
     return absl::InternalError(
@@ -296,8 +296,8 @@ xla::nb_numpy_ndarray ToNbArray(const tensorflow::Tensor& tensor) {
 }
 
 // TODO: Add the Allocator parameter to the applicable callers.
-neptune::HostBuffer ToHostBuffer(xla::nb_numpy_ndarray numpy_array,
-                             neptune::Allocator* allocator) {
+xla_serving::HostBuffer ToHostBuffer(xla::nb_numpy_ndarray numpy_array,
+                             xla_serving::Allocator* allocator) {
   // Get the shape.
   absl::Span<int64_t const> shape(
       reinterpret_cast<const int64_t*>(numpy_array.shape()),
@@ -317,7 +317,7 @@ neptune::HostBuffer ToHostBuffer(xla::nb_numpy_ndarray numpy_array,
                    "Failed to convert `xla::nb_dtype` to `xla::ifrt::DType`");
     }
   }
-  neptune::HostBuffer host_buffer(*ifrt_dtype, xla::ifrt::Shape(shape), allocator);
+  xla_serving::HostBuffer host_buffer(*ifrt_dtype, xla::ifrt::Shape(shape), allocator);
 
   if (ifrt_dtype->kind() == xla::ifrt::DType::kString) {
     ThrowIfError(FillHostBufferFromStringNumpyArray(numpy_array, host_buffer),
@@ -336,7 +336,7 @@ neptune::HostBuffer ToHostBuffer(xla::nb_numpy_ndarray numpy_array,
   return host_buffer;
 }
 
-xla::nb_numpy_ndarray ToNbArray(const neptune::HostBuffer& host_buffer) {
+xla::nb_numpy_ndarray ToNbArray(const xla_serving::HostBuffer& host_buffer) {
   // Copy the data from the HostBuffer to xla::nb_numpy_ndarray.
   absl::StatusOr<xla::nb_dtype> dtype =
       xla::IfrtDtypeToNbDtype(host_buffer.dtype());
@@ -359,4 +359,4 @@ xla::nb_numpy_ndarray ToNbArray(const neptune::HostBuffer& host_buffer) {
   }
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

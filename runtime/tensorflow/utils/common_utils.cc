@@ -26,7 +26,7 @@
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 // Gets the TF SavedModel supplement from the manifest.
@@ -68,4 +68,4 @@ absl::StatusOr<std::string> GetTfSavedModelDirPath(
   return GetAbsoluteFileSystemPath(
       model_path, tf_saved_model_supplement.file_system_location());
 }
-}  // namespace neptune
+}  // namespace xla_serving

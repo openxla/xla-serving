@@ -22,7 +22,7 @@
 #include "include/grpcpp/security/credentials.h"  // from @grpc
 #include "include/grpcpp/security/server_credentials.h"  // from @grpc
 
-namespace neptune {
+namespace xla_serving {
 namespace serving {
 
 // Creates gRPC server credentials based on the provided flags.
@@ -38,6 +38,6 @@ CreateChannelCredentials(std::string server_cert_chain_path,
                          bool use_insecure_grpc_credentials);
 
 }  // namespace serving
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_AUTH_UTILS_H_

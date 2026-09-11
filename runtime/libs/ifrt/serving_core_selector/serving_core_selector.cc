@@ -22,7 +22,7 @@
 #include "xla/tsl/framework/serving_device_selector.h"  // from @xla
 #include "xla/tsl/lib/monitoring/counter.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 using ::tsl::monitoring::Counter;
 
@@ -71,4 +71,4 @@ tsl::DeviceReservation ServingCoreSelector::ReserveDevice(
   return reservation;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

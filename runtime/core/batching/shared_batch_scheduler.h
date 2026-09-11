@@ -57,14 +57,14 @@
 #include "tsl/profiler/lib/context_types.h"  // from @tsl
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 namespace internal {
 template <typename TaskType>
 class Queue;
 }  // namespace internal
-}  // namespace neptune
+}  // namespace xla_serving
 
-namespace neptune {
+namespace xla_serving {
 
 using ::tsl::Env;
 
@@ -1565,6 +1565,6 @@ size_t QueueHandle<TaskType>::SchedulingCapacity() const {
 
 }  // namespace internal
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_SHARED_BATCH_SCHEDULER_H_

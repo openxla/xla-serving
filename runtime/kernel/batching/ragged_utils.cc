@@ -30,7 +30,7 @@
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 template <typename T>
 absl::StatusOr<HostBuffer> ConcatRowSplitsTyped(
@@ -211,4 +211,4 @@ absl::StatusOr<HostBuffer> CreateWarmupFlatValues(
   return Concat(thread_pool, to_concatenate, allocator);
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

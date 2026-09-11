@@ -34,7 +34,7 @@ class MultiKernelMathTransform : public TransformBase {
  public:
   static absl::StatusOr<std::unique_ptr<MultiKernelMathTransform<T>>> Create();
 
-  absl::StatusOr<neptune::HostBuffer> operator()(neptune::HostBuffer in_buffer);
+  absl::StatusOr<xla_serving::HostBuffer> operator()(xla_serving::HostBuffer in_buffer);
 
   absl::StatusOr<TransformConfig> ToProto() const override;
 

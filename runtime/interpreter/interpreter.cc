@@ -95,7 +95,7 @@
 ABSL_FLAG(bool, jsv_enable_parallel_loading_pipelines, true,
           "When set to true, load the pipelines in parallel.");
 
-namespace neptune {
+namespace xla_serving {
 
 using neptune_model_orchestration::BatchOptions;
 
@@ -1528,12 +1528,11 @@ absl::StatusOr<std::vector<Value>> Interpreter::Run(
   VLOG(2) << "Interpreter::Run: pipeline_name=" << pipeline_name
           << ", model_name=" << create_options_->model_name;
 
-  std::optional<neptune::ScopedStreamCallback> scoped_stream_callback;
+  std::optional<ScopedStreamCallback> scoped_stream_callback;
   if (run_options.streamed_output_callback != nullptr &&
       callback_id_.has_value()) {
-    TF_ASSIGN_OR_RETURN(
-        neptune::StreamCallbackRegistry * stream_callback_registry,
-        neptune::GetGlobalStreamCallbackRegistry());
+    TF_ASSIGN_OR_RETURN(StreamCallbackRegistry * stream_callback_registry,
+                        GetGlobalStreamCallbackRegistry());
     TF_ASSIGN_OR_RETURN(
         scoped_stream_callback,
         stream_callback_registry->Register(
@@ -1621,15 +1620,15 @@ tsl::Future<std::vector<Value>> Interpreter::RunAsync(
   VLOG(2) << "Interpreter::RunAsync: pipeline_name=" << pipeline_name
           << ", model_name=" << create_options_->model_name;
 
-  std::shared_ptr<neptune::ScopedStreamCallback> scoped_stream_callback;
+  std::shared_ptr<ScopedStreamCallback> scoped_stream_callback;
   if (run_options.streamed_output_callback != nullptr &&
       callback_id_.has_value()) {
-    absl::StatusOr<neptune::StreamCallbackRegistry*> stream_callback_registry =
-        neptune::GetGlobalStreamCallbackRegistry();
+    absl::StatusOr<StreamCallbackRegistry*> stream_callback_registry =
+        GetGlobalStreamCallbackRegistry();
     if (!stream_callback_registry.ok()) {
       return tsl::Future<std::vector<Value>>(stream_callback_registry.status());
     }
-    absl::StatusOr<neptune::ScopedStreamCallback> registered_callback =
+    absl::StatusOr<ScopedStreamCallback> registered_callback =
         (*stream_callback_registry)
             ->Register(create_options_->model_name, *callback_id_,
                        run_options.request_id,
@@ -1637,8 +1636,8 @@ tsl::Future<std::vector<Value>> Interpreter::RunAsync(
     if (!registered_callback.ok()) {
       return tsl::Future<std::vector<Value>>(registered_callback.status());
     }
-    scoped_stream_callback = std::make_shared<neptune::ScopedStreamCallback>(
-        std::move(*registered_callback));
+    scoped_stream_callback =
+        std::make_shared<ScopedStreamCallback>(std::move(*registered_callback));
   }
 
   auto future = [this, pipeline_name, &positional_inputs, &keyword_inputs,
@@ -1822,4 +1821,4 @@ int32_t Interpreter::GenerateNextRequestId() {
   return next_id;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

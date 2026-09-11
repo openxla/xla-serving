@@ -33,7 +33,7 @@ class AddIntFromResourceTransform
  public:
   static absl::StatusOr<std::unique_ptr<AddIntFromResourceTransform>> Create(
       std::shared_ptr<const IntResource> resource);
-  absl::StatusOr<neptune::HostBuffer> operator()(neptune::HostBuffer in_buffer);
+  absl::StatusOr<xla_serving::HostBuffer> operator()(xla_serving::HostBuffer in_buffer);
   absl::StatusOr<neptune::data::composite::TransformConfig> ToProto()
       const override;
   std::vector<std::shared_ptr<neptune::data::Resource>> GetAllResources()

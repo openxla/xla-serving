@@ -24,7 +24,7 @@
 #include "runtime/core/host_buffer_type_utils.h"  // from @neptune
 #include "xla/python/ifrt/dtype.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 template <typename T>
@@ -135,4 +135,4 @@ HostBufferEq::operator ::testing::Matcher<const HostBuffer&>() const {
   return ::testing::MakeMatcher(new HostBufferEqMatcherImpl(target_));
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

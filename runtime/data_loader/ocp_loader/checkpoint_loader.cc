@@ -51,7 +51,7 @@
 #include "tsl/platform/path.h"  // from @tsl
 
 // TODO(qidichen): add test for this file.
-namespace neptune {
+namespace xla_serving {
 
 const char _OCDBT_MANIFEST_FILE[] = "manifest.ocdbt";
 
@@ -206,4 +206,4 @@ LoadCheckpointFromOrbax(absl::string_view checkpoint_path,
   return named_weights;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

@@ -27,7 +27,7 @@
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // Builds a `HostBuffer` from a list of values and a shape with the given
 // allocator. It will pick a `xla::ifrt::Dtype` that has the same storage width
@@ -79,6 +79,6 @@ HostBuffer AsHostBuffer(
   return host_buffer;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_HOST_BUFFER_TEST_UTILS_H_

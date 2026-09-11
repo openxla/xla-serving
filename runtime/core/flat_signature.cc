@@ -31,7 +31,7 @@
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 std::string MetaArgSpec::DebugString() const {
   return absl::StrFormat("MetaArgSpec: %s, name: %s, has_default_value: %v, ",
@@ -236,4 +236,4 @@ std::vector<Placement> FlatSignature::ResolvePlacements(
   return resolved;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

@@ -39,7 +39,7 @@
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 namespace {
 
@@ -149,4 +149,4 @@ std::string GetProgramFingerprintWithTimestamp(
                       kProgramFingerprintAndTimestampDelimiter, now_timestamp);
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

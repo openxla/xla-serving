@@ -22,10 +22,10 @@
 // Why this file exists:
 // SavedModel tokenizers (such as KerasHub / TensorFlow Text regex-based
 // splitters) require the `RegexSplitWithOffsets` custom op to execute text
-// preprocessing inside the Neptune C++ model server. In OSS builds, Neptune
+// preprocessing inside the XSE C++ model server. In OSS builds, XSE
 // does not bundle or link the full tensorflow-text C++ repository due to
 // external Bazel dependency constraints. This self-contained kernel provides
-// the op directly in OSS Neptune serving binaries.
+// the op directly in OSS XSE serving binaries.
 //
 // In Google3 builds, this kernel is NOT directly linked into
 // `init_lib_tensorflow` because Google3 server binaries (e.g. Orbax model

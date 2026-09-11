@@ -18,12 +18,12 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "include/grpcpp/support/status.h"  // from @grpc
 
-namespace neptune {
+namespace xla_serving {
 namespace serving {
 
 grpc::Status ToGrpcStatus(const absl::Status& status);
 
 }  // namespace serving
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_GRPC_STATUS_UTILS_H_

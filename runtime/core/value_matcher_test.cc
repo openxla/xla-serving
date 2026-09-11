@@ -18,7 +18,7 @@
 #include "gtest/gtest.h"
 #include "runtime/core/value.h"  // from @neptune
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 using ::testing::Eq;
@@ -54,4 +54,4 @@ TEST(ValueMatcherTest, SameTypeDifferentContentsShallFail) {
   EXPECT_TRUE(listener.str().empty());
 }
 }  // namespace
-}  // namespace neptune
+}  // namespace xla_serving

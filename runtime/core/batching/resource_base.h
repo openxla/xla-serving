@@ -21,7 +21,7 @@
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "tsl/platform/refcount.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
 // This is the base class of all resource classes. Each resource must be
 // represented as a subclass of ResourceBase (which is reference counted) to be
@@ -39,6 +39,6 @@ class ResourceBase : public tsl::core::WeakRefCounted {
   // Returns memory used by this resource.
   virtual int64_t MemoryUsed() const { return 0; }
 };
-}  //  namespace neptune
+}  //  namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_RESOURCE_BASE_H_

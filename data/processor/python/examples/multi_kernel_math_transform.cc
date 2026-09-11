@@ -42,15 +42,15 @@ MultiKernelMathTransform<T>::Create() {
 }
 
 template <typename T>
-absl::StatusOr<neptune::HostBuffer> MultiKernelMathTransform<T>::operator()(
-    neptune::HostBuffer in_buffer) {
-  if (in_buffer.dtype().kind() != neptune::NativeAsDTypeKind<T>::value) {
+absl::StatusOr<xla_serving::HostBuffer> MultiKernelMathTransform<T>::operator()(
+    xla_serving::HostBuffer in_buffer) {
+  if (in_buffer.dtype().kind() != xla_serving::NativeAsDTypeKind<T>::value) {
     return absl::InvalidArgumentError(
         absl::StrCat("Input buffer dtype mismatch. Expected: ",
-                     xla::ifrt::DType(neptune::NativeAsDTypeKind<T>::value),
+                     xla::ifrt::DType(xla_serving::NativeAsDTypeKind<T>::value),
                      ", Got: ", in_buffer.dtype()));
   }
-  neptune::HostBuffer out(in_buffer.dtype(), in_buffer.shape());
+  xla_serving::HostBuffer out(in_buffer.dtype(), in_buffer.shape());
   const T* in_data = static_cast<const T*>(in_buffer.base());
   T* out_data = static_cast<T*>(out.base());
   for (size_t i = 0; i < out.shape().num_elements(); ++i) {

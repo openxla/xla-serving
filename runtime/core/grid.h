@@ -21,7 +21,7 @@
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 
 // Coordinates that identify a particular point in a 4-d grid (usually a TPU
 // topology).
@@ -69,6 +69,6 @@ struct GridCoords {
   }
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_GRID_H_

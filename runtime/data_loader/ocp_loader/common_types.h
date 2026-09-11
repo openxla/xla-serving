@@ -15,7 +15,7 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_COMMON_TYPES_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_COMMON_TYPES_H_
 
-namespace neptune {
+namespace xla_serving {
 
 enum class CheckpointType {
   // In standard checkpoint mode, each param is stored in its sub directory and
@@ -27,6 +27,6 @@ enum class CheckpointType {
   kOcdbt,
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_COMMON_TYPES_H_

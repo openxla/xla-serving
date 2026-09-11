@@ -47,10 +47,10 @@ class CpuEmbeddingLookupTransform : public TransformBase {
   std::vector<std::shared_ptr<neptune::data::Resource>> GetAllResources()
       const override;
 
-  absl::StatusOr<std::vector<neptune::HostBuffer>> operator()(
-      std::vector<neptune::HostBuffer> ids,
-      std::vector<neptune::HostBuffer> row_pointers,
-      std::vector<neptune::HostBuffer> weights);
+  absl::StatusOr<std::vector<xla_serving::HostBuffer>> operator()(
+      std::vector<xla_serving::HostBuffer> ids,
+      std::vector<xla_serving::HostBuffer> row_pointers,
+      std::vector<xla_serving::HostBuffer> weights);
 
   absl::Status PropagateSignatureImpl(
       api::ShapeInferenceContext& context) const override;

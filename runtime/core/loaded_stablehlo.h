@@ -37,7 +37,7 @@
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // A class that holds loaded StableHLO(s) (i.e. MLIR module(s)) representing
 // a single JAX model. The loaded StableHLO(s) could be:
@@ -199,6 +199,6 @@ class LoadedStableHlo {
   const bool has_streaming_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_LOADED_STABLEHLO_H_

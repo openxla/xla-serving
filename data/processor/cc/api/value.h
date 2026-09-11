@@ -291,7 +291,7 @@ struct InPlaceHandler {
                             !std::is_copy_constructible_v<V>, int> = 0>
   static void CopyInternal(Value* self, Value* dest) {
     LOG(FATAL)  // Crash Ok
-        << "Copying a `neptune::Value` whose underlying type is not copyable is a "
+        << "Copying a `xla_serving::Value` whose underlying type is not copyable is a "
            "runtime error.";
   }
 
@@ -357,7 +357,7 @@ struct OutOfPlaceHandler {
                             !std::is_copy_constructible_v<V>, int> = 0>
   static void CopyInternal(Value* self, Value* dest) {
     LOG(FATAL)  // Crash Ok
-        << "Copying a `neptune::Value` whose underlying type is not copyable is a "
+        << "Copying a `xla_serving::Value` whose underlying type is not copyable is a "
            "runtime error.";
   }
 

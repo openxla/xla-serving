@@ -57,8 +57,8 @@ DenseCpuEmbeddingLookupTransform::DenseCpuEmbeddingLookupTransform(
       pad_value_(pad_value),
       output_feature_names_(std::move(output_feature_names)) {
   for (size_t i = 0; i < feature_names_.size(); ++i) {
-    input_types_.push_back(api::CreateTypeInfo<neptune::HostBuffer>());
-    output_types_.push_back(api::CreateTypeInfo<neptune::HostBuffer>());
+    input_types_.push_back(api::CreateTypeInfo<xla_serving::HostBuffer>());
+    output_types_.push_back(api::CreateTypeInfo<xla_serving::HostBuffer>());
   }
   debug_string_ = absl::StrCat(
       "DenseCpuEmbeddingLookupTransform(features=[",
@@ -123,13 +123,13 @@ absl::Status DenseCpuEmbeddingLookupTransform::Execute(
         " inputs, got ", context.inputs.size()));
   }
 
-  std::vector<neptune::HostBuffer> host_buffers;
+  std::vector<xla_serving::HostBuffer> host_buffers;
   host_buffers.reserve(context.inputs.size());
   for (size_t i = 0; i < context.inputs.size(); ++i) {
-    host_buffers.push_back(context.inputs[i].Get<neptune::HostBuffer>());
+    host_buffers.push_back(context.inputs[i].Get<xla_serving::HostBuffer>());
   }
 
-  ASSIGN_OR_RETURN(std::vector<neptune::HostBuffer> outputs,
+  ASSIGN_OR_RETURN(std::vector<xla_serving::HostBuffer> outputs,
                    (*this)(std::move(host_buffers)));
 
   for (auto& out_hb : outputs) {
@@ -138,9 +138,9 @@ absl::Status DenseCpuEmbeddingLookupTransform::Execute(
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::vector<neptune::HostBuffer>>
+absl::StatusOr<std::vector<xla_serving::HostBuffer>>
 DenseCpuEmbeddingLookupTransform::operator()(
-    std::vector<neptune::HostBuffer> dense_ids_list) {
+    std::vector<xla_serving::HostBuffer> dense_ids_list) {
   if (dense_ids_list.size() != feature_names_.size()) {
     return absl::InvalidArgumentError(absl::StrCat(
         "DenseCpuEmbeddingLookupTransform expected ", feature_names_.size(),
@@ -236,14 +236,14 @@ DenseCpuEmbeddingLookupTransform::operator()(
   ASSIGN_OR_RETURN(std::vector<cpu_embedding::Array> arrays,
                    resource_->Get()->Execute(feature_batches));
 
-  std::vector<neptune::HostBuffer> output_buffers;
+  std::vector<xla_serving::HostBuffer> output_buffers;
   output_buffers.reserve(arrays.size());
   for (size_t f = 0; f < arrays.size(); ++f) {
     const auto& arr = arrays[f];
     int64_t batch_size = dense_ids_list[f].shape().dims()[0];
     ASSIGN_OR_RETURN(int32_t emb_dim,
                      resource_->GetEmbeddingDim(feature_names_[f]));
-    neptune::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+    xla_serving::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                        xla::ifrt::Shape({batch_size, emb_dim}));
     size_t byte_size = batch_size * emb_dim * sizeof(float);
     if (byte_size > 0) {

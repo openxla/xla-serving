@@ -34,7 +34,7 @@
 #include "xla/python/ifrt/device_list.h"  // from @xla
 #include "xla/python/ifrt/memory.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // Struct to describe a potential param to be loaded as a weight array.
 struct ArraySpec {
@@ -91,6 +91,6 @@ LoadCheckpointFromOrbax(absl::string_view checkpoint_path,
                         const xla::ifrt::DeviceListRef& device_list,
                         xla::ifrt::Client& client);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_

@@ -22,7 +22,7 @@
 #include "absl/base/no_destructor.h"  // from @abseil-cpp
 #include "runtime/core/allocator.h"  // from @neptune
 
-namespace neptune {
+namespace xla_serving {
 
 // An allocator that allocates host memory.
 class DefaultAllocator : public Allocator {
@@ -45,6 +45,6 @@ class DefaultAllocator : public Allocator {
   DefaultAllocator() = default;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DEFAULT_ALLOCATOR_H_

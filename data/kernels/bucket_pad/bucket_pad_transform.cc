@@ -46,8 +46,8 @@ namespace neptune::data::composite::transforms {
 namespace {
 
 template <typename T>
-absl::Status ExecuteTypedPad(const neptune::HostBuffer& input,
-                             neptune::HostBuffer& output, int norm_axis,
+absl::Status ExecuteTypedPad(const xla_serving::HostBuffer& input,
+                             xla_serving::HostBuffer& output, int norm_axis,
                              int64_t in_dim, int64_t target_dim,
                              const utils::DefaultValue& pad_value_proto) {
   T pad_val = T(0);
@@ -181,11 +181,11 @@ BucketPadTransform::BucketPadTransform(std::vector<int64_t> target_dimensions,
     : target_dimensions_(std::move(target_dimensions)),
       axis_(axis),
       pad_value_(std::move(pad_value)),
-      input_types_({api::CreateTypeInfo<neptune::HostBuffer>()}),
-      output_types_({api::CreateTypeInfo<neptune::HostBuffer>()}) {}
+      input_types_({api::CreateTypeInfo<xla_serving::HostBuffer>()}),
+      output_types_({api::CreateTypeInfo<xla_serving::HostBuffer>()}) {}
 
-absl::StatusOr<neptune::HostBuffer> BucketPadTransform::operator()(
-    const neptune::HostBuffer& input) const {
+absl::StatusOr<xla_serving::HostBuffer> BucketPadTransform::operator()(
+    const xla_serving::HostBuffer& input) const {
   const auto& in_dims = input.shape().dims();
   int rank = in_dims.size();
   if (rank == 0) {
@@ -235,7 +235,7 @@ absl::StatusOr<neptune::HostBuffer> BucketPadTransform::operator()(
 
   xla::ifrt::Shape out_shape(out_dims);
 
-  neptune::HostBuffer output(input.dtype(), out_shape);
+  xla_serving::HostBuffer output(input.dtype(), out_shape);
 
   switch (input.dtype().kind()) {
     case xla::ifrt::DType::kF32:
@@ -289,7 +289,7 @@ absl::Status BucketPadTransform::Execute(api::ExecuteContext& context) {
         absl::StrCat("BucketPadTransform expects exactly 1 input, got ",
                      context.inputs.size()));
   }
-  const auto& input = context.inputs[0].Get<neptune::HostBuffer>();
+  const auto& input = context.inputs[0].Get<xla_serving::HostBuffer>();
   auto output_or = (*this)(input);
   if (!output_or.ok()) {
     return output_or.status();

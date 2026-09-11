@@ -20,13 +20,13 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "xla/python/ifrt/client.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 namespace serving {
 
 absl::StatusOr<std::shared_ptr<xla::ifrt::Client>> GetIfrtClient(
     absl::string_view pjrt_platform);
 
 }  // namespace serving
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_IFRT_CLIENT_CREATOR_H_

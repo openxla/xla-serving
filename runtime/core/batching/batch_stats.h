@@ -28,7 +28,7 @@
 #include "absl/time/time.h"  // from @abseil-cpp
 #include "tsl/platform/thread_annotations.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
 // Default values for when there is no recorded statistic in ModelBatchStats.
 constexpr int64_t kNumBatchThreadsUnknown = -1;
@@ -247,6 +247,6 @@ inline BatchStatsRegistry& GlobalBatchStatsRegistry() {
   return *instance;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_BATCH_STATS_H_

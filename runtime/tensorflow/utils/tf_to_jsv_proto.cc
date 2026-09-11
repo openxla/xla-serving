@@ -31,15 +31,15 @@
 #include "tensorflow/core/framework/types.pb.h"  // from @org_tensorflow
 #include "tsl/platform/tstring.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
-absl::StatusOr<neptune::HostBufferProto> FromTfTensorProto(
+absl::StatusOr<xla_serving::HostBufferProto> FromTfTensorProto(
     const tensorflow::TensorProto& tf_tensor_proto) {
-  neptune::HostBufferProto jsv_proto;
+  xla_serving::HostBufferProto jsv_proto;
 
   *jsv_proto.mutable_shape() =
-      neptune::ToIfrtShape(tf_tensor_proto.tensor_shape()).ToProto();
-  TF_ASSIGN_OR_RETURN(auto dtype, neptune::ToIfrtDType(tf_tensor_proto.dtype()));
+      xla_serving::ToIfrtShape(tf_tensor_proto.tensor_shape()).ToProto();
+  TF_ASSIGN_OR_RETURN(auto dtype, xla_serving::ToIfrtDType(tf_tensor_proto.dtype()));
   *jsv_proto.mutable_dtype() = dtype.ToProto();
 
   // Tensors may either be stored in the tensor_content field (raw bytes) or in
@@ -63,4 +63,4 @@ absl::StatusOr<neptune::HostBufferProto> FromTfTensorProto(
   return std::move(jsv_proto);
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

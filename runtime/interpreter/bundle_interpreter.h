@@ -31,7 +31,7 @@
 #include "runtime/interpreter/run_options.h"  // from @neptune
 #include "xla/tsl/concurrency/future.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // BundleInterpreter manages a bundle of models and executes them sequentially
 // as defined in a BundleOrchestration proto.
@@ -105,6 +105,6 @@ class BundleInterpreter : public Interpreter {
   GetLastComponent(absl::string_view pipeline_name) const;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_BUNDLE_INTERPRETER_H_

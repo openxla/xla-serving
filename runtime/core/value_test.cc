@@ -19,7 +19,7 @@
 #include "gtest/gtest.h"
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 TEST(ValueTest, SmallCopyable) {
@@ -172,4 +172,4 @@ TEST(ValueTest, Error) {
 }
 
 }  // namespace
-}  // namespace neptune
+}  // namespace xla_serving

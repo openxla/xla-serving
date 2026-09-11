@@ -56,8 +56,8 @@ AddIntFromResourceTransform::GetAllResources() const {
       std::const_pointer_cast<IntResource>(resource_))};
 }
 
-absl::StatusOr<neptune::HostBuffer> AddIntFromResourceTransform::operator()(
-    neptune::HostBuffer in_buffer) {
+absl::StatusOr<xla_serving::HostBuffer> AddIntFromResourceTransform::operator()(
+    xla_serving::HostBuffer in_buffer) {
   if (resource_ == nullptr) {
     return absl::FailedPreconditionError(
         "Resource not loaded. Ensure this transform runs in a "
@@ -67,8 +67,8 @@ absl::StatusOr<neptune::HostBuffer> AddIntFromResourceTransform::operator()(
     return absl::InvalidArgumentError("Input buffer must have S32 dtype");
   }
 
-  neptune::HostBuffer out_buffer =
-      neptune::HostBuffer(in_buffer.dtype(), in_buffer.shape());
+  xla_serving::HostBuffer out_buffer =
+      xla_serving::HostBuffer(in_buffer.dtype(), in_buffer.shape());
 
   int64_t num_elements = in_buffer.shape().num_elements();
   const int* data = static_cast<const int*>(in_buffer.base());

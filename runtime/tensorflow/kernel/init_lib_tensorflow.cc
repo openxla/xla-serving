@@ -28,7 +28,7 @@
 #include "tensorflow/core/platform/env.h"  // from @org_tensorflow
 #include "tensorflow/core/platform/path.h"  // from @org_tensorflow
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 void LoadSingleSo(const std::string& so_path) {
@@ -104,4 +104,4 @@ static const bool kUnused = []() {
 }();
 
 }  // namespace
-}  // namespace neptune
+}  // namespace xla_serving

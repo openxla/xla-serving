@@ -48,7 +48,7 @@
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 namespace {}  // namespace
 
@@ -164,7 +164,7 @@ absl::Status AotStableHloRunner::PopulateAotExecutableCache(
       arg_list.reserve(executable_bundle->module_kept_var_indices.size());
       for (const auto& arg_spec : executable_bundle->io_spec.inputs) {
         TF_ASSIGN_OR_RETURN(auto ifrt_sharding,
-                            neptune::sharding_internal::ToIfrtSharding(
+                            xla_serving::sharding_internal::ToIfrtSharding(
                                 *options.base_options.client, arg_spec.sharding,
                                 assigned_device_list_));
         arg_list.push_back(std::move(ifrt_sharding));
@@ -175,7 +175,7 @@ absl::Status AotStableHloRunner::PopulateAotExecutableCache(
       output_list.reserve(executable_bundle->io_spec.outputs.size());
       for (const auto& out_spec : executable_bundle->io_spec.outputs) {
         TF_ASSIGN_OR_RETURN(auto ifrt_sharding,
-                            neptune::sharding_internal::ToIfrtSharding(
+                            xla_serving::sharding_internal::ToIfrtSharding(
                                 *options.base_options.client, out_spec.sharding,
                                 assigned_device_list_));
         output_list.push_back(std::move(ifrt_sharding));
@@ -208,4 +208,4 @@ AotStableHloRunner::LookUpOrCreateExecutable(
       absl::FailedPreconditionError("AOT cache miss: unseen input shape."));
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

@@ -19,7 +19,7 @@
 #include "absl/time/clock.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 
 class Clock {
  public:
@@ -40,6 +40,6 @@ class RealClock : public Clock {
   }
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_CLOCK_H_

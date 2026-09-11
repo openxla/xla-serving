@@ -18,9 +18,9 @@
 #include "gtest/gtest.h"
 #include "runtime/core/host_buffer.h"  // from @neptune
 
-namespace neptune {
+namespace xla_serving {
 
-// Matcher for neptune::HostBuffer instances. Two HostBuffers match iff
+// Matcher for xla_serving::HostBuffer instances. Two HostBuffers match iff
 //
 //   - their dtypes are equal,
 //   - their shapes are equal,
@@ -43,6 +43,6 @@ class HostBufferEq {
   const HostBuffer& target_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_HOST_BUFFER_MATCHER_H_

@@ -19,7 +19,7 @@
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 
 absl::StatusOr<MixedPriorityBatchingPolicy> GetMixedPriorityBatchingPolicy(
     absl::string_view attr_value) {
@@ -38,4 +38,4 @@ absl::StatusOr<MixedPriorityBatchingPolicy> GetMixedPriorityBatchingPolicy(
       "Unknown mixed priority batching policy: %s", attr_value));
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

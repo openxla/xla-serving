@@ -30,7 +30,7 @@
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "tsl/platform/protobuf.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
 // LINT.IfChange(InterpreterCreateOptions)
 // The options to create the interpreter. This is a virtual class to allow
@@ -100,6 +100,6 @@ struct InterpreterCreateOptions {
   std::string target_topology_label;
 };
 // LINT.ThenChange(//depot//third_party/neptune/runtime/interpreter/interpreter.cc:InterpreterCreateOptionsValidation)
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_INTERPRETER_CREATE_OPTIONS_H_

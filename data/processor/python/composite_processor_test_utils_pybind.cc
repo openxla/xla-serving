@@ -53,7 +53,7 @@ PYBIND11_MODULE(composite_processor_test_utils_pybind, m) {
   });
 
   m.def("get_ref_count_from_ref",
-        [](const neptune::HostBuffer& hb) { return hb.ref_count(); });
+        [](const xla_serving::HostBuffer& hb) { return hb.ref_count(); });
 
   m.def("run_transform_methods_concurrently",
         [](const std::shared_ptr<TransformBase>& transform) {

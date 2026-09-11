@@ -27,7 +27,7 @@
 #include "xla/python/ifrt/program.h"  // from @xla
 #include "xla/python/pjrt_ifrt/xla_compiler.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 absl::StatusOr<xla::ifrt::LoadedExecutableRef>
 IfrtPersistentCompilationCache::LookupLoadedExecutableOrCreate(
@@ -46,4 +46,4 @@ IfrtPersistentCompilationCache::LookupLoadedExecutableOrCreate(
   return value_fn(std::move(hlo_program), std::move(ifrt_xla_compile_options));
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

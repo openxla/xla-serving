@@ -41,7 +41,7 @@
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 class TestBatchResourceBase : public BatchResourceBase {
  public:
@@ -238,6 +238,6 @@ class TestRaggedBatchResourceBase : public BatchResourceBase {
   Allocator* allocator_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_TEST_BATCH_RESOURCE_BASE_H_

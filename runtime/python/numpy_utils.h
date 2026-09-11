@@ -26,7 +26,7 @@
 #include "tensorflow/core/framework/tensor_shape.h"  // from @org_tensorflow
 #include "tensorflow/core/framework/types.pb.h"  // from @org_tensorflow
 
-namespace neptune {
+namespace xla_serving {
 
 // Converts an `xla::nb_numpy_ndarray` to a `tensorflow::Tensor`.
 tensorflow::Tensor ToTFTensor(xla::nb_numpy_ndarray numpy_array);
@@ -36,16 +36,16 @@ tensorflow::Tensor ToTFTensor(xla::nb_numpy_ndarray numpy_array);
 // dtype `np.object_`.
 xla::nb_numpy_ndarray ToNbArray(const tensorflow::Tensor& tensor);
 
-// Converts an `xla::nb_numpy_ndarray` to a `neptune::HostBuffer`. The `HostBuffer`
+// Converts an `xla::nb_numpy_ndarray` to a `xla_serving::HostBuffer`. The `HostBuffer`
 // is allocated using the provided `allocator`. The DefaultAllocator is used if
 // `allocator` is not provided.
-neptune::HostBuffer ToHostBuffer(
+xla_serving::HostBuffer ToHostBuffer(
     xla::nb_numpy_ndarray numpy_array,
-    neptune::Allocator* allocator = neptune::DefaultAllocator::GetInstance());
+    xla_serving::Allocator* allocator = xla_serving::DefaultAllocator::GetInstance());
 
-// Converts a `neptune::HostBuffer` to a `xla::nb_numpy_ndarray`.
-xla::nb_numpy_ndarray ToNbArray(const neptune::HostBuffer& host_buffer);
+// Converts a `xla_serving::HostBuffer` to a `xla::nb_numpy_ndarray`.
+xla::nb_numpy_ndarray ToNbArray(const xla_serving::HostBuffer& host_buffer);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_PYTHON_NUMPY_UTILS_H_

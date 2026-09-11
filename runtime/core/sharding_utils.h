@@ -33,7 +33,7 @@
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace neptune::sharding_internal {
+namespace xla_serving::sharding_internal {
 
 // Splits the given `input_buffer` into equal shapes of slices.
 //
@@ -109,6 +109,6 @@ absl::StatusOr<DeviceBuffer> MakeDeviceBufferFromPinnedHost(
     xla::ifrt::ShardingRef sharding,
     const tsl::thread::ThreadPool& thread_pool);
 
-}  // namespace neptune::sharding_internal
+}  // namespace xla_serving::sharding_internal
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_SHARDING_UTILS_H_

@@ -287,8 +287,8 @@ TEST(CompositeProcessorTest, AddIntTransformSucceeds) {
   const xla::ifrt::DType dtype(xla::ifrt::DType::Kind::kS32);
   const xla::ifrt::Shape shape({2});
 
-  neptune::HostBuffer hb1 = neptune::AsHostBuffer<int>({1, 2}, shape);
-  neptune::HostBuffer hb2 = neptune::AsHostBuffer<int>({10, 20}, shape);
+  xla_serving::HostBuffer hb1 = xla_serving::AsHostBuffer<int>({1, 2}, shape);
+  xla_serving::HostBuffer hb2 = xla_serving::AsHostBuffer<int>({10, 20}, shape);
 
   api::ExecuteContext context;
   std::vector<api::Value> inputs;
@@ -299,9 +299,9 @@ TEST(CompositeProcessorTest, AddIntTransformSucceeds) {
   EXPECT_OK(processor->Process(context));
 
   ASSERT_EQ(context.outputs.size(), 1);
-  EXPECT_TRUE(context.outputs[0].IsType<neptune::HostBuffer>());
-  neptune::HostBuffer out = context.outputs[0].Get<neptune::HostBuffer>();
-  EXPECT_THAT(out, neptune::HostBufferEq(neptune::AsHostBuffer<int>({11, 22}, shape)));
+  EXPECT_TRUE(context.outputs[0].IsType<xla_serving::HostBuffer>());
+  xla_serving::HostBuffer out = context.outputs[0].Get<xla_serving::HostBuffer>();
+  EXPECT_THAT(out, xla_serving::HostBufferEq(xla_serving::AsHostBuffer<int>({11, 22}, shape)));
 }
 
 TEST(CompositeProcessorTest, Serialize) {
@@ -907,8 +907,8 @@ class MultiKernelMathTransform : public TransformBase {
     return std::make_unique<MultiKernelMathTransform<T>>();
   }
 
-  absl::StatusOr<neptune::HostBuffer> operator()(neptune::HostBuffer in) {
-    neptune::HostBuffer out(in.dtype(), in.shape());
+  absl::StatusOr<xla_serving::HostBuffer> operator()(xla_serving::HostBuffer in) {
+    xla_serving::HostBuffer out(in.dtype(), in.shape());
     const T* in_data = static_cast<const T*>(in.base());
     T* out_data = static_cast<T*>(out.base());
     for (size_t i = 0; i < out.shape().num_elements(); ++i) {
@@ -969,7 +969,7 @@ TEST(CompositeProcessorTest, DynamicDispatchDeserializationAndExecution) {
 
   // Verify we can run the graph before serialization.
   {
-    neptune::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+    xla_serving::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                        xla::ifrt::Shape({2}));
     int32_t* data = static_cast<int32_t*>(hb.base());
     data[0] = 1;
@@ -988,7 +988,7 @@ TEST(CompositeProcessorTest, DynamicDispatchDeserializationAndExecution) {
     exec_ctx.inputs = exec_inputs;
     ASSERT_OK(processor.Process(exec_ctx));
     ASSERT_EQ(exec_ctx.outputs.size(), 1);
-    const auto& out_hb = exec_ctx.outputs[0].Get<neptune::HostBuffer>();
+    const auto& out_hb = exec_ctx.outputs[0].Get<xla_serving::HostBuffer>();
     const int32_t* out_data = static_cast<const int32_t*>(out_hb.base());
     EXPECT_EQ(out_data[0], 11);
     EXPECT_EQ(out_data[1], 12);
@@ -1003,7 +1003,7 @@ TEST(CompositeProcessorTest, DynamicDispatchDeserializationAndExecution) {
 
   // Verify dispatch to int32 kernel.
   {
-    neptune::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+    xla_serving::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                        xla::ifrt::Shape({2}));
     int32_t* data = static_cast<int32_t*>(hb.base());
     data[0] = 1;
@@ -1022,7 +1022,7 @@ TEST(CompositeProcessorTest, DynamicDispatchDeserializationAndExecution) {
     exec_ctx.inputs = exec_inputs;
     ASSERT_OK(deserialized_s32.Process(exec_ctx));
     ASSERT_EQ(exec_ctx.outputs.size(), 1);
-    const auto& out_hb = exec_ctx.outputs[0].Get<neptune::HostBuffer>();
+    const auto& out_hb = exec_ctx.outputs[0].Get<xla_serving::HostBuffer>();
     const int32_t* out_data = static_cast<const int32_t*>(out_hb.base());
     EXPECT_EQ(out_data[0], 11);
     EXPECT_EQ(out_data[1], 12);
@@ -1032,7 +1032,7 @@ TEST(CompositeProcessorTest, DynamicDispatchDeserializationAndExecution) {
   ASSERT_OK_AND_ASSIGN(CompositeProcessor deserialized_f32,
                        CompositeProcessor::FromProto(config));
   {
-    neptune::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+    xla_serving::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                        xla::ifrt::Shape({2}));
     float* data = static_cast<float*>(hb.base());
     data[0] = 1.5f;
@@ -1051,7 +1051,7 @@ TEST(CompositeProcessorTest, DynamicDispatchDeserializationAndExecution) {
     exec_ctx.inputs = exec_inputs;
     ASSERT_OK(deserialized_f32.Process(exec_ctx));
     ASSERT_EQ(exec_ctx.outputs.size(), 1);
-    const auto& out_hb = exec_ctx.outputs[0].Get<neptune::HostBuffer>();
+    const auto& out_hb = exec_ctx.outputs[0].Get<xla_serving::HostBuffer>();
     const float* out_data = static_cast<const float*>(out_hb.base());
     EXPECT_EQ(out_data[0], 11.5f);
     EXPECT_EQ(out_data[1], 12.5f);
@@ -1066,8 +1066,8 @@ class MultiKernelMathGpuTransform : public TransformBase {
     return std::make_unique<MultiKernelMathGpuTransform<T>>();
   }
 
-  absl::StatusOr<neptune::HostBuffer> operator()(neptune::HostBuffer in) {
-    neptune::HostBuffer out(in.dtype(), in.shape());
+  absl::StatusOr<xla_serving::HostBuffer> operator()(xla_serving::HostBuffer in) {
+    xla_serving::HostBuffer out(in.dtype(), in.shape());
     const T* in_data = static_cast<const T*>(in.base());
     T* out_data = static_cast<T*>(out.base());
     for (size_t i = 0; i < out.shape().num_elements(); ++i) {
@@ -1129,7 +1129,7 @@ TEST(CompositeProcessorTest, GpuDynamicDispatchExecution) {
   ASSERT_OK_AND_ASSIGN(CompositeProcessor processor,
                        CompositeProcessor::Create(std::move(graph)));
 
-  neptune::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+  xla_serving::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                      xla::ifrt::Shape({2}));
   float* data = static_cast<float*>(hb.base());
   data[0] = 1.5f;
@@ -1153,13 +1153,13 @@ TEST(CompositeProcessorTest, GpuDynamicDispatchExecution) {
   ASSERT_EQ(exec_ctx.outputs.size(), 2);
 
   // GPU node output: input + 100
-  const auto& gpu_out_hb = exec_ctx.outputs[0].Get<neptune::HostBuffer>();
+  const auto& gpu_out_hb = exec_ctx.outputs[0].Get<xla_serving::HostBuffer>();
   const float* gpu_out_data = static_cast<const float*>(gpu_out_hb.base());
   EXPECT_EQ(gpu_out_data[0], 101.5f);
   EXPECT_EQ(gpu_out_data[1], 102.5f);
 
   // CPU node output: input + 10
-  const auto& cpu_out_hb = exec_ctx.outputs[1].Get<neptune::HostBuffer>();
+  const auto& cpu_out_hb = exec_ctx.outputs[1].Get<xla_serving::HostBuffer>();
   const float* cpu_out_data = static_cast<const float*>(cpu_out_hb.base());
   EXPECT_EQ(cpu_out_data[0], 11.5f);
   EXPECT_EQ(cpu_out_data[1], 12.5f);
@@ -1193,14 +1193,14 @@ TEST(CompositeProcessorTest, GpuDynamicDispatchExecution) {
   ASSERT_EQ(des_exec_ctx.outputs.size(), 2);
 
   // Verify GPU node output from deserialized processor: input + 100
-  const auto& des_gpu_out_hb = des_exec_ctx.outputs[0].Get<neptune::HostBuffer>();
+  const auto& des_gpu_out_hb = des_exec_ctx.outputs[0].Get<xla_serving::HostBuffer>();
   const float* des_gpu_out_data =
       static_cast<const float*>(des_gpu_out_hb.base());
   EXPECT_EQ(des_gpu_out_data[0], 101.5f);
   EXPECT_EQ(des_gpu_out_data[1], 102.5f);
 
   // Verify CPU node output from deserialized processor: input + 10
-  const auto& des_cpu_out_hb = des_exec_ctx.outputs[1].Get<neptune::HostBuffer>();
+  const auto& des_cpu_out_hb = des_exec_ctx.outputs[1].Get<xla_serving::HostBuffer>();
   const float* des_cpu_out_data =
       static_cast<const float*>(des_cpu_out_hb.base());
   EXPECT_EQ(des_cpu_out_data[0], 11.5f);

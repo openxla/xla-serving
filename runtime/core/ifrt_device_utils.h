@@ -26,7 +26,7 @@
 #include "xla/python/ifrt/device.h"  // from @xla
 #include "xla/python/ifrt/executable.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // Returns the assigned IFRT devices based on the device assignment attribute.
 //
@@ -47,6 +47,6 @@ absl::StatusOr<std::vector<xla::ifrt::Device*>> GetAssignedIfrtDevices(
     int num_cores_per_replica,
     std::optional<std::vector<int>> device_assignment);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_IFRT_DEVICE_UTILS_H_

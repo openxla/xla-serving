@@ -16,7 +16,7 @@
 #include "runtime/kernel/builtin_kernel.h"  // from @neptune
 #include "runtime/kernel/kernel.h"  // from @neptune
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 // TODO: Find a better way to register the kernels
@@ -32,4 +32,4 @@ static const bool kUnused = []() {
 
 }  // namespace
 
-}  // namespace neptune
+}  // namespace xla_serving

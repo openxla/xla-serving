@@ -23,13 +23,13 @@
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "tsl/platform/path.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
 absl::Status IsOrbaxModelDirectory(absl::string_view path) {
   tsl::Env* env = tsl::Env::Default();
-  const std::string neptune_model_manifest_version_path =
+  const std::string model_manifest_version_path =
       tsl::io::JoinPath(path, kNeptuneModelManifestVersionTxt);
-  if (env->FileExists(neptune_model_manifest_version_path).ok()) {
+  if (env->FileExists(model_manifest_version_path).ok()) {
     return absl::OkStatus();
   }
   const std::string orbax_model_manifest_version_path =
@@ -37,4 +37,4 @@ absl::Status IsOrbaxModelDirectory(absl::string_view path) {
   return env->FileExists(orbax_model_manifest_version_path);
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

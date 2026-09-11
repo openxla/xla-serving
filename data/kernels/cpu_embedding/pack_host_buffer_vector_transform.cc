@@ -46,16 +46,16 @@ PackHostBufferVectorTransform::Create(int input_count) {
 
 PackHostBufferVectorTransform::PackHostBufferVectorTransform(int input_count)
     : input_count_(input_count) {
-  input_types_.resize(input_count_, api::CreateTypeInfo<neptune::HostBuffer>());
-  output_types_.push_back(api::CreateTypeInfo<std::vector<neptune::HostBuffer>>());
+  input_types_.resize(input_count_, api::CreateTypeInfo<xla_serving::HostBuffer>());
+  output_types_.push_back(api::CreateTypeInfo<std::vector<xla_serving::HostBuffer>>());
 }
 
 absl::Status PackHostBufferVectorTransform::Execute(
     api::ExecuteContext& context) {
-  std::vector<neptune::HostBuffer> packed;
+  std::vector<xla_serving::HostBuffer> packed;
   packed.reserve(context.inputs.size());
   for (const auto& val : context.inputs) {
-    packed.push_back(val.Get<neptune::HostBuffer>());
+    packed.push_back(val.Get<xla_serving::HostBuffer>());
   }
   context.outputs.push_back(api::Value(std::move(packed)));
   return absl::OkStatus();

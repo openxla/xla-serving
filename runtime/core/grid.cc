@@ -18,10 +18,10 @@
 
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 
 std::string GridCoords::ToString() const {
   return absl::StrCat("[", dim[0], ",", dim[1], ",", dim[2], ",", dim[3], "]");
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

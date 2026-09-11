@@ -68,7 +68,7 @@
 #include "tensorstore/util/element_pointer.h"  // from @tensorstore
 #include "tensorstore/util/result.h"  // from @tensorstore
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 bool IsSubdirectory(absl::string_view parent, absl::string_view child) {
@@ -380,4 +380,4 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadFromTensorstore(
                                         std::move(opts), std::move(context));
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

@@ -40,7 +40,7 @@
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "tsl/platform/refcount.h"  // from @tsl
-namespace neptune {
+namespace xla_serving {
 
 struct BatchRunnerOpOptions {
   std::vector<MetaArgSpec> input_signature;
@@ -147,6 +147,6 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateBatchRunnerOp(
     std::vector<std::unique_ptr<Kernel>> kernels,
     const BatchRunnerOpOptions& options, tsl::thread::ThreadPool* thread_pool);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_BATCH_RUNNER_OP_H_

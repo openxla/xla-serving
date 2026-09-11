@@ -47,14 +47,14 @@ UnpackHostBufferVectorTransform::Create(int output_count) {
 UnpackHostBufferVectorTransform::UnpackHostBufferVectorTransform(
     int output_count)
     : output_count_(output_count) {
-  input_types_.push_back(api::CreateTypeInfo<std::vector<neptune::HostBuffer>>());
-  output_types_.resize(output_count_, api::CreateTypeInfo<neptune::HostBuffer>());
+  input_types_.push_back(api::CreateTypeInfo<std::vector<xla_serving::HostBuffer>>());
+  output_types_.resize(output_count_, api::CreateTypeInfo<xla_serving::HostBuffer>());
 }
 
 absl::Status UnpackHostBufferVectorTransform::Execute(
     api::ExecuteContext& context) {
-  const std::vector<neptune::HostBuffer>& packed =
-      context.inputs[0].Get<std::vector<neptune::HostBuffer>>();
+  const std::vector<xla_serving::HostBuffer>& packed =
+      context.inputs[0].Get<std::vector<xla_serving::HostBuffer>>();
 
   if (packed.size() != output_count_) {
     return absl::InternalError(absl::StrCat(

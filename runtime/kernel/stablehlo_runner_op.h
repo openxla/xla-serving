@@ -29,11 +29,11 @@
 #include "runtime/kernel/kernel_builder_context.h"  // from @neptune
 #include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
 
-namespace neptune {
+namespace xla_serving {
 
 // A kernel that runs a StableHlo computation.
-// It takes a list of `neptune::HostBuffer` as inputs and outputs.
-// It also supports loading variables from an `neptune::IfrtLoadedVariableRegistry`.
+// It takes a list of `xla_serving::HostBuffer` as inputs and outputs.
+// It also supports loading variables from an `xla_serving::IfrtLoadedVariableRegistry`.
 // The variable names are provided as a list of strings. The variable names are
 // expected to be in the same order as the variable arguments in the
 // computation. It is also assumed that variables will always be at the
@@ -88,6 +88,6 @@ class StableHloRunnerOp : public CancellableKernel {
   friend class StableHloRunnerTestPeer;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_STABLEHLO_RUNNER_OP_H_

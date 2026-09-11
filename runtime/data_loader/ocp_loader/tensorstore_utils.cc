@@ -43,7 +43,7 @@
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "tensorstore/data_type.h"  // from @tensorstore
 
-namespace neptune {
+namespace xla_serving {
 
 namespace {
 
@@ -304,4 +304,4 @@ absl::StatusOr<tensorstore::DataType> ToTensorStoreDType(
   }
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

@@ -28,7 +28,7 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 
 // Global registry for model's warm-up states. Before a model executes warm-up
 // requests, it is registered here so that the runtime can distinguish demand
@@ -125,6 +125,6 @@ WarmupStateRegistry& GetGlobalWarmupStateRegistry();
 bool ShouldWarmupAllBatchSizes(absl::string_view model_name,
                                int64_t model_version);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_WARMUP_H_

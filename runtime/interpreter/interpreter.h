@@ -51,7 +51,7 @@
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/file_system.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 using KernelGraph = std::vector<std::unique_ptr<Kernel>>;
 
@@ -183,7 +183,7 @@ class Interpreter {
   absl::Status LoadGraphs();
 
   struct GraphBundle {
-    // TODO: Remove this constructor once we upgrate oss neptune to
+    // TODO: Remove this constructor once we upgrade oss to
     // C++ 20.
     GraphBundle(std::string name, neptune_model_orchestration::Pipeline p,
                 FunctionFlatSignature sig)
@@ -363,6 +363,6 @@ class Interpreter {
   std::optional<int64_t> callback_id_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_INTERPRETER_H_

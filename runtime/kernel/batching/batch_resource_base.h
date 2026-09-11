@@ -51,7 +51,7 @@
 
 ABSL_DECLARE_FLAG(bool, jsv_support_batching_for_ragged_inputs);
 
-namespace neptune {
+namespace xla_serving {
 
 struct RaggedInputSpec {
   // Index of the flat_values tensor in the flat signature.
@@ -84,7 +84,7 @@ class BatchResourceBase : public ResourceBase {
   //
   // Note input from one batch-op invocation is valid and considered a
   // specialized `slice`.
-  struct BatchTask : public neptune::BatchTask {
+  struct BatchTask : public xla_serving::BatchTask {
     BatchTask() : criticality_val(tsl::criticality::GetCriticality()) {};
 
     // A unique ID to identify this invocation of Batch.
@@ -396,6 +396,6 @@ class BatchResourceBase : public ResourceBase {
   tsl::thread::ThreadPool* thread_pool_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_BATCH_RESOURCE_BASE_H_

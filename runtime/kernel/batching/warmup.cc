@@ -28,7 +28,7 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 
 void WarmupStateRegistry::Handle::Release() {
   if (!key_.has_value()) {
@@ -79,4 +79,4 @@ bool ShouldWarmupAllBatchSizes(absl::string_view model_name,
   return per_model_data && per_model_data->warmup_all_batch_sizes;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

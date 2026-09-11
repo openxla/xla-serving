@@ -29,8 +29,8 @@ class AddTwoInputBuffersTransform
     : public neptune::data::composite::TransformBase {
  public:
   static absl::StatusOr<std::unique_ptr<AddTwoInputBuffersTransform>> Create();
-  absl::StatusOr<neptune::HostBuffer> operator()(neptune::HostBuffer in_buffer1,
-                                             neptune::HostBuffer in_buffer2);
+  absl::StatusOr<xla_serving::HostBuffer> operator()(xla_serving::HostBuffer in_buffer1,
+                                             xla_serving::HostBuffer in_buffer2);
   absl::StatusOr<neptune::data::composite::TransformConfig> ToProto()
       const override;
 };

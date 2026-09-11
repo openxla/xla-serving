@@ -20,7 +20,7 @@
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // Converts an `neptune_model_type::DType` to `xla::PrimitiveType`.
 absl::StatusOr<xla::PrimitiveType> ToPrimitiveType(
@@ -29,6 +29,6 @@ absl::StatusOr<xla::PrimitiveType> ToPrimitiveType(
 // Converts an `neptune_model_type::DType` to `xla::ifrt::DType`.
 absl::StatusOr<xla::ifrt::DType> ToIfrtDType(neptune_model_type::DType type);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_ORBAX_TYPE_UTILS_H_

@@ -28,7 +28,7 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 
 // A factory class interface to create FunctionHandler.
 //
@@ -97,6 +97,6 @@ class OptionalFunctionHandlerRouter {
       handlers_ ABSL_GUARDED_BY(router_mu_);
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_OPTIONAL_FUNCTION_HANDLER_FACTORY_H_

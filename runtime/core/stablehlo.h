@@ -29,7 +29,7 @@
 #include "runtime/core/stablehlo_utils.h"  // from @neptune
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // TODO b/401364010 - Add unit test for this class.
 
@@ -93,6 +93,6 @@ class StableHlo {
   const std::vector<Spec> specs_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_STABLEHLO_H_

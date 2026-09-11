@@ -14,7 +14,7 @@
 
 edition = "2024";
 
-package neptune;
+package xla_serving;
 
 import "xla/python/ifrt/dtype.proto";
 import "xla/python/ifrt/shape.proto";

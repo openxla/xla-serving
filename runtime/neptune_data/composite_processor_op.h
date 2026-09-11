@@ -23,7 +23,7 @@
 #include "data/processor/cc/core/composite_processor.h"  // from @neptune
 #include "runtime/kernel/kernel.h"  // from @neptune
 
-namespace neptune {
+namespace xla_serving {
 namespace composite {
 
 // A kernel that executes a neptune::data::composite::CompositeProcessor.
@@ -48,6 +48,6 @@ class CompositeProcessorOp : public CancellableKernel {
 };
 
 }  // namespace composite
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_NEPTUNE_DATA_COMPOSITE_PROCESSOR_OP_H_

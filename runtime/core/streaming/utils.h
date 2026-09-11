@@ -20,7 +20,7 @@
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 #include "runtime/core/host_buffer.h"  // from @neptune
 
-namespace neptune {
+namespace xla_serving {
 
 inline constexpr absl::string_view kStreamedResultBatchedStepIdName =
     "__streamed_result_batched_step_id";
@@ -34,14 +34,14 @@ absl::Status PropagateStreamingStepId(mlir::ModuleOp module,
                                       bool is_batched = false);
 
 // Creates a HostBuffer containing request_ids for streaming.
-absl::StatusOr<neptune::HostBuffer> CreateRequestIdsBuffer(int64_t batch_size,
+absl::StatusOr<xla_serving::HostBuffer> CreateRequestIdsBuffer(int64_t batch_size,
                                                        int32_t request_id);
 
-absl::StatusOr<neptune::HostBuffer> CreateScalarRequestIdBuffer(int32_t request_id);
+absl::StatusOr<xla_serving::HostBuffer> CreateScalarRequestIdBuffer(int32_t request_id);
 
-absl::StatusOr<neptune::HostBuffer> CreateRequestIdsBuffer(
+absl::StatusOr<xla_serving::HostBuffer> CreateRequestIdsBuffer(
     absl::Span<const int32_t> request_ids);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_STREAMING_UTILS_H_

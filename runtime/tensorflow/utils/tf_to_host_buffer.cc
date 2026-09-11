@@ -39,7 +39,7 @@
 #include "tensorflow/core/framework/types.pb.h"  // from @org_tensorflow
 #include "tsl/platform/refcount.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
 namespace {
 // A TensorBuffer that manages the lifetime of a host array.
@@ -127,4 +127,4 @@ absl::StatusOr<Value> ToJsvValue(tensorflow::Tensor tensor,
   }
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

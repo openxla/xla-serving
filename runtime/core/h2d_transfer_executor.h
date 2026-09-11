@@ -27,7 +27,7 @@
 #include "xla/python/ifrt/sharding.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // Interface for Host-to-Device (Arena) Transfers.
 // Implementations of this interface handle linear packing of HostBuffers along
@@ -68,6 +68,6 @@ class H2DTransferExecutorFactory {
       tsl::thread::ThreadPool* thread_pool) = 0;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_H2D_TRANSFER_EXECUTOR_H_

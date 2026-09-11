@@ -28,7 +28,7 @@
 #include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
 #include "runtime/tensorflow/tf_saved_model_runner.h"  // from @neptune
 
-namespace neptune {
+namespace xla_serving {
 
 // A kernel that runs a TF SavedModel.
 class TfSavedModelFunctionRunnerOp : public CancellableKernel {
@@ -76,6 +76,6 @@ class TfSavedModelFunctionRunnerOp : public CancellableKernel {
   bool post_data_conversion_ = false;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_KERNEL_TF_SAVED_MODEL_FUNCTION_RUNNER_OP_H_

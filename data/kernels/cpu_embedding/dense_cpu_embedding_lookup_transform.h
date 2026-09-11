@@ -61,8 +61,8 @@ class DenseCpuEmbeddingLookupTransform : public TransformBase {
   absl::Span<const api::TypeInfo> InputTypes() const override;
   absl::Span<const api::TypeInfo> OutputTypes() const override;
 
-  absl::StatusOr<std::vector<neptune::HostBuffer>> operator()(
-      std::vector<neptune::HostBuffer> dense_ids_list);
+  absl::StatusOr<std::vector<xla_serving::HostBuffer>> operator()(
+      std::vector<xla_serving::HostBuffer> dense_ids_list);
 
   absl::Status PropagateSignatureImpl(
       api::ShapeInferenceContext& context) const override;

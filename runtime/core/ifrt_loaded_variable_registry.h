@@ -34,7 +34,7 @@
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // This class is thread safe.
 class IfrtLoadedVariableRegistry {
@@ -113,6 +113,6 @@ class IfrtLoadedVariableRegistryTestPeer {
   IfrtLoadedVariableRegistry* absl_nonnull registry_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_IFRT_LOADED_VARIABLE_REGISTRY_H_

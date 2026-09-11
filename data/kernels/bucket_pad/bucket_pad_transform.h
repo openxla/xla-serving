@@ -69,8 +69,8 @@ class BucketPadTransform : public TransformBase {
   absl::StatusOr<::neptune::data::composite::TransformConfig> ToProto()
       const override;
 
-  absl::StatusOr<neptune::HostBuffer> operator()(
-      const neptune::HostBuffer& input) const;
+  absl::StatusOr<xla_serving::HostBuffer> operator()(
+      const xla_serving::HostBuffer& input) const;
 
   std::string DebugName() const override;
 

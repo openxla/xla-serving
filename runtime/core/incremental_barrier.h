@@ -19,7 +19,7 @@
 
 #include "absl/functional/any_invocable.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 
 class InternalIncrementalBarrier;
 
@@ -76,6 +76,6 @@ class IncrementalBarrier {
   InternalIncrementalBarrier* internal_barrier_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INCREMENTAL_BARRIER_H_

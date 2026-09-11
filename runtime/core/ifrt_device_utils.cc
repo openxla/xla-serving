@@ -39,7 +39,7 @@
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 static constexpr int kTpuTopologyRank = 4;  // (x, y, z, core).
 
@@ -165,4 +165,4 @@ absl::StatusOr<std::vector<xla::ifrt::Device*>> GetAssignedIfrtDevices(
   return result;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

@@ -55,7 +55,7 @@
 #include "xla/xla_data.pb.h"  // from @xla
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
 namespace {
 
@@ -239,15 +239,15 @@ absl::Status StableHloRunnerOp::RunInternal(ExecuteContext& context) {
   if (stablehlo_runner_->has_streaming()) {
     int32_t request_id = context.run_context.request_id;
     if (inputs_span.size() == stablehlo_runner_->GetNumInputs()) {
-      absl::StatusOr<neptune::HostBuffer> request_ids_buffer_status;
+      absl::StatusOr<HostBuffer> request_ids_buffer_status;
       if (!context.run_context.request_ids.empty()) {
         request_ids_buffer_status =
-            neptune::CreateRequestIdsBuffer(context.run_context.request_ids);
+            CreateRequestIdsBuffer(context.run_context.request_ids);
       } else {
         request_ids_buffer_status =
-            neptune::CreateScalarRequestIdBuffer(request_id);
+            CreateScalarRequestIdBuffer(request_id);
       }
-      TF_ASSIGN_OR_RETURN(neptune::HostBuffer request_ids_buffer,
+      TF_ASSIGN_OR_RETURN(HostBuffer request_ids_buffer,
                           request_ids_buffer_status);
       inputs_with_stream_step_id.assign(inputs_span.begin(), inputs_span.end());
       inputs_with_stream_step_id.push_back(
@@ -267,4 +267,4 @@ absl::Status StableHloRunnerOp::RunInternal(ExecuteContext& context) {
   return absl::OkStatus();
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

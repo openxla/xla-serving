@@ -19,7 +19,7 @@
 
 #include "absl/container/fixed_array.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 namespace internal {
 // InputSplitMetadata represents the task sizes of a batch task after it's
 // tailored according to queue status (`open_batch_remaining_slot` and
@@ -47,6 +47,6 @@ class InputSplitMetadata {
   const absl::FixedArray<int> task_sizes_;
 };
 }  // namespace internal
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_INPUT_SPLIT_METADATA_H_

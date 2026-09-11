@@ -29,7 +29,7 @@
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // Returns a new Value containing a buffer reshaped to the shape specified.
 // Supports HostBuffer and DeviceBuffer.
@@ -100,6 +100,6 @@ absl::StatusOr<std::vector<T>> UnpackFromValues(
 }
 
 }  // namespace internal
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_VALUE_UTILS_H_

@@ -20,7 +20,7 @@
 #include "gtest/gtest.h"
 #include "runtime/core/value.h"  // from @neptune
 
-namespace neptune {
+namespace xla_serving {
 namespace internal {
 // Implementation of ValueOfType matcher. See comments of ValueOfType for
 // details.
@@ -84,6 +84,6 @@ class ValueOfType {
   const ::testing::Matcher<const T&>& inner_matcher_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_VALUE_MATCHER_H_

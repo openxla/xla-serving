@@ -31,7 +31,7 @@
 #include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // Executor that groups and issues batched host-to-device transfers.
 // This implementation groups HostBuffers targeted for the same devices and
@@ -80,6 +80,6 @@ class BatchedH2DTransferExecutorFactory : public H2DTransferExecutorFactory {
   BatchedH2DTransferExecutor::Options options_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_BATCHED_H2D_TRANSFER_EXECUTOR_H_

@@ -23,7 +23,7 @@
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
 #include "runtime/core/batching/batch_stats.h"  // from @neptune
 
-namespace neptune {
+namespace xla_serving {
 
 // Returns the next allowed batch size, which is the smallest allowed batch size
 // greater than or equal to the given batch size. If allowed_batch_sizes,
@@ -68,6 +68,6 @@ void MaybeBatchDown(Batch<TaskType>& batch,
   }
 }
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_BATCH_SCHEDULER_UTILS_H_

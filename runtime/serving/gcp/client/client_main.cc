@@ -55,7 +55,7 @@ ABSL_FLAG(bool, use_insecure_grpc_credentials, false,
           "Whether to use insecure credentials for the server. WARNING: THIS "
           "SHOULD NOT BE USED IN PRODUCTION.");
 
-void LogPredictResponse(const neptune::serving::PredictResponse& response) {
+void LogPredictResponse(const xla_serving::serving::PredictResponse& response) {
   LOG(INFO) << "Model Spec: " << response.model_spec().name()
             << " Signature: " << response.model_spec().signature_name();
   LOG(INFO) << "Outputs:";
@@ -64,14 +64,14 @@ void LogPredictResponse(const neptune::serving::PredictResponse& response) {
   } else {
     for (const auto& pair : response.outputs()) {
       const std::string& output_name = pair.first;
-      const neptune::HostBufferProto& output_buffer = pair.second;
+      const xla_serving::HostBufferProto& output_buffer = pair.second;
       LOG(INFO) << "  Output: " << output_name << ", DType: "
                 << xla::ifrt::DTypeProto::Kind_Name(
                        output_buffer.dtype().kind())
                 << ", Shape: ["
                 << absl::StrJoin(output_buffer.shape().dims(), ", ") << "]";
-      absl::StatusOr<neptune::HostBuffer> host_buffer =
-          neptune::HostBuffer::FromProto(output_buffer);
+      absl::StatusOr<xla_serving::HostBuffer> host_buffer =
+          xla_serving::HostBuffer::FromProto(output_buffer);
       if (!host_buffer.ok()) {
         LOG(ERROR) << "Failed to convert HostBufferProto to HostBuffer: "
                    << host_buffer.status();
@@ -83,7 +83,7 @@ void LogPredictResponse(const neptune::serving::PredictResponse& response) {
   }
 }
 
-absl::StatusOr<neptune::serving::PredictResponse> RunPredict(
+absl::StatusOr<xla_serving::serving::PredictResponse> RunPredict(
     const std::string& server_address, absl::string_view model_name,
     const std::string& warmup_requests_path, std::string server_cert_chain_path,
     bool use_insecure_grpc_credentials) {
@@ -103,17 +103,17 @@ absl::StatusOr<neptune::serving::PredictResponse> RunPredict(
     return absl::InvalidArgumentError(absl::StrCat(
         "Failed to read record from TFRecord file: ", warmup_requests_path));
   }
-  neptune::serving::PredictionLog prediction_log;
+  xla_serving::serving::PredictionLog prediction_log;
   if (!prediction_log.ParseFromString(record)) {
     return absl::InvalidArgumentError(
         "Failed to parse PredictionLog from TFRecord record.");
   }
-  neptune::serving::PredictRequest request =
+  xla_serving::serving::PredictRequest request =
       prediction_log.predict_log().request();
   // LOG(INFO) << "Successfully loaded PredictRequest from "
   //           << warmup_requests_path;
-  // absl::StatusOr<neptune::serving::PredictRequest> request =
-  //     neptune::FromTfPredictRequest(tf_request);
+  // absl::StatusOr<xla_serving::serving::PredictRequest> request =
+  //     xla_serving::FromTfPredictRequest(tf_request);
   // if (!request.ok()) {
   //   return absl::InvalidArgumentError(
   //       absl::StrCat("Failed to convert PredictRequest to JSV proto: ",
@@ -123,15 +123,15 @@ absl::StatusOr<neptune::serving::PredictResponse> RunPredict(
   LOG(INFO) << "Successfully converted PredictRequest to JSV proto.";
   TF_ASSIGN_OR_RETURN(
       std::shared_ptr<grpc::ChannelCredentials> creds,
-      neptune::serving::CreateChannelCredentials(server_cert_chain_path,
+      xla_serving::serving::CreateChannelCredentials(server_cert_chain_path,
                                              use_insecure_grpc_credentials));
   std::shared_ptr<grpc::Channel> channel =
       grpc::CreateChannel(server_address, creds);
 
-  std::unique_ptr<neptune::serving::PredictionService::Stub> stub =
-      neptune::serving::PredictionService::NewStub(channel);
+  std::unique_ptr<xla_serving::serving::PredictionService::Stub> stub =
+      xla_serving::serving::PredictionService::NewStub(channel);
 
-  neptune::serving::PredictResponse response;
+  xla_serving::serving::PredictResponse response;
   grpc::ClientContext context;
   LOG(INFO) << "Sending PredictRequest to " << server_address;
   grpc::Status predict_status =

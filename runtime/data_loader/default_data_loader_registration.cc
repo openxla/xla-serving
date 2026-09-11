@@ -21,7 +21,7 @@
 #include "runtime/data_loader/data_loader.h"  // from @neptune
 #include "runtime/data_loader/default_data_loader.h"  // from @neptune
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 bool kUnused = []() {
@@ -37,4 +37,4 @@ bool kUnused = []() {
 }();
 
 }  // namespace
-}  // namespace neptune
+}  // namespace xla_serving

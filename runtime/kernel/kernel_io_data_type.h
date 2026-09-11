@@ -15,16 +15,16 @@
 #ifndef THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_IO_DATA_TYPE_H_
 #define THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_IO_DATA_TYPE_H_
 
-namespace neptune {
+namespace xla_serving {
 
 // The data type of the kernel input and output. This is the data type wrapped
-// by `neptune::Value`.
+// by `xla_serving::Value`.
 // TODO: build a type checker around this and use it in kernel
 // implementations.
 enum class KernelIODataType {
-  kHostBuffer,  // `neptune::HostBuffer`
+  kHostBuffer,  // `xla_serving::HostBuffer`
   kTensor,      // `tensorflow::Tensor`
 };
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_IO_DATA_TYPE_H_

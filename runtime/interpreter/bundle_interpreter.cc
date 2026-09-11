@@ -40,7 +40,7 @@
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "tsl/platform/path.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
 namespace {
 
@@ -357,4 +357,4 @@ BundleInterpreter::GetLastComponent(absl::string_view pipeline_name) const {
   return &pipeline->components(pipeline->components_size() - 1);
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

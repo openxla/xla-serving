@@ -21,7 +21,7 @@
 #include "runtime/core/host_buffer.h"  // from @neptune
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // Concatenates the row splits of the tasks into a single row splits.
 // `padding_amount` is the number of padding elements to add to the end of the
@@ -79,6 +79,6 @@ absl::StatusOr<HostBuffer> CreateWarmupFlatValues(
     int warmup_batch_size, tsl::thread::ThreadPool* thread_pool,
     Allocator* allocator);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_RAGGED_UTILS_H_

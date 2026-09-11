@@ -47,7 +47,7 @@
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 namespace {
 
@@ -323,4 +323,4 @@ BatchedH2DTransferExecutorFactory::Create(
       client, std::move(device_list), thread_pool, options_);
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

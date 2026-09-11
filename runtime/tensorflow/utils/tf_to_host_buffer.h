@@ -23,7 +23,7 @@
 #include "tensorflow/core/framework/tensor_shape.h"  // from @org_tensorflow
 #include "tensorflow/core/framework/types.pb.h"  // from @org_tensorflow
 
-namespace neptune {
+namespace xla_serving {
 
 // Converts a Tensor to a HostBuffer.
 absl::StatusOr<HostBuffer> ToHostBuffer(tensorflow::Tensor tensor);
@@ -35,6 +35,6 @@ absl::StatusOr<tensorflow::Tensor> ToTFTensor(const HostBuffer& host_buffer);
 absl::StatusOr<Value> ToJsvValue(tensorflow::Tensor tensor,
                                  KernelIODataType data_type);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_UTILS_TF_TO_HOST_BUFFER_H_

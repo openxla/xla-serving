@@ -23,7 +23,7 @@
 #include "runtime/core/thread_pool_interface.h"  // from @neptune
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // An implementation of ThreadPoolInterface that uses a tsl::thread::ThreadPool
 // as the underlying thread pool.
@@ -55,6 +55,6 @@ class CommonThreadPool : public ThreadPoolInterface {
   tsl::thread::ThreadPool* underlying_thread_pool_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_COMMON_THREAD_POOL_H_

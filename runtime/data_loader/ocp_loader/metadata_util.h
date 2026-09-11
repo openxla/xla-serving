@@ -23,7 +23,7 @@
 #include "nlohmann/json.hpp"  // from @nlohmann_json
 #include "nlohmann/json_fwd.hpp"  // from @nlohmann_json
 
-namespace neptune {
+namespace xla_serving {
 
 /**
  * Extracts *all* parameter names from a Orbax Checkpoint JSON metadata.
@@ -62,6 +62,6 @@ absl::StatusOr<std::vector<std::string>> GetParamNamesForSubTree(
 absl::StatusOr<std::vector<std::string>> GetAllWeightNamesFromCheckpoint(
     absl::string_view checkpoint_path);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_METADATA_UTIL_H_

@@ -19,10 +19,10 @@
 #include "runtime/tensorflow/kernel/tf_saved_model_function_runner_op.h"  // from @neptune
 #include "xla/tsl/platform/errors.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 absl::Status RegisterBuiltinTensorflowKernels(KernelRegistry& registry) {
   TF_RETURN_IF_ERROR(registry.Register("TfSavedModelFunctionRunnerOp",
                                        TfSavedModelFunctionRunnerOp::Create));
   return absl::OkStatus();
 }
-}  // namespace neptune
+}  // namespace xla_serving

@@ -27,7 +27,7 @@
 #include "runtime/core/batching/batch_stats.h"  // from @neptune
 #include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
 
-namespace neptune {
+namespace xla_serving {
 
 int GetNextAllowedBatchSize(int batch_size,
                             const std::vector<int32_t>& allowed_batch_sizes,
@@ -153,4 +153,4 @@ int32_t ApplyBatchPaddingPolicy(
   return batch_down_size;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

@@ -24,7 +24,7 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "runtime/core/value.h"  // from @neptune
 
-namespace neptune {
+namespace xla_serving {
 
 class KernelBuilderContext {
  public:
@@ -58,6 +58,6 @@ class KernelBuilderContext {
   absl::flat_hash_map<std::string, Value> configs_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_BUILDER_CONTEXT_H_

@@ -52,7 +52,7 @@ ABSL_FLAG(int64_t, jsv_host_buffer_max_elements, int64_t{1} << 32,
           "Maximum number of elements allowed in a HostBuffer to prevent "
           "OOM/DoS.");
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 bool DataTypeCanUseMemCpy(xla::ifrt::DType dtype) {
   switch (dtype.kind()) {
@@ -584,4 +584,4 @@ std::string BufferData::DebugString() const {
   return out;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

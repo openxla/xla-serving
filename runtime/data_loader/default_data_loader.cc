@@ -56,7 +56,7 @@
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 // Result of the `Load` method.
@@ -143,7 +143,7 @@ struct LoadOrbaxCheckpointTask {
 
       std::vector<std::string> used_weight_names;
       used_weight_names.reserve(num_weights);
-      std::vector<neptune::ArraySpec> used_weight_array_specs;
+      std::vector<ArraySpec> used_weight_array_specs;
       used_weight_array_specs.reserve(num_weights);
 
       for (int i = 0; i < num_weights; ++i) {
@@ -162,7 +162,7 @@ struct LoadOrbaxCheckpointTask {
         if (weight_spec->placement == Placement::kHost) {
           memory_kind = xla::ifrt::MemoryKind("pinned_host");
         }
-        used_weight_array_specs.push_back(neptune::ArraySpec{
+        used_weight_array_specs.push_back(ArraySpec{
             .dtype = weight_spec->dtype,
             .shape = ToIfrtShape(weight_spec->shape),
             .sharding = weight_spec->sharding.ToProto(),
@@ -173,9 +173,9 @@ struct LoadOrbaxCheckpointTask {
 
       TF_ASSIGN_OR_RETURN(
           auto named_weight_arrays,
-          neptune::LoadCheckpointFromOrbax(
-              checkpoint_path, used_weight_names, used_weight_array_specs,
-              device_list, *client_ptr));
+          LoadCheckpointFromOrbax(checkpoint_path, used_weight_names,
+                                  used_weight_array_specs, device_list,
+                                  *client_ptr));
 
       // Fulfill the promises with the loaded arrays.
       for (const auto& [weight_name, weight_array] : named_weight_arrays) {
@@ -314,9 +314,8 @@ absl::StatusOr<std::vector<std::string>> GetWeightNames(
     std::optional<const neptune_model_manifest::Manifest*> manifest,
     std::optional<absl::Span<const neptune_model_manifest::Function* const>>
         stablehlo_funcs) {
-  TF_ASSIGN_OR_RETURN(
-      std::vector<std::string> weight_names_from_checkpoint,
-      neptune::GetAllWeightNamesFromCheckpoint(checkpoint_path));
+  TF_ASSIGN_OR_RETURN(std::vector<std::string> weight_names_from_checkpoint,
+                      GetAllWeightNamesFromCheckpoint(checkpoint_path));
 
   TF_ASSIGN_OR_RETURN(std::vector<std::string> data_names,
                       GetDataNamesFromFunction(stablehlo_funcs.value()));
@@ -550,4 +549,4 @@ DefaultDataLoader::DefaultDataLoader(CreateOptions create_options)
       checkpoint_loader_thread_pool_(
           create_options.checkpoint_loader_thread_pool) {}
 
-}  // namespace neptune
+}  // namespace xla_serving

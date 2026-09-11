@@ -25,7 +25,7 @@
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 absl::StatusOr<Value> Reshape(Value&& value,
                              const xla::ifrt::Shape& shape) {
@@ -60,4 +60,4 @@ absl::StatusOr<Value> Bitcast(Value&& value, xla::ifrt::DType dtype,
       "Value is neither a HostBuffer nor a DeviceBuffer.");
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

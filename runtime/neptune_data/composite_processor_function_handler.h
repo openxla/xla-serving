@@ -29,7 +29,7 @@
 #include "runtime/kernel/kernel.h"  // from @neptune
 #include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
 
-namespace neptune {
+namespace xla_serving {
 namespace composite {
 
 constexpr char kCompositeProcessorMimeType[] =
@@ -71,6 +71,6 @@ class CompositeProcessorFunctionHandlerFactory
 };
 
 }  // namespace composite
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_NEPTUNE_DATA_COMPOSITE_PROCESSOR_FUNCTION_HANDLER_H_

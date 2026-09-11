@@ -17,7 +17,7 @@
 
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 
 inline constexpr absl::string_view kStableHlo = "stablehlo";
 // Some kernels's implementation can take different numbers of inputs. This
@@ -48,6 +48,6 @@ inline constexpr absl::string_view kIfrtLoadedExecutables =
     "ifrt_loaded_executables";
 inline constexpr absl::string_view kIfrtAotMemoryRegions =
     "ifrt_aot_memory_regions";
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_BUILDER_CONSTANTS_H_

@@ -60,7 +60,7 @@
 #include "xla/xla_data.pb.h"  // from @xla
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
-namespace neptune::sharding_internal {
+namespace xla_serving::sharding_internal {
 namespace {
 
 // Shard the given `input_buffer` into equal shapes of slices.
@@ -868,4 +868,4 @@ absl::StatusOr<DeviceBuffer> MakeDeviceBufferFromPinnedHost(
   };
 }
 
-}  // namespace neptune::sharding_internal
+}  // namespace xla_serving::sharding_internal

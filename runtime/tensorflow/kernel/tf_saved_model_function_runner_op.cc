@@ -45,7 +45,7 @@
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 #include "tsl/profiler/lib/traceme_encode.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
 namespace {
 
@@ -299,4 +299,4 @@ absl::Status TfSavedModelFunctionRunnerOp::RunInternal(
   return absl::OkStatus();
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

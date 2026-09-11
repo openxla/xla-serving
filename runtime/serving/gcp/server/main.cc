@@ -67,9 +67,9 @@ ABSL_FLAG(bool, warmup_server, false,
           "('assets.extra/neptune_serving_warmup_requests') to be present in "
           "the model directory. The file must contain size-prefixed records "
           "(varint32 length prefix followed by serialized proto bytes) of "
-          "neptune::serving::PredictionLog containing PredictRequests. This file "
+          "xla_serving::serving::PredictionLog containing PredictRequests. This file "
           "can be generated automatically during model export by passing "
-          "`warmup_examples` to `neptune_model.save()`. See "
+          "`warmup_examples` to `xla_saved_model.save()`. See "
           "https://github.com/AI-Hypercomputer/neptune/blob/main/"
           "README.md#server-warmup-on-startup for details.");
 ABSL_FLAG(int, max_receive_message_size,
@@ -84,7 +84,7 @@ ABSL_FLAG(int, thread_pool_num_threads, 0,
 void RunServer() {
   std::string server_address = absl::StrCat("[::]:", absl::GetFlag(FLAGS_port));
 
-  neptune::serving::OrbaxCallbackGrpcServerOptions options;
+  xla_serving::serving::OrbaxCallbackGrpcServerOptions options;
   options.enable_lazy_loading = absl::GetFlag(FLAGS_enable_lazy_loading);
   options.lazy_loading_use_graph_executor =
       absl::GetFlag(FLAGS_lazy_loading_use_graph_executor);
@@ -98,7 +98,7 @@ void RunServer() {
       absl::GetFlag(FLAGS_thread_pool_num_threads);
 
   LOG(INFO) << "Server address: " << server_address;
-  auto service_or = neptune::serving::OrbaxCallbackGrpcServer::Create(
+  auto service_or = xla_serving::serving::OrbaxCallbackGrpcServer::Create(
       absl::GetFlag(FLAGS_model_name), absl::GetFlag(FLAGS_model_path),
       options);
   TF_CHECK_OK(service_or.status());
@@ -110,7 +110,7 @@ void RunServer() {
   bool use_insecure_grpc_credentials =
       absl::GetFlag(FLAGS_use_insecure_grpc_credentials);
   absl::StatusOr<std::shared_ptr<grpc::ServerCredentials>> creds =
-      neptune::serving::CreateServerCredentials(private_key_path, cert_chain_path,
+      xla_serving::serving::CreateServerCredentials(private_key_path, cert_chain_path,
                                             root_certs_path,
                                             use_insecure_grpc_credentials);
   TF_CHECK_OK(creds.status());
@@ -132,7 +132,7 @@ void RunServer() {
 int main(int argc, char* argv[]) {
   absl::ParseCommandLine(argc, argv);
   tsl::port::InitMain(argv[0], &argc, &argv);
-  LOG(INFO) << "Starting Neptune Server on GCP with flags: "
+  LOG(INFO) << "Starting XSE Server on GCP with flags: "
             << absl::GetFlag(FLAGS_model_name) << " "
             << absl::GetFlag(FLAGS_model_path) << " "
             << absl::GetFlag(FLAGS_server_private_key_path) << " "

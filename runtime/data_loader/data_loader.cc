@@ -25,7 +25,7 @@
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "protos/manifest.pb.h"  // from @neptune
 
-namespace neptune {
+namespace xla_serving {
 
 absl::Status DataLoaderFactoryRegistry::RegisterDataLoaderFactory(
     neptune_model_manifest::LoaderType loader_type,
@@ -55,4 +55,4 @@ DataLoaderFactoryRegistry::CreateDataLoader(
   return it->second(std::move(create_options));
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

@@ -230,12 +230,12 @@ absl::Status TransformFactoryHolder::Execute(TransformBase* base,
 
 namespace {
 
-xla::ifrt::DType GetDType(const neptune::HostBuffer& hb) { return hb.dtype(); }
+xla::ifrt::DType GetDType(const xla_serving::HostBuffer& hb) { return hb.dtype(); }
 xla::ifrt::DType GetDType(const api::HostBufferSpec& spec) {
   return spec.dtype;
 }
 
-const xla::ifrt::Shape& GetShape(const neptune::HostBuffer& hb) {
+const xla::ifrt::Shape& GetShape(const xla_serving::HostBuffer& hb) {
   return hb.shape();
 }
 const xla::ifrt::Shape& GetShape(const api::HostBufferSpec& spec) {
@@ -288,16 +288,16 @@ struct ValueTraits;
 template <>
 struct ValueTraits<api::Value> {
   static bool IsList(const api::Value& value) {
-    return value.IsType<std::vector<neptune::HostBuffer>>();
+    return value.IsType<std::vector<xla_serving::HostBuffer>>();
   }
-  static absl::Span<const neptune::HostBuffer> GetList(const api::Value& value) {
-    return value.Get<std::vector<neptune::HostBuffer>>();
+  static absl::Span<const xla_serving::HostBuffer> GetList(const api::Value& value) {
+    return value.Get<std::vector<xla_serving::HostBuffer>>();
   }
   static bool IsSingle(const api::Value& value) {
-    return value.IsType<neptune::HostBuffer>();
+    return value.IsType<xla_serving::HostBuffer>();
   }
-  static const neptune::HostBuffer& GetSingle(const api::Value& value) {
-    return value.Get<neptune::HostBuffer>();
+  static const xla_serving::HostBuffer& GetSingle(const api::Value& value) {
+    return value.Get<xla_serving::HostBuffer>();
   }
 };
 

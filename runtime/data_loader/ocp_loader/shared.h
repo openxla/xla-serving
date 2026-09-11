@@ -19,8 +19,7 @@
 #include "tensorstore/context.h"  // from @tensorstore
 #include "tensorstore/util/result.h"  // from @tensorstore
 
-namespace neptune {
-
+namespace xla_serving {
 
 inline absl::StatusOr<tensorstore::Context> GetOcdbtContext() {
   auto context = tensorstore::Context::FromJson(
@@ -32,6 +31,6 @@ inline absl::StatusOr<tensorstore::Context> GetOcdbtContext() {
   return context.value();
 }
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_SHARED_H_

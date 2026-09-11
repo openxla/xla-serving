@@ -68,7 +68,7 @@
 #include "tensorflow/core/framework/tensor.h"  // from @org_tensorflow
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 namespace serving {
 
 namespace {
@@ -132,40 +132,40 @@ tensorflow::tfrt_stub::SavedModel::Options GetSavedModelOptions(
 
 #endif
 
-absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>> PrepareInputs(
-    const neptune::serving::PredictRequest& request,
-    absl::string_view pipeline_name, neptune::Interpreter* interpreter) {
-  TF_ASSIGN_OR_RETURN(neptune::KernelIODataType input_data_type,
+absl::StatusOr<absl::flat_hash_map<std::string, xla_serving::Value>> PrepareInputs(
+    const xla_serving::serving::PredictRequest& request,
+    absl::string_view pipeline_name, xla_serving::Interpreter* interpreter) {
+  TF_ASSIGN_OR_RETURN(xla_serving::KernelIODataType input_data_type,
                       interpreter->GetModelInputDataType(pipeline_name));
   bool input_expects_tensor =
-      (input_data_type == neptune::KernelIODataType::kTensor);
+      (input_data_type == xla_serving::KernelIODataType::kTensor);
 
-  absl::flat_hash_map<std::string, neptune::Value> input_with_names;
+  absl::flat_hash_map<std::string, xla_serving::Value> input_with_names;
   input_with_names.reserve(request.inputs().size());
   for (const auto& [name, host_buffer_proto] : request.inputs()) {
-    TF_ASSIGN_OR_RETURN(neptune::HostBuffer host_buffer,
-                        neptune::HostBuffer::FromProto(host_buffer_proto));
+    TF_ASSIGN_OR_RETURN(xla_serving::HostBuffer host_buffer,
+                        xla_serving::HostBuffer::FromProto(host_buffer_proto));
     if (input_expects_tensor) {
       TF_ASSIGN_OR_RETURN(tensorflow::Tensor tensor, ToTFTensor(host_buffer));
-      input_with_names[name] = neptune::Value(std::move(tensor));
+      input_with_names[name] = xla_serving::Value(std::move(tensor));
     } else {
-      input_with_names[name] = neptune::Value(std::move(host_buffer));
+      input_with_names[name] = xla_serving::Value(std::move(host_buffer));
     }
   }
   return input_with_names;
 }
 
 absl::Status ConvertOutputsToResponse(
-    absl::flat_hash_map<std::string, neptune::Value> output_with_names,
+    absl::flat_hash_map<std::string, xla_serving::Value> output_with_names,
     bool output_is_tensor, absl::string_view pipeline_name,
-    absl::string_view model_name, neptune::serving::PredictResponse* response) {
+    absl::string_view model_name, xla_serving::serving::PredictResponse* response) {
   tsl::profiler::TraceMe traceme_serialization("ConvertOutputs");
   for (auto& [name, value] : output_with_names) {
-    absl::StatusOr<neptune::HostBuffer> host_buffer;
+    absl::StatusOr<xla_serving::HostBuffer> host_buffer;
     if (output_is_tensor) {
       host_buffer = ToHostBuffer(value.Get<tensorflow::Tensor>());
     } else {
-      host_buffer = value.Get<neptune::HostBuffer>();
+      host_buffer = value.Get<xla_serving::HostBuffer>();
     }
     if (!host_buffer.ok()) {
       return host_buffer.status();
@@ -225,11 +225,11 @@ OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
           "OrbaxCheckpointLoaderThreadPool", kThreadPoolNumThreads);
   #if ENABLE_TF == 1
     auto create_options =
-        std::make_unique<neptune::TfCompatibleInterpreterCreateOptions>();
+        std::make_unique<xla_serving::TfCompatibleInterpreterCreateOptions>();
     create_options->tfrt_options.saved_model_options =
         GetSavedModelOptions(options);
 #else
-  auto create_options = std::make_unique<neptune::InterpreterCreateOptions>();
+  auto create_options = std::make_unique<xla_serving::InterpreterCreateOptions>();
 #endif
 
     create_options->checkpoint_loader_thread_pool =
@@ -241,9 +241,9 @@ OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
     create_options->ifrt_client = client;
     create_options->computation_thread_pool = computation_thread_pool.get();
     create_options->platform_name = orbax_platform;
-    std::unique_ptr<neptune::Interpreter> interpreter;
+    std::unique_ptr<xla_serving::Interpreter> interpreter;
     TF_ASSIGN_OR_RETURN(interpreter,
-                        neptune::Interpreter::Create(std::move(create_options)));
+                        xla_serving::Interpreter::Create(std::move(create_options)));
     auto server = std::make_unique<OrbaxCallbackGrpcServer>(
         model_name, std::move(interpreter), client,
         std::move(execute_worker_thread_pool),
@@ -257,8 +257,8 @@ OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
 
 grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
     grpc::CallbackServerContext* context,
-    const neptune::serving::PredictRequest* request,
-    neptune::serving::PredictResponse* response) {
+    const xla_serving::serving::PredictRequest* request,
+    xla_serving::serving::PredictResponse* response) {
   VLOG(4) << "Received PredictRequest: " << request->DebugString();
   grpc::ServerUnaryReactor* reactor = context->DefaultReactor();
 
@@ -287,7 +287,7 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
           : absl::string_view(request->model_spec().signature_name());
   VLOG(1) << "Using pipeline name: '" << pipeline_name << "'";
 
-  absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>>
+  absl::StatusOr<absl::flat_hash_map<std::string, xla_serving::Value>>
       input_with_names =
           PrepareInputs(*request, pipeline_name, interpreter_.get());
   if (!input_with_names.ok()) {
@@ -296,19 +296,19 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
     return reactor;
   }
 
-  absl::StatusOr<neptune::KernelIODataType> output_data_type =
+  absl::StatusOr<xla_serving::KernelIODataType> output_data_type =
       interpreter_->GetModelOutputDataType(pipeline_name);
   if (!output_data_type.ok()) {
     record_metrics(output_data_type.status());
     reactor->Finish(ToGrpcStatus(output_data_type.status()));
     return reactor;
   }
-  bool output_is_tensor = (*output_data_type == neptune::KernelIODataType::kTensor);
+  bool output_is_tensor = (*output_data_type == xla_serving::KernelIODataType::kTensor);
 
-  neptune::RunOptions run_options;
+  xla_serving::RunOptions run_options;
   run_options.deadline = absl::FromChrono(context->deadline());
 
-  tsl::Future<absl::flat_hash_map<std::string, neptune::Value>> future =
+  tsl::Future<absl::flat_hash_map<std::string, xla_serving::Value>> future =
       interpreter_->RunAsyncWithMapReturn(
           pipeline_name, /*positional_inputs=*/{}, std::move(*input_with_names),
           run_options);
@@ -316,7 +316,7 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
   future.OnReady(
       [this, reactor, response, record_metrics, output_is_tensor,
        pipeline_name = std::string(pipeline_name)](
-          absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>>
+          absl::StatusOr<absl::flat_hash_map<std::string, xla_serving::Value>>
               output_with_names) {
         if (!output_with_names.ok()) {
           record_metrics(output_with_names.status());
@@ -334,10 +334,10 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
   return reactor;
 }
 
-absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>>
+absl::StatusOr<absl::flat_hash_map<std::string, xla_serving::Value>>
 OrbaxCallbackGrpcServer::RunPredictInternal(
-    const neptune::serving::PredictRequest& request,
-    absl::string_view pipeline_name, const neptune::RunOptions& run_options) {
+    const xla_serving::serving::PredictRequest& request,
+    absl::string_view pipeline_name, const xla_serving::RunOptions& run_options) {
   TF_ASSIGN_OR_RETURN(
       auto input_with_names,
       PrepareInputs(request, pipeline_name, interpreter_.get()));
@@ -371,9 +371,9 @@ absl::Status OrbaxCallbackGrpcServer::Warmup(absl::string_view model_path) {
 
   google::protobuf::io::ArrayInputStream array_input(result.data(), result.size());
 
-  neptune::RunOptions run_options;  // Default options, no deadline.
+  xla_serving::RunOptions run_options;  // Default options, no deadline.
   bool clean_eof = false;
-  neptune::serving::PredictionLog prediction_log;
+  xla_serving::serving::PredictionLog prediction_log;
   // TODO: Evaluate if parallelizing the warmup can speed up
   // server startup.
   while (google::protobuf::util::ParseDelimitedFromZeroCopyStream(
@@ -382,13 +382,13 @@ absl::Status OrbaxCallbackGrpcServer::Warmup(absl::string_view model_path) {
       LOG(WARNING) << "PredictionLog does not have predict_log, skipping.";
       continue;
     }
-    const neptune::serving::PredictRequest& request =
+    const xla_serving::serving::PredictRequest& request =
         prediction_log.predict_log().request();
     absl::string_view pipeline_name =
         request.model_spec().signature_name().empty()
             ? absl::string_view(kDefaultServingSignatureDefKey)
             : absl::string_view(request.model_spec().signature_name());
-    absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>> warmup_status =
+    absl::StatusOr<absl::flat_hash_map<std::string, xla_serving::Value>> warmup_status =
         RunPredictInternal(request, pipeline_name, run_options);
     if (!warmup_status.ok()) {
       LOG(ERROR) << "Warmup failed for pipeline '" << pipeline_name
@@ -409,8 +409,8 @@ absl::Status OrbaxCallbackGrpcServer::Warmup(absl::string_view model_path) {
 
 grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::GetModelMetadata(
     grpc::CallbackServerContext* context,
-    const neptune::serving::GetModelMetadataRequest* request,
-    neptune::serving::GetModelMetadataResponse* response) {
+    const xla_serving::serving::GetModelMetadataRequest* request,
+    xla_serving::serving::GetModelMetadataResponse* response) {
   VLOG(4) << "Received GetModelMetadataRequest: " << request->DebugString();
   grpc::ServerUnaryReactor* reactor = context->DefaultReactor();
 
@@ -463,7 +463,7 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::GetModelMetadata(
 
   for (const auto& field : request->metadata_field()) {
     if (field == "signature_def") {
-      neptune::serving::SignatureDefMap signature_def_map;
+      xla_serving::serving::SignatureDefMap signature_def_map;
       auto& sig_def =
           (*signature_def_map
                 .mutable_signature_def())[std::string(signature_name)];
@@ -483,4 +483,4 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::GetModelMetadata(
 }
 
 }  // namespace serving
-}  // namespace neptune
+}  // namespace xla_serving

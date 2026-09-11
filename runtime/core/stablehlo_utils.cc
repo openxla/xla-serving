@@ -62,7 +62,7 @@
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 constexpr absl::string_view kPolymorphicShapeAttrName =
@@ -528,4 +528,4 @@ xla::ifrt::Shape ToIfrtShape(const ArgShape& shape) {
   return xla::ifrt::Shape(dimensions);
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

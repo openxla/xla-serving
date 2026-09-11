@@ -35,7 +35,7 @@
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // Device assignment information from the manifest.
 struct AssignedDevices {
@@ -108,7 +108,7 @@ absl::Status FlattenType(
     const neptune_model_type::Type& type,
     std::vector<neptune_model_type::LeafType>& flatten_types);
 
-// Converts an `neptune_model_type::TensorType` to a `neptune::ArgSpec`.
+// Converts an `neptune_model_type::TensorType` to a `xla_serving::ArgSpec`.
 absl::StatusOr<ArgSpec> ConvertToArgSpec(
     const neptune_model_type::TensorType& type);
 
@@ -190,6 +190,6 @@ absl::Status ValidateCompiledExecutable(
     const neptune_model_manifest::CompiledExecutableBody& compiled_exec,
     size_t num_inputs);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_MANIFEST_UTILS_H_

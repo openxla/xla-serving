@@ -20,7 +20,7 @@
 #include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
 #include "tensorflow/core/tfrt/saved_model/saved_model.h"  // from @org_tensorflow
 
-namespace neptune {
+namespace xla_serving {
 
 // The options to load the TF SavedModel.
 struct TfrtOptions {
@@ -36,6 +36,6 @@ struct TfCompatibleInterpreterCreateOptions : public InterpreterCreateOptions {
   TfrtOptions tfrt_options;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_TF_COMPATIBLE_INTERPRETER_CREATE_OPTIONS_H_

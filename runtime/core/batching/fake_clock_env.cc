@@ -20,7 +20,7 @@
 #include "absl/synchronization/notification.h"  // from @abseil-cpp
 #include "xla/tsl/platform/env.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 namespace test_util {
 
 FakeClockEnv::FakeClockEnv(Env* wrapped) : EnvWrapper(wrapped) {}
@@ -88,4 +88,4 @@ void FakeClockEnv::SleepForMicroseconds(int64_t micros) {
 }
 
 }  // namespace test_util
-}  // namespace neptune
+}  // namespace xla_serving

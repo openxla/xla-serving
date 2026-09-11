@@ -24,7 +24,7 @@
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
 #include "xla/tsl/platform/criticality.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 absl::StatusOr<std::string> GetBatchPaddingPolicyString(
     BatchOptions::BatchPaddingPolicy batch_padding_policy) {
@@ -93,4 +93,4 @@ absl::string_view CriticalityToString(
   return "unknown_criticality";
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

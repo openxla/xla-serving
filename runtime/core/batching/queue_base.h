@@ -35,7 +35,7 @@
 #include "runtime/core/batching/shared_batch_scheduler.h"  // from @neptune
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
-namespace neptune {
+namespace xla_serving {
 namespace internal {
 
 // An abstract base class for task queues used by SharedBatchScheduler.
@@ -322,6 +322,6 @@ QueueBase<TaskType>::PeekBatchPriority() const {
 }
 
 }  // namespace internal
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_BATCHING_QUEUE_BASE_H_

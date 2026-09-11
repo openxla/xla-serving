@@ -22,7 +22,7 @@
 #include "tsl/platform/ml_dtypes.h"  // from @tsl
 #include "tsl/platform/tstring.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
 // TODO: Fancy data types such as f8exxx are not supported yet.
 // Add them when needed. String and token are not supported.
@@ -90,6 +90,6 @@ struct NativeAsDTypeKind {
 
 #undef DEFINE_NATIVE_AS_DTYPE_KIND
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_HOST_BUFFER_TYPE_UTILS_H_

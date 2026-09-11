@@ -35,7 +35,7 @@
 #include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
 #include "xla/tsl/concurrency/future.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // Kernel interface definition. All kernels should implement this interface.
 class Kernel {
@@ -180,6 +180,6 @@ class KernelRegistry {
 
 KernelRegistry& GetGlobalKernelRegistry();
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_H_

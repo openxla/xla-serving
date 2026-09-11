@@ -31,7 +31,7 @@
 #include "xla/python/ifrt/sharding.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // Physical memory placement kind for on-device and zero-copy host buffers.
 enum class BufferMemoryKind { kDevice = 0, kPinnedHost = 1 };
@@ -102,6 +102,6 @@ inline absl::StatusOr<DeviceBuffer> DeviceBuffer::Bitcast(
   };
 }
 
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_DEVICE_BUFFER_H_

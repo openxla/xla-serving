@@ -53,7 +53,7 @@
 #include "tensorflow/core/protobuf/meta_graph.pb.h"  // from @org_tensorflow
 #include "tensorflow/core/protobuf/saved_model.pb.h"  // from @org_tensorflow
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 // A handle to a TF concrete function that contains the information needed to
@@ -175,7 +175,7 @@ TfCompatibleOptionalFunctionHandler::HandleFunction(
     } else {
       LOG(WARNING)
           << "No options for loading and running TF SavedModel is provided "
-             "during loading the Neptune model. Using the default options. "
+             "during loading the model. Using the default options. "
              "This will greatly impact the performance and should only be "
              "used for testing.";
       tf_saved_model_runner_ =
@@ -236,4 +236,4 @@ static const bool kUnused = []() {
   return true;
 }();
 
-}  // namespace neptune
+}  // namespace xla_serving

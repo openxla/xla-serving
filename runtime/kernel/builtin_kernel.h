@@ -18,9 +18,9 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "runtime/kernel/kernel.h"  // from @neptune
 
-namespace neptune {
+namespace xla_serving {
 
 absl::Status RegisterBuiltinKernels(KernelRegistry& registry);
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BUILTIN_KERNEL_H_

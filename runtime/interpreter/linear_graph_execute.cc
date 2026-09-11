@@ -38,7 +38,7 @@
 #include "tsl/profiler/lib/context_types.h"  // from @tsl
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
 namespace {
 
@@ -268,4 +268,4 @@ tsl::Future<std::vector<Value>> AsyncExecuteLinearGraph(
   return async_results;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving
