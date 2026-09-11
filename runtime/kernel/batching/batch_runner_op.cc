@@ -190,7 +190,7 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateBatchRunnerOp(
   std::shared_ptr<SharedBatchScheduler<BatchResourceBase::BatchTask>> batcher;
   TF_RETURN_IF_ERROR(SharedBatchScheduler<BatchResourceBase::BatchTask>::Create(
       scheduler_options, &batcher));
-  BatchResourceBase::BatcherT::QueueOptions queue_options =
+  BatchResourceBase::QueueOptions queue_options =
       JsvBatchResource::GetBatcherQueueOptions(
           scheduler_options.num_batch_threads, options.max_batch_size,
           options.batch_timeout_micros, options.max_enqueued_batches,

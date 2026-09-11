@@ -496,7 +496,7 @@ absl::Status BatchResourceBase::RegisterInput(
   return batcher_queue->Schedule(&batch_components);
 }
 
-/*static*/ BatchResourceBase::BatcherT::QueueOptions
+/*static*/ BatchResourceBase::QueueOptions
 BatchResourceBase::GetBatcherQueueOptions(
     int32_t num_batch_threads, int32_t max_batch_size,
     int32_t batch_timeout_micros, int32_t max_enqueued_batches,
@@ -509,7 +509,7 @@ BatchResourceBase::GetBatcherQueueOptions(
     MixedPriorityBatchingPolicy mixed_priority_batching_policy,
     tsl::thread::ThreadPool* thread_pool, Allocator* allocator,
     std::vector<RaggedInputSpec> ragged_inputs) {
-  BatcherT::QueueOptions batcher_queue_options;
+  QueueOptions batcher_queue_options;
   batcher_queue_options.input_batch_size_limit = max_batch_size;
   batcher_queue_options.max_enqueued_batches = max_enqueued_batches;
   batcher_queue_options.batch_timeout_micros = batch_timeout_micros;

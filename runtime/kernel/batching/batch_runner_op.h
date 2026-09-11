@@ -72,7 +72,7 @@ class JsvBatchResource : public BatchResourceBase {
       std::vector<std::unique_ptr<Kernel>> batched_graph,
       std::shared_ptr<SharedBatchScheduler<BatchResourceBase::BatchTask>>
           batcher,
-      const BatchResourceBase::BatcherT::QueueOptions& batcher_queue_options,
+      const BatchResourceBase::QueueOptions& batcher_queue_options,
       std::vector<int32_t> allowed_batch_sizes,
       tsl::thread::ThreadPool* thread_pool,
       std::vector<RaggedInputSpec> ragged_inputs = {})

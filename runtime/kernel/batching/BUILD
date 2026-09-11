@@ -37,6 +37,7 @@ cc_library(
         "@neptune//runtime/core/batching:batch_scheduler_utils",
         "@neptune//runtime/core/batching:batch_stats",
         "@neptune//runtime/core/batching:input_split_metadata",
+        "@neptune//runtime/core/batching:queue_options",
         "@neptune//runtime/core/batching:resource_base",
         "@neptune//runtime/core/batching:shared_batch_scheduler",
         "@neptune//runtime/core/batching:threadsafe_status",

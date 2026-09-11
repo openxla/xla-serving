@@ -24,18 +24,91 @@ cc_library(
 )
 
 cc_library(
-    name = "shared_batch_scheduler",
-    hdrs = [
-        "fifo_queue.h",
-        "priority_aware_queue.h",
-        "queue_base.h",
-        "shared_batch_scheduler.h",
+    name = "queue_options",
+    hdrs = ["queue_options.h"],
+    deps = [
+        ":batch_scheduler",
+        ":batch_stats",
+        "@abseil-cpp//absl/status",
+        "@neptune//runtime/core:allocator",
+        "@neptune//runtime/core:default_allocator",
+        "@neptune//runtime/kernel/batching:batch_options_utils",
     ],
+)
+
+cc_library(
+    name = "queue_base",
+    hdrs = ["queue_base.h"],
+    deps = [
+        ":batch_scheduler",
+        ":queue_options",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/synchronization",
+        "@tsl//tsl/profiler/lib:connected_traceme",
+        "@tsl//tsl/profiler/lib:context_types_hdrs",
+        "@tsl//tsl/profiler/lib:traceme",
+        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:errors",
+    ],
+)
+
+cc_library(
+    name = "fifo_queue",
+    hdrs = ["fifo_queue.h"],
+    deps = [
+        ":batch_scheduler",
+        ":batch_scheduler_utils",
+        ":queue_base",
+        ":queue_options",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:str_format",
+        "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/time",
+        "@tsl//tsl/profiler/lib:connected_traceme",
+        "@tsl//tsl/profiler/lib:context_types_hdrs",
+        "@tsl//tsl/profiler/lib:traceme",
+        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:errors",
+    ],
+)
+
+cc_library(
+    name = "priority_aware_queue",
+    hdrs = ["priority_aware_queue.h"],
+    deps = [
+        ":batch_scheduler",
+        ":batch_scheduler_utils",
+        ":queue_base",
+        ":queue_options",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings:str_format",
+        "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/time",
+        "@xla//xla/tsl/platform:criticality",
+        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:errors",
+    ],
+)
+
+cc_library(
+    name = "shared_batch_scheduler",
+    hdrs = ["shared_batch_scheduler.h"],
     deps = [
         ":batch_scheduler",
         ":batch_scheduler_utils",
         ":batch_stats",
         ":periodic_function",
+        ":queue_options",
         "@abseil-cpp//absl/base:core_headers",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/log:check",

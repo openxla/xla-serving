@@ -41,13 +41,10 @@
 #include "absl/synchronization/notification.h"  // from @abseil-cpp
 #include "absl/time/clock.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
-#include "runtime/core/allocator.h"  // from @neptune
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
 #include "runtime/core/batching/batch_scheduler_utils.h"  // from @neptune
-#include "runtime/core/batching/batch_stats.h"  // from @neptune
 #include "runtime/core/batching/periodic_function.h"  // from @neptune
-#include "runtime/core/default_allocator.h"  // from @neptune
-#include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
+#include "runtime/core/batching/queue_options.h"  // from @neptune
 #include "xla/tsl/platform/criticality.h"  // from @xla
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
@@ -158,150 +155,21 @@ class SharedBatchScheduler
 
   virtual ~SharedBatchScheduler();
 
+  using QueueOptions = ::xla_serving::QueueOptions<TaskType>;
+
   // Adds a queue to which tasks may be submitted. The returned queue implements
   // the BatchScheduler API. Each queue has its own set of scheduling options,
   // and its own callback to process batches of tasks submitted to the queue.
   //
   // The returned queue's destructor blocks until all tasks submitted to it have
   // been processed.
-  struct QueueOptions {
-    // The size limit of an input batch to the queue.
-    //
-    // If `enable_large_batch_splitting` is True, 'input_batch_size_limit'
-    // should be greater or equal than `max_execution_batch_size`; otherwise
-    // `input_batch_size_limit` should be equal to `max_execution_batch_size`.
-    size_t input_batch_size_limit = 1000;
-
-    // If a task has been enqueued for this amount of time (in microseconds),
-    // and a thread is available, the scheduler will immediately form a batch
-    // from enqueued tasks and assign the batch to the thread for processing,
-    // even if the batch's size is below 'input_batch_size_limit'.
-    //
-    // This parameter offers a way to bound queue latency, so that a task isn't
-    // stuck in the queue indefinitely waiting for enough tasks to arrive to
-    // make a full batch. (The latency bound is given in the class documentation
-    // above.)
-    //
-    // The goal is to smooth out batch sizes under low request rates, and thus
-    // avoid latency spikes.
-    int64_t batch_timeout_micros = 0;
-
-    // The maximum allowable number of enqueued (accepted by Schedule() but
-    // not yet being processed on a batch thread) tasks in terms of batches.
-    // If this limit is reached, Schedule() will return an UNAVAILABLE error.
-    // See the class documentation above for guidelines on how to tune this
-    // parameter.
-    //
-    // Must be positive, or else invalid argument error will be returned at
-    // queue creation time.
-    size_t max_enqueued_batches = 10;
-
-    // If true, queue implementation would split one input batch task into
-    // subtasks (as specified by `split_input_task_func` below) and fit subtasks
-    // into different batches.
-    //
-    // For usage of `split_input_task_func`, please see its comment.
-    bool enable_large_batch_splitting = false;
-
-    // `input_task`: a unit of task to be split.
-    // `first_output_task_size`: task size of first output.
-    // `max_execution_batch_size`: Maximum size of each batch.
-    // `output_tasks`: A list of output tasks after split.
-    //
-    // REQUIRED:
-    // 1) All `output_tasks` should be non-empty tasks.
-    // 2) Sizes of `output_tasks` add up to size of `input_task`.
-    //
-    // NOTE:
-    // Instantiations of `TaskType` may vary, so it's up to caller to define
-    // how (e.g., which members to access) to split input tasks.
-    std::function<absl::Status(
-        std::unique_ptr<TaskType>* input_task, int first_output_task_size,
-        int input_batch_size_limit,
-        std::vector<std::unique_ptr<TaskType>>* output_tasks)>
-        split_input_task_func;
-
-    // The maximum size of each enqueued batch (i.e., in
-    // `high_priority_batches_`).
-    //
-    // The scheduler may form batches of any size between 1 and this number
-    // (inclusive). If there is a need to quantize the batch sizes, i.e. only
-    // submit batches whose size is in a small set of allowed sizes, that can be
-    // done by adding padding in the process-batch callback.
-    size_t max_execution_batch_size = 1000;
-
-    // If non-empty, contains configured batch sizes.
-    std::vector<int32_t> allowed_batch_sizes;
-
-    // If true, the padding will not be appended.
-    bool disable_padding = false;
-
-    // The padding policy to use.
-    //
-    // See the documentation for kPadUpPolicy for details.
-    std::string batch_padding_policy = std::string(kPadUpPolicy);
-
-    // A pointer to a ModelBatchStats instance for this model. To be used for
-    // cost-based padding policy selection.
-    //
-    // If null, some other padding policy will be used if a cost-based one is
-    // requested.
-    ModelBatchStats* model_batch_stats = nullptr;
-
-    // If true, queue implementation would split high priority and low priority
-    // inputs into two sub queues.
-    bool enable_priority_queue = false;
-
-    // A separate set of queue options for different priority inputs.
-    // Use iff `enable_priority_queue` is true.
-    struct PriorityQueueOptions {
-      // See QueueOptions.max_execution_batch_size
-      size_t max_execution_batch_size = 0;
-      // See QueueOptions.batch_timeout_micros
-      int64_t batch_timeout_micros = 0;
-      // See QueueOptions.input_batch_size_limit
-      size_t input_batch_size_limit = 0;
-      // See QueueOptions.max_enqueued_batches
-      size_t max_enqueued_batches = 0;
-      // See QueueOptions.allowed_batch_sizes
-      std::vector<int32_t> allowed_batch_sizes;
-    };
-    // A subset of queue options for high priority input. These options are
-    // currently not being used in favor of the equivalents options at the
-    // QueueOptions level.
-    PriorityQueueOptions high_priority_queue_options;
-    // A subset of queue options for low priority input.
-    PriorityQueueOptions low_priority_queue_options;
-
-    // A policy that determines the mixed priority batching behavior. It is
-    // effective only when enable_priority_queue is true.
-    MixedPriorityBatchingPolicy mixed_priority_batching_policy =
-        MixedPriorityBatchingPolicy::kLowPriorityPaddingWithMaxBatchSize;
-
-    // Options for priority aware batching.
-    // Used iff PriorityBatchingPolicy is set to PRIORITY_AWARE.
-    struct PriorityAwareBatchingOptions {
-      // The maximum sum of task sizes to enqueue. Default is 0, which means the
-      // limit is not set.
-      size_t max_queue_depth = 0;
-      // If true, the priority aware batch queue will resplit tasks into smaller
-      // subtasks if needed.
-      bool enable_task_resplit = false;
-    };
-    PriorityAwareBatchingOptions priority_aware_batching_options;
-
-    // The allocator for allocating memory for HostBuffer. The default allocator
-    // is DefaultAllocator. It can be overridden with a custom allocator.
-    Allocator* allocator = DefaultAllocator::GetInstance();
-  };
+  //
   // This method is marked virtual for testing purposes only.
   virtual absl::Status AddQueue(
       const QueueOptions& options, ProcessBatchCallback process_batch_callback,
       std::unique_ptr<BatchScheduler<TaskType>>* queue);
 
-  bool use_global_scheduler() const {
-    return options_.use_global_scheduler;
-  }
+  bool use_global_scheduler() const { return options_.use_global_scheduler; }
 
   bool rank_queues() const { return options_.rank_queues; }
 
@@ -403,8 +271,10 @@ class Queue {
   //   used are an implementation detail of PeekBatchPriority().
   using BatchPriorityKey = std::pair<int, int64_t>;
 
-  Queue(const typename SharedBatchScheduler<TaskType>::QueueOptions& options,
-        Env* env, ProcessBatchCallback process_batch_callback,
+  using QueueOptions = ::xla_serving::QueueOptions<TaskType>;
+
+  Queue(const QueueOptions& options, Env* env,
+        ProcessBatchCallback process_batch_callback,
         SchedulableBatchCallback schedulable_batch_callback);
 
   // Illegal to destruct unless the queue is empty.
@@ -460,8 +330,7 @@ class Queue {
 
  private:
   // Computes the max_execution_batch_size of the queue based on queue options.
-  static size_t GetMaxExecutionBatchSize(
-      const typename SharedBatchScheduler<TaskType>::QueueOptions& options) {
+  static size_t GetMaxExecutionBatchSize(const QueueOptions& options) {
     // If `enable_large_batch_splitting`, returns `max_execution_batch_size`
     // configured by user options directly; returns `input_batch_size_limit`
     // otherwise.
@@ -555,7 +424,7 @@ class Queue {
   // enable_priority_queue is false.
   std::vector<std::unique_ptr<TaskType>> GetLowPriorityTasks(size_t size);
 
-  const typename SharedBatchScheduler<TaskType>::QueueOptions options_;
+  const QueueOptions options_;
 
   // The environment to use.
   Env* env_;
@@ -883,10 +752,9 @@ void SharedBatchScheduler<TaskType>::ThreadLogic() {
 namespace internal {
 
 template <typename TaskType>
-Queue<TaskType>::Queue(
-    const typename SharedBatchScheduler<TaskType>::QueueOptions& options,
-    Env* env, ProcessBatchCallback process_batch_callback,
-    SchedulableBatchCallback schedulable_batch_callback)
+Queue<TaskType>::Queue(const QueueOptions& options, Env* env,
+                       ProcessBatchCallback process_batch_callback,
+                       SchedulableBatchCallback schedulable_batch_callback)
     : options_(options),
       env_(env),
       max_execution_batch_size_(GetMaxExecutionBatchSize(options_)),

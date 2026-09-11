@@ -36,6 +36,7 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/allocator.h"  // from @neptune
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
+#include "runtime/core/batching/queue_options.h"  // from @neptune
 #include "runtime/core/batching/resource_base.h"  // from @neptune
 #include "runtime/core/batching/shared_batch_scheduler.h"  // from @neptune
 #include "runtime/core/batching/threadsafe_status.h"  // from @neptune
@@ -189,12 +190,13 @@ class BatchResourceBase : public ResourceBase {
   };
 
   using BatcherT = SharedBatchScheduler<BatchResourceBase::BatchTask>;
+  using QueueOptions = ::xla_serving::QueueOptions<BatchResourceBase::BatchTask>;
 
   using BatcherQueueT = BatchScheduler<BatchResourceBase::BatchTask>;
   using BatchT = Batch<BatchResourceBase::BatchTask>;
 
   BatchResourceBase(std::shared_ptr<BatcherT> batcher,
-                    const BatcherT::QueueOptions& batcher_queue_options,
+                    const QueueOptions& batcher_queue_options,
                     std::vector<int32_t> allowed_batch_sizes,
                     tsl::thread::ThreadPool* thread_pool,
                     std::vector<RaggedInputSpec> ragged_inputs = {})
@@ -230,7 +232,7 @@ class BatchResourceBase : public ResourceBase {
       const CreateBatchTaskFn& create_batch_task_fn,
       absl::AnyInvocable<void(absl::Status)> done_callback);
 
-  static BatcherT::QueueOptions GetBatcherQueueOptions(
+  static QueueOptions GetBatcherQueueOptions(
       int32_t num_batch_threads, int32_t max_batch_size,
       int32_t batch_timeout_micros, int32_t max_enqueued_batches,
       const std::vector<int32_t>& allowed_batch_sizes,
@@ -379,7 +381,7 @@ class BatchResourceBase : public ResourceBase {
   size_t outstanding_batch_total_size_ TF_GUARDED_BY(outstanding_batch_mu_) = 0;
   // A batch scheduler, and options for creating queues.
   std::shared_ptr<BatcherT> batcher_;
-  BatcherT::QueueOptions batcher_queue_options_;
+  QueueOptions batcher_queue_options_;
 
   // A collection of batcher queues, keyed on queue name.
   mutable absl::Mutex batcher_queues_mu_;

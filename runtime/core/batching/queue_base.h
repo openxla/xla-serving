@@ -32,9 +32,12 @@
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/synchronization/notification.h"  // from @abseil-cpp
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
-#include "runtime/core/batching/shared_batch_scheduler.h"  // from @neptune
+#include "runtime/core/batching/queue_options.h"  // from @neptune
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
+#include "tsl/profiler/lib/connected_traceme.h"  // from @tsl
+#include "tsl/profiler/lib/context_types.h"  // from @tsl
+#include "tsl/profiler/lib/traceme.h"  // from @tsl
 namespace xla_serving {
 namespace internal {
 
@@ -53,6 +56,8 @@ class QueueBase {
   using ProcessBatchCallback =
       std::function<void(std::unique_ptr<Batch<TaskType>>)>;
 
+  using BatchTaskUniquePtr = std::unique_ptr<Batch<TaskType>>;
+
   using SchedulableBatchCallback = std::function<void()>;
 
   // Orderable key representing the priority of a batch. Higher priority batches
@@ -63,7 +68,7 @@ class QueueBase {
   using BatchPriorityKey = std::pair<int, int64_t>;
 
   QueueBase(
-      const typename SharedBatchScheduler<TaskType>::QueueOptions& options,
+      const QueueOptions<TaskType>& options,
       tsl::Env* env, ProcessBatchCallback process_batch_callback,
       SchedulableBatchCallback schedulable_batch_callback);
 
@@ -97,7 +102,7 @@ class QueueBase {
   // this queue. Either returns a batch that is ready to be processed, or
   // nullptr if the queue declines to schedule a batch at this time. If it
   // returns a batch, the batch is guaranteed to be closed.
-  typename SharedBatchScheduler<TaskType>::BatchTaskUniquePtr ScheduleBatch();
+  BatchTaskUniquePtr ScheduleBatch();
 
   // Without mutating the queue, checks if ScheduleBatch() will return a valid
   // batch and if so will return the priority of that batch.
@@ -141,7 +146,7 @@ class QueueBase {
 
   // Computes the max_execution_batch_size of the queue based on queue options.
   static size_t GetMaxExecutionBatchSize(
-      const typename SharedBatchScheduler<TaskType>::QueueOptions& options) {
+      const QueueOptions<TaskType>& options) {
     // If `enable_large_batch_splitting`, returns `max_execution_batch_size`
     // configured by user options directly; returns `input_batch_size_limit`
     // otherwise.
@@ -155,7 +160,7 @@ class QueueBase {
     }
   }
 
-  const typename SharedBatchScheduler<TaskType>::QueueOptions options_;
+  const QueueOptions<TaskType> options_;
 
   // The environment to use.
   tsl::Env* env_;
@@ -197,7 +202,7 @@ class QueueBase {
 
 template <typename TaskType>
 QueueBase<TaskType>::QueueBase(
-    const typename SharedBatchScheduler<TaskType>::QueueOptions& options,
+    const QueueOptions<TaskType>& options,
     ::tsl::Env* env, ProcessBatchCallback process_batch_callback,
     SchedulableBatchCallback schedulable_batch_callback)
     : options_(options),
@@ -245,7 +250,7 @@ size_t QueueBase<TaskType>::SchedulingCapacity() const {
 }
 
 template <typename TaskType>
-typename SharedBatchScheduler<TaskType>::BatchTaskUniquePtr
+typename QueueBase<TaskType>::BatchTaskUniquePtr
 QueueBase<TaskType>::ScheduleBatch() {
   // The batch to schedule, which we may populate below. (If left as nullptr,
   // that means we are electing not to schedule a batch at this time.)

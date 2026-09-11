@@ -48,7 +48,7 @@ class TestBatchResourceBase : public BatchResourceBase {
   TestBatchResourceBase(
       std::shared_ptr<SharedBatchScheduler<BatchResourceBase::BatchTask>>
           batcher,
-      const BatcherT::QueueOptions& batcher_queue_options,
+      const QueueOptions& batcher_queue_options,
       std::vector<int32_t> allowed_batch_sizes,
       std::vector<int32_t> low_priority_allowed_batch_sizes,
       tsl::thread::ThreadPool* thread_pool)
@@ -112,7 +112,7 @@ class TestFailedBatchResource : public BatchResourceBase {
   TestFailedBatchResource(
       std::shared_ptr<SharedBatchScheduler<BatchResourceBase::BatchTask>>
           batcher,
-      const BatcherT::QueueOptions& batcher_queue_options,
+      const QueueOptions& batcher_queue_options,
       std::vector<int32_t> allowed_batch_sizes,
       tsl::thread::ThreadPool* thread_pool,
       absl::Status failure_status =
@@ -141,7 +141,7 @@ class TestJsvBatchResource : public JsvBatchResource {
       std::vector<std::unique_ptr<Kernel>> batched_graph,
       std::shared_ptr<SharedBatchScheduler<BatchResourceBase::BatchTask>>
           batcher,
-      const BatchResourceBase::BatcherT::QueueOptions& queue_options,
+      const BatchResourceBase::QueueOptions& queue_options,
       const std::vector<int32_t>& allowed_batch_sizes,
       tsl::thread::ThreadPool* thread_pool)
       : JsvBatchResource(std::move(batched_graph), batcher, queue_options,
@@ -174,7 +174,7 @@ class TestRaggedBatchResourceBase : public BatchResourceBase {
   TestRaggedBatchResourceBase(
       std::shared_ptr<SharedBatchScheduler<BatchResourceBase::BatchTask>>
           batcher,
-      const BatcherT::QueueOptions& batcher_queue_options,
+      const QueueOptions& batcher_queue_options,
       std::vector<int32_t> allowed_batch_sizes,
       tsl::thread::ThreadPool* thread_pool,
       std::vector<RaggedInputSpec> ragged_inputs = {{.flat_values_index = 1,

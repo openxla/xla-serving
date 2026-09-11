@@ -38,7 +38,7 @@
 #include "runtime/core/batching/batch_scheduler.h"  // from @neptune
 #include "runtime/core/batching/batch_scheduler_utils.h"  // from @neptune
 #include "runtime/core/batching/queue_base.h"  // from @neptune
-#include "runtime/core/batching/shared_batch_scheduler.h"  // from @neptune
+#include "runtime/core/batching/queue_options.h"  // from @neptune
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "tsl/profiler/lib/connected_traceme.h"  // from @tsl
@@ -62,7 +62,7 @@ class FifoQueue : public QueueBase<TaskType> {
   using BatchPriorityKey = typename QueueBase<TaskType>::BatchPriorityKey;
 
   FifoQueue(
-      const typename SharedBatchScheduler<TaskType>::QueueOptions& options,
+      const QueueOptions<TaskType>& options,
       tsl::Env* env, ProcessBatchCallback process_batch_callback,
       SchedulableBatchCallback schedulable_batch_callback);
 
@@ -148,7 +148,7 @@ class FifoQueue : public QueueBase<TaskType> {
 
 template <typename TaskType>
 FifoQueue<TaskType>::FifoQueue(
-    const typename SharedBatchScheduler<TaskType>::QueueOptions& options,
+    const QueueOptions<TaskType>& options,
     tsl::Env* env, ProcessBatchCallback process_batch_callback,
     SchedulableBatchCallback schedulable_batch_callback)
     : QueueBase<TaskType>(options, env, process_batch_callback,
