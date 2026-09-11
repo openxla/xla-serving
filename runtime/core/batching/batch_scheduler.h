@@ -51,6 +51,33 @@ enum class MixedPriorityBatchingPolicy {
 absl::StatusOr<MixedPriorityBatchingPolicy> GetMixedPriorityBatchingPolicy(
     absl::string_view attr_value);
 
+const absl::string_view kStrictFifoAttrValue = "strict_fifo";
+const absl::string_view kPriorityAwareAttrValue = "priority_aware";
+
+enum class PriorityBatchingPolicy {
+  kStrictFifo,
+  kPriorityAware,
+};
+
+absl::StatusOr<PriorityBatchingPolicy> GetPriorityBatchingPolicy(
+    absl::string_view attr_value);
+
+// Options for priority-aware batching. Used iff priority_batching_policy is
+// set to PriorityBatchingPolicy::kPriorityAware.
+struct PriorityAwareBatchingOptions {
+  // The maximum sum of task sizes to enqueue. Default is 0, which means the
+  // limit is not set.
+  size_t max_queue_depth = 0;
+  // If true, the priority aware batch queue will resplit tasks into smaller
+  // subtasks if needed.
+  bool enable_task_resplit = false;
+
+  bool operator==(const PriorityAwareBatchingOptions& other) const {
+    return max_queue_depth == other.max_queue_depth &&
+           enable_task_resplit == other.enable_task_resplit;
+  }
+};
+
 // The abstract superclass for a unit of work to be done as part of a batch.
 //
 // An implementing subclass typically contains (or points to):
