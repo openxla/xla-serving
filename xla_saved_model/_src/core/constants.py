@@ -40,6 +40,10 @@ MODEL_VERSION_LEGACY_FILENAME = 'orbax_model_version.txt'
 # The file path of the manifest proto file relative to the save directory.
 MANIFEST_FILE_PATH = 'manifest.pb'
 
+# The file path of the modifications history file relative to the save
+# directory.
+HISTORY_FILENAME = 'history.txtpb'
+
 # The version of the manifest.
 MANIFEST_VERSION = '0.0.1'
 

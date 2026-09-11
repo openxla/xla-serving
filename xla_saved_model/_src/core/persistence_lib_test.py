@@ -19,7 +19,9 @@ import os
 
 from absl.testing import absltest
 from absl.testing import parameterized
+from google.protobuf import text_format
 
+from xla_saved_model.protos import history_pb2
 from xla_saved_model.protos import manifest_pb2
 from xla_saved_model.protos import type_pb2
 from xla_saved_model._src.core import constants
@@ -92,6 +94,15 @@ class PersistenceLibTest(test_utils.XsmTestCase, parameterized.TestCase):
         target_dir, constants.MODEL_VERSION_LEGACY_FILENAME
     )
     self.assertTrue(os.path.exists(legacy_model_version_path))
+
+    history_path = os.path.join(target_dir, constants.HISTORY_FILENAME)
+    self.assertTrue(os.path.exists(history_path))
+    history_proto = history_pb2.ModelHistory()
+    with open(history_path, 'r') as f:
+      text_format.Parse(f.read(), history_proto)
+    self.assertEqual(history_proto.model_version, constants.MANIFEST_VERSION)
+    self.assertLen(history_proto.records, 1)
+    self.assertEqual(history_proto.records[0].action, 'EXPORT')
 
     actual_manifest = persistence_lib.load(target_dir)
     expected_manifest = manifest_pb2.Manifest(

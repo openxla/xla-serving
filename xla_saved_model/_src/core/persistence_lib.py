@@ -20,11 +20,15 @@ persisted OBM module.
 
 from collections.abc import Mapping, Sequence
 import dataclasses
+import datetime
+import getpass
 import pathlib
 from typing import Any
 
 from absl import logging
+from google.protobuf import text_format
 
+from xla_saved_model.protos import history_pb2
 from xla_saved_model.protos import manifest_pb2
 from xla_saved_model._src.core import constants
 from xla_saved_model._src.core import device_assignment
@@ -149,6 +153,28 @@ def save(
   legacy_model_version.save(
       str(pathlib.Path(target_dir) / constants.MODEL_VERSION_LEGACY_FILENAME)
   )
+
+  # Write the baseline modifications history file if it does not already exist.
+  history_path = pathlib.Path(target_dir) / constants.HISTORY_FILENAME
+  if not file_utils.exists(str(history_path)):
+    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    try:
+      user = getpass.getuser()
+    except OSError:
+      user = 'unknown'
+    initial_history = history_pb2.ModelHistory(
+        model_version=constants.MANIFEST_VERSION,
+        records=[
+            history_pb2.HistoryRecord(
+                action='EXPORT',
+                timestamp=now_iso,
+                user=user,
+                description='Initial model export.',
+            )
+        ],
+    )
+    with file_utils.open_file(str(history_path), 'w') as f:
+      f.write(text_format.MessageToString(initial_history))
 
 
 def _load_model_version(

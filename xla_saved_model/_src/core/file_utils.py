@@ -20,11 +20,18 @@ import shutil
 
 _file_opener = open
 _mkdir_p = lambda path: os.makedirs(path, exist_ok=True)
-_copy = shutil.copyfile
+_copy = lambda src, dst, overwrite=False: (
+    shutil.copyfile(src, dst)
+    if (overwrite or not os.path.exists(dst))
+    else (_ for _ in ()).throw(FileExistsError(f"Destination {dst} exists"))
+)
 _copytree = shutil.copytree
 _exists = os.path.exists
 _isdir = os.path.isdir
 _remove = os.remove
+_rename = lambda src, dst, overwrite=True: (
+    os.replace(src, dst) if overwrite else os.rename(src, dst)
+)
 _rmtree = shutil.rmtree
 
 
@@ -43,8 +50,8 @@ def mkdir_p(path: str) -> None:
   _mkdir_p(path)
 
 
-def copy(source: str, dest: str) -> None:
-  _copy(source, dest)
+def copy(source: str, dest: str, overwrite: bool = False) -> None:
+  _copy(source, dest, overwrite=overwrite)
 
 
 def copytree(source: str, dest: str) -> None:
@@ -65,3 +72,7 @@ def remove(path: str) -> None:
 
 def rmtree(path: str) -> None:
   _rmtree(path)
+
+
+def rename(source: str, dest: str, overwrite: bool = True) -> None:
+  _rename(source, dest, overwrite=overwrite)
