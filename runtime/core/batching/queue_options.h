@@ -150,6 +150,10 @@ struct QueueOptions {
   MixedPriorityBatchingPolicy mixed_priority_batching_policy =
       MixedPriorityBatchingPolicy::kLowPriorityPaddingWithMaxBatchSize;
 
+  // Controls the internal queue batching strategy.
+  PriorityBatchingPolicy priority_batching_policy =
+      PriorityBatchingPolicy::kStrictFifo;
+
   // Options for priority aware batching.
   // Used iff PriorityBatchingPolicy is set to PRIORITY_AWARE.
   struct PriorityAwareBatchingOptions {

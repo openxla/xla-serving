@@ -78,6 +78,31 @@ absl::string_view MixedPriorityBatchingPolicyToString(
   return "unknown_mixed_priority_batching_policy";
 }
 
+absl::StatusOr<PriorityBatchingPolicy> GetPriorityBatchingPolicy(
+    BatchOptions::PriorityBatchingPolicy priority_batching_policy) {
+  switch (priority_batching_policy) {
+    case BatchOptions::PRIORITY_BATCHING_POLICY_UNSPECIFIED:
+    case BatchOptions::STRICT_FIFO:
+      return PriorityBatchingPolicy::kStrictFifo;
+    case BatchOptions::PRIORITY_AWARE:
+      return PriorityBatchingPolicy::kPriorityAware;
+    default:
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Unsupported priority batching policy: ", priority_batching_policy));
+  }
+}
+
+absl::string_view PriorityBatchingPolicyToString(
+    PriorityBatchingPolicy policy) {
+  switch (policy) {
+    case PriorityBatchingPolicy::kStrictFifo:
+      return kStrictFifoAttrValue;
+    case PriorityBatchingPolicy::kPriorityAware:
+      return kPriorityAwareAttrValue;
+  }
+  return "unknown_priority_batching_policy";
+}
+
 absl::string_view CriticalityToString(
     tsl::criticality::Criticality criticality) {
   switch (criticality) {

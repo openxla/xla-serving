@@ -34,12 +34,15 @@
 
 namespace xla_serving {
 
-const absl::string_view kLowPriorityPaddingWithMaxBatchSizeAttrValue =
-    "low_priority_padding_with_max_batch_size";
-const absl::string_view kLowPriorityPaddingWithNextAllowedBatchSizeAttrValue =
-    "low_priority_padding_with_next_allowed_batch_size";
-const absl::string_view kPriorityIsolationAttrValue = "priority_isolation";
-const absl::string_view kPriorityMergeAttrValue = "priority_merge";
+inline constexpr absl::string_view
+    kLowPriorityPaddingWithMaxBatchSizeAttrValue =
+        "low_priority_padding_with_max_batch_size";
+inline constexpr absl::string_view
+    kLowPriorityPaddingWithNextAllowedBatchSizeAttrValue =
+        "low_priority_padding_with_next_allowed_batch_size";
+inline constexpr absl::string_view kPriorityIsolationAttrValue =
+    "priority_isolation";
+inline constexpr absl::string_view kPriorityMergeAttrValue = "priority_merge";
 
 enum class MixedPriorityBatchingPolicy {
   kLowPriorityPaddingWithMaxBatchSize,
@@ -50,6 +53,14 @@ enum class MixedPriorityBatchingPolicy {
 
 absl::StatusOr<MixedPriorityBatchingPolicy> GetMixedPriorityBatchingPolicy(
     absl::string_view attr_value);
+
+inline constexpr absl::string_view kStrictFifoAttrValue = "strict_fifo";
+inline constexpr absl::string_view kPriorityAwareAttrValue = "priority_aware";
+
+enum class PriorityBatchingPolicy {
+  kStrictFifo,
+  kPriorityAware,
+};
 
 // The abstract superclass for a unit of work to be done as part of a batch.
 //

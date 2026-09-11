@@ -45,6 +45,12 @@ absl::StatusOr<MixedPriorityBatchingPolicy> GetMixedPriorityBatchingPolicy(
 absl::string_view MixedPriorityBatchingPolicyToString(
     MixedPriorityBatchingPolicy policy);
 
+absl::StatusOr<PriorityBatchingPolicy> GetPriorityBatchingPolicy(
+    BatchOptions::PriorityBatchingPolicy priority_batching_policy);
+
+absl::string_view PriorityBatchingPolicyToString(
+    PriorityBatchingPolicy policy);
+
 absl::string_view CriticalityToString(
     tsl::criticality::Criticality criticality);
 
