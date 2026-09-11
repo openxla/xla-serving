@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_COMPOSITE_PROCESSOR_H_
-#define THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_COMPOSITE_PROCESSOR_H_
+#ifndef XLA_SERVING_DATA_PROCESSOR_CC_CORE_COMPOSITE_PROCESSOR_H_
+#define XLA_SERVING_DATA_PROCESSOR_CC_CORE_COMPOSITE_PROCESSOR_H_
 
 #include <cstddef>
 #include <memory>
@@ -93,4 +93,4 @@ class CompositeProcessor {
 }  // namespace composite
 }  // namespace neptune::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_COMPOSITE_PROCESSOR_H_
+#endif  // XLA_SERVING_DATA_PROCESSOR_CC_CORE_COMPOSITE_PROCESSOR_H_

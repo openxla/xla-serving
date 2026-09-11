@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_IFRT_LOADED_VARIABLE_REGISTRY_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_IFRT_LOADED_VARIABLE_REGISTRY_H_
+#ifndef XLA_SERVING_RUNTIME_IFRT_LOADED_VARIABLE_REGISTRY_H_
+#define XLA_SERVING_RUNTIME_IFRT_LOADED_VARIABLE_REGISTRY_H_
 
 #include <optional>
 #include <string>
@@ -115,4 +115,4 @@ class IfrtLoadedVariableRegistryTestPeer {
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_IFRT_LOADED_VARIABLE_REGISTRY_H_
+#endif  // XLA_SERVING_RUNTIME_IFRT_LOADED_VARIABLE_REGISTRY_H_

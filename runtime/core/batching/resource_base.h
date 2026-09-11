@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_RESOURCE_BASE_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_RESOURCE_BASE_H_
+#ifndef XLA_SERVING_RUNTIME_BATCHING_RESOURCE_BASE_H_
+#define XLA_SERVING_RUNTIME_BATCHING_RESOURCE_BASE_H_
 
 #include <cstdint>
 #include <string>
@@ -41,4 +41,4 @@ class ResourceBase : public tsl::core::WeakRefCounted {
 };
 }  //  namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_RESOURCE_BASE_H_
+#endif  // XLA_SERVING_RUNTIME_BATCHING_RESOURCE_BASE_H_

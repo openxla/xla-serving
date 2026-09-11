@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_UTILS_BUFFER_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_UTILS_BUFFER_UTILS_H_
+#ifndef XLA_SERVING_DATA_PROCESSOR_CC_UTILS_BUFFER_UTILS_H_
+#define XLA_SERVING_DATA_PROCESSOR_CC_UTILS_BUFFER_UTILS_H_
 
 #include <cstdint>
 
@@ -34,5 +34,5 @@ inline bool IsBufferEigenAligned(const void* data_ptr) { return true; }
 
 }  // namespace neptune::data::composite::utils
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_UTILS_BUFFER_UTILS_H_
+#endif  // XLA_SERVING_DATA_PROCESSOR_CC_UTILS_BUFFER_UTILS_H_
 

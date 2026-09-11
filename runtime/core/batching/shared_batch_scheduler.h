@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_SHARED_BATCH_SCHEDULER_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_SHARED_BATCH_SCHEDULER_H_
+#ifndef XLA_SERVING_RUNTIME_BATCHING_SHARED_BATCH_SCHEDULER_H_
+#define XLA_SERVING_RUNTIME_BATCHING_SHARED_BATCH_SCHEDULER_H_
 
 #include <stddef.h>
 
@@ -1435,4 +1435,4 @@ size_t QueueHandle<TaskType>::SchedulingCapacity() const {
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_SHARED_BATCH_SCHEDULER_H_
+#endif  // XLA_SERVING_RUNTIME_BATCHING_SHARED_BATCH_SCHEDULER_H_

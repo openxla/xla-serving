@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_CORE_STREAMING_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_CORE_STREAMING_UTILS_H_
+#ifndef XLA_SERVING_RUNTIME_CORE_STREAMING_UTILS_H_
+#define XLA_SERVING_RUNTIME_CORE_STREAMING_UTILS_H_
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
@@ -44,4 +44,4 @@ absl::StatusOr<xla_serving::HostBuffer> CreateRequestIdsBuffer(
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_STREAMING_UTILS_H_
+#endif  // XLA_SERVING_RUNTIME_CORE_STREAMING_UTILS_H_

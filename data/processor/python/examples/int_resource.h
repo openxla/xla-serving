@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_PYTHON_EXAMPLES_INT_RESOURCE_H_
-#define THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_PYTHON_EXAMPLES_INT_RESOURCE_H_
+#ifndef XLA_SERVING_DATA_PROCESSOR_PYTHON_EXAMPLES_INT_RESOURCE_H_
+#define XLA_SERVING_DATA_PROCESSOR_PYTHON_EXAMPLES_INT_RESOURCE_H_
 
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "data/resource_manager/cc/resource.h"  // from @neptune
@@ -44,4 +44,4 @@ class IntContentResource : public Resource {
 }  // namespace composite
 }  // namespace neptune::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_PYTHON_EXAMPLES_INT_RESOURCE_H_
+#endif  // XLA_SERVING_DATA_PROCESSOR_PYTHON_EXAMPLES_INT_RESOURCE_H_

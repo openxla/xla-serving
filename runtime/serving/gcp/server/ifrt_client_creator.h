@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_IFRT_CLIENT_CREATOR_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_IFRT_CLIENT_CREATOR_H_
+#ifndef XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_IFRT_CLIENT_CREATOR_H_
+#define XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_IFRT_CLIENT_CREATOR_H_
 
 #include <memory>
 #include "absl/status/statusor.h"  // from @abseil-cpp
@@ -29,4 +29,4 @@ absl::StatusOr<std::shared_ptr<xla::ifrt::Client>> GetIfrtClient(
 }  // namespace serving
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_IFRT_CLIENT_CREATOR_H_
+#endif  // XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_IFRT_CLIENT_CREATOR_H_

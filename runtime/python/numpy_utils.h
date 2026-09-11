@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_PYTHON_NUMPY_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_PYTHON_NUMPY_UTILS_H_
+#ifndef XLA_SERVING_RUNTIME_PYTHON_NUMPY_UTILS_H_
+#define XLA_SERVING_RUNTIME_PYTHON_NUMPY_UTILS_H_
 
 #include "runtime/core/allocator.h"  // from @neptune
 #include "runtime/core/default_allocator.h"  // from @neptune
@@ -48,4 +48,4 @@ xla::nb_numpy_ndarray ToNbArray(const xla_serving::HostBuffer& host_buffer);
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_PYTHON_NUMPY_UTILS_H_
+#endif  // XLA_SERVING_RUNTIME_PYTHON_NUMPY_UTILS_H_

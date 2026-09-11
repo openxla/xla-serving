@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_MLIR_DUMP_MLIR_UTIL_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_MLIR_DUMP_MLIR_UTIL_H_
+#ifndef XLA_SERVING_RUNTIME_LIBS_MLIR_DUMP_MLIR_UTIL_H_
+#define XLA_SERVING_RUNTIME_LIBS_MLIR_DUMP_MLIR_UTIL_H_
 
 #include <memory>
 #include <string>
@@ -70,4 +70,4 @@ void PrintPassPipeline(const mlir::PassManager& pass_manager,
                        mlir::Operation* op, llvm::raw_ostream& os);
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_MLIR_DUMP_MLIR_UTIL_H_
+#endif  // XLA_SERVING_RUNTIME_LIBS_MLIR_DUMP_MLIR_UTIL_H_

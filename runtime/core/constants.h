@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_CONSTANTS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_CONSTANTS_H_
+#ifndef XLA_SERVING_RUNTIME_CONSTANTS_H_
+#define XLA_SERVING_RUNTIME_CONSTANTS_H_
 
 namespace xla_serving {
 
@@ -70,4 +70,4 @@ inline constexpr char kTfConcreteFunctionHandleMimeTypeLegacy[] =
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CONSTANTS_H_
+#endif  // XLA_SERVING_RUNTIME_CONSTANTS_H_

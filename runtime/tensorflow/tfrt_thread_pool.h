@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_TFRT_THREAD_POOL_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_TFRT_THREAD_POOL_H_
+#ifndef XLA_SERVING_RUNTIME_TENSORFLOW_TFRT_THREAD_POOL_H_
+#define XLA_SERVING_RUNTIME_TENSORFLOW_TFRT_THREAD_POOL_H_
 
 #include <cstdint>
 #include <functional>
@@ -65,4 +65,4 @@ class TfrtThreadPool : public ThreadPoolInterface {
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_TFRT_THREAD_POOL_H_
+#endif  // XLA_SERVING_RUNTIME_TENSORFLOW_TFRT_THREAD_POOL_H_

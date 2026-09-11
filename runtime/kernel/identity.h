@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_IDENTITY_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_IDENTITY_H_
+#ifndef XLA_SERVING_RUNTIME_KERNEL_IDENTITY_H_
+#define XLA_SERVING_RUNTIME_KERNEL_IDENTITY_H_
 
 #include <memory>
 #include <string>
@@ -56,4 +56,4 @@ class IdentityKernel : public CancellableKernel {
 };
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_IDENTITY_H_
+#endif  // XLA_SERVING_RUNTIME_KERNEL_IDENTITY_H_

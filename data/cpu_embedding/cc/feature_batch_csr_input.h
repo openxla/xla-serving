@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_CC_FEATURE_BATCH_CSR_INPUT_H_
-#define THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_CC_FEATURE_BATCH_CSR_INPUT_H_
+#ifndef XLA_SERVING_DATA_CPU_EMBEDDING_CC_FEATURE_BATCH_CSR_INPUT_H_
+#define XLA_SERVING_DATA_CPU_EMBEDDING_CC_FEATURE_BATCH_CSR_INPUT_H_
 
 #include <cstddef>
 #include <cstdint>
@@ -67,4 +67,4 @@ class FeatureBatchCsrInput {
 
 }  // namespace neptune::data::cpu_embedding
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_CC_FEATURE_BATCH_CSR_INPUT_H_
+#endif  // XLA_SERVING_DATA_CPU_EMBEDDING_CC_FEATURE_BATCH_CSR_INPUT_H_

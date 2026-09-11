@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_METADATA_UTIL_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_METADATA_UTIL_H_
+#ifndef XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_METADATA_UTIL_H_
+#define XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_METADATA_UTIL_H_
 
 #include <string>
 #include <vector>
@@ -64,4 +64,4 @@ absl::StatusOr<std::vector<std::string>> GetAllWeightNamesFromCheckpoint(
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_METADATA_UTIL_H_
+#endif  // XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_METADATA_UTIL_H_

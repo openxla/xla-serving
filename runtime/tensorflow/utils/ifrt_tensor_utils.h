@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_UTILS_IFRT_TENSOR_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_UTILS_IFRT_TENSOR_UTILS_H_
+#ifndef XLA_SERVING_RUNTIME_TENSORFLOW_UTILS_IFRT_TENSOR_UTILS_H_
+#define XLA_SERVING_RUNTIME_TENSORFLOW_UTILS_IFRT_TENSOR_UTILS_H_
 
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
@@ -58,4 +58,4 @@ tensorflow::PartialTensorShape MlirTypeToTensorShape(const mlir::Type& type);
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_UTILS_IFRT_TENSOR_UTILS_H_
+#endif  // XLA_SERVING_RUNTIME_TENSORFLOW_UTILS_IFRT_TENSOR_UTILS_H_

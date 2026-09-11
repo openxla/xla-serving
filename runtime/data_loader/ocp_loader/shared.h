@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_SHARED_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_SHARED_H_
+#ifndef XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_SHARED_H_
+#define XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_SHARED_H_
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "tensorstore/context.h"  // from @tensorstore
@@ -33,4 +33,4 @@ inline absl::StatusOr<tensorstore::Context> GetOcdbtContext() {
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_SHARED_H_
+#endif  // XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_SHARED_H_

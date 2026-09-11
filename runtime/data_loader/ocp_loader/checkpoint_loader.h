@@ -18,8 +18,8 @@
 #include "xla/python/ifrt/shape.h"  // from @xla
 
 // TODO(qidichen): move or add the unit test from MIRA.
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_
+#ifndef XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_
+#define XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_
 
 #include <optional>
 #include <string>
@@ -93,4 +93,4 @@ LoadCheckpointFromOrbax(absl::string_view checkpoint_path,
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_
+#endif  // XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_

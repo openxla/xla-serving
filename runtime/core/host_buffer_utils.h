@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_CORE_HOST_BUFFER_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_CORE_HOST_BUFFER_UTILS_H_
+#ifndef XLA_SERVING_RUNTIME_CORE_HOST_BUFFER_UTILS_H_
+#define XLA_SERVING_RUNTIME_CORE_HOST_BUFFER_UTILS_H_
 
 #include <cstddef>
 #include <cstdint>
@@ -37,4 +37,4 @@ void AppendRecursive(std::string* out, xla::ifrt::DType dtype, const void* data,
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_HOST_BUFFER_UTILS_H_
+#endif  // XLA_SERVING_RUNTIME_CORE_HOST_BUFFER_UTILS_H_

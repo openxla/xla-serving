@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_GRAPH_GRAPH_EXECUTOR_H_
-#define THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_GRAPH_GRAPH_EXECUTOR_H_
+#ifndef XLA_SERVING_DATA_PROCESSOR_CC_CORE_GRAPH_GRAPH_EXECUTOR_H_
+#define XLA_SERVING_DATA_PROCESSOR_CC_CORE_GRAPH_GRAPH_EXECUTOR_H_
 
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "data/processor/cc/api/transform_context.h"  // from @neptune
@@ -44,4 +44,4 @@ class SingleThreadedSynchronousGraphExecutor : public GraphExecutor {
 }  // namespace composite
 }  // namespace neptune::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_GRAPH_GRAPH_EXECUTOR_H_
+#endif  // XLA_SERVING_DATA_PROCESSOR_CC_CORE_GRAPH_GRAPH_EXECUTOR_H_

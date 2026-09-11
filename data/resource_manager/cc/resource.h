@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_RESOURCE_MANAGER_CC_RESOURCE_H_
-#define THIRD_PARTY_NEPTUNE_DATA_RESOURCE_MANAGER_CC_RESOURCE_H_
+#ifndef XLA_SERVING_DATA_RESOURCE_MANAGER_CC_RESOURCE_H_
+#define XLA_SERVING_DATA_RESOURCE_MANAGER_CC_RESOURCE_H_
 
 #include <cstdint>
 #include <memory>
@@ -116,4 +116,4 @@ absl::Status RegisterResource(const std::string& class_name) {
 #define ND_REGISTER_RESOURCE(Type, Name) \
   ND_REGISTER_RESOURCE_INTERNAL(Type, Name, __COUNTER__)
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_RESOURCE_MANAGER_CC_RESOURCE_H_
+#endif  // XLA_SERVING_DATA_RESOURCE_MANAGER_CC_RESOURCE_H_

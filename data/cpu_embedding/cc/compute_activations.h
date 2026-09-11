@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_CC_COMPUTE_ACTIVATIONS_H_
-#define THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_CC_COMPUTE_ACTIVATIONS_H_
+#ifndef XLA_SERVING_DATA_CPU_EMBEDDING_CC_COMPUTE_ACTIVATIONS_H_
+#define XLA_SERVING_DATA_CPU_EMBEDDING_CC_COMPUTE_ACTIVATIONS_H_
 
 #include <cstdint>
 
@@ -54,4 +54,4 @@ absl::StatusOr<Array> LookupEmbeddingSequence(
 
 }  // namespace neptune::data::cpu_embedding
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_CC_COMPUTE_ACTIVATIONS_H_
+#endif  // XLA_SERVING_DATA_CPU_EMBEDDING_CC_COMPUTE_ACTIVATIONS_H_

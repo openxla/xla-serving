@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_CORE_BATCHING_FIFO_QUEUE_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_CORE_BATCHING_FIFO_QUEUE_H_
+#ifndef XLA_SERVING_RUNTIME_CORE_BATCHING_FIFO_QUEUE_H_
+#define XLA_SERVING_RUNTIME_CORE_BATCHING_FIFO_QUEUE_H_
 
 #include <stddef.h>
 
@@ -460,4 +460,4 @@ FifoQueue<TaskType>::GetBatches() const {
 }  // namespace internal
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_BATCHING_FIFO_QUEUE_H_
+#endif  // XLA_SERVING_RUNTIME_CORE_BATCHING_FIFO_QUEUE_H_

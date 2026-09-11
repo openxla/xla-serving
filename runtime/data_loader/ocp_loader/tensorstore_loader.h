@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_LOADER_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_LOADER_H_
+#ifndef XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_LOADER_H_
+#define XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_LOADER_H_
 
 #include <cstdint>
 #include <optional>
@@ -126,4 +126,4 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadFromTensorstore(
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_LOADER_H_
+#endif  // XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_LOADER_H_

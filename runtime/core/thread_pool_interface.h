@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_THREAD_POOL_INTERFACE_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_THREAD_POOL_INTERFACE_H_
+#ifndef XLA_SERVING_RUNTIME_THREAD_POOL_INTERFACE_H_
+#define XLA_SERVING_RUNTIME_THREAD_POOL_INTERFACE_H_
 
 #include <cstdint>
 #include <functional>
@@ -53,4 +53,4 @@ class ThreadPoolInterface {
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_THREAD_POOL_INTERFACE_H_
+#endif  // XLA_SERVING_RUNTIME_THREAD_POOL_INTERFACE_H_

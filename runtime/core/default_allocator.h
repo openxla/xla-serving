@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_DEFAULT_ALLOCATOR_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_DEFAULT_ALLOCATOR_H_
+#ifndef XLA_SERVING_RUNTIME_DEFAULT_ALLOCATOR_H_
+#define XLA_SERVING_RUNTIME_DEFAULT_ALLOCATOR_H_
 
 #include <cstddef>
 #include <cstdint>
@@ -47,4 +47,4 @@ class DefaultAllocator : public Allocator {
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DEFAULT_ALLOCATOR_H_
+#endif  // XLA_SERVING_RUNTIME_DEFAULT_ALLOCATOR_H_

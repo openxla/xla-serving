@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_PYTHON_IFRT_CLIENT_FACTORY_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_PYTHON_IFRT_CLIENT_FACTORY_H_
+#ifndef XLA_SERVING_RUNTIME_PYTHON_IFRT_CLIENT_FACTORY_H_
+#define XLA_SERVING_RUNTIME_PYTHON_IFRT_CLIENT_FACTORY_H_
 
 #include <memory>
 #include <string>
@@ -43,4 +43,4 @@ absl::StatusOr<std::shared_ptr<xla::ifrt::Client>> CreateIfrtClient(
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_PYTHON_IFRT_CLIENT_FACTORY_H_
+#endif  // XLA_SERVING_RUNTIME_PYTHON_IFRT_CLIENT_FACTORY_H_

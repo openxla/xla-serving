@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_COMMON_TYPES_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_COMMON_TYPES_H_
+#ifndef XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_COMMON_TYPES_H_
+#define XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_COMMON_TYPES_H_
 
 namespace xla_serving {
 
@@ -29,4 +29,4 @@ enum class CheckpointType {
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_COMMON_TYPES_H_
+#endif  // XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_COMMON_TYPES_H_

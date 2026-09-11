@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_BUILDER_CONTEXT_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_BUILDER_CONTEXT_H_
+#ifndef XLA_SERVING_RUNTIME_KERNEL_KERNEL_BUILDER_CONTEXT_H_
+#define XLA_SERVING_RUNTIME_KERNEL_KERNEL_BUILDER_CONTEXT_H_
 
 #include <string>
 
@@ -60,4 +60,4 @@ class KernelBuilderContext {
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_BUILDER_CONTEXT_H_
+#endif  // XLA_SERVING_RUNTIME_KERNEL_KERNEL_BUILDER_CONTEXT_H_

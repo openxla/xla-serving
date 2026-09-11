@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_SHARDING_UTILS_CORE_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_SHARDING_UTILS_CORE_H_
+#ifndef XLA_SERVING_RUNTIME_SHARDING_UTILS_CORE_H_
+#define XLA_SERVING_RUNTIME_SHARDING_UTILS_CORE_H_
 
 #include <cstdint>
 #include <functional>
@@ -452,4 +452,4 @@ class XlaNDConcatenator {
 
 }  // namespace xla_serving::sharding_internal
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_SHARDING_UTILS_CORE_H_
+#endif  // XLA_SERVING_RUNTIME_SHARDING_UTILS_CORE_H_

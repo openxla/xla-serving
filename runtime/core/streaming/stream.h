@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_CORE_STREAMING_STREAM_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_CORE_STREAMING_STREAM_H_
+#ifndef XLA_SERVING_RUNTIME_CORE_STREAMING_STREAM_H_
+#define XLA_SERVING_RUNTIME_CORE_STREAMING_STREAM_H_
 
 #include <algorithm>
 #include <cstdint>
@@ -243,4 +243,4 @@ class ScopedStreamCallback {
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_STREAMING_STREAM_H_
+#endif  // XLA_SERVING_RUNTIME_CORE_STREAMING_STREAM_H_

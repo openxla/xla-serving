@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_CORE_BATCHING_QUEUE_BASE_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_CORE_BATCHING_QUEUE_BASE_H_
+#ifndef XLA_SERVING_RUNTIME_CORE_BATCHING_QUEUE_BASE_H_
+#define XLA_SERVING_RUNTIME_CORE_BATCHING_QUEUE_BASE_H_
 
 #include <stddef.h>
 
@@ -329,4 +329,4 @@ QueueBase<TaskType>::PeekBatchPriority() const {
 }  // namespace internal
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_BATCHING_QUEUE_BASE_H_
+#endif  // XLA_SERVING_RUNTIME_CORE_BATCHING_QUEUE_BASE_H_

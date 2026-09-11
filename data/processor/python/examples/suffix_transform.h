@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_PYTHON_EXAMPLES_SUFFIX_TRANSFORM_H_
-#define THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_PYTHON_EXAMPLES_SUFFIX_TRANSFORM_H_
+#ifndef XLA_SERVING_DATA_PROCESSOR_PYTHON_EXAMPLES_SUFFIX_TRANSFORM_H_
+#define XLA_SERVING_DATA_PROCESSOR_PYTHON_EXAMPLES_SUFFIX_TRANSFORM_H_
 
 #include <memory>
 #include <string>
@@ -47,4 +47,4 @@ class SuffixTransform : public TransformBase {
 }  // namespace composite
 }  // namespace neptune::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_PYTHON_EXAMPLES_SUFFIX_TRANSFORM_H_
+#endif  // XLA_SERVING_DATA_PROCESSOR_PYTHON_EXAMPLES_SUFFIX_TRANSFORM_H_

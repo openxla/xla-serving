@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_STABLEHLO_LOADER_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_STABLEHLO_LOADER_H_
+#ifndef XLA_SERVING_RUNTIME_LIBS_IFRT_STABLEHLO_LOADER_H_
+#define XLA_SERVING_RUNTIME_LIBS_IFRT_STABLEHLO_LOADER_H_
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
@@ -40,4 +40,4 @@ class StableHloLoader {
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_STABLEHLO_LOADER_H_
+#endif  // XLA_SERVING_RUNTIME_LIBS_IFRT_STABLEHLO_LOADER_H_

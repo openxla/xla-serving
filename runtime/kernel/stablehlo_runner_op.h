@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_STABLEHLO_RUNNER_OP_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_STABLEHLO_RUNNER_OP_H_
+#ifndef XLA_SERVING_RUNTIME_KERNEL_STABLEHLO_RUNNER_OP_H_
+#define XLA_SERVING_RUNTIME_KERNEL_STABLEHLO_RUNNER_OP_H_
 
 #include <cstdint>
 #include <memory>
@@ -90,4 +90,4 @@ class StableHloRunnerOp : public CancellableKernel {
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_STABLEHLO_RUNNER_OP_H_
+#endif  // XLA_SERVING_RUNTIME_KERNEL_STABLEHLO_RUNNER_OP_H_

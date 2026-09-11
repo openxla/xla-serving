@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_INPUT_SPLIT_METADATA_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_INPUT_SPLIT_METADATA_H_
+#ifndef XLA_SERVING_RUNTIME_BATCHING_INPUT_SPLIT_METADATA_H_
+#define XLA_SERVING_RUNTIME_BATCHING_INPUT_SPLIT_METADATA_H_
 
 #include <string>
 
@@ -49,4 +49,4 @@ class InputSplitMetadata {
 }  // namespace internal
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_INPUT_SPLIT_METADATA_H_
+#endif  // XLA_SERVING_RUNTIME_BATCHING_INPUT_SPLIT_METADATA_H_

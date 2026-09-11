@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_NEPTUNE_DATA_COMPOSITE_PROCESSOR_OP_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_NEPTUNE_DATA_COMPOSITE_PROCESSOR_OP_H_
+#ifndef XLA_SERVING_RUNTIME_NEPTUNE_DATA_COMPOSITE_PROCESSOR_OP_H_
+#define XLA_SERVING_RUNTIME_NEPTUNE_DATA_COMPOSITE_PROCESSOR_OP_H_
 
 #include <memory>
 #include <string>
@@ -50,4 +50,4 @@ class CompositeProcessorOp : public CancellableKernel {
 }  // namespace composite
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_NEPTUNE_DATA_COMPOSITE_PROCESSOR_OP_H_
+#endif  // XLA_SERVING_RUNTIME_NEPTUNE_DATA_COMPOSITE_PROCESSOR_OP_H_

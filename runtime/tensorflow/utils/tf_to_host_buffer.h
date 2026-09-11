@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_UTILS_TF_TO_HOST_BUFFER_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_UTILS_TF_TO_HOST_BUFFER_H_
+#ifndef XLA_SERVING_RUNTIME_TENSORFLOW_UTILS_TF_TO_HOST_BUFFER_H_
+#define XLA_SERVING_RUNTIME_TENSORFLOW_UTILS_TF_TO_HOST_BUFFER_H_
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "runtime/core/host_buffer.h"  // from @neptune
@@ -37,4 +37,4 @@ absl::StatusOr<Value> ToJsvValue(tensorflow::Tensor tensor,
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_UTILS_TF_TO_HOST_BUFFER_H_
+#endif  // XLA_SERVING_RUNTIME_TENSORFLOW_UTILS_TF_TO_HOST_BUFFER_H_

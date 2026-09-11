@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_FLAT_SIGNATURE_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_FLAT_SIGNATURE_H_
+#ifndef XLA_SERVING_RUNTIME_FLAT_SIGNATURE_H_
+#define XLA_SERVING_RUNTIME_FLAT_SIGNATURE_H_
 
 #include <optional>
 #include <string>
@@ -144,4 +144,4 @@ struct FunctionFlatSignature {
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_FLAT_SIGNATURE_H_
+#endif  // XLA_SERVING_RUNTIME_FLAT_SIGNATURE_H_

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_LINEAR_GRAPH_EXECUTE_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_LINEAR_GRAPH_EXECUTE_H_
+#ifndef XLA_SERVING_RUNTIME_INTERPRETER_LINEAR_GRAPH_EXECUTE_H_
+#define XLA_SERVING_RUNTIME_INTERPRETER_LINEAR_GRAPH_EXECUTE_H_
 
 #include <cstdint>
 #include <memory>
@@ -61,4 +61,4 @@ tsl::Future<std::vector<Value>> AsyncExecuteLinearGraph(
     int64_t model_version);
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_LINEAR_GRAPH_EXECUTE_H_
+#endif  // XLA_SERVING_RUNTIME_INTERPRETER_LINEAR_GRAPH_EXECUTE_H_

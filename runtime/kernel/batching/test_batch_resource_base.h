@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_TEST_BATCH_RESOURCE_BASE_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_TEST_BATCH_RESOURCE_BASE_H_
+#ifndef XLA_SERVING_RUNTIME_KERNEL_BATCHING_TEST_BATCH_RESOURCE_BASE_H_
+#define XLA_SERVING_RUNTIME_KERNEL_BATCHING_TEST_BATCH_RESOURCE_BASE_H_
 
 #include <cstdint>
 #include <functional>
@@ -240,4 +240,4 @@ class TestRaggedBatchResourceBase : public BatchResourceBase {
 
 }  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_TEST_BATCH_RESOURCE_BASE_H_
+#endif  // XLA_SERVING_RUNTIME_KERNEL_BATCHING_TEST_BATCH_RESOURCE_BASE_H_
