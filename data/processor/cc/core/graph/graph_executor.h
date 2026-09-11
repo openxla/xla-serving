@@ -16,8 +16,8 @@
 #define XLA_SERVING_DATA_PROCESSOR_CC_CORE_GRAPH_GRAPH_EXECUTOR_H_
 
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/core/graph/execution_graph.h"  // from @neptune
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/core/graph/execution_graph.h"  // from @xla_serving
 
 namespace neptune::data {
 namespace composite {

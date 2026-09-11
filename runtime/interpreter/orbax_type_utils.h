@@ -16,7 +16,7 @@
 #define XLA_SERVING_RUNTIME_INTERPRETER_ORBAX_TYPE_UTILS_H_
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
-#include "protos/type.pb.h"  // from @neptune
+#include "protos/type.pb.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 

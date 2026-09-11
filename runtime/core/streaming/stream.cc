@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/streaming/stream.h"  // from @neptune
+#include "runtime/core/streaming/stream.h"  // from @xla_serving
 
 #include <cstdint>
 #include <cstring>
@@ -45,8 +45,8 @@
 #include "mlir/include/mlir/IR/BuiltinAttributes.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/Operation.h"  // from @llvm-project
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/streaming/utils.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/streaming/utils.h"  // from @xla_serving
 #include "stablehlo/dialect/StablehloOps.h"  // from @stablehlo
 #include "xla/executable_run_options.h"  // from @xla
 #include "xla/ffi/ffi.h"  // from @xla

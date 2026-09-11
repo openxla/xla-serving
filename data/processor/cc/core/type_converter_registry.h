@@ -23,8 +23,8 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
-#include "data/processor/cc/api/type_converter.h"  // from @neptune
-#include "data/processor/cc/api/type_info.h"  // from @neptune
+#include "data/processor/cc/api/type_converter.h"  // from @xla_serving
+#include "data/processor/cc/api/type_info.h"  // from @xla_serving
 
 namespace neptune::data {
 namespace composite {

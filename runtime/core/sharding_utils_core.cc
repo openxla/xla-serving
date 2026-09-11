@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/sharding_utils_core.h"  // from @neptune
+#include "runtime/core/sharding_utils_core.h"  // from @xla_serving
 
 #include <cstdint>
 
@@ -22,7 +22,7 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "Eigen/Core"
 #include "unsupported/Eigen/CXX11/Tensor"
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/tsl/platform/logging.h"  // from @xla  // IWYU pragma: keep
 
 namespace xla_serving::sharding_internal {

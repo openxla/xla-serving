@@ -40,7 +40,7 @@ cc_library(
     hdrs = ["value.h"],
     visibility = [
         ":core_users",
-        "@neptune//runtime/interpreter:interpreter_users",
+        "@xla_serving//runtime/interpreter:interpreter_users",
     ],
     deps = [
         "@abseil-cpp//absl/log",
@@ -178,7 +178,6 @@ cc_library(
         "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:Support",
-        "@neptune//runtime/libs/mlir:utils",
         "@shardy//shardy/dialect/sdy/ir:dialect",
         "@stablehlo//:stablehlo_ops",
         "@stablehlo//:stablehlo_passes",
@@ -196,6 +195,7 @@ cc_library(
         "@xla//xla/service/spmd/shardy/stablehlo_round_trip:export_shardings",
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/libs/mlir:utils",
     ],
 )
 
@@ -255,14 +255,6 @@ cc_library(
         "@com_google_protobuf//:protobuf",
         "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:IR",
-        "@neptune//runtime/core/streaming",
-        "@neptune//runtime/core/streaming:utils",
-        "@neptune//runtime/interpreter:context",
-        "@neptune//runtime/interpreter:manifest_utils",
-        "@neptune//runtime/libs/ifrt:executable_build_utils",
-        "@neptune//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",
-        "@neptune//runtime/libs/ifrt/serving_core_selector",
-        "@neptune//runtime/libs/mlir:dump_mlir_util",
         "@tsl//tsl/profiler/lib:traceme",
         "@xla//xla:shape_util",
         "@xla//xla:status_macros",
@@ -279,6 +271,14 @@ cc_library(
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/core/streaming",
+        "@xla_serving//runtime/core/streaming:utils",
+        "@xla_serving//runtime/interpreter:context",
+        "@xla_serving//runtime/interpreter:manifest_utils",
+        "@xla_serving//runtime/libs/ifrt:executable_build_utils",
+        "@xla_serving//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",
+        "@xla_serving//runtime/libs/ifrt/serving_core_selector",
+        "@xla_serving//runtime/libs/mlir:dump_mlir_util",
     ],
 )
 
@@ -288,8 +288,8 @@ cc_library(
     hdrs = ["host_buffer.h"],
     visibility = [
         ":core_users",
-        "@neptune//examples:__subpackages__",
-        "@neptune//runtime/interpreter:interpreter_users",
+        "@xla_serving//examples:__subpackages__",
+        "@xla_serving//runtime/interpreter:interpreter_users",
     ],
     deps = [
         ":allocator",
@@ -307,7 +307,6 @@ cc_library(
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
         "@eigen_archive//:eigen3",
-        "@neptune//protos/grpc:host_buffer_cc_proto",
         "@tsl//tsl/platform:tstring",
         "@xla//xla:util",
         "@xla//xla/python/ifrt",
@@ -316,6 +315,7 @@ cc_library(
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",
         "@xla//xla/tsl/platform:types",
+        "@xla_serving//protos/grpc:host_buffer_cc_proto",
     ],
 )
 
@@ -396,10 +396,10 @@ cc_library(
     srcs = ["flat_signature.cc"],
     hdrs = ["flat_signature.h"],
     visibility = [
-        "@neptune//runtime/interpreter:__subpackages__",
-        "@neptune//runtime/interpreter:interpreter_users",
-        "@neptune//runtime/kernel:__subpackages__",
-        "@neptune//runtime/tensorflow:__subpackages__",
+        "@xla_serving//runtime/interpreter:__subpackages__",
+        "@xla_serving//runtime/interpreter:interpreter_users",
+        "@xla_serving//runtime/kernel:__subpackages__",
+        "@xla_serving//runtime/tensorflow:__subpackages__",
     ],
     deps = [
         ":stablehlo_utils",
@@ -471,13 +471,13 @@ cc_library(
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/types:span",
         "@llvm-project//mlir:IR",
-        "@neptune//runtime/libs/ifrt:stablehlo_loader",
-        "@neptune//runtime/libs/mlir:dump_mlir_util",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/pjrt/proto:compile_options_proto_cc",
         "@xla//xla/python/ifrt",
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/libs/ifrt:stablehlo_loader",
+        "@xla_serving//runtime/libs/mlir:dump_mlir_util",
     ],
 )
 
@@ -541,10 +541,10 @@ cc_library(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/types:span",
         "@com_google_protobuf//:protobuf",
-        "@neptune//protos:manifest_cc_proto",
-        "@neptune//runtime/interpreter:manifest_utils",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//protos:manifest_cc_proto",
+        "@xla_serving//runtime/interpreter:manifest_utils",
     ],
 )
 
@@ -565,8 +565,8 @@ cc_library(
     hdrs = ["allocator.h"],
     visibility = [
         ":core_users",
-        "@neptune//runtime/core/batching:__subpackages__",
-        "@neptune//runtime/core/google:__subpackages__",
+        "@xla_serving//runtime/core/batching:__subpackages__",
+        "@xla_serving//runtime/core/google:__subpackages__",
     ],
 )
 
@@ -575,7 +575,7 @@ cc_library(
     hdrs = ["default_allocator.h"],
     visibility = [
         ":core_users",
-        "@neptune//runtime/core/batching:__subpackages__",
+        "@xla_serving//runtime/core/batching:__subpackages__",
     ],
     deps = [
         ":allocator",
@@ -588,7 +588,7 @@ cc_library(
     hdrs = ["thread_pool_interface.h"],
     visibility = [
         ":core_users",
-        "@neptune//runtime/tensorflow:__subpackages__",
+        "@xla_serving//runtime/tensorflow:__subpackages__",
     ],
     deps = [
         "@abseil-cpp//absl/base:nullability",
@@ -612,7 +612,7 @@ cc_library(
     name = "batched_h2d_transfer_executor",
     srcs = ["batched_h2d_transfer_executor.cc"],
     hdrs = ["batched_h2d_transfer_executor.h"],
-    visibility = ["@neptune//runtime:__subpackages__"],
+    visibility = ["@xla_serving//runtime:__subpackages__"],
     deps = [
         ":h2d_transfer_executor",
         ":host_buffer",

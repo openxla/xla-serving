@@ -2,8 +2,8 @@ load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(default_visibility = [
-    "@neptune//runtime/interpreter:__pkg__",
-    "@neptune//runtime/kernel/batching:__subpackages__",
+    "@xla_serving//runtime/interpreter:__pkg__",
+    "@xla_serving//runtime/kernel/batching:__subpackages__",
 ])
 
 cc_library(
@@ -30,9 +30,9 @@ cc_library(
         ":batch_scheduler",
         ":batch_stats",
         "@abseil-cpp//absl/status",
-        "@neptune//runtime/core:allocator",
-        "@neptune//runtime/core:default_allocator",
-        "@neptune//runtime/kernel/batching:batch_options_utils",
+        "@xla_serving//runtime/core:allocator",
+        "@xla_serving//runtime/core:default_allocator",
+        "@xla_serving//runtime/kernel/batching:batch_options_utils",
     ],
 )
 
@@ -117,9 +117,6 @@ cc_library(
         "@abseil-cpp//absl/strings:str_format",
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/time",
-        "@neptune//runtime/core:allocator",
-        "@neptune//runtime/core:default_allocator",
-        "@neptune//runtime/kernel/batching:batch_options_utils",
         "@tsl//tsl/platform:platform_port",
         "@tsl//tsl/platform:thread_annotations",
         "@tsl//tsl/profiler/lib:connected_traceme",
@@ -128,6 +125,9 @@ cc_library(
         "@xla//xla/tsl/platform:criticality",
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:errors",
+        "@xla_serving//runtime/core:allocator",
+        "@xla_serving//runtime/core:default_allocator",
+        "@xla_serving//runtime/kernel/batching:batch_options_utils",
     ],
 )
 
@@ -143,7 +143,7 @@ cc_library(
         "@abseil-cpp//absl/log:check",
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/time",
-        "@neptune//runtime/kernel/batching:batch_options_utils",
+        "@xla_serving//runtime/kernel/batching:batch_options_utils",
     ],
 )
 

@@ -17,7 +17,7 @@
 
 #include <optional>
 
-#include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
+#include "runtime/interpreter/interpreter_create_options.h"  // from @xla_serving
 #include "tensorflow/core/tfrt/saved_model/saved_model.h"  // from @org_tensorflow
 
 namespace xla_serving {

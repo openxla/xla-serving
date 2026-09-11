@@ -35,10 +35,10 @@
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/time/clock.h"  // from @abseil-cpp
-#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
-#include "runtime/core/batching/batch_scheduler_utils.h"  // from @neptune
-#include "runtime/core/batching/queue_base.h"  // from @neptune
-#include "runtime/core/batching/queue_options.h"  // from @neptune
+#include "runtime/core/batching/batch_scheduler.h"  // from @xla_serving
+#include "runtime/core/batching/batch_scheduler_utils.h"  // from @xla_serving
+#include "runtime/core/batching/queue_base.h"  // from @xla_serving
+#include "runtime/core/batching/queue_options.h"  // from @xla_serving
 #include "xla/tsl/platform/criticality.h"  // from @xla
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla

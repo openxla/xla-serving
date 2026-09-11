@@ -33,7 +33,6 @@ cc_library(
         "@abseil-cpp//absl/types:span",
         "@llvm-project//llvm:Support",
         "@llvm-project//mlir:IR",
-        "@neptune//runtime/core:host_buffer",
         "@stablehlo//:stablehlo_ops",
         "@tsl//tsl/platform:random",
         "@tsl//tsl/profiler/lib:traceme",
@@ -45,6 +44,7 @@ cc_library(
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:statusor",
         "@xla//xla/tsl/platform:threadpool_interface",
+        "@xla_serving//runtime/core:host_buffer",
     ],
 )
 
@@ -66,11 +66,11 @@ cc_library(
         "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:Support",
-        "@neptune//runtime/core:host_buffer",
-        "@neptune//runtime/libs/mlir:dump_mlir_util",
         "@stablehlo//:stablehlo_ops",
         "@xla//xla/python/ifrt",
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/libs/mlir:dump_mlir_util",
     ],
 )

@@ -19,8 +19,8 @@
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "protos/orchestration.pb.h"  // from @neptune
-#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
+#include "protos/orchestration.pb.h"  // from @xla_serving
+#include "runtime/core/batching/batch_scheduler.h"  // from @xla_serving
 #include "xla/tsl/platform/criticality.h"  // from @xla
 
 namespace xla_serving {

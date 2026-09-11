@@ -20,7 +20,7 @@
 #include <utility>
 
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "runtime/core/thread_pool_interface.h"  // from @neptune
+#include "runtime/core/thread_pool_interface.h"  // from @xla_serving
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
 namespace xla_serving {

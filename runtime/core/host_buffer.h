@@ -35,9 +35,9 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "Eigen/Core"
 #include "unsupported/Eigen/CXX11/Tensor"
-#include "protos/grpc/host_buffer.pb.h"  // from @neptune
-#include "runtime/core/allocator.h"  // from @neptune
-#include "runtime/core/default_allocator.h"  // from @neptune
+#include "protos/grpc/host_buffer.pb.h"  // from @xla_serving
+#include "runtime/core/allocator.h"  // from @xla_serving
+#include "runtime/core/default_allocator.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla

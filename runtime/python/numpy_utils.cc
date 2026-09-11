@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/python/numpy_utils.h"  // from @neptune
+#include "runtime/python/numpy_utils.h"  // from @xla_serving
 
 #include <Python.h>
 
@@ -31,9 +31,9 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "include/nanobind/nanobind.h"  // from @nanobind_bazel
-#include "runtime/core/allocator.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/tensorflow/utils/ifrt_tensor_utils.h"  // from @neptune
+#include "runtime/core/allocator.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/tensorflow/utils/ifrt_tensor_utils.h"  // from @xla_serving
 #include "numpy/ndarrayobject.h"
 #include "numpy/ndarraytypes.h"
 #include "xla/python/ifrt/dtype.h"  // from @xla

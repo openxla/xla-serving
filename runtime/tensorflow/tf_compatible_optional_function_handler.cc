@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/tensorflow/tf_compatible_optional_function_handler.h"  // from @neptune
+#include "runtime/tensorflow/tf_compatible_optional_function_handler.h"  // from @xla_serving
 
 #include <memory>
 #include <optional>
@@ -27,22 +27,22 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
-#include "protos/orchestration.pb.h"  // from @neptune
-#include "protos/tf_concrete_function_handle.pb.h"  // from @neptune
-#include "protos/type.pb.h"  // from @neptune
-#include "runtime/core/constants.h"  // from @neptune
-#include "runtime/core/flat_signature.h"  // from @neptune
-#include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
-#include "runtime/interpreter/manifest_utils.h"  // from @neptune
-#include "runtime/interpreter/optional_function_handler_factory.h"  // from @neptune
-#include "runtime/kernel/kernel.h"  // from @neptune
-#include "runtime/kernel/kernel_builder_constants.h"  // from @neptune
-#include "runtime/kernel/kernel_builder_context.h"  // from @neptune
-#include "runtime/tensorflow/kernel/kernel_builder_constants.h"  // from @neptune
-#include "runtime/tensorflow/tf_compatible_interpreter_create_options.h"  // from @neptune
-#include "runtime/tensorflow/tf_saved_model_runner.h"  // from @neptune
-#include "runtime/tensorflow/utils/common_utils.h"  // from @neptune
+#include "protos/manifest.pb.h"  // from @xla_serving
+#include "protos/orchestration.pb.h"  // from @xla_serving
+#include "protos/tf_concrete_function_handle.pb.h"  // from @xla_serving
+#include "protos/type.pb.h"  // from @xla_serving
+#include "runtime/core/constants.h"  // from @xla_serving
+#include "runtime/core/flat_signature.h"  // from @xla_serving
+#include "runtime/interpreter/interpreter_create_options.h"  // from @xla_serving
+#include "runtime/interpreter/manifest_utils.h"  // from @xla_serving
+#include "runtime/interpreter/optional_function_handler_factory.h"  // from @xla_serving
+#include "runtime/kernel/kernel.h"  // from @xla_serving
+#include "runtime/kernel/kernel_builder_constants.h"  // from @xla_serving
+#include "runtime/kernel/kernel_builder_context.h"  // from @xla_serving
+#include "runtime/tensorflow/kernel/kernel_builder_constants.h"  // from @xla_serving
+#include "runtime/tensorflow/tf_compatible_interpreter_create_options.h"  // from @xla_serving
+#include "runtime/tensorflow/tf_saved_model_runner.h"  // from @xla_serving
+#include "runtime/tensorflow/utils/common_utils.h"  // from @xla_serving
 #include "google/protobuf/repeated_ptr_field.h"
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla

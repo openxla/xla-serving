@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/serving/gcp/auth/utils.h"  // from @neptune
+#include "runtime/serving/gcp/auth/utils.h"  // from @xla_serving
 
 #include <memory>
 #include <string>

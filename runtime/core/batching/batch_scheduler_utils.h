@@ -20,8 +20,8 @@
 #include <vector>
 
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
-#include "runtime/core/batching/batch_stats.h"  // from @neptune
+#include "runtime/core/batching/batch_scheduler.h"  // from @xla_serving
+#include "runtime/core/batching/batch_stats.h"  // from @xla_serving
 
 namespace xla_serving {
 

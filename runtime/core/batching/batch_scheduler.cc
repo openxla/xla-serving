@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
+#include "runtime/core/batching/batch_scheduler.h"  // from @xla_serving
 
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp

@@ -20,8 +20,8 @@
 
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "data/processor/cc/core/composite_processor.h"  // from @neptune
-#include "runtime/kernel/kernel.h"  // from @neptune
+#include "data/processor/cc/core/composite_processor.h"  // from @xla_serving
+#include "runtime/kernel/kernel.h"  // from @xla_serving
 
 namespace xla_serving {
 namespace composite {

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/data_loader/default_data_loader.h"  // from @neptune
+#include "runtime/data_loader/default_data_loader.h"  // from @xla_serving
 
 #include <cstddef>
 #include <iterator>
@@ -35,16 +35,16 @@
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
-#include "runtime/core/constants.h"  // from @neptune
-#include "runtime/core/ifrt_device_utils.h"  // from @neptune
-#include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune
-#include "runtime/core/stablehlo_utils.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/data_loader/data_loader.h"  // from @neptune
-#include "runtime/data_loader/ocp_loader/checkpoint_loader.h"  // from @neptune
-#include "runtime/data_loader/ocp_loader/metadata_util.h"  // from @neptune
-#include "runtime/interpreter/manifest_utils.h"  // from @neptune
+#include "protos/manifest.pb.h"  // from @xla_serving
+#include "runtime/core/constants.h"  // from @xla_serving
+#include "runtime/core/ifrt_device_utils.h"  // from @xla_serving
+#include "runtime/core/ifrt_loaded_variable_registry.h"  // from @xla_serving
+#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/data_loader/data_loader.h"  // from @xla_serving
+#include "runtime/data_loader/ocp_loader/checkpoint_loader.h"  // from @xla_serving
+#include "runtime/data_loader/ocp_loader/metadata_util.h"  // from @xla_serving
+#include "runtime/interpreter/manifest_utils.h"  // from @xla_serving
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla

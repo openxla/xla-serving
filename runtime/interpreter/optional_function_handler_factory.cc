@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/interpreter/optional_function_handler_factory.h"  // from @neptune
+#include "runtime/interpreter/optional_function_handler_factory.h"  // from @xla_serving
 
 #include <memory>
 #include <string>
 
-#include "runtime/interpreter/optional_function_handler.h"  // from @neptune
+#include "runtime/interpreter/optional_function_handler.h"  // from @xla_serving
 #include "absl/base/no_destructor.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp

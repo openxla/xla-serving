@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/streaming/utils.h"  // from @neptune
+#include "runtime/core/streaming/utils.h"  // from @xla_serving
 
 #include <cstdint>
 #include <string>
@@ -40,8 +40,8 @@
 #include "mlir/include/mlir/IR/Types.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/Value.h"  // from @llvm-project
 #include "mlir/include/mlir/Support/LLVM.h"  // from @llvm-project
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/libs/mlir/dump_mlir_util.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/libs/mlir/dump_mlir_util.h"  // from @xla_serving
 #include "stablehlo/dialect/StablehloOps.h"  // from @stablehlo
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla

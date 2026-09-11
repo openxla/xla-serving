@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/kernel/batching/warmup.h"  // from @neptune
+#include "runtime/kernel/batching/warmup.h"  // from @xla_serving
 
 #include <cstdint>
 #include <memory>

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/stablehlo_runner.h"  // from @neptune
+#include "runtime/core/stablehlo_runner.h"  // from @xla_serving
 
 #include <atomic>
 #include <cstddef>
@@ -49,25 +49,25 @@
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/OperationSupport.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/OwningOpRef.h"  // from @llvm-project
-#include "runtime/core/device_buffer.h"  // from @neptune
-#include "runtime/core/h2d_transfer_executor.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/ifrt_device_utils.h"  // from @neptune
-#include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune
-#include "runtime/core/loaded_stablehlo.h"  // from @neptune
-#include "runtime/core/sharding_utils.h"  // from @neptune
-#include "runtime/core/stablehlo.h"  // from @neptune
-#include "runtime/core/stablehlo_optimizer.h"  // from @neptune
-#include "runtime/core/stablehlo_utils.h"  // from @neptune
-#include "runtime/core/streaming/stream.h"  // from @neptune
-#include "runtime/core/streaming/utils.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/interpreter/context.h"  // from @neptune
-#include "runtime/interpreter/manifest_utils.h"  // from @neptune
-#include "runtime/libs/ifrt/executable_build_utils.h"  // from @neptune
-#include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
-#include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @neptune
-#include "runtime/libs/mlir/dump_mlir_util.h"  // from @neptune
+#include "runtime/core/device_buffer.h"  // from @xla_serving
+#include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/ifrt_device_utils.h"  // from @xla_serving
+#include "runtime/core/ifrt_loaded_variable_registry.h"  // from @xla_serving
+#include "runtime/core/loaded_stablehlo.h"  // from @xla_serving
+#include "runtime/core/sharding_utils.h"  // from @xla_serving
+#include "runtime/core/stablehlo.h"  // from @xla_serving
+#include "runtime/core/stablehlo_optimizer.h"  // from @xla_serving
+#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
+#include "runtime/core/streaming/stream.h"  // from @xla_serving
+#include "runtime/core/streaming/utils.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/interpreter/context.h"  // from @xla_serving
+#include "runtime/interpreter/manifest_utils.h"  // from @xla_serving
+#include "runtime/libs/ifrt/executable_build_utils.h"  // from @xla_serving
+#include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @xla_serving
+#include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @xla_serving
+#include "runtime/libs/mlir/dump_mlir_util.h"  // from @xla_serving
 #include "google/protobuf/message.h"
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/layout.h"  // from @xla

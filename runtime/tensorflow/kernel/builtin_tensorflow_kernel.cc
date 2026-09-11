@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/tensorflow/kernel/builtin_tensorflow_kernel.h"  // from @neptune
+#include "runtime/tensorflow/kernel/builtin_tensorflow_kernel.h"  // from @xla_serving
 
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "runtime/kernel/kernel.h"  // from @neptune
-#include "runtime/tensorflow/kernel/tf_saved_model_function_runner_op.h"  // from @neptune
+#include "runtime/kernel/kernel.h"  // from @xla_serving
+#include "runtime/tensorflow/kernel/tf_saved_model_function_runner_op.h"  // from @xla_serving
 #include "xla/tsl/platform/errors.h"  // from @xla
 
 namespace xla_serving {

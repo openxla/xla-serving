@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/common_util.h"  // from @neptune
+#include "runtime/core/common_util.h"  // from @xla_serving
 
 #include <string>
 
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "runtime/core/constants.h"  // from @neptune
+#include "runtime/core/constants.h"  // from @xla_serving
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "tsl/platform/path.h"  // from @tsl

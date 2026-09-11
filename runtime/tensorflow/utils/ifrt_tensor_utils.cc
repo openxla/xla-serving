@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/tensorflow/utils/ifrt_tensor_utils.h"  // from @neptune
+#include "runtime/tensorflow/utils/ifrt_tensor_utils.h"  // from @xla_serving
 
 #include <cstdint>
 #include <numeric>

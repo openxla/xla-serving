@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/cpu_embedding/cc/array.h"  // from @neptune
+#include "data/cpu_embedding/cc/array.h"  // from @xla_serving
 
 #include <any>
 #include <cstdint>

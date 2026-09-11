@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/kernel/kernel.h"  // from @neptune
+#include "runtime/kernel/kernel.h"  // from @xla_serving
 
 #include <memory>
 #include <string>
@@ -28,9 +28,9 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/core/flat_signature.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/kernel/kernel_builder_context.h"  // from @neptune
+#include "runtime/core/flat_signature.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/kernel/kernel_builder_context.h"  // from @xla_serving
 #include "xla/pjrt/pjrt_future.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla

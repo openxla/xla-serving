@@ -22,7 +22,7 @@
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "unsupported/Eigen/CXX11/ThreadPool"
-#include "runtime/core/thread_pool_interface.h"  // from @neptune
+#include "runtime/core/thread_pool_interface.h"  // from @xla_serving
 #include "tensorflow/core/tfrt/runtime/work_queue_interface.h"  // from @org_tensorflow
 #include "include/tfrt/host_context/task_function.h"  // from @tf_runtime
 

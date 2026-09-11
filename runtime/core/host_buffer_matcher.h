@@ -16,7 +16,7 @@
 #define XLA_SERVING_RUNTIME_HOST_BUFFER_MATCHER_H_
 
 #include "gtest/gtest.h"
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 
 namespace xla_serving {
 

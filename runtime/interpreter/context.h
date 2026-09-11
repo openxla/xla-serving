@@ -24,10 +24,10 @@
 
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/stablehlo_utils.h"  // from @neptune
-#include "runtime/interpreter/clock.h"  // from @neptune
-#include "runtime/interpreter/run_options.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
+#include "runtime/interpreter/clock.h"  // from @xla_serving
+#include "runtime/interpreter/run_options.h"  // from @xla_serving
 
 namespace xla_serving {
 

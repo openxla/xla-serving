@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune
+#include "runtime/core/ifrt_loaded_variable_registry.h"  // from @xla_serving
 
 #include <string>
 #include <utility>

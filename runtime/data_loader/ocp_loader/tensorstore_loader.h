@@ -28,7 +28,7 @@
 #include "absl/time/time.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "nlohmann/json.hpp"  // from @nlohmann_json
-#include "runtime/data_loader/ocp_loader/common_types.h"  // from @neptune
+#include "runtime/data_loader/ocp_loader/common_types.h"  // from @xla_serving
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/memory.h"  // from @xla

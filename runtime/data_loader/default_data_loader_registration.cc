@@ -17,9 +17,9 @@
 
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
-#include "runtime/data_loader/data_loader.h"  // from @neptune
-#include "runtime/data_loader/default_data_loader.h"  // from @neptune
+#include "protos/manifest.pb.h"  // from @xla_serving
+#include "runtime/data_loader/data_loader.h"  // from @xla_serving
+#include "runtime/data_loader/default_data_loader.h"  // from @xla_serving
 
 namespace xla_serving {
 namespace {

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include "absl/log/check.h"  // from @abseil-cpp
-#include "runtime/kernel/builtin_kernel.h"  // from @neptune
-#include "runtime/kernel/kernel.h"  // from @neptune
+#include "runtime/kernel/builtin_kernel.h"  // from @xla_serving
+#include "runtime/kernel/kernel.h"  // from @xla_serving
 
 namespace xla_serving {
 namespace {

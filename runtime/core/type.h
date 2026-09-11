@@ -20,7 +20,7 @@
 #include <vector>
 
 #include "absl/container/btree_map.h"  // from @abseil-cpp
-#include "runtime/core/value.h"  // from @neptune
+#include "runtime/core/value.h"  // from @xla_serving
 
 namespace xla_serving::type {
 

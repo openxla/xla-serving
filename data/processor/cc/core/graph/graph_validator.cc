@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/processor/cc/core/graph/graph_validator.h"  // from @neptune
+#include "data/processor/cc/core/graph/graph_validator.h"  // from @xla_serving
 
 #include <cstddef>
 
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "xla/tsl/platform/status_macros.h"
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
-#include "data/processor/cc/core/graph/execution_graph.h"  // from @neptune
+#include "data/processor/cc/core/graph/execution_graph.h"  // from @xla_serving
 
 namespace neptune::data {
 namespace composite {

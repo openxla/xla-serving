@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/kernel/builtin_kernel.h"  // from @neptune
+#include "runtime/kernel/builtin_kernel.h"  // from @xla_serving
 
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "runtime/kernel/batching/batch_runner_op.h"  // from @neptune
-#include "runtime/kernel/identity.h"  // from @neptune
-#include "runtime/kernel/kernel.h"  // from @neptune
-#include "runtime/kernel/stablehlo_runner_op.h"  // from @neptune
+#include "runtime/kernel/batching/batch_runner_op.h"  // from @xla_serving
+#include "runtime/kernel/identity.h"  // from @xla_serving
+#include "runtime/kernel/kernel.h"  // from @xla_serving
+#include "runtime/kernel/stablehlo_runner_op.h"  // from @xla_serving
 #include "xla/tsl/platform/errors.h"  // from @xla
 
 namespace xla_serving {

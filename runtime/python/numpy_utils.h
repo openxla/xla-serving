@@ -15,9 +15,9 @@
 #ifndef XLA_SERVING_RUNTIME_PYTHON_NUMPY_UTILS_H_
 #define XLA_SERVING_RUNTIME_PYTHON_NUMPY_UTILS_H_
 
-#include "runtime/core/allocator.h"  // from @neptune
-#include "runtime/core/default_allocator.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/allocator.h"  // from @xla_serving
+#include "runtime/core/default_allocator.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/nb_numpy.h"  // from @xla
 #include "xla/tsl/python/lib/core/numpy.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla

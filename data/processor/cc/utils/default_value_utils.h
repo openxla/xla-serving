@@ -22,7 +22,7 @@
 #include "google/protobuf/any.pb.h"
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
-#include "data/processor/cc/utils/default_value.pb.h"  // from @neptune
+#include "data/processor/cc/utils/default_value.pb.h"  // from @xla_serving
 #include "tsl/platform/tstring.h"  // from @tsl
 
 namespace neptune::data {

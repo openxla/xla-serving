@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
+#include "runtime/kernel/batching/batch_options_utils.h"  // from @xla_serving
 
 #include <string>
 
@@ -20,8 +20,8 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "protos/orchestration.pb.h"  // from @neptune
-#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
+#include "protos/orchestration.pb.h"  // from @xla_serving
+#include "runtime/core/batching/batch_scheduler.h"  // from @xla_serving
 #include "xla/tsl/platform/criticality.h"  // from @xla
 
 namespace xla_serving {

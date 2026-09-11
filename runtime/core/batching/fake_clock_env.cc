@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/batching/fake_clock_env.h"  // from @neptune
+#include "runtime/core/batching/fake_clock_env.h"  // from @xla_serving
 
 #include <cstdint>
 

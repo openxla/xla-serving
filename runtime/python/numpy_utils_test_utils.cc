@@ -22,9 +22,9 @@
 #include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "include/nanobind/nanobind.h"  // from @nanobind_bazel
 #include "include/nanobind/nb_defs.h"  // from @nanobind_bazel
-#include "runtime/core/allocator.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/python/numpy_utils.h"  // from @neptune
+#include "runtime/core/allocator.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/python/numpy_utils.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/nb_numpy.h"  // from @xla

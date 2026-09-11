@@ -3,7 +3,7 @@ load("@pybind11_bazel//:build_defs.bzl", "pybind_extension", "pybind_library")
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
 package(default_visibility = [
-    "@neptune//data:neptune_data_internal",
+    "@xla_serving//data:neptune_data_internal",
 ])
 
 pybind_library(
@@ -12,26 +12,26 @@ pybind_library(
     deps = [
         "@abseil-cpp//absl/functional:any_invocable",
         "@abseil-cpp//absl/status",
-        "@neptune//data/resource_manager/cc:asset",
-        "@neptune//data/resource_manager/cc:resource",
         "@pybind11_abseil//pybind11_abseil:status_casters",
+        "@xla_serving//data/resource_manager/cc:asset",
+        "@xla_serving//data/resource_manager/cc:resource",
     ],
 )
 
 pybind_extension(
     name = "resource_manager_pybind",
     srcs = ["resource_manager_pybind.cc"],
-    dynamic_deps = ["@neptune//data:neptune_data_core"],
+    dynamic_deps = ["@xla_serving//data:neptune_data_core"],
     linkopts = ["-Wl,-rpath,$$ORIGIN/../.."],
     deps = [
         ":resource_pybind_lib",
         "@abseil-cpp//absl/strings",
-        "@neptune//data/resource_manager/cc:asset",
-        "@neptune//data/resource_manager/cc:resource",
-        "@neptune//data/resource_manager/cc:resource_manager",
-        "@neptune//data/resource_manager/proto:resource_manager_cc_proto",
         "@pybind11_abseil//pybind11_abseil:status_casters",
         "@pybind11_protobuf//pybind11_protobuf:native_proto_caster",
+        "@xla_serving//data/resource_manager/cc:asset",
+        "@xla_serving//data/resource_manager/cc:resource",
+        "@xla_serving//data/resource_manager/cc:resource_manager",
+        "@xla_serving//data/resource_manager/proto:resource_manager_cc_proto",
     ],
 )
 
@@ -47,7 +47,7 @@ py_library(
     data = ["resource_manager_pybind.pyi"],
     deps = [
         ":resource_manager_pybind",
-        "@neptune//data/resource_manager/proto:resource_manager_py_pb2",
+        "@xla_serving//data/resource_manager/proto:resource_manager_py_pb2",
     ],
 )
 
@@ -59,10 +59,10 @@ py_test(
         "@absl_py//absl/logging",
         "@absl_py//absl/testing:absltest",
         "@com_google_protobuf//:protobuf",
-        "@neptune//data/resource_manager/proto:resource_manager_py_pb2",
-        "@neptune//data/resource_manager/python/examples:another_concrete_resource_pybind",
-        "@neptune//data/resource_manager/python/examples:concrete_resource_pybind",
-        "@neptune//data/test_utils",
+        "@xla_serving//data/resource_manager/proto:resource_manager_py_pb2",
+        "@xla_serving//data/resource_manager/python/examples:another_concrete_resource_pybind",
+        "@xla_serving//data/resource_manager/python/examples:concrete_resource_pybind",
+        "@xla_serving//data/test_utils",
     ],
 )
 

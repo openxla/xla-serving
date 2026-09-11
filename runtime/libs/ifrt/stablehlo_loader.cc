@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/libs/ifrt/stablehlo_loader.h"  // from @neptune
+#include "runtime/libs/ifrt/stablehlo_loader.h"  // from @xla_serving
 
 #include <string>
 

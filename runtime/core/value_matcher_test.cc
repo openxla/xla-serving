@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/value_matcher.h"  // from @neptune
+#include "runtime/core/value_matcher.h"  // from @xla_serving
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "runtime/core/value.h"  // from @neptune
+#include "runtime/core/value.h"  // from @xla_serving
 
 namespace xla_serving {
 namespace {

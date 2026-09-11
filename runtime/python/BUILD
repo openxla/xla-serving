@@ -34,14 +34,6 @@ pybind_extension(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/strings:string_view",
         "@nanobind_bazel//:nanobind",
-        "@neptune//runtime/core:device_buffer",
-        "@neptune//runtime/core:host_buffer",
-        "@neptune//runtime/core:value",
-        "@neptune//runtime/interpreter",
-        "@neptune//runtime/interpreter:run_options",
-        "@neptune//runtime/kernel:kernel_io_data_type",
-        "@neptune//runtime/tensorflow:interpreter_tensorflow_support",  # buildcleaner: keep
-        "@neptune//runtime/tensorflow:tf_compatible_interpreter_create_options",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
         "@xla//xla:xla_data_proto_cc",
@@ -53,6 +45,14 @@ pybind_extension(
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:statusor",
         "@xla//xla/tsl/python/lib/core:numpy",
+        "@xla_serving//runtime/core:device_buffer",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/core:value",
+        "@xla_serving//runtime/interpreter",
+        "@xla_serving//runtime/interpreter:run_options",
+        "@xla_serving//runtime/kernel:kernel_io_data_type",
+        "@xla_serving//runtime/tensorflow:interpreter_tensorflow_support",  # buildcleaner: keep
+        "@xla_serving//runtime/tensorflow:tf_compatible_interpreter_create_options",
     ],
 )
 
@@ -135,10 +135,6 @@ cc_library(
         "@abseil-cpp//absl/strings:str_format",
         "@abseil-cpp//absl/types:span",
         "@nanobind_bazel//:nanobind",
-        "@neptune//runtime/core:allocator",
-        "@neptune//runtime/core:default_allocator",
-        "@neptune//runtime/core:host_buffer",
-        "@neptune//runtime/tensorflow/utils:ifrt_tensor_utils",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
         "@org_tensorflow//third_party/py/numpy:headers",
@@ -151,6 +147,10 @@ cc_library(
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",
         "@xla//xla/tsl/python/lib/core:numpy",
+        "@xla_serving//runtime/core:allocator",
+        "@xla_serving//runtime/core:default_allocator",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/tensorflow/utils:ifrt_tensor_utils",
     ],
 )
 

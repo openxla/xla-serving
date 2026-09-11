@@ -3,8 +3,8 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package(default_visibility = [
-    "@neptune//:__subpackages__",
-    "@neptune//data/cpu_embedding:__subpackages__",
+    "@xla_serving//:__subpackages__",
+    "@xla_serving//data/cpu_embedding:__subpackages__",
 ])
 
 cc_library(
@@ -98,7 +98,7 @@ cc_test(
         "@abseil-cpp//absl/status:status_matchers",
         "@abseil-cpp//absl/types:span",
         "@googletest//:gtest_main",
-        "@neptune//data/test_utils:status_macros",
+        "@xla_serving//data/test_utils:status_macros",
     ],
 )
 
@@ -117,7 +117,7 @@ cc_test(
         "@abseil-cpp//absl/types:span",
         "@eigen_archive//:eigen3",
         "@googletest//:gtest_main",
-        "@neptune//data/test_utils:status_macros",
+        "@xla_serving//data/test_utils:status_macros",
     ],
 )
 
@@ -133,7 +133,7 @@ cc_test(
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:status_matchers",
         "@googletest//:gtest_main",
-        "@neptune//data/test_utils:status_macros",
+        "@xla_serving//data/test_utils:status_macros",
     ],
 )
 
@@ -153,7 +153,7 @@ cc_test(
         "@abseil-cpp//absl/types:span",
         "@eigen_archive//:eigen3",
         "@googletest//:gtest_main",
-        "@neptune//data/test_utils:status_macros",
+        "@xla_serving//data/test_utils:status_macros",
     ],
 )
 

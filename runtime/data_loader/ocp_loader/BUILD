@@ -2,7 +2,7 @@ load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(default_visibility = [
-    "@neptune//:__subpackages__",
+    "@xla_serving//:__subpackages__",
 ])
 
 cc_library(

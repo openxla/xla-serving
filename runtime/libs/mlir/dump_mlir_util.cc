@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/libs/mlir/dump_mlir_util.h"  // from @neptune
+#include "runtime/libs/mlir/dump_mlir_util.h"  // from @xla_serving
 
 #include <cstdint>
 #include <cstdio>

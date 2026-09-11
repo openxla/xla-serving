@@ -25,8 +25,8 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
-#include "runtime/core/stablehlo_utils.h"  // from @neptune
+#include "protos/manifest.pb.h"  // from @xla_serving
+#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
 #include "xla/xla_data.pb.h"  // from @xla
 
 namespace xla_serving {

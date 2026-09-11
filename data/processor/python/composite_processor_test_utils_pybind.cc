@@ -16,9 +16,9 @@
 #include <thread>
 #include <vector>
 
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/cc/utils/buffer_utils.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/cc/utils/buffer_utils.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "include/pybind11/gil.h"  // from @pybind11_bazel
 #include "include/pybind11/numpy.h"  // from @pybind11_bazel
 #include "include/pybind11/pybind11.h"  // from @pybind11_bazel

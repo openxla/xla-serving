@@ -34,15 +34,15 @@
 #include "include/nanobind/stl/string_view.h"  // from @nanobind_bazel  // IWYU pragma: keep
 #include "include/nanobind/stl/unordered_map.h"  // from @nanobind_bazel  // IWYU pragma: keep
 #include "include/nanobind/stl/vector.h"  // from @nanobind_bazel  // IWYU pragma: keep
-#include "runtime/core/device_buffer.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/interpreter/interpreter.h"  // from @neptune
-#include "runtime/interpreter/run_options.h"  // from @neptune
-#include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
-#include "runtime/python/ifrt_client_factory.h"  // from @neptune
-#include "runtime/python/numpy_utils.h"  // from @neptune
-#include "runtime/tensorflow/tf_compatible_interpreter_create_options.h"  // from @neptune
+#include "runtime/core/device_buffer.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/interpreter/interpreter.h"  // from @xla_serving
+#include "runtime/interpreter/run_options.h"  // from @xla_serving
+#include "runtime/kernel/kernel_io_data_type.h"  // from @xla_serving
+#include "runtime/python/ifrt_client_factory.h"  // from @xla_serving
+#include "runtime/python/numpy_utils.h"  // from @xla_serving
+#include "runtime/tensorflow/tf_compatible_interpreter_create_options.h"  // from @xla_serving
 #include "xla/pjrt/plugin/xla_cpu/cpu_client_options.h"  // from @xla
 #include "xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla

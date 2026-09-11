@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/python/ifrt_client_factory.h"  // from @neptune
+#include "runtime/python/ifrt_client_factory.h"  // from @xla_serving
 
 #include <memory>
 #include <string>

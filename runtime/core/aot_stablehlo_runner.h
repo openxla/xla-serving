@@ -21,8 +21,8 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/core/stablehlo.h"  // from @neptune
-#include "runtime/core/stablehlo_runner.h"  // from @neptune
+#include "runtime/core/stablehlo.h"  // from @xla_serving
+#include "runtime/core/stablehlo_runner.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/executable.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla

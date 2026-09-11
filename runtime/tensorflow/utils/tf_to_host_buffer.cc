@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/tensorflow/utils/tf_to_host_buffer.h"  // from @neptune
+#include "runtime/tensorflow/utils/tf_to_host_buffer.h"  // from @xla_serving
 
 #include <cstddef>
 #include <cstdint>
@@ -26,10 +26,10 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
-#include "runtime/tensorflow/utils/ifrt_tensor_utils.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/kernel/kernel_io_data_type.h"  // from @xla_serving
+#include "runtime/tensorflow/utils/ifrt_tensor_utils.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla

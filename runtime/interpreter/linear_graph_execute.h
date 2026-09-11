@@ -20,13 +20,13 @@
 #include <string>
 #include <vector>
 
-#include "runtime/interpreter/context.h"  // from @neptune
+#include "runtime/interpreter/context.h"  // from @xla_serving
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/kernel/kernel.h"  // from @neptune
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/kernel/kernel.h"  // from @xla_serving
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/data_loader/ocp_loader/common_types.h"  // from @neptune
+#include "runtime/data_loader/ocp_loader/common_types.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 

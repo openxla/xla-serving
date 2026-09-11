@@ -35,8 +35,8 @@ proto_library(
     deps = [
         ":model_proto",
         "@com_google_protobuf//:any_proto",
-        "@neptune//protos:orchestration_proto",
-        "@neptune//protos:type_proto",
+        "@xla_serving//protos:orchestration_proto",
+        "@xla_serving//protos:type_proto",
     ],
 )
 

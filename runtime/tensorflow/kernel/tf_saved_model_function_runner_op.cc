@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/tensorflow/kernel/tf_saved_model_function_runner_op.h"  // from @neptune
+#include "runtime/tensorflow/kernel/tf_saved_model_function_runner_op.h"  // from @xla_serving
 
 #include <algorithm>
 #include <memory>
@@ -30,15 +30,15 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/core/flat_signature.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/core/value_utils.h"  // from @neptune
-#include "runtime/kernel/kernel.h"  // from @neptune
-#include "runtime/kernel/kernel_builder_context.h"  // from @neptune
-#include "runtime/tensorflow/kernel/kernel_builder_constants.h"  // from @neptune
-#include "runtime/tensorflow/tf_saved_model_runner.h"  // from @neptune
-#include "runtime/tensorflow/utils/tf_to_host_buffer.h"  // from @neptune
+#include "runtime/core/flat_signature.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/core/value_utils.h"  // from @xla_serving
+#include "runtime/kernel/kernel.h"  // from @xla_serving
+#include "runtime/kernel/kernel_builder_context.h"  // from @xla_serving
+#include "runtime/tensorflow/kernel/kernel_builder_constants.h"  // from @xla_serving
+#include "runtime/tensorflow/tf_saved_model_runner.h"  // from @xla_serving
+#include "runtime/tensorflow/utils/tf_to_host_buffer.h"  // from @xla_serving
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "tensorflow/core/framework/tensor.h"  // from @org_tensorflow

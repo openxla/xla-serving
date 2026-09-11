@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/data_loader/data_loader.h"  // from @neptune
+#include "runtime/data_loader/data_loader.h"  // from @xla_serving
 
 #include <memory>
 #include <utility>
@@ -23,7 +23,7 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
+#include "protos/manifest.pb.h"  // from @xla_serving
 
 namespace xla_serving {
 

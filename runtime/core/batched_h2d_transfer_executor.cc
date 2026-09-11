@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/batched_h2d_transfer_executor.h"  // from @neptune
+#include "runtime/core/batched_h2d_transfer_executor.h"  // from @xla_serving
 
 #include <memory>
 #include <utility>
@@ -26,9 +26,9 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "xla/pjrt/pjrt_layout.h"  // from @xla
 #include "xla/python/ifrt/rtti.h"  // from @xla
-#include "runtime/core/h2d_transfer_executor.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/sharding_utils.h"  // from @neptune
+#include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/sharding_utils.h"  // from @xla_serving
 #include "xla/literal.h"  // from @xla
 #include "xla/pjrt/pjrt_client.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/serving/gcp/server/ifrt_client_creator.h"  // from @neptune
+#include "runtime/serving/gcp/server/ifrt_client_creator.h"  // from @xla_serving
 
 #include <memory>
 #include <utility>

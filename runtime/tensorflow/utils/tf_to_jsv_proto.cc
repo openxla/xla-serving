@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/tensorflow/utils/tf_to_jsv_proto.h"  // from @neptune
+#include "runtime/tensorflow/utils/tf_to_jsv_proto.h"  // from @xla_serving
 
 #include <string>
 #include <utility>
@@ -20,10 +20,10 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
-#include "protos/grpc/host_buffer.pb.h"  // from @neptune
-#include "protos/grpc/model.pb.h"  // from @neptune
-#include "protos/grpc/predict.pb.h"  // from @neptune
-#include "runtime/tensorflow/utils/ifrt_tensor_utils.h"  // from @neptune
+#include "protos/grpc/host_buffer.pb.h"  // from @xla_serving
+#include "protos/grpc/model.pb.h"  // from @xla_serving
+#include "protos/grpc/predict.pb.h"  // from @xla_serving
+#include "runtime/tensorflow/utils/ifrt_tensor_utils.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.pb.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "tensorflow/core/framework/tensor.h"  // from @org_tensorflow

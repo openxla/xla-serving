@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/cpu_embedding/cc/compute_activations.h"  // from @neptune
+#include "data/cpu_embedding/cc/compute_activations.h"  // from @xla_serving
 
 #include <algorithm>
 #include <cmath>
@@ -26,9 +26,9 @@
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "Eigen/Core"
-#include "data/cpu_embedding/cc/array.h"  // from @neptune
-#include "data/cpu_embedding/cc/embedding_table.h"  // from @neptune
-#include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @neptune
+#include "data/cpu_embedding/cc/array.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/embedding_table.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @xla_serving
 
 namespace neptune::data::cpu_embedding {
 namespace {

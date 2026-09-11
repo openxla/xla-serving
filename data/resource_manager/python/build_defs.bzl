@@ -22,8 +22,8 @@ def resource_pybind_library(name, srcs = [], hdrs = [], deps = [], **kwargs):
         name = name + "_gen_cc",
         srcs = all_inputs,
         outs = [cc_file],
-        tools = ["@neptune//data/resource_manager/python:generate_pybind"],
-        cmd = "$(location @neptune//data/resource_manager/python:generate_pybind) $(location " + cc_file + ") " + name + " $(SRCS)",
+        tools = ["@xla_serving//data/resource_manager/python:generate_pybind"],
+        cmd = "$(location @xla_serving//data/resource_manager/python:generate_pybind) $(location " + cc_file + ") " + name + " $(SRCS)",
     )
 
     pybind_extension(
@@ -31,11 +31,11 @@ def resource_pybind_library(name, srcs = [], hdrs = [], deps = [], **kwargs):
         srcs = [cc_file],
         
         deps = deps + [
-            "@neptune//data/resource_manager/cc:resource",
-            "@neptune//data/resource_manager/python:resource_pybind_lib",
+            "@xla_serving//data/resource_manager/cc:resource",
+            "@xla_serving//data/resource_manager/python:resource_pybind_lib",
             "@pybind11_abseil//pybind11_abseil:status_casters",
             "@pybind11_protobuf//pybind11_protobuf:native_proto_caster",
-            "@neptune//data/resource_manager/proto:resource_manager_cc_proto",
+            "@xla_serving//data/resource_manager/proto:resource_manager_cc_proto",
         ],
         
         **kwargs

@@ -16,9 +16,9 @@
 #define XLA_SERVING_RUNTIME_TENSORFLOW_UTILS_TF_TO_HOST_BUFFER_H_
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/kernel/kernel_io_data_type.h"  // from @xla_serving
 #include "tensorflow/core/framework/tensor.h"  // from @org_tensorflow
 #include "tensorflow/core/framework/tensor_shape.h"  // from @org_tensorflow
 #include "tensorflow/core/framework/types.pb.h"  // from @org_tensorflow

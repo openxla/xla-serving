@@ -24,7 +24,7 @@
 #include <vector>
 
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "data/cpu_embedding/cc/array.h"  // from @neptune
+#include "data/cpu_embedding/cc/array.h"  // from @xla_serving
 #include "include/pybind11/numpy.h"  // from @pybind11_bazel
 #include "include/pybind11/pybind11.h"  // from @pybind11_bazel
 

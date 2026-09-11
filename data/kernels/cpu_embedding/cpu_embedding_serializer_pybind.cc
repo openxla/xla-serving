@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/cpu_embedding/python/array_caster.h"  // from @neptune
-#include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @neptune
-#include "data/kernels/cpu_embedding/cpu_embedding_serializer.h"  // from @neptune
+#include "data/cpu_embedding/python/array_caster.h"  // from @xla_serving
+#include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @xla_serving
+#include "data/kernels/cpu_embedding/cpu_embedding_serializer.h"  // from @xla_serving
 #include "include/pybind11/pybind11.h"  // from @pybind11_bazel
 #include "include/pybind11/stl.h"  // from @pybind11_bazel
 #include "pybind11_abseil/absl_casters.h"  // from @pybind11_abseil

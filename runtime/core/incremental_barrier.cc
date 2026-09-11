@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/incremental_barrier.h"  // from @neptune
+#include "runtime/core/incremental_barrier.h"  // from @xla_serving
 
 #include <atomic>
 #include <utility>

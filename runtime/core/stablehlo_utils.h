@@ -27,7 +27,7 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
-#include "runtime/libs/mlir/utils.h"  // from @neptune
+#include "runtime/libs/mlir/utils.h"  // from @xla_serving
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/layout.h"  // from @xla
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla

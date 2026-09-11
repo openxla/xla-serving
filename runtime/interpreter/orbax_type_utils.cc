@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/interpreter/orbax_type_utils.h"  // from @neptune
+#include "runtime/interpreter/orbax_type_utils.h"  // from @xla_serving
 
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
-#include "protos/type.pb.h"  // from @neptune
+#include "protos/type.pb.h"  // from @xla_serving
 #include "xla/xla_data.pb.h"  // from @xla
 
 namespace xla_serving {

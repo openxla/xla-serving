@@ -21,8 +21,8 @@
 
 #include "absl/functional/any_invocable.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "data/resource_manager/cc/asset.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
+#include "data/resource_manager/cc/asset.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
 #include "include/pybind11/pybind11.h"  // from @pybind11_bazel
 #include "include/pybind11/stl.h"  // from @pybind11_bazel
 #include "include/pybind11/trampoline_self_life_support.h"  // from @pybind11_bazel

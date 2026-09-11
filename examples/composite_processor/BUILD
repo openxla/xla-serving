@@ -1,9 +1,9 @@
-load("@neptune//data/processor/python:build_defs.bzl", "transform_pybind_library")
-load("@neptune//data/resource_manager/python:build_defs.bzl", "resource_pybind_library")
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
+load("@xla_serving//data/processor/python:build_defs.bzl", "transform_pybind_library")
+load("@xla_serving//data/resource_manager/python:build_defs.bzl", "resource_pybind_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -14,7 +14,7 @@ cc_library(
     deps = [
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/strings",
-        "@neptune//data/resource_manager/cc:resource",
+        "@xla_serving//data/resource_manager/cc:resource",
     ],
     alwayslink = True,
 )
@@ -24,7 +24,7 @@ resource_pybind_library(
     testonly = 1,
     srcs = ["int_resource.cc"],
     hdrs = ["int_resource.h"],
-    dynamic_deps = ["@neptune//data:neptune_data_test_core"],
+    dynamic_deps = ["@xla_serving//data:neptune_data_test_core"],
     linkopts = ["-Wl,-rpath,$$ORIGIN/../../../neptune_data_test:$$ORIGIN/../../../neptune_data"],
     deps = [":int_resource"],
 )
@@ -40,14 +40,14 @@ cc_library(
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/types:span",
-        "@neptune//data/processor/cc/api:registry",
-        "@neptune//data/processor/cc/core:transform",
-        "@neptune//data/processor/proto:transform_config_cc_proto",
-        "@neptune//data/resource_manager/cc:resource",
-        "@neptune//data/resource_manager/cc:resource_manager",
-        "@neptune//data/resource_manager/proto:resource_manager_cc_proto",
-        "@neptune//runtime/core:host_buffer",
         "@xla//xla/python/ifrt",
+        "@xla_serving//data/processor/cc/api:registry",
+        "@xla_serving//data/processor/cc/core:transform",
+        "@xla_serving//data/processor/proto:transform_config_cc_proto",
+        "@xla_serving//data/resource_manager/cc:resource",
+        "@xla_serving//data/resource_manager/cc:resource_manager",
+        "@xla_serving//data/resource_manager/proto:resource_manager_cc_proto",
+        "@xla_serving//runtime/core:host_buffer",
     ],
     alwayslink = True,
 )
@@ -57,7 +57,7 @@ transform_pybind_library(
     testonly = 1,
     srcs = ["add_int_from_resource_transform.cc"],
     hdrs = ["add_int_from_resource_transform.h"],
-    dynamic_deps = ["@neptune//data:neptune_data_test_core"],
+    dynamic_deps = ["@xla_serving//data:neptune_data_test_core"],
     linkopts = ["-Wl,-rpath,$$ORIGIN/../../../neptune_data_test:$$ORIGIN/../../../neptune_data"],
     deps = [":add_int_from_resource_transform"],
 )
@@ -69,11 +69,11 @@ cc_library(
     deps = [
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
-        "@neptune//data/processor/cc/api:registry",
-        "@neptune//data/processor/cc/core:transform",
-        "@neptune//data/processor/proto:transform_config_cc_proto",
-        "@neptune//runtime/core:host_buffer",
         "@xla//xla/python/ifrt",
+        "@xla_serving//data/processor/cc/api:registry",
+        "@xla_serving//data/processor/cc/core:transform",
+        "@xla_serving//data/processor/proto:transform_config_cc_proto",
+        "@xla_serving//runtime/core:host_buffer",
     ],
     alwayslink = True,
 )
@@ -83,14 +83,14 @@ transform_pybind_library(
     testonly = 1,
     srcs = ["add_two_input_buffers_transform.cc"],
     hdrs = ["add_two_input_buffers_transform.h"],
-    dynamic_deps = ["@neptune//data:neptune_data_test_core"],
+    dynamic_deps = ["@xla_serving//data:neptune_data_test_core"],
     linkopts = ["-Wl,-rpath,$$ORIGIN/../../../neptune_data_test:$$ORIGIN/../../../neptune_data"],
     deps = [":add_two_input_buffers_transform"],
 )
 
 cc_library(
     name = "example_transforms_and_resources",
-    visibility = ["@neptune//:__subpackages__"],
+    visibility = ["@xla_serving//:__subpackages__"],
     deps = [
         ":add_int_from_resource_transform",
         ":add_two_input_buffers_transform",
@@ -101,7 +101,7 @@ cc_library(
 
 cc_library(
     name = "composite_processor_example_support",
-    visibility = ["@neptune//:__subpackages__"],
+    visibility = ["@xla_serving//:__subpackages__"],
     deps = [":example_transforms_and_resources"],
     alwayslink = True,
 )
@@ -114,13 +114,13 @@ py_library(
         ":add_int_from_resource_transform_pybind",
         ":add_two_input_buffers_transform_pybind",
         ":int_resource_pybind",
-        "@neptune//data/resource_manager/python:resource_manager",
-        "@neptune//protos:orchestration_py_pb2",
-        "@neptune//xla_saved_model/_src/core:typing",
-        "@neptune//xla_saved_model/_src/export:jax_model",
-        "@neptune//xla_saved_model/_src/export:main_lib",
-        "@neptune//xla_saved_model/_src/export:serving_config",
-        "@neptune_pypi//jax",
+        "@xla_serving//data/resource_manager/python:resource_manager",
+        "@xla_serving//protos:orchestration_py_pb2",
+        "@xla_serving//xla_saved_model/_src/core:typing",
+        "@xla_serving//xla_saved_model/_src/export:jax_model",
+        "@xla_serving//xla_saved_model/_src/export:main_lib",
+        "@xla_serving//xla_saved_model/_src/export:serving_config",
+        "@xla_serving_pypi//jax",
     ],
 )
 
@@ -131,8 +131,8 @@ py_test(
         ":export",
         "@absl_py//absl/logging",
         "@absl_py//absl/testing:absltest",
-        "@neptune//runtime/python:model_runner",  # buildcleaner: keep
-        "@neptune_pypi//numpy",
+        "@xla_serving//runtime/python:model_runner",  # buildcleaner: keep
+        "@xla_serving_pypi//numpy",
     ],
 )
 
@@ -157,8 +157,8 @@ cc_test(
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
         "@googletest//:gtest_main",
-        "@neptune//data/resource_manager/cc:asset",
-        "@neptune//runtime/core:host_buffer",
         "@xla//xla/python/ifrt",
+        "@xla_serving//data/resource_manager/cc:asset",
+        "@xla_serving//runtime/core:host_buffer",
     ],
 )

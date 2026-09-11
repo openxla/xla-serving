@@ -6,8 +6,8 @@ cc_library(
     srcs = ["utils.cc"],
     hdrs = ["utils.h"],
     visibility = [
-        "@neptune//examples:__subpackages__",
-        "@neptune//runtime/serving/gcp:__subpackages__",
+        "@xla_serving//examples:__subpackages__",
+        "@xla_serving//runtime/serving/gcp:__subpackages__",
     ],
     deps = [
         "@abseil-cpp//absl/log",

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/serving/gcp/server/orbax_callback_grpc_server.h"  // from @neptune
+#include "runtime/serving/gcp/server/orbax_callback_grpc_server.h"  // from @xla_serving
 
 #include <cstdint>
 #include <memory>
@@ -33,15 +33,15 @@
 #include "include/grpcpp/server_context.h"  // from @grpc
 #include "include/grpcpp/support/server_callback.h"  // from @grpc
 #include "include/grpcpp/support/status.h"  // from @grpc
-#include "protos/grpc/host_buffer.pb.h"  // from @neptune
-#include "protos/grpc/model.pb.h"  // from @neptune
-#include "protos/grpc/prediction_log.pb.h"  // from @neptune
-#include "protos/grpc/prediction_service.pb.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/interpreter/interpreter.h"  // from @neptune
-#include "runtime/interpreter/run_options.h"  // from @neptune
-#include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
+#include "protos/grpc/host_buffer.pb.h"  // from @xla_serving
+#include "protos/grpc/model.pb.h"  // from @xla_serving
+#include "protos/grpc/prediction_log.pb.h"  // from @xla_serving
+#include "protos/grpc/prediction_service.pb.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/interpreter/interpreter.h"  // from @xla_serving
+#include "runtime/interpreter/run_options.h"  // from @xla_serving
+#include "runtime/kernel/kernel_io_data_type.h"  // from @xla_serving
 #include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 #include "google/protobuf/util/delimited_message_util.h"
 #include "xla/tsl/lib/monitoring/counter.h"  // from @xla
@@ -49,14 +49,14 @@
 #include "xla/tsl/platform/file_system.h"  // from @xla
 #include "tsl/platform/cpu_info.h"  // from @tsl
 #if ENABLE_TF == 1
-  #include "runtime/tensorflow/tf_compatible_interpreter_create_options.h"  // from @neptune
+  #include "runtime/tensorflow/tf_compatible_interpreter_create_options.h"  // from @xla_serving
 #else
-  #include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
+  #include "runtime/interpreter/interpreter_create_options.h"  // from @xla_serving
 #endif
-#include "runtime/serving/gcp/server/flags.h"  // from @neptune
-#include "runtime/serving/gcp/server/grpc_status_utils.h"  // from @neptune
-#include "runtime/serving/gcp/server/ifrt_client_creator.h"  // from @neptune
-#include "runtime/tensorflow/utils/tf_to_host_buffer.h"  // from @neptune
+#include "runtime/serving/gcp/server/flags.h"  // from @xla_serving
+#include "runtime/serving/gcp/server/grpc_status_utils.h"  // from @xla_serving
+#include "runtime/serving/gcp/server/ifrt_client_creator.h"  // from @xla_serving
+#include "runtime/tensorflow/utils/tf_to_host_buffer.h"  // from @xla_serving
 #include "xla/pjrt/pjrt_api.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla

@@ -3,7 +3,7 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package(default_visibility = [
-    "@neptune//data:neptune_data_internal",
+    "@xla_serving//data:neptune_data_internal",
 ])
 
 cc_library(
@@ -66,7 +66,7 @@ cc_test(
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:status_matchers",
         "@googletest//:gtest_main",
-        "@neptune//data/test_utils:status_macros",
+        "@xla_serving//data/test_utils:status_macros",
     ],
 )
 
@@ -90,8 +90,8 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/synchronization",
-        "@neptune//data/resource_manager/proto:resource_manager_cc_proto",
         "@xla//xla/tsl/platform:status_macros",
+        "@xla_serving//data/resource_manager/proto:resource_manager_cc_proto",
     ],
 )
 
@@ -108,7 +108,7 @@ cc_test(
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:status_matchers",
         "@googletest//:gtest_main",
-        "@neptune//data/test_utils:status_macros",
+        "@xla_serving//data/test_utils:status_macros",
     ],
 )
 
@@ -128,8 +128,8 @@ cc_library(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/types:span",
-        "@neptune//data/resource_manager/proto:resource_manager_cc_proto",
         "@xla//xla/tsl/platform:status_macros",
+        "@xla_serving//data/resource_manager/proto:resource_manager_cc_proto",
     ],
 )
 
@@ -150,8 +150,8 @@ cc_test(
         "@com_google_protobuf//:differencer",
         "@com_google_protobuf//:protobuf",
         "@googletest//:gtest_main",
-        "@neptune//data/resource_manager/proto:resource_manager_cc_proto",
-        "@neptune//data/test_utils:proto_matchers",
-        "@neptune//data/test_utils:status_macros",
+        "@xla_serving//data/resource_manager/proto:resource_manager_cc_proto",
+        "@xla_serving//data/test_utils:proto_matchers",
+        "@xla_serving//data/test_utils:status_macros",
     ],
 )

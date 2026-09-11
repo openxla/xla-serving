@@ -20,7 +20,7 @@
 #include <new>
 
 #include "absl/base/no_destructor.h"  // from @abseil-cpp
-#include "runtime/core/allocator.h"  // from @neptune
+#include "runtime/core/allocator.h"  // from @xla_serving
 
 namespace xla_serving {
 

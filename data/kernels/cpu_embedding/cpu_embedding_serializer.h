@@ -18,8 +18,8 @@
 #include <string>
 #include <vector>
 
-#include "data/cpu_embedding/cc/array.h"  // from @neptune
-#include "data/resource_manager/cc/asset.h"  // from @neptune
+#include "data/cpu_embedding/cc/array.h"  // from @xla_serving
+#include "data/resource_manager/cc/asset.h"  // from @xla_serving
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp

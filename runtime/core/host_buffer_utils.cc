@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/host_buffer_utils.h"  // from @neptune
+#include "runtime/core/host_buffer_utils.h"  // from @xla_serving
 
 #include <cstddef>
 #include <cstdint>

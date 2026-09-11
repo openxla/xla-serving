@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/interpreter/manifest_utils.h"  // from @neptune
+#include "runtime/interpreter/manifest_utils.h"  // from @xla_serving
 
 #include <algorithm>
 #include <cstddef>
@@ -37,15 +37,15 @@
 #include "absl/strings/strip.h"  // from @abseil-cpp
 #include "absl/strings/substitute.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
-#include "protos/orchestration.pb.h"  // from @neptune
-#include "protos/type.pb.h"  // from @neptune
-#include "runtime/core/constants.h"  // from @neptune
-#include "runtime/core/flat_signature.h"  // from @neptune
-#include "runtime/core/stablehlo_utils.h"  // from @neptune
-#include "runtime/core/type.h"  // from @neptune
-#include "runtime/interpreter/orbax_type_utils.h"  // from @neptune
-#include "runtime/kernel/kernel_builder_constants.h"  // from @neptune
+#include "protos/manifest.pb.h"  // from @xla_serving
+#include "protos/orchestration.pb.h"  // from @xla_serving
+#include "protos/type.pb.h"  // from @xla_serving
+#include "runtime/core/constants.h"  // from @xla_serving
+#include "runtime/core/flat_signature.h"  // from @xla_serving
+#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
+#include "runtime/core/type.h"  // from @xla_serving
+#include "runtime/interpreter/orbax_type_utils.h"  // from @xla_serving
+#include "runtime/kernel/kernel_builder_constants.h"  // from @xla_serving
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "google/protobuf/util/message_differencer.h"

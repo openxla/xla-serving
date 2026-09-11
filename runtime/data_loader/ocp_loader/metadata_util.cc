@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/data_loader/ocp_loader/metadata_util.h"  // from @neptune
+#include "runtime/data_loader/ocp_loader/metadata_util.h"  // from @xla_serving
 
 #include <string>
 #include <vector>

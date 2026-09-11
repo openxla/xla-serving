@@ -16,8 +16,8 @@
 #define XLA_SERVING_DATA_PROCESSOR_CC_API_TYPE_CONVERTER_H_
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
-#include "data/processor/cc/api/type_info.h"  // from @neptune
-#include "data/processor/cc/api/value.h"  // from @neptune
+#include "data/processor/cc/api/type_info.h"  // from @xla_serving
+#include "data/processor/cc/api/value.h"  // from @xla_serving
 
 namespace neptune::data {
 namespace composite {

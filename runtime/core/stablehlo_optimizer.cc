@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/stablehlo_optimizer.h"  // from @neptune
+#include "runtime/core/stablehlo_optimizer.h"  // from @xla_serving
 
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project

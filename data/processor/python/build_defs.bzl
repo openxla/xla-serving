@@ -25,8 +25,8 @@ def transform_pybind_library(name, srcs = [], hdrs = [], deps = [], use_pytype =
         name = name + "_gen_cc",
         srcs = all_inputs,
         outs = [cc_file],
-        tools = ["@neptune//data/processor/python:generate_pybind"],
-        cmd = "$(location @neptune//data/processor/python:generate_pybind) $(location " + cc_file + ") " + name + " $(SRCS)",
+        tools = ["@xla_serving//data/processor/python:generate_pybind"],
+        cmd = "$(location @xla_serving//data/processor/python:generate_pybind) $(location " + cc_file + ") " + name + " $(SRCS)",
         testonly = kwargs.get("testonly", False),
     )
 
@@ -36,8 +36,8 @@ def transform_pybind_library(name, srcs = [], hdrs = [], deps = [], use_pytype =
             name = name + "_gen_pyi",
             srcs = all_inputs,
             outs = [pyi_file],
-            tools = ["@neptune//data/processor/python:generate_pybind"],
-            cmd = "$(location @neptune//data/processor/python:generate_pybind) $(location " + pyi_file + ") " + name + " $(SRCS)",
+            tools = ["@xla_serving//data/processor/python:generate_pybind"],
+            cmd = "$(location @xla_serving//data/processor/python:generate_pybind) $(location " + pyi_file + ") " + name + " $(SRCS)",
             testonly = kwargs.get("testonly", False),
         )
 
@@ -47,11 +47,11 @@ def transform_pybind_library(name, srcs = [], hdrs = [], deps = [], use_pytype =
             
             
             deps = deps + [
-                "@neptune//data/processor/cc/core:transform",
-                "@neptune//data/processor/python:transform_pybind",
+                "@xla_serving//data/processor/cc/core:transform",
+                "@xla_serving//data/processor/python:transform_pybind",
                 "@pybind11_abseil//pybind11_abseil:status_casters",
                 "@pybind11_protobuf//pybind11_protobuf:native_proto_caster",
-                "@neptune//data/processor/proto:transform_config_cc_proto",
+                "@xla_serving//data/processor/proto:transform_config_cc_proto",
             ],
             
             
@@ -63,11 +63,11 @@ def transform_pybind_library(name, srcs = [], hdrs = [], deps = [], use_pytype =
             srcs = [cc_file],
             
             deps = deps + [
-                "@neptune//data/processor/cc/core:transform",
-                "@neptune//data/processor/python:transform_pybind",
+                "@xla_serving//data/processor/cc/core:transform",
+                "@xla_serving//data/processor/python:transform_pybind",
                 "@pybind11_abseil//pybind11_abseil:status_casters",
                 "@pybind11_protobuf//pybind11_protobuf:native_proto_caster",
-                "@neptune//data/processor/proto:transform_config_cc_proto",
+                "@xla_serving//data/processor/proto:transform_config_cc_proto",
             ],
             
             **kwargs

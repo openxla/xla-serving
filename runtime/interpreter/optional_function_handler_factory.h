@@ -20,7 +20,7 @@
 #include <memory>
 #include <string>
 
-#include "runtime/interpreter/optional_function_handler.h"  // from @neptune
+#include "runtime/interpreter/optional_function_handler.h"  // from @xla_serving
 #include "absl/base/no_destructor.h"  // from @abseil-cpp
 #include "absl/base/thread_annotations.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp

@@ -16,7 +16,7 @@
 #define XLA_SERVING_DATA_PROCESSOR_PYTHON_EXAMPLES_INT_RESOURCE_H_
 
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "data/resource_manager/cc/resource.h"  // from @neptune
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
 
 namespace neptune::data {
 namespace composite {

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/tensorflow/tf_saved_model_runner.h"  // from @neptune
+#include "runtime/tensorflow/tf_saved_model_runner.h"  // from @xla_serving
 
 #include <memory>
 #include <optional>

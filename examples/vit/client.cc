@@ -41,11 +41,11 @@
 #include "include/grpcpp/security/credentials.h"  // from @grpc
 #include "include/grpcpp/support/channel_arguments.h"  // from @grpc
 #include "include/grpcpp/support/status.h"  // from @grpc
-#include "protos/grpc/host_buffer.pb.h"  // from @neptune
-#include "protos/grpc/model.pb.h"  // from @neptune
-#include "protos/grpc/predict.pb.h"  // from @neptune
-#include "protos/grpc/prediction_service.grpc.pb.h"  // from @neptune
-#include "runtime/serving/gcp/auth/utils.h"  // from @neptune
+#include "protos/grpc/host_buffer.pb.h"  // from @xla_serving
+#include "protos/grpc/model.pb.h"  // from @xla_serving
+#include "protos/grpc/predict.pb.h"  // from @xla_serving
+#include "protos/grpc/prediction_service.grpc.pb.h"  // from @xla_serving
+#include "runtime/serving/gcp/auth/utils.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.pb.h"  // from @xla
 #include "xla/python/ifrt/shape.pb.h"  // from @xla
 

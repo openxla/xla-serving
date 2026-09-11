@@ -16,7 +16,7 @@
 #define XLA_SERVING_RUNTIME_KERNEL_BUILTIN_KERNEL_H_
 
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "runtime/kernel/kernel.h"  // from @neptune
+#include "runtime/kernel/kernel.h"  // from @xla_serving
 
 namespace xla_serving {
 

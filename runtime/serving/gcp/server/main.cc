@@ -29,8 +29,8 @@
 #include "include/grpcpp/security/server_credentials.h"  // from @grpc
 #include "include/grpcpp/server.h"  // from @grpc
 #include "include/grpcpp/server_builder.h"  // from @grpc
-#include "runtime/serving/gcp/auth/utils.h"  // from @neptune
-#include "runtime/serving/gcp/server/orbax_callback_grpc_server.h"  // from @neptune
+#include "runtime/serving/gcp/auth/utils.h"  // from @xla_serving
+#include "runtime/serving/gcp/server/orbax_callback_grpc_server.h"  // from @xla_serving
 #include "xla/tsl/platform/status.h"  // from @xla
 #include "xla/tsl/profiler/rpc/profiler_server.h"  // from @xla
 #include "tsl/platform/init_main.h"  // from @tsl

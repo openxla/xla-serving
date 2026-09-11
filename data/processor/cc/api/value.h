@@ -25,7 +25,7 @@
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
-#include "data/processor/cc/api/type_info.h"  // from @neptune
+#include "data/processor/cc/api/type_info.h"  // from @xla_serving
 
 namespace neptune::data {
 namespace composite {

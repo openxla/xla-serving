@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/ifrt_device_utils.h"  // from @neptune
+#include "runtime/core/ifrt_device_utils.h"  // from @xla_serving
 
 #include <cstdint>
 #include <optional>
@@ -28,7 +28,7 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "runtime/core/grid.h"  // from @neptune
+#include "runtime/core/grid.h"  // from @xla_serving
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/attribute_map.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla

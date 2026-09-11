@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/processor/cc/utils/default_value_utils.h"  // from @neptune
+#include "data/processor/cc/utils/default_value_utils.h"  // from @xla_serving
 
 #include <cstdint>
 #include <string>
@@ -21,7 +21,7 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "data/processor/cc/utils/default_value.pb.h"  // from @neptune
+#include "data/processor/cc/utils/default_value.pb.h"  // from @xla_serving
 #include "google/protobuf/descriptor.h"
 #include "tsl/platform/tstring.h"  // from @tsl
 

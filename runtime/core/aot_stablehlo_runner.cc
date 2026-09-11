@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/aot_stablehlo_runner.h"  // from @neptune
+#include "runtime/core/aot_stablehlo_runner.h"  // from @xla_serving
 
 #include <algorithm>
 #include <cstddef>
@@ -31,13 +31,13 @@
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/time/clock.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/core/ifrt_device_utils.h"  // from @neptune
-#include "runtime/core/loaded_stablehlo.h"  // from @neptune
-#include "runtime/core/sharding_utils.h"  // from @neptune
-#include "runtime/core/stablehlo.h"  // from @neptune
-#include "runtime/core/stablehlo_runner.h"  // from @neptune
-#include "runtime/core/stablehlo_utils.h"  // from @neptune
-#include "runtime/libs/ifrt/executable_build_utils.h"  // from @neptune
+#include "runtime/core/ifrt_device_utils.h"  // from @xla_serving
+#include "runtime/core/loaded_stablehlo.h"  // from @xla_serving
+#include "runtime/core/sharding_utils.h"  // from @xla_serving
+#include "runtime/core/stablehlo.h"  // from @xla_serving
+#include "runtime/core/stablehlo_runner.h"  // from @xla_serving
+#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
+#include "runtime/libs/ifrt/executable_build_utils.h"  // from @xla_serving
 #include "xla/python/ifrt/device.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
 #include "xla/python/ifrt/dtype.h"  // from @xla

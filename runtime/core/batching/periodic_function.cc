@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/batching/periodic_function.h"  // from @neptune
+#include "runtime/core/batching/periodic_function.h"  // from @xla_serving
 
 #include <algorithm>
 #include <cstdint>

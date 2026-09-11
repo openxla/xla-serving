@@ -18,7 +18,7 @@
 #include <ostream>
 
 #include "gtest/gtest.h"
-#include "runtime/core/value.h"  // from @neptune
+#include "runtime/core/value.h"  // from @xla_serving
 
 namespace xla_serving {
 namespace internal {
