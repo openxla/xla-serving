@@ -243,6 +243,7 @@ class BatchResourceBase : public ResourceBase {
       int32_t low_priority_max_enqueued_batches,
       const std::vector<int32_t>& low_priority_allowed_batch_sizes,
       MixedPriorityBatchingPolicy mixed_priority_batching_policy,
+      PriorityBatchingPolicy priority_batching_policy,
       tsl::thread::ThreadPool* thread_pool, Allocator* allocator,
       std::vector<RaggedInputSpec> ragged_inputs = {});
 
