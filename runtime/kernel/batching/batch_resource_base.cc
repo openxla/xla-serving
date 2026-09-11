@@ -507,6 +507,8 @@ BatchResourceBase::GetBatcherQueueOptions(
     int32_t low_priority_max_enqueued_batches,
     const std::vector<int32_t>& low_priority_allowed_batch_sizes,
     MixedPriorityBatchingPolicy mixed_priority_batching_policy,
+    PriorityBatchingPolicy priority_batching_policy,
+    PriorityAwareBatchingOptions priority_aware_batching_options,
     tsl::thread::ThreadPool* thread_pool, Allocator* allocator,
     std::vector<RaggedInputSpec> ragged_inputs) {
   QueueOptions batcher_queue_options;
@@ -539,6 +541,9 @@ BatchResourceBase::GetBatcherQueueOptions(
       low_priority_allowed_batch_sizes;
   batcher_queue_options.mixed_priority_batching_policy =
       mixed_priority_batching_policy;
+  batcher_queue_options.priority_batching_policy = priority_batching_policy;
+  batcher_queue_options.priority_aware_batching_options =
+      priority_aware_batching_options;
   batcher_queue_options.enable_large_batch_splitting =
       enable_large_batch_splitting;
   batcher_queue_options.allocator = allocator;
