@@ -123,9 +123,14 @@ absl::Status AotStableHloRunner::PopulateAotExecutableCache(
                       executable_bundle->module_kept_var_indices.end(),
                       [num_weights](int idx) { return idx < num_weights; });
 
-    executable_bundle->io_spec.inputs = spec.inputs;
+    executable_bundle->io_spec.inputs.reserve(
+        executable_bundle->module_kept_var_indices.size());
+    for (int idx : executable_bundle->module_kept_var_indices) {
+      executable_bundle->io_spec.inputs.push_back(spec.inputs[idx]);
+    }
     executable_bundle->io_spec.outputs = spec.outputs;
-    executable_bundle->original_io_spec.inputs = spec.inputs;
+    executable_bundle->original_io_spec.inputs =
+        executable_bundle->io_spec.inputs;
     executable_bundle->original_io_spec.outputs = spec.outputs;
     executable_bundle->ifrt_executable = std::move(options.executables[i]);
     executable_bundle->program_fingerprint_with_timestamp =
@@ -133,12 +138,13 @@ absl::Status AotStableHloRunner::PopulateAotExecutableCache(
                                            absl::Now());
 
     std::vector<xla::ifrt::Shape> user_input_shapes;
-    user_input_shapes.reserve(executable_bundle->io_spec.inputs.size() -
-                              executable_bundle->input_offset);
-    for (int j = executable_bundle->input_offset;
-         j < executable_bundle->io_spec.inputs.size(); ++j) {
-      user_input_shapes.push_back(
-          executable_bundle->io_spec.inputs[j].GetIfrtShape());
+    // The cache key must span every user input the caller supplies at runtime,
+    // including inputs DCE pruned from the module. Slice the unpruned
+    // `spec.inputs`; `io_spec.inputs` holds only kept inputs and is indexed by
+    // `input_offset`, which counts kept weights rather than all weights.
+    user_input_shapes.reserve(spec.inputs.size() - num_weights);
+    for (size_t j = num_weights; j < spec.inputs.size(); ++j) {
+      user_input_shapes.push_back(spec.inputs[j].GetIfrtShape());
     }
 
     // IFRT requires an explicit device mapping when executing unbound
@@ -161,7 +167,7 @@ absl::Status AotStableHloRunner::PopulateAotExecutableCache(
       executable_bundle->output_shardings = std::move(output_map);
     } else {
       CachedExecutableBundle::ShardingList arg_list;
-      arg_list.reserve(executable_bundle->module_kept_var_indices.size());
+      arg_list.reserve(executable_bundle->io_spec.inputs.size());
       for (const auto& arg_spec : executable_bundle->io_spec.inputs) {
         TF_ASSIGN_OR_RETURN(auto ifrt_sharding,
                             xla_serving::sharding_internal::ToIfrtSharding(
