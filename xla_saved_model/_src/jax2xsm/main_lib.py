@@ -259,7 +259,7 @@ def convert(
     ]
 
   exported_creator = jax_export.export(
-      fun_jax,
+      fun_jax,  # pyrefly: ignore[bad-argument-type]
       **jax_export_kwargs,
   )
 
