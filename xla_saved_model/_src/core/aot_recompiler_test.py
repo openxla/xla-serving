@@ -116,7 +116,6 @@ class AotRecompilerTest(test_utils.XsmTestCase):
     config = offline_compiler.TargetConfig(
         target_topology_label=f"{platform}_target",
         platform=platform,
-        enable_deviceless_compilation=True,
         serialized_topology=serialized_topo,
         autotune_database_path=autotune_db,
     )
@@ -164,19 +163,16 @@ class AotRecompilerTest(test_utils.XsmTestCase):
         offline_compiler.TargetConfig(
             target_topology_label="tpu_slice_1",
             platform="tpu",
-            enable_deviceless_compilation=True,
             serialized_topology=serialized_tpu,
         ),
         offline_compiler.TargetConfig(
             target_topology_label="tpu_slice_2",
             platform="tpu",
-            enable_deviceless_compilation=True,
             target_topology="df:2x2",
         ),
         offline_compiler.TargetConfig(
             target_topology_label="cuda_target",
             platform="cuda",
-            enable_deviceless_compilation=True,
             serialized_topology=serialized_cuda,
             autotune_database_path=autotune_dir,
         ),
@@ -213,7 +209,6 @@ class AotRecompilerTest(test_utils.XsmTestCase):
     config = offline_compiler.TargetConfig(
         target_topology_label="cpu_attached",
         platform="cpu",
-        enable_deviceless_compilation=False,
     )
     out_dir = aot_recompiler.recompile(
         input_model_path=input_model,
@@ -244,7 +239,6 @@ class AotRecompilerTest(test_utils.XsmTestCase):
     config = offline_compiler.TargetConfig(
         target_topology_label=f"{platform}_attached",
         platform=platform,
-        enable_deviceless_compilation=False,
     )
     out_dir = aot_recompiler.recompile(
         input_model_path=input_model,

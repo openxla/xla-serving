@@ -56,8 +56,6 @@ class TargetConfig:
       manifest.proto).
     platform: Name of the target platform ("cuda", "tpu", "cpu"). Note: 'gpu' is
       not supported; use 'cuda' directly.
-    enable_deviceless_compilation: Whether to perform compilation without
-      physical devices attached.
     serialized_topology: Optional serialized topology bytes required for
       deviceless compilation.
     autotune_database_path: Optional path to the CUDA autotune database.
@@ -73,13 +71,20 @@ class TargetConfig:
 
   target_topology_label: str
   platform: str
-  enable_deviceless_compilation: bool = False
   serialized_topology: bytes | None = None
   autotune_database_path: str | None = None
   target_topology: str | None = None
   compile_portable_executable: bool | None = None
   optimizer: OptimizerType | None = None
   compile_options: Any = None
+
+  @property
+  def is_deviceless(self) -> bool:
+    """Returns whether compilation is performed without attached devices."""
+    return (
+        self.serialized_topology is not None
+        or self.target_topology is not None
+    )
 
 
 def _validate_target_config(config: TargetConfig) -> None:
@@ -93,16 +98,7 @@ def _validate_target_config(config: TargetConfig) -> None:
         f" {sorted(_SUPPORTED_PLATFORMS)}"
     )
 
-  # 2. Deviceless topology requirement
-  if config.enable_deviceless_compilation and not (
-      config.serialized_topology or config.target_topology
-  ):
-    raise ValueError(
-        f"Deviceless compilation for platform '{platform}' requires either"
-        " `serialized_topology` or `target_topology`."
-    )
-
-  # 3. Autotune database validation
+  # 2. Autotune database validation
   if config.autotune_database_path:
     if platform != "cuda":
       raise ValueError(
@@ -114,7 +110,7 @@ def _validate_target_config(config: TargetConfig) -> None:
           "Autotune database path does not exist:"
           f" {config.autotune_database_path}"
       )
-  elif platform == "cuda" and config.enable_deviceless_compilation:
+  elif platform == "cuda" and config.is_deviceless:
     logging.warning(
         "autotune_database_path was not provided for CUDA deviceless"
         " compilation. XLA will fallback to internal heuristics/cost-models"
@@ -125,7 +121,7 @@ def _validate_target_config(config: TargetConfig) -> None:
 def _resolve_topology(config: TargetConfig) -> topologies.TopologyDescription:
   """Resolves topology description from serialized bytes, name, or hardware."""
   platform = config.platform.lower().strip()
-  if not config.enable_deviceless_compilation:
+  if not config.is_deviceless:
     return topologies.get_attached_topology(platform=platform)
   if config.serialized_topology is not None:
     return topologies.TopologyDescription.deserialize(
@@ -181,10 +177,10 @@ def _build_compile_options(
 
 def _get_compile_fn(
     client: Any,
-    enable_deviceless_compilation: bool,
+    is_deviceless: bool,
 ) -> Callable[..., Any]:
   """Returns the compilation method for the given execution mode."""
-  if enable_deviceless_compilation:
+  if is_deviceless:
     return client.compile
   if hasattr(client, "compile_and_load"):
     return client.compile_and_load
@@ -264,7 +260,6 @@ def create_offline_compiler_hook(
 
     for config in target_configs:
       target_topology_label = config.target_topology_label
-      enable_deviceless_compilation = config.enable_deviceless_compilation
       platform = config.platform.lower().strip()
 
       logging.info(
@@ -306,7 +301,7 @@ def create_offline_compiler_hook(
         # 5. Compilation Phase
         client = topology.devices[0].client
         device_list = jaxlib.xla_client.DeviceList(tuple(topology.devices))
-        compile_fn = _get_compile_fn(client, enable_deviceless_compilation)
+        compile_fn = _get_compile_fn(client, config.is_deviceless)
         executable = compile_fn(
             module, device_list, compile_options=compile_options
         )

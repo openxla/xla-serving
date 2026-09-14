@@ -18,12 +18,21 @@ import pathlib
 
 from absl.testing import absltest
 from absl.testing import parameterized
+import jax
 from typer import testing
 
 from xla_saved_model._src.core import file_utils
 from xla_saved_model._src.core import persistence_lib
 from xla_saved_model._src.core import test_utils
 from xla_saved_model.cli import xsm_cli
+
+
+def _has_attached_cuda() -> bool:
+  """Returns whether CUDA devices are attached to this machine."""
+  try:
+    return bool(jax.devices("cuda"))
+  except (RuntimeError, ValueError):
+    return False
 
 
 class RecompileCliTest(test_utils.XsmTestCase):
@@ -103,7 +112,6 @@ class RecompileCliTest(test_utils.XsmTestCase):
             "-l",
             "cpu_attached_target",
             "--no-auto-timestamp",
-            "--no-enable-deviceless-compilation",
         ],
     )
     self.assertEqual(result.exit_code, 0, msg=result.output)
@@ -139,7 +147,6 @@ class RecompileCliTest(test_utils.XsmTestCase):
             "-l",
             f"{platform}_attached_target",
             "--no-auto-timestamp",
-            "--no-enable-deviceless-compilation",
         ],
     )
     self.assertEqual(result.exit_code, 0, msg=result.output)
@@ -210,7 +217,6 @@ class RecompileCliTest(test_utils.XsmTestCase):
             "--target-topology-label",
             "cpu_long_target",
             "--no-auto-timestamp",
-            "--no-enable-deviceless-compilation",
         ],
     )
     self.assertEqual(result.exit_code, 0, msg=result.output)
@@ -248,7 +254,6 @@ class RecompileCliTest(test_utils.XsmTestCase):
             "cpu",
             "-l",
             "cpu_target",
-            "--no-enable-deviceless-compilation",
             flag,
             "42",
         ],
@@ -276,7 +281,6 @@ class RecompileCliTest(test_utils.XsmTestCase):
             "cpu",
             "-l",
             "cpu_target",
-            "--no-enable-deviceless-compilation",
             "--auto-timestamp",
         ],
     )
@@ -304,7 +308,6 @@ class RecompileCliTest(test_utils.XsmTestCase):
             "cpu",
             "-l",
             "cpu_target",
-            "--no-enable-deviceless-compilation",
             "--version",
             "42",
             "--auto-timestamp",
@@ -337,7 +340,6 @@ class RecompileCliTest(test_utils.XsmTestCase):
             "cpu",
             "-l",
             "cpu_target",
-            "--no-enable-deviceless-compilation",
             "--no-auto-timestamp",
             "--strip-stablehlo",
         ],
@@ -368,7 +370,6 @@ class RecompileCliTest(test_utils.XsmTestCase):
             "cpu",
             "-l",
             "cpu_target",
-            "--no-enable-deviceless-compilation",
             "--no-auto-timestamp",
             "--include-stablehlo",
         ],
@@ -406,7 +407,6 @@ class RecompileCliTest(test_utils.XsmTestCase):
             "cpu",
             "-l",
             "cpu_target",
-            "--no-enable-deviceless-compilation",
             "-v",
             "1",
             "--overwrite",
@@ -439,7 +439,6 @@ class RecompileCliTest(test_utils.XsmTestCase):
             "cpu",
             "-l",
             "cpu_target",
-            "--no-enable-deviceless-compilation",
             "-v",
             "1",
             "--no-overwrite",
@@ -645,7 +644,6 @@ class RecompileCliTest(test_utils.XsmTestCase):
             "cpu",
             "-l",
             "cpu_target",
-            "--no-enable-deviceless-compilation",
         ],
     )
     self.assertEqual(result.exit_code, 1)
@@ -669,7 +667,6 @@ class RecompileCliTest(test_utils.XsmTestCase):
             "cpu",
             "-l",
             "cpu_target",
-            "--no-enable-deviceless-compilation",
             "--no-auto-timestamp",
             "--strip-stablehlo",
         ],
@@ -687,7 +684,6 @@ class RecompileCliTest(test_utils.XsmTestCase):
             "cpu",
             "-l",
             "cpu_target",
-            "--no-enable-deviceless-compilation",
             "--no-auto-timestamp",
         ],
     )
@@ -727,10 +723,13 @@ class RecompileCliTest(test_utils.XsmTestCase):
         result.stderr,
     )
 
-  def test_cli_missing_deviceless_topology_fails(self):
-    """Verifies exit code 1 when deviceless accelerator compilation lacks topology."""
+  def test_cli_missing_hardware_backend_fails_cleanly(self):
+    """Verifies exit code 1 when the target platform has no attached devices."""
+    if _has_attached_cuda():
+      self.skipTest("Requires a machine with no attached CUDA hardware.")
+
     input_model = test_utils.create_test_xla_saved_model(
-        str(pathlib.Path(self.temp_dir) / "in_missing_topo_opts")
+        str(pathlib.Path(self.temp_dir) / "in_no_hw")
     )
     result = self.runner.invoke(
         self.app,
@@ -739,7 +738,7 @@ class RecompileCliTest(test_utils.XsmTestCase):
             "-i",
             input_model,
             "-o",
-            str(pathlib.Path(self.temp_dir) / "out_missing_topo_opts"),
+            str(pathlib.Path(self.temp_dir) / "out_no_hw"),
             "-p",
             "cuda",
             "-l",
@@ -747,7 +746,8 @@ class RecompileCliTest(test_utils.XsmTestCase):
         ],
     )
     self.assertEqual(result.exit_code, 1)
-    self.assertIn("requires either", result.stderr)
+    # JAX owns the wording, so match only on the requested backend name.
+    self.assertIn("cuda", result.stderr)
 
   def test_cli_error_output_written_to_stderr(self):
     """Verifies CLI error messages are emitted to stderr and not stdout."""
@@ -763,7 +763,6 @@ class RecompileCliTest(test_utils.XsmTestCase):
             "cpu",
             "-l",
             "cpu_target",
-            "--no-enable-deviceless-compilation",
         ],
     )
     self.assertEqual(result.exit_code, 1)
