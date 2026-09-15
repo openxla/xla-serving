@@ -156,14 +156,6 @@ struct QueueOptions {
 
   // Options for priority aware batching.
   // Used iff PriorityBatchingPolicy is set to PRIORITY_AWARE.
-  struct PriorityAwareBatchingOptions {
-    // The maximum sum of task sizes to enqueue. Default is 0, which means the
-    // limit is not set.
-    size_t max_queue_depth = 0;
-    // If true, the priority aware batch queue will resplit tasks into smaller
-    // subtasks if needed.
-    bool enable_task_resplit = false;
-  };
   PriorityAwareBatchingOptions priority_aware_batching_options;
 
   // The allocator for allocating memory for HostBuffer. The default allocator

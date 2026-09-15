@@ -51,6 +51,9 @@ absl::StatusOr<PriorityBatchingPolicy> GetPriorityBatchingPolicy(
 absl::string_view PriorityBatchingPolicyToString(
     PriorityBatchingPolicy policy);
 
+absl::StatusOr<PriorityAwareBatchingOptions> GetPriorityAwareBatchingOptions(
+    const BatchOptions::PriorityAwareBatchingOptions& options);
+
 absl::string_view CriticalityToString(
     tsl::criticality::Criticality criticality);
 

@@ -14,6 +14,7 @@
 
 #include "runtime/kernel/batching/batch_options_utils.h"  // from @xla_serving
 
+#include <cstddef>
 #include <string>
 
 #include "absl/log/log.h"  // from @abseil-cpp
@@ -101,6 +102,20 @@ absl::string_view PriorityBatchingPolicyToString(
       return kPriorityAwareAttrValue;
   }
   return "unknown_priority_batching_policy";
+}
+
+absl::StatusOr<PriorityAwareBatchingOptions> GetPriorityAwareBatchingOptions(
+    const BatchOptions::PriorityAwareBatchingOptions& options) {
+  if (options.max_queue_depth() < 0) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("`priority_aware_batching_options.max_queue_depth` must "
+                     "be non-negative, but got: ",
+                     options.max_queue_depth()));
+  }
+  return PriorityAwareBatchingOptions{
+      .max_queue_depth = static_cast<size_t>(options.max_queue_depth()),
+      .enable_task_resplit = options.enable_task_resplit(),
+  };
 }
 
 absl::string_view CriticalityToString(

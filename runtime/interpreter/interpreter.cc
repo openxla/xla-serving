@@ -380,6 +380,12 @@ absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
             low_priority_batch_options.allowed_batch_sizes().begin(),
             low_priority_batch_options.allowed_batch_sizes().end()};
   }
+  if (batch_options.has_priority_aware_batching_options()) {
+    TF_ASSIGN_OR_RETURN(
+        batch_runner_op_options.priority_aware_batching_options,
+        GetPriorityAwareBatchingOptions(
+            batch_options.priority_aware_batching_options()));
+  }
 
   return CreateBatchRunnerOp(std::move(batched_kernels),
                              batch_runner_op_options, thread_pool);

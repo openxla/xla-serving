@@ -62,6 +62,7 @@ struct BatchRunnerOpOptions {
       MixedPriorityBatchingPolicy::kLowPriorityPaddingWithMaxBatchSize;
   PriorityBatchingPolicy priority_batching_policy =
       PriorityBatchingPolicy::kStrictFifo;
+  PriorityAwareBatchingOptions priority_aware_batching_options;
   Allocator* allocator = DefaultAllocator::GetInstance();
   std::vector<RaggedInputSpec> ragged_inputs;
 };

@@ -201,7 +201,8 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateBatchRunnerOp(
           options.low_priority_max_enqueued_batches,
           options.low_priority_allowed_batch_sizes,
           options.mixed_priority_batching_policy,
-          options.priority_batching_policy, thread_pool,
+          options.priority_batching_policy,
+          options.priority_aware_batching_options, thread_pool,
           options.allocator, options.ragged_inputs);
 
   tsl::core::RefCountPtr<JsvBatchResource> batch_resource(new JsvBatchResource(
