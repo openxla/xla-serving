@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
@@ -43,7 +44,7 @@ class BatchedH2DTransferExecutor : public H2DTransferExecutor {
   static absl::StatusOr<std::unique_ptr<H2DTransferExecutor>> Create(
       xla::ifrt::Client* client,
       xla::ifrt::DeviceListRef device_list,
-      tsl::thread::ThreadPool* thread_pool, Options options);
+      tsl::thread::ThreadPool* absl_nonnull thread_pool, Options options);
 
   ~BatchedH2DTransferExecutor() override = default;
 
@@ -54,12 +55,12 @@ class BatchedH2DTransferExecutor : public H2DTransferExecutor {
  private:
   BatchedH2DTransferExecutor(xla::ifrt::PjRtCompatibleClient* client,
                              xla::ifrt::DeviceListRef device_list,
-                             tsl::thread::ThreadPool* thread_pool,
+                             tsl::thread::ThreadPool* absl_nonnull thread_pool,
                              Options options);
 
   xla::ifrt::PjRtCompatibleClient* client_;  // Not owned.
   xla::ifrt::DeviceListRef device_list_;
-  tsl::thread::ThreadPool* thread_pool_;  // Not owned.
+  tsl::thread::ThreadPool* absl_nonnull thread_pool_;  // Not owned.
   Options options_;
 };
 
@@ -74,7 +75,7 @@ class BatchedH2DTransferExecutorFactory : public H2DTransferExecutorFactory {
   absl::StatusOr<std::unique_ptr<H2DTransferExecutor>> Create(
       xla::ifrt::Client* client,
       xla::ifrt::DeviceListRef device_list,
-      tsl::thread::ThreadPool* thread_pool) override;
+      tsl::thread::ThreadPool* absl_nonnull thread_pool) override;
 
  private:
   BatchedH2DTransferExecutor::Options options_;
