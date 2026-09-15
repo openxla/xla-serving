@@ -85,6 +85,9 @@ enum LoaderType {
   // The default loader, which loads the data from an Orbax checkpoint.
   LOADER_TYPE_DEFAULT = 0;
   LEMMING_LOADER = 1;
+  // Weights are frozen into the executable. Names resolve from the manifest;
+  // no weight storage is read.
+  FROZEN_WEIGHTS_LOADER = 2;
 }
 
 message ExternalValue {
