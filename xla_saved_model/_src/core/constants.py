@@ -49,7 +49,7 @@ MANIFEST_VERSION = '0.0.1'
 
 # The mime type of the manifest proto file.
 MANIFEST_MIME_TYPE = (
-    'application/protobuf; type=neptune_model_manifest.Manifest'
+    'application/protobuf; type=xla_saved_model_manifest.Manifest'
 )
 MANIFEST_LEGACY_MIME_TYPE = (
     'application/protobuf; type=orbax_model_manifest.Manifest'

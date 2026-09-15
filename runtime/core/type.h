@@ -63,7 +63,7 @@ struct None {};
 // leaves should be things like `HostBuffer` or `tensorflow::Tensor` while
 // `Type`'s leaves should be things like `ArgSpec`.
 //
-// `Type` is isomorphic to `neptune_model_type::Type`.
+// `Type` is isomorphic to `xla_saved_model_type::Type`.
 using Type = Tree;
 
 // A list of (key, value) pairs for `Tree`.

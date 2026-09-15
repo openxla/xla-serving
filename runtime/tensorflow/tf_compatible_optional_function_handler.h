@@ -40,11 +40,11 @@ class TfCompatibleOptionalFunctionHandler : public OptionalFunctionHandler {
  public:
   absl::StatusOr<std::unique_ptr<Kernel>> HandleFunction(
       absl::string_view model_path,
-      const neptune_model_manifest::Function& function,
+      const xla_saved_model_manifest::Function& function,
       const InterpreterCreateOptions& create_options, bool pre_data_conversion,
       bool post_data_conversion,
-      const neptune_model_orchestration::NamedTensorTypeList* named_inputs,
-      const neptune_model_orchestration::NamedTensorTypeList* named_outputs)
+      const xla_saved_model_orchestration::NamedTensorTypeList* named_inputs,
+      const xla_saved_model_orchestration::NamedTensorTypeList* named_outputs)
       override;
 
   KernelIODataType GetInputDataType(bool pre_data_conversion) const override {

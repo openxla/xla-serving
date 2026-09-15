@@ -67,7 +67,7 @@ class BundleInterpreter : public Interpreter {
   absl::StatusOr<FunctionFlatSignature> GetPipelineSignature(
       absl::string_view pipeline_name) const override;
 
-  absl::StatusOr<neptune_model_orchestration::Pipeline> GetPipelineProto(
+  absl::StatusOr<xla_saved_model_orchestration::Pipeline> GetPipelineProto(
       absl::string_view pipeline_name) const override;
 
   absl::StatusOr<KernelIODataType> GetModelInputDataType(

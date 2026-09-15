@@ -66,9 +66,9 @@ struct InterpreterCreateOptions {
   Allocator* absl_nonnull allocator = DefaultAllocator::GetInstance();
   // The platform name to use for `xla::ExecutableBuildOptions`. If not set,
   // the default platform name will be "TPU".
-  // platform_name should be the name of neptune_model_manifest::Platform name.
-  std::string platform_name = neptune_model_manifest::Platform_Name(
-      neptune_model_manifest::Platform::TPU);
+  // platform_name should be the name of xla_saved_model_manifest::Platform name.
+  std::string platform_name = xla_saved_model_manifest::Platform_Name(
+      xla_saved_model_manifest::Platform::TPU);
   // If true, the interpreter will only load the pipeline when it is requested.
   bool lazy_loading_pipelines = false;
   // If true, the device assignment in the manifest will be ignored.

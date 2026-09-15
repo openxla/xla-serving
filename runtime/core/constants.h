@@ -21,7 +21,7 @@ namespace xla_serving {
 // named 'orbax_model_version.txt' with the following format:
 //
 // version: "0.0.1"
-// mime_type: "application/protobuf; type=neptune_model_manifest.Manifest"
+// mime_type: "application/protobuf; type=xla_saved_model_manifest.Manifest"
 // manifest_file_path: "path/to/manifest.pb"
 //
 inline constexpr char kOrbaxModelManifestVersionTxt[] =
@@ -34,7 +34,7 @@ inline constexpr char kOrbaxModelManifestManifestFilePathKey[] =
     "manifest_file_path";
 inline constexpr char kOrbaxModelManifestVersion[] = "0.0.1";
 inline constexpr char kOrbaxModelManifestMimeType[] =
-    "application/protobuf; type=neptune_model_manifest.Manifest";
+    "application/protobuf; type=xla_saved_model_manifest.Manifest";
 inline constexpr char kOrbaxModelManifestMimeTypeLegacy[] =
     "application/protobuf; type=orbax_model_manifest.Manifest";
 
@@ -52,7 +52,7 @@ inline constexpr char kOexOrchestrationMultiPipelineMimeTypeLegacy[] =
 inline constexpr char kStableHloMimeType[] = "application/x.mlir-stablehlo";
 // XLA compile options mime type expression.
 inline constexpr char kXlaCompileOptionsMimeType[] =
-    "application/protobuf; type=neptune_model_manifest.CompileOptionsProtoMap";
+    "application/protobuf; type=xla_saved_model_manifest.CompileOptionsProtoMap";
 inline constexpr char kXlaCompileOptionsMimeTypeLegacy[] =
     "application/protobuf; type=orbax_model_manifest.CompileOptionsProtoMap";
 // TF SavedModel supplemental name.

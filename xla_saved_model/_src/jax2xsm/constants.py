@@ -20,12 +20,12 @@ XLA_COMPILE_OPTIONS = 'xla_compile_options'
 # TODO: Consolidate constants related to mime types in a common library, so that both obm and jsv can use them.
 # XLA compile options mime type.
 XLA_COMPILE_OPTIONS_MIME_TYPE = (
-    'application/protobuf; type=neptune_model_manifest.CompileOptionsProtoMap'
+    'application/protobuf; type=xla_saved_model_manifest.CompileOptionsProtoMap'
 )
 
 # JAX specific info constants.
 JAX_SPECIFIC_INFO = 'jax_specific_info'
 CURRENT_JAX_SUPPLEMENTAL_MIME_TYPE = (
-    'application/protobuf; type=neptune_model_jax_supplemental.Function'
+    'application/protobuf; type=xla_saved_model_jax_supplemental.Function'
 )
 CURRENT_JAX_SUPPLEMENTAL_VERSION = '0.0.1'

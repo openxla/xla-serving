@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-package neptune_model_type;
+package xla_saved_model_type;
 
 import "xla/xla_data.proto";
 

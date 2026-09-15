@@ -27,7 +27,7 @@ namespace {
 bool kUnused = []() {
   const auto s =
       DataLoaderFactoryRegistry::GetGlobalRegistry().RegisterDataLoaderFactory(
-          neptune_model_manifest::LoaderType::LOADER_TYPE_DEFAULT,
+          xla_saved_model_manifest::LoaderType::LOADER_TYPE_DEFAULT,
           [](DataLoader::CreateOptions create_options)
               -> absl::StatusOr<std::unique_ptr<DataLoader>> {
             return DefaultDataLoader::Create(std::move(create_options));

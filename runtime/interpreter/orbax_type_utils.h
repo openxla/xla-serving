@@ -22,12 +22,12 @@
 
 namespace xla_serving {
 
-// Converts an `neptune_model_type::DType` to `xla::PrimitiveType`.
+// Converts an `xla_saved_model_type::DType` to `xla::PrimitiveType`.
 absl::StatusOr<xla::PrimitiveType> ToPrimitiveType(
-    neptune_model_type::DType type);
+    xla_saved_model_type::DType type);
 
-// Converts an `neptune_model_type::DType` to `xla::ifrt::DType`.
-absl::StatusOr<xla::ifrt::DType> ToIfrtDType(neptune_model_type::DType type);
+// Converts an `xla_saved_model_type::DType` to `xla::ifrt::DType`.
+absl::StatusOr<xla::ifrt::DType> ToIfrtDType(xla_saved_model_type::DType type);
 
 }  // namespace xla_serving
 

@@ -40,7 +40,7 @@ MIME_TYPE_ORBAX_TF_CONCRETE_FUNCTION = (
 MIME_TYPE_TF_SAVED_MODEL = 'application/x.tensorflow-saved-model'
 
 MIME_TYPE_XLA_COMPILE_OPTIONS = (
-    'application/protobuf; type=neptune_model_manifest.CompileOptionsProtoMap'
+    'application/protobuf; type=xla_saved_model_manifest.CompileOptionsProtoMap'
 )
 
 MIME_TYPE_ORBAX_XLA_COMPILE_OPTIONS = (
@@ -48,7 +48,7 @@ MIME_TYPE_ORBAX_XLA_COMPILE_OPTIONS = (
 )
 
 MIME_TYPE_ORBAX_JAX_SUPPLEMENTAL = (
-    'application/protobuf; type=neptune_model_jax_supplemental.Function'
+    'application/protobuf; type=xla_saved_model_jax_supplemental.Function'
 )
 
 

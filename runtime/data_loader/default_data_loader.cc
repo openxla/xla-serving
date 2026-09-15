@@ -67,10 +67,10 @@ struct LoadedWeightArrays {
 };
 
 absl::Status ValidateLoadInputs(
-    const neptune_model_manifest::ExternalValue& value_to_load,
+    const xla_saved_model_manifest::ExternalValue& value_to_load,
     std::optional<absl::string_view> model_path,
-    std::optional<const neptune_model_manifest::Manifest*> manifest,
-    std::optional<absl::Span<const neptune_model_manifest::Function* const>>
+    std::optional<const xla_saved_model_manifest::Manifest*> manifest,
+    std::optional<absl::Span<const xla_saved_model_manifest::Function* const>>
         stablehlo_funcs) {
   if (!value_to_load.has_data()) {
     return absl::InvalidArgumentError(
@@ -78,7 +78,7 @@ absl::Status ValidateLoadInputs(
   }
   TF_RETURN_IF_ERROR(CheckMimeAndDataType(
       value_to_load.data(), {kOrbaxCheckpointMimeType},
-      {neptune_model_manifest::UnstructuredData::kFileSystemLocation},
+      {xla_saved_model_manifest::UnstructuredData::kFileSystemLocation},
       "Checkpoint value"));
   if (!model_path.has_value()) {
     return absl::InvalidArgumentError(
@@ -272,7 +272,7 @@ absl::Status AllDataNamesExistInCheckpoint(
 // When there are multiple functions, verify that they should have the same
 // set of data names.
 absl::StatusOr<std::vector<std::string>> GetDataNamesFromFunction(
-    absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs) {
+    absl::Span<const xla_saved_model_manifest::Function* const> stablehlo_funcs) {
   if (stablehlo_funcs.empty()) {
     return absl::InvalidArgumentError(
         "`stablehlo_funcs` should not be empty for Orbax checkpoint "
@@ -311,8 +311,8 @@ absl::StatusOr<std::vector<std::string>> GetDataNamesFromFunction(
 // indicating there is no weight to load.
 absl::StatusOr<std::vector<std::string>> GetWeightNames(
     absl::string_view checkpoint_path,
-    std::optional<const neptune_model_manifest::Manifest*> manifest,
-    std::optional<absl::Span<const neptune_model_manifest::Function* const>>
+    std::optional<const xla_saved_model_manifest::Manifest*> manifest,
+    std::optional<absl::Span<const xla_saved_model_manifest::Function* const>>
         stablehlo_funcs) {
   TF_ASSIGN_OR_RETURN(std::vector<std::string> weight_names_from_checkpoint,
                       GetAllWeightNamesFromCheckpoint(checkpoint_path));
@@ -350,7 +350,7 @@ absl::StatusOr<std::vector<std::string>> GetWeightNames(
 //    weights.
 absl::StatusOr<std::vector<std::optional<ArgSpec>>> GetWeightSpecsFromFunction(
     int num_weights,
-    absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs) {
+    absl::Span<const xla_saved_model_manifest::Function* const> stablehlo_funcs) {
   std::vector<std::optional<ArgSpec>> weight_specs(num_weights, std::nullopt);
   for (int i = 0; i < stablehlo_funcs.size(); ++i) {
     const auto& func = *stablehlo_funcs[i];
@@ -473,11 +473,11 @@ absl::Status RegisterAndLoadCheckpoints(
 // TODO: `value_to_load` is actually the path to the checkpoint
 // inside the model directory. Should update all relevant names.
 absl::StatusOr<DataLoader::LoadResult> DefaultDataLoader::Load(
-    const neptune_model_manifest::ExternalValue& value_to_load,
+    const xla_saved_model_manifest::ExternalValue& value_to_load,
     std::optional<absl::string_view> model_path,
     const AssignedDevices* absl_nullable assigned_devices,
-    std::optional<const neptune_model_manifest::Manifest*> manifest,
-    std::optional<absl::Span<const neptune_model_manifest::Function* const>>
+    std::optional<const xla_saved_model_manifest::Manifest*> manifest,
+    std::optional<absl::Span<const xla_saved_model_manifest::Function* const>>
         stablehlo_funcs) {
   TF_RETURN_IF_ERROR(
       ValidateLoadInputs(value_to_load, model_path, manifest, stablehlo_funcs));

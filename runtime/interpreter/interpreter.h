@@ -81,7 +81,7 @@ class Interpreter {
       absl::string_view pipeline_name) const;
 
   // Returns the pipeline proto for the given pipeline name.
-  virtual absl::StatusOr<neptune_model_orchestration::Pipeline>
+  virtual absl::StatusOr<xla_saved_model_orchestration::Pipeline>
   GetPipelineProto(absl::string_view pipeline_name) const;
 
   // Runs a pipeline in the model with the given inputs. `pipeline_name` is the
@@ -185,7 +185,7 @@ class Interpreter {
   struct GraphBundle {
     // TODO: Remove this constructor once we upgrade oss to
     // C++ 20.
-    GraphBundle(std::string name, neptune_model_orchestration::Pipeline p,
+    GraphBundle(std::string name, xla_saved_model_orchestration::Pipeline p,
                 FunctionFlatSignature sig)
         : pipeline_name(std::move(name)),
           pipeline(std::move(p)),
@@ -193,7 +193,7 @@ class Interpreter {
 
     // For logging and debugging.
     std::string pipeline_name;
-    neptune_model_orchestration::Pipeline pipeline;
+    xla_saved_model_orchestration::Pipeline pipeline;
     FunctionFlatSignature signature;
     mutable absl::Mutex graph_mutex;
     // nullopt if the graph is not loaded yet.
@@ -225,19 +225,19 @@ class Interpreter {
 
   // Loads the graph from the given pipeline.
   absl::StatusOr<KernelGraph> LoadGraph(
-      const neptune_model_orchestration::Pipeline& pipeline);
+      const xla_saved_model_orchestration::Pipeline& pipeline);
 
 
   // Loads host function (preprocessors, postprocessors, CPU SHLOs) and
   // returns the loaded kernel runner op.
   absl::StatusOr<std::unique_ptr<Kernel>> LoadOnHostFunction(
-      const neptune_model_orchestration::Component& component,
+      const xla_saved_model_orchestration::Component& component,
       int component_index, int total_components, bool keyword_arguments_based);
 
   // Loads the graph from the given pipeline using the components from the
   // pipeline proto.
   absl::StatusOr<KernelGraph> LoadGraphFromComponentProto(
-      const neptune_model_orchestration::Pipeline& pipeline);
+      const xla_saved_model_orchestration::Pipeline& pipeline);
 
   // Loads a StableHloRunnerOp kernel based on the model function name and
   // weights name.
@@ -251,9 +251,9 @@ class Interpreter {
   // would incorrectly route execution to CPU, which fails for TPU workloads.
   absl::StatusOr<std::unique_ptr<Kernel>> LoadStableHloRunnerOp(
       absl::string_view model_function_name, absl::string_view weights_name,
-      const neptune_model_orchestration::NamedTensorTypeList* named_inputs =
+      const xla_saved_model_orchestration::NamedTensorTypeList* named_inputs =
           nullptr,
-      const neptune_model_orchestration::NamedTensorTypeList* named_outputs =
+      const xla_saved_model_orchestration::NamedTensorTypeList* named_outputs =
           nullptr,
       const std::string& platform_name = "");
 
@@ -264,7 +264,7 @@ class Interpreter {
   // - assigned_devices: the assigned devices for the weights.
   absl::StatusOr<DataLoader::LoadResult> LoadWeights(
       absl::string_view weight_set_name,
-      absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs,
+      absl::Span<const xla_saved_model_manifest::Function* const> stablehlo_funcs,
       const AssignedDevices& assigned_devices,
       std::shared_ptr<xla::ifrt::Client> ifrt_client);
 
@@ -289,33 +289,33 @@ class Interpreter {
   // Loads the model runner kernel for a component, attempting AOT loading first
   // and falling back to JIT compilation if configured.
   absl::StatusOr<std::unique_ptr<Kernel>> LoadModelRunnerOp(
-      const neptune_model_orchestration::Component& component,
-      const neptune_model_orchestration::NamedTensorTypeList* named_inputs =
+      const xla_saved_model_orchestration::Component& component,
+      const xla_saved_model_orchestration::NamedTensorTypeList* named_inputs =
           nullptr,
-      const neptune_model_orchestration::NamedTensorTypeList* named_outputs =
+      const xla_saved_model_orchestration::NamedTensorTypeList* named_outputs =
           nullptr);
 
   // Loads an AOT compiled executable for the given component and StableHLO
   // functions.
   absl::StatusOr<AotLoadResult> LoadAotExecutable(
-      const neptune_model_orchestration::Component& component,
-      absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs,
+      const xla_saved_model_orchestration::Component& component,
+      absl::Span<const xla_saved_model_manifest::Function* const> stablehlo_funcs,
       absl::string_view target_topology_label);
 
   // Creates a StableHloRunnerOp kernel from an AOT load result and named
   // signature tensors.
   absl::StatusOr<std::unique_ptr<Kernel>> LoadAotRunnerOp(
       AotLoadResult aot_result,
-      const neptune_model_orchestration::NamedTensorTypeList* named_inputs =
+      const xla_saved_model_orchestration::NamedTensorTypeList* named_inputs =
           nullptr,
-      const neptune_model_orchestration::NamedTensorTypeList* named_outputs =
+      const xla_saved_model_orchestration::NamedTensorTypeList* named_outputs =
           nullptr);
 
   // Loads weights for the given functions or registers and returns the loaded
   // weight names.
   absl::StatusOr<std::vector<std::string>> GetOrLoadWeightNames(
       absl::string_view weights_name,
-      absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs,
+      absl::Span<const xla_saved_model_manifest::Function* const> stablehlo_funcs,
       const AssignedDevices& assigned_devices,
       std::shared_ptr<xla::ifrt::Client> ifrt_client);
 
@@ -326,9 +326,9 @@ class Interpreter {
       absl::Span<const Value> positional_inputs,
       const absl::flat_hash_map<std::string, Value>& keyword_inputs);
 
-  neptune_model_manifest::Manifest manifest_;
+  xla_saved_model_manifest::Manifest manifest_;
   absl::flat_hash_map<std::string,
-                      const neptune_model_manifest::TopLevelObject*>
+                      const xla_saved_model_manifest::TopLevelObject*>
       manifest_objects_;
   // Routes optional functions to the correct handler based on function
   // type. OptionalFunctionHandlers for each key are unique per

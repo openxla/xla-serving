@@ -25,7 +25,7 @@
 
 namespace xla_serving {
 
-using neptune_model_orchestration::BatchOptions;
+using xla_saved_model_orchestration::BatchOptions;
 
 // batch_padding_policy string constants matching with the
 // BatchOptions.BatchPaddingPolicy enum.

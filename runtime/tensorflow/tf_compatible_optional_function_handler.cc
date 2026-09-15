@@ -76,11 +76,11 @@ struct TfConcreteFunctionHandle {
 };
 
 // Gets a TF concrete function handle from an
-// `neptune_model_manifest::Function`.
+// `xla_saved_model_manifest::Function`.
 absl::StatusOr<TfConcreteFunctionHandle> GetTfConcreteFunctionHandle(
-    const neptune_model_manifest::Function& func,
+    const xla_saved_model_manifest::Function& func,
     absl::string_view model_path) {
-  const neptune_model_manifest::UnstructuredData& tf_body = func.body().other();
+  const xla_saved_model_manifest::UnstructuredData& tf_body = func.body().other();
 
   TF_ASSIGN_OR_RETURN(
       std::string full_path,
@@ -111,7 +111,7 @@ std::vector<std::string> SortedKeys(const Dict& dict) {
 absl::StatusOr<std::shared_ptr<TfSavedModelRunner>>
 TfCompatibleOptionalFunctionHandler::CreateTfSavedModelRunner(
     absl::string_view model_path, TfrtOptions tfrt_options) {
-  TF_ASSIGN_OR_RETURN(neptune_model_manifest::Manifest manifest,
+  TF_ASSIGN_OR_RETURN(xla_saved_model_manifest::Manifest manifest,
                       GetManifest(model_path));
   TF_ASSIGN_OR_RETURN(std::string saved_model_dir,
                       GetTfSavedModelDirPath(model_path));
@@ -122,11 +122,11 @@ TfCompatibleOptionalFunctionHandler::CreateTfSavedModelRunner(
 absl::StatusOr<std::unique_ptr<Kernel>>
 TfCompatibleOptionalFunctionHandler::HandleFunction(
     absl::string_view model_path,
-    const neptune_model_manifest::Function& function,
+    const xla_saved_model_manifest::Function& function,
     const InterpreterCreateOptions& create_options, bool pre_data_conversion,
     bool post_data_conversion,
-    const neptune_model_orchestration::NamedTensorTypeList* named_inputs,
-    const neptune_model_orchestration::NamedTensorTypeList* named_outputs) {
+    const xla_saved_model_orchestration::NamedTensorTypeList* named_inputs,
+    const xla_saved_model_orchestration::NamedTensorTypeList* named_outputs) {
   if (!function.has_body()) {
     return absl::InvalidArgumentError("Function does not have body.");
   }
@@ -134,7 +134,7 @@ TfCompatibleOptionalFunctionHandler::HandleFunction(
   if (!function.body().has_other()) {
     return absl::InvalidArgumentError("Function body does not have `Other`.");
   }
-  const neptune_model_manifest::UnstructuredData& tf_body =
+  const xla_saved_model_manifest::UnstructuredData& tf_body =
       function.body().other();
 
   std::unique_ptr<Kernel> tf_kernel;
@@ -143,7 +143,7 @@ TfCompatibleOptionalFunctionHandler::HandleFunction(
       tf_body,
       {kTfConcreteFunctionHandleMimeTypeLegacy,
        kTfConcreteFunctionHandleMimeType},
-      {neptune_model_manifest::UnstructuredData::kFileSystemLocation},
+      {xla_saved_model_manifest::UnstructuredData::kFileSystemLocation},
       "Function body for TF Function"));
 
   TF_ASSIGN_OR_RETURN(auto tf_concrete_function_handle,

@@ -165,7 +165,7 @@ absl::StatusOr<FunctionFlatSignature> BundleInterpreter::GetPipelineSignature(
   };
 }
 
-absl::StatusOr<neptune_model_orchestration::Pipeline>
+absl::StatusOr<xla_saved_model_orchestration::Pipeline>
 BundleInterpreter::GetPipelineProto(absl::string_view pipeline_name) const {
   return absl::UnimplementedError(
       "GetPipelineProto is not implemented for BundleInterpreter.");

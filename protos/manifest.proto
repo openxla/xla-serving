@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-package neptune_model_manifest;
+package xla_saved_model_manifest;
 
 import "protos/type.proto";
 import "xla/pjrt/proto/compile_options.proto";
@@ -52,7 +52,7 @@ message TopLevelObject {
 }
 
 message Function {
-  neptune_model_type.FunctionSignature signature = 1;
+  xla_saved_model_type.FunctionSignature signature = 1;
   FunctionBody body = 2;
   // The names of the dependent data. Each of this corresponds to a key in the
   // checkpoint metadata.
@@ -88,7 +88,7 @@ enum LoaderType {
 }
 
 message ExternalValue {
-  optional neptune_model_type.Type type = 1;
+  optional xla_saved_model_type.Type type = 1;
   UnstructuredData data = 2;
 
   // The type of data loader.

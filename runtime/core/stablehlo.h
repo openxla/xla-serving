@@ -77,7 +77,7 @@ class StableHlo {
 
   // Creates an StableHlo object from one or multiple `Function`s.
   static absl::StatusOr<std::unique_ptr<StableHlo>> Create(
-      absl::Span<const neptune_model_manifest::Function* const> funcs);
+      absl::Span<const xla_saved_model_manifest::Function* const> funcs);
 
   // Creates an StableHlo object directly from a list of `Spec`s.
   static absl::StatusOr<std::unique_ptr<StableHlo>> Create(

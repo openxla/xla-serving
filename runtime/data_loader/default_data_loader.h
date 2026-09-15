@@ -40,11 +40,11 @@ class DefaultDataLoader : public DataLoader {
       CreateOptions create_options);
 
   absl::StatusOr<LoadResult> Load(
-      const neptune_model_manifest::ExternalValue& value_to_load,
+      const xla_saved_model_manifest::ExternalValue& value_to_load,
       std::optional<absl::string_view> model_path,
       const AssignedDevices* absl_nullable assigned_devices,
-      std::optional<const neptune_model_manifest::Manifest*> manifest,
-      std::optional<absl::Span<const neptune_model_manifest::Function* const>>
+      std::optional<const xla_saved_model_manifest::Manifest*> manifest,
+      std::optional<absl::Span<const xla_saved_model_manifest::Function* const>>
           stablehlo_funcs) override;
 
  private:

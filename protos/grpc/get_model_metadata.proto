@@ -24,11 +24,11 @@ import "protos/type.proto";
 message SignatureDef {
   // The overall (input and output) signature of the model.
   // For details, see orchestration.proto
-  neptune_model_type.FunctionSignature signature = 1;
+  xla_saved_model_type.FunctionSignature signature = 1;
 
   // An optional signature that is a (ordered) mapping from names to
   // `TensorType`. For details, see orchestration.proto
-  neptune_model_orchestration.NamedSignature named_signature = 2
+  xla_saved_model_orchestration.NamedSignature named_signature = 2
       [features.field_presence = EXPLICIT];
 }
 

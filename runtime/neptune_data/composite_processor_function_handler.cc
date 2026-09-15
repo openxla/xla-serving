@@ -41,11 +41,11 @@ namespace composite {
 absl::StatusOr<std::unique_ptr<Kernel>>
 CompositeProcessorFunctionHandler::HandleFunction(
     absl::string_view model_path,
-    const neptune_model_manifest::Function& function,
+    const xla_saved_model_manifest::Function& function,
     const InterpreterCreateOptions& create_options, bool pre_data_conversion,
     bool post_data_conversion,
-    const neptune_model_orchestration::NamedTensorTypeList* named_inputs,
-    const neptune_model_orchestration::NamedTensorTypeList* named_outputs) {
+    const xla_saved_model_orchestration::NamedTensorTypeList* named_inputs,
+    const xla_saved_model_orchestration::NamedTensorTypeList* named_outputs) {
   if (!function.has_body()) {
     return absl::InvalidArgumentError("Function does not have body.");
   }
@@ -53,13 +53,13 @@ CompositeProcessorFunctionHandler::HandleFunction(
   if (!function.body().has_other()) {
     return absl::InvalidArgumentError("Function body does not have `Other`.");
   }
-  const neptune_model_manifest::UnstructuredData& processor_body =
+  const xla_saved_model_manifest::UnstructuredData& processor_body =
       function.body().other();
 
   TF_RETURN_IF_ERROR(CheckMimeAndDataType(
       processor_body,
       {kCompositeProcessorMimeType, kLegacyCompositeProcessorMimeType},
-      {neptune_model_manifest::UnstructuredData::kFileSystemLocation},
+      {xla_saved_model_manifest::UnstructuredData::kFileSystemLocation},
       "Function body filesystem path for CompositeProcessor"));
 
   std::string absolute_config_path = tsl::io::JoinPath(
