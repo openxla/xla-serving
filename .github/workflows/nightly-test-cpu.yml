@@ -73,11 +73,11 @@ jobs:
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           echo "Extracting Docker image: ${IMAGE}"
-          mkdir -p /tmp/neptune-serving
-          crane export "${IMAGE}" - | tar -xf - -C /tmp/neptune-serving
+          mkdir -p /tmp/xla-serving
+          crane export "${IMAGE}" - | tar -xf - -C /tmp/xla-serving
           echo "Verifying serving binary..."
-          ls -la /tmp/neptune-serving/runtime/serving/gcp/server/neptune_serving_main_cpu
-          test -x /tmp/neptune-serving/runtime/serving/gcp/server/neptune_serving_main_cpu
+          ls -la /tmp/xla-serving/runtime/serving/gcp/server/xla_serving_main_cpu
+          test -x /tmp/xla-serving/runtime/serving/gcp/server/xla_serving_main_cpu
 
       - name: Install uv and Set up Python
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
@@ -125,23 +125,23 @@ jobs:
           python3 -m examples.nnx.run_export --export_path=/tmp/exported_model
           ls -la /tmp/exported_model
 
-      - name: Start Neptune CPU Server and Run End-to-End Prediction Test
+      - name: Start XLA Serving CPU Server and Run End-to-End Prediction Test
         run: |
-          echo "Starting Neptune Serving CPU binary..."
-          /tmp/neptune-serving/runtime/serving/gcp/server/neptune_serving_main_cpu \
+          echo "Starting XLA Serving CPU binary..."
+          /tmp/xla-serving/runtime/serving/gcp/server/xla_serving_main_cpu \
             --model_name=nnx \
             --model_path=/tmp/exported_model \
             --use_insecure_grpc_credentials=true \
-            --port=8500 > /tmp/neptune-serving.log 2>&1 &
+            --port=8500 > /tmp/xla-serving.log 2>&1 &
           SERVER_PID=$!
           echo "SERVER_PID=${SERVER_PID}" >> $GITHUB_ENV
-          echo "Started Neptune server with PID ${SERVER_PID}"
+          echo "Started XLA Serving server with PID ${SERVER_PID}"
 
-          echo "Waiting for Neptune server to be ready..."
+          echo "Waiting for XLA Serving server to be ready..."
           READY=false
           for i in $(seq 1 30); do
-            if grep -q "JAX Serving listening on" /tmp/neptune-serving.log 2>/dev/null; then
-              echo "Neptune server is ready after ${i}s!"
+            if grep -q "JAX Serving listening on" /tmp/xla-serving.log 2>/dev/null; then
+              echo "XLA Serving server is ready after ${i}s!"
               READY=true
               break
             fi
@@ -149,8 +149,8 @@ jobs:
           done
 
           if [ "${READY}" != "true" ]; then
-            echo "Neptune server failed to start within 30s. Server logs:"
-            cat /tmp/neptune-serving.log || true
+            echo "XLA Serving server failed to start within 30s. Server logs:"
+            cat /tmp/xla-serving.log || true
             exit 1
           fi
 
@@ -165,9 +165,9 @@ jobs:
       - name: Clean up Server
         if: always()
         run: |
-          if [ -f /tmp/neptune-serving.log ]; then
-            echo "=== Neptune Serving Logs ==="
-            cat /tmp/neptune-serving.log
+          if [ -f /tmp/xla-serving.log ]; then
+            echo "=== XLA Serving Logs ==="
+            cat /tmp/xla-serving.log
           fi
           if [ -n "${SERVER_PID}" ]; then
             kill -9 "${SERVER_PID}" 2>/dev/null || true

@@ -65,20 +65,20 @@ The exported bundle at `/tmp/qwen3_serving_b30_p2000` contains:
 
 ---
 
-## 3. Serving via Neptune C++ Model Server
+## 3. Serving via XLA Serving C++ Model Server
 
 Build the standalone C++ Model Serving Server binary
-(`neptune_serving_main_tpu`) using Bazel (enabling TensorFlow tokenization
+(`xla_serving_main_tpu`) using Bazel (enabling TensorFlow tokenization
 support with `--define=ENABLE_TF=1`):
 
 ```bash
 # Build the server binary
-bazel build -c opt --define=ENABLE_TF=1 //runtime/serving/gcp/server:neptune_serving_main_tpu
+bazel build -c opt --define=ENABLE_TF=1 //runtime/serving/gcp/server:xla_serving_main_tpu
 
 # Launch the server on TPU
 export TPU_LIBRARY_PATH=$(python3 -c "import libtpu; print(libtpu.get_library_path())")
 
-./bazel-bin/runtime/serving/gcp/server/neptune_serving_main_tpu \
+./bazel-bin/runtime/serving/gcp/server/xla_serving_main_tpu \
   --model_name=qwen3 \
   --model_path=/tmp/qwen3_serving_b30_p2000 \
   --port=8500 \

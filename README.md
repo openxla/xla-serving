@@ -126,7 +126,7 @@ In order to build the image at head, please run:
 
 ```
 bazel run -c opt \
-//runtime/serving/gcp/server:neptune_serving_pusher \
+//runtime/serving/gcp/server:xla_serving_pusher \
 -- --repository=<Path to Artifact registry> \
 --tag=latest
 ```
@@ -135,7 +135,7 @@ To build with Tensorflow dependencies
 
 ```
 bazel run -c opt --define ENABLE_TF=1 \
-//runtime/serving/gcp/server:neptune_serving_pusher \
+//runtime/serving/gcp/server:xla_serving_pusher \
 -- --repository=<Path to Artifact registry> --tag=latest
 ```
 
@@ -155,7 +155,7 @@ To build docker image for GPU:
 
 ```
 bazel run -c opt --config=cuda_v12 \
-//runtime/serving/gcp/server:neptune_serving_pusher_gpu \
+//runtime/serving/gcp/server:xla_serving_pusher_gpu \
 -- --repository="<Path to Artifact registry>" \
 --tag="latest"
 ```
@@ -173,7 +173,7 @@ To build docker image for GPU:
 
 ```
 bazel run -c opt --config=cuda_v12 \
-//runtime/serving/gcp/server:neptune_serving_pusher_tpu \
+//runtime/serving/gcp/server:xla_serving_pusher_tpu \
 -- --repository="<Path to Artifact registry>" \
 --tag="latest"
 ```
@@ -226,7 +226,7 @@ command:
 
 #### CPU
 ```bash
-bazel run //runtime/serving/gcp/server:neptune_serving_main -- \
+bazel run //runtime/serving/gcp/server:xla_serving_main_cpu -- \
   --model_path <Exported model path> \
   --model_name <model_name> \
   --orbax_grpc_server_platform <cpu|cuda|tpu>  \
@@ -235,7 +235,7 @@ bazel run //runtime/serving/gcp/server:neptune_serving_main -- \
 
 #### GPU and TPU
 ```bash
-bazel run //runtime/serving/gcp/server:neptune_serving_main_<gpu|tpu> -- \
+bazel run //runtime/serving/gcp/server:xla_serving_main_<gpu|tpu> -- \
   --model_path <Exported model path> \
   --model_name <model_name> \
   --orbax_grpc_server_platform <cpu|cuda|tpu>  \
@@ -293,7 +293,7 @@ xla_saved_model.save(
 To enable warmup, set `--warmup_server=true`. Note that if the warmup file is missing, the server startup will fail.
 
 ```bash
-bazel run //runtime/serving/gcp/server:neptune_serving_main -- \
+bazel run //runtime/serving/gcp/server:xla_serving_main_cpu -- \
   --model_path <Exported model path> \
   --model_name <model_name> \
   --orbax_grpc_server_platform <cpu|cuda|tpu> \
@@ -304,7 +304,7 @@ bazel run //runtime/serving/gcp/server:neptune_serving_main -- \
 By default, warmup is disabled. You can also explicitly disable it with `--warmup_server=false`:
 
 ```bash
-bazel run //runtime/serving/gcp/server:neptune_serving_main -- \
+bazel run //runtime/serving/gcp/server:xla_serving_main_cpu -- \
   --model_path <Exported model path> \
   --model_name <model_name> \
   --orbax_grpc_server_platform <cpu|cuda|tpu> \

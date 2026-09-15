@@ -127,7 +127,7 @@ python3 -m xla_saved_model._src.llm.export_llm \
 ## 3. Deploying & Serving on Native C++ Model Server
 
 You can serve any exported model bundle using XSE's native C++ Model Serving
-Server (`neptune_serving_main_tpu`), which executes the Orbax model bundle on
+Server (`xla_serving_main_tpu`), which executes the Orbax model bundle on
 Google Cloud TPU via Orbax and IFRT with zero Python runtime overhead.
 
 ### A. Build the C++ Serving Server Binary
@@ -135,7 +135,7 @@ Build the TPU model serving binary using Bazel (enabling TensorFlow
 tokenization support with `--define=ENABLE_TF=1`):
 
 ```bash
-bazel build -c opt --define=ENABLE_TF=1 //runtime/serving/gcp/server:neptune_serving_main_tpu
+bazel build -c opt --define=ENABLE_TF=1 //runtime/serving/gcp/server:xla_serving_main_tpu
 ```
 
 ### B. Launch the C++ Model Server
@@ -145,7 +145,7 @@ server:
 ```bash
 export TPU_LIBRARY_PATH=$(python3 -c "import libtpu; print(libtpu.get_library_path())")
 
-./bazel-bin/runtime/serving/gcp/server/neptune_serving_main_tpu \
+./bazel-bin/runtime/serving/gcp/server/xla_serving_main_tpu \
   --model_name=qwen3 \
   --model_path=/tmp/qwen3_serving_b30_p2000 \
   --port=8500 \
@@ -388,7 +388,7 @@ python3 -m xla_saved_model._src.llm.benchmark_llm \
 
 ### Mode 2: `grpc_client` (C++ Model Server via gRPC)
 Sends gRPC requests to an active C++ XLA SavedModel Server
-(`neptune_serving_main_tpu`), verifying generated output beams and measuring
+(`xla_serving_main_tpu`), verifying generated output beams and measuring
 end-to-end request throughput:
 
 ```bash

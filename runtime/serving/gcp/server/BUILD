@@ -12,7 +12,7 @@ config_setting(
     values = {"define": "ENABLE_TF=1"},
 )
 
-NEPTUNE_SERVING_MAIN_COMMON_DEPS = [
+XLA_SERVING_MAIN_COMMON_DEPS = [
     "@abseil-cpp//absl/flags:flag",
     "@abseil-cpp//absl/flags:parse",
     "@abseil-cpp//absl/log",
@@ -31,105 +31,105 @@ NEPTUNE_SERVING_MAIN_COMMON_DEPS = [
 ]
 
 cc_binary(
-    name = "neptune_serving_main_cpu",
+    name = "xla_serving_main_cpu",
     srcs = ["main.cc"],
     linkopts = ["-Wl,--allow-multiple-definition"],
     deps = [
         ":jsv_callback_grpc_server_cpu",
-    ] + NEPTUNE_SERVING_MAIN_COMMON_DEPS,
+    ] + XLA_SERVING_MAIN_COMMON_DEPS,
 )
 
 cc_binary(
-    name = "neptune_serving_main_gpu",
+    name = "xla_serving_main_gpu",
     srcs = ["main.cc"],
     linkopts = ["-Wl,--allow-multiple-definition"],
     tags = ["manual"],
     deps = [
         ":jsv_callback_grpc_server_gpu",
-    ] + NEPTUNE_SERVING_MAIN_COMMON_DEPS,
+    ] + XLA_SERVING_MAIN_COMMON_DEPS,
 )
 
 cc_binary(
-    name = "neptune_serving_main_tpu",
+    name = "xla_serving_main_tpu",
     srcs = ["main.cc"],
     linkopts = ["-Wl,--allow-multiple-definition"],
     tags = ["manual"],
     deps = [
         ":jsv_callback_grpc_server_tpu",
-    ] + NEPTUNE_SERVING_MAIN_COMMON_DEPS,
+    ] + XLA_SERVING_MAIN_COMMON_DEPS,
 )
 
 # The following configuration is only for the public OSS version.
 # import oss_only_module
 # Package the binary in tar layer.
 tar(
-    name = "neptune_serving",
-    srcs = [":neptune_serving_main_cpu"],
+    name = "xla_serving",
+    srcs = [":xla_serving_main_cpu"],
     tags = ["manual"],
 )
 
 # 3. Define the Image
 oci_image(
-    name = "neptune_serving_image",
+    name = "xla_serving_image",
     base = "@distroless_cc",
-    entrypoint = ["/runtime/serving/gcp/server/neptune_serving_main_cpu"],
+    entrypoint = ["/runtime/serving/gcp/server/xla_serving_main_cpu"],
     tags = ["manual"],
-    tars = [":neptune_serving"],
+    tars = [":xla_serving"],
 )
 
 # 4. Define the Push destination, e.g. command:
-# bazel run //runtime/serving/gcp/server:neptune_serving_pusher -- --repository=us-docker.pkg.dev/my-project/my-repo/image
+# bazel run //runtime/serving/gcp/server:xla_serving_pusher -- --repository=us-docker.pkg.dev/my-project/my-repo/image
 oci_push(
-    name = "neptune_serving_pusher",
-    image = ":neptune_serving_image",
+    name = "xla_serving_pusher",
+    image = ":xla_serving_image",
     repository = "gcr.io/neptune-serving-engine/cpu-jax-only",
     tags = ["manual"],
 )
 
 # Package the GPU binary in tar layer.
 tar(
-    name = "neptune_serving_gpu",
-    srcs = [":neptune_serving_main_gpu"],
+    name = "xla_serving_gpu",
+    srcs = [":xla_serving_main_gpu"],
     tags = ["manual"],
 )
 
 # Define the GPU Image
 oci_image(
-    name = "neptune_serving_image_gpu",
+    name = "xla_serving_image_gpu",
     base = "@cuda_base",
-    entrypoint = ["/runtime/serving/gcp/server/neptune_serving_main_gpu"],
+    entrypoint = ["/runtime/serving/gcp/server/xla_serving_main_gpu"],
     tags = ["manual"],
-    tars = [":neptune_serving_gpu"],
+    tars = [":xla_serving_gpu"],
 )
 
 # Define the GPU Push destination
 oci_push(
-    name = "neptune_serving_pusher_gpu",
-    image = ":neptune_serving_image_gpu",
+    name = "xla_serving_pusher_gpu",
+    image = ":xla_serving_image_gpu",
     repository = "gcr.io/neptune-serving-engine/gpu-jax",
     tags = ["manual"],
 )
 
 # Package the TPU binary in tar layer.
 tar(
-    name = "neptune_serving_tpu",
-    srcs = [":neptune_serving_main_tpu"],
+    name = "xla_serving_tpu",
+    srcs = [":xla_serving_main_tpu"],
     tags = ["manual"],
 )
 
 # Define the TPU Image
 oci_image(
-    name = "neptune_serving_image_tpu",
+    name = "xla_serving_image_tpu",
     base = "@distroless_cc",
-    entrypoint = ["/runtime/serving/gcp/server/neptune_serving_main_tpu"],
+    entrypoint = ["/runtime/serving/gcp/server/xla_serving_main_tpu"],
     tags = ["manual"],
-    tars = [":neptune_serving_tpu"],
+    tars = [":xla_serving_tpu"],
 )
 
 # Define the TPU Push destination
 oci_push(
-    name = "neptune_serving_pusher_tpu",
-    image = ":neptune_serving_image_tpu",
+    name = "xla_serving_pusher_tpu",
+    image = ":xla_serving_image_tpu",
     repository = "gcr.io/neptune-serving-engine/tpu-jax",
     tags = ["manual"],
 )
@@ -315,7 +315,7 @@ cc_library(
     ],
 )
 
-NEPTUNE_SERVING_MAIN_TEST_COMMON_DEPS = [
+XLA_SERVING_MAIN_TEST_COMMON_DEPS = [
     ":flags",
     "//devtools/build/runtime:get_runfiles_dir",
     "//net/util:ports",
