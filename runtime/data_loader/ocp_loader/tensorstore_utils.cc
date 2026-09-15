@@ -29,6 +29,7 @@
 #include "absl/strings/match.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_format.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "nlohmann/json.hpp"  // from @nlohmann_json
 #include "nlohmann/json_fwd.hpp"  // from @nlohmann_json
