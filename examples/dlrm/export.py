@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Neptune export for DLRM recommender model with TPUEmbeddingForServing."""
+"""XLA SavedModel export for DLRM recommender with TPUEmbeddingForServing."""
 
 import os
 import tempfile
@@ -84,7 +84,7 @@ def get_synthetic_batch(batch_size, valency=None, vocab_sizes=None):
 
 
 def export_model(export_path: str, embedding_size: int = 128):
-  """Exports the DLRM recommender model using Neptune."""
+  """Exports the DLRM recommender model using XLA SavedModel."""
 
   embedding_layer, model = model_lib.build_model(embedding_size)
   synthetic_batch_1 = get_synthetic_batch(

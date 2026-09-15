@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""End-to-end prediction client test for Neptune Serving."""
+"""End-to-end prediction client test for XLA Serving."""
 
 import argparse
 import grpc
@@ -39,7 +39,7 @@ def run_prediction_test(
     timeout: int = 60,
 ) -> None:
   """Sends a Predict request to the server and verifies the response."""
-  print(f"Connecting to Neptune server at {server_address}...")
+  print(f"Connecting to XLA Serving server at {server_address}...")
   channel = grpc.insecure_channel(server_address)
   predict_fn = channel.unary_unary(
       "/neptune.serving.PredictionService/Predict",
@@ -87,7 +87,7 @@ def run_prediction_test(
 
 def main() -> None:
   parser = argparse.ArgumentParser(
-      description="Test Neptune serving prediction client."
+      description="Test XLA Serving prediction client."
   )
   parser.add_argument(
       "--server_address",

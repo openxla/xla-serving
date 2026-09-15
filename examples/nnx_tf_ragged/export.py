@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Neptune model with a TF preprocessor that uses tf.RaggedTensor and tf.SparseTensor."""
+"""XLA SavedModel with a TF preprocessor using Ragged and Sparse tensors."""
 
 import jax.numpy as jnp
 import tensorflow as tf

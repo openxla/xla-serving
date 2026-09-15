@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for Neptune export of DLRM model."""
+"""Tests for XLA SavedModel export of DLRM model."""
 
 import os
 

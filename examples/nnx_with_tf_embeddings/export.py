@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Neptune export for NNX recommender model with TPUEmbeddingForServing layer."""
+"""XLA SavedModel export for NNX recommender with TPUEmbeddingForServing."""
 
 import os
 import tempfile
@@ -39,7 +39,7 @@ flags.DEFINE_integer(
 
 
 def export_model(export_path: str):
-  """Exports the NNX recommender model using Neptune."""
+  """Exports the NNX recommender model using XLA SavedModel."""
 
   rngs = nnx.Rngs(0)
   embedding_layer, model = model_lib.build_model(

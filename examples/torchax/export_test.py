@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for Neptune export of PyTorch model."""
+"""Tests for XLA SavedModel export of PyTorch model."""
 
 import os
 from absl.testing import absltest
@@ -23,7 +23,7 @@ from xla_saved_model_runner import model_runner
 
 
 class ExportTest(absltest.TestCase):
-  """Tests for Neptune export of PyTorch model."""
+  """Tests for XLA SavedModel export of PyTorch model."""
 
   def test_export_and_compare(self):
     export_path = self.create_tempdir().full_path
@@ -43,12 +43,12 @@ class ExportTest(absltest.TestCase):
     pt_output = pt_model(input_tensor).detach().numpy()
 
     runner = model_runner.ModelRunner(model_path=export_path)
-    neptune_outputs = runner.signature("serving_default").run_with_dict_return(
+    xsm_outputs = runner.signature("serving_default").run_with_dict_return(
         x=input_np
     )
-    neptune_output = neptune_outputs["y"]
+    xsm_output = xsm_outputs["y"]
 
-    np.testing.assert_allclose(neptune_output, pt_output, rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(xsm_output, pt_output, rtol=1e-5, atol=1e-5)
 
 
 if __name__ == "__main__":

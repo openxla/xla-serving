@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Neptune export for an NNX recommender model with JAX preprocessor."""
+"""XLA SavedModel export for an NNX recommender model with JAX preprocessor."""
 
 import os
 import tempfile
@@ -30,7 +30,7 @@ from xla_saved_model._src.export import serving_config
 
 
 def export_model(export_path: str):
-  """Exports the NNX recommender model using Neptune."""
+  """Exports the NNX recommender model using XLA SavedModel."""
 
   rngs = nnx.Rngs(0)
   embedding_layer, model = nnx_model.build_model(

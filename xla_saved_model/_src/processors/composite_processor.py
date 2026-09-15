@@ -126,7 +126,7 @@ def _propagate_pybind_signature(
   return jax.tree_util.tree_unflatten(output_treedef, flat_outputs)
 
 
-# //neptune/runtime/xla_serving_data/composite_processor_function_handler.h
+# Keep in sync with runtime/xla_serving_data/composite_processor_function_handler.h
 COMPOSITE_PROCESSOR_MIME_TYPE = (
     "application/protobuf; type=xla_serving.data.composite.CompositeProcessorConfig"
 )
