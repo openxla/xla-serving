@@ -44,9 +44,9 @@ namespace xla_serving {
 
 namespace {
 
-absl::StatusOr<neptune_bundle_orchestration::BundlePipelines>
+absl::StatusOr<xla_serving_bundle_orchestration::BundlePipelines>
 ParseBundleOrchestration(absl::string_view bundle_path) {
-  neptune_bundle_orchestration::BundlePipelines proto;
+  xla_serving_bundle_orchestration::BundlePipelines proto;
   std::string pb_path =
       tsl::io::JoinPath(bundle_path, "bundle_orchestration.pb");
   TF_RETURN_IF_ERROR(
@@ -326,7 +326,7 @@ BundleInterpreter::CreateSubInterpreter(absl::string_view model_name) const {
   return Interpreter::Create(std::move(sub_options));
 }
 
-absl::StatusOr<const neptune_bundle_orchestration::BundlePipeline*>
+absl::StatusOr<const xla_serving_bundle_orchestration::BundlePipeline*>
 BundleInterpreter::GetPipeline(absl::string_view pipeline_name) const {
   auto pipe_it =
       master_orchestration_.pipelines().find(std::string(pipeline_name));
@@ -337,7 +337,7 @@ BundleInterpreter::GetPipeline(absl::string_view pipeline_name) const {
   return &pipe_it->second;
 }
 
-absl::StatusOr<const neptune_bundle_orchestration::ModelExecutionComponent*>
+absl::StatusOr<const xla_serving_bundle_orchestration::ModelExecutionComponent*>
 BundleInterpreter::GetFirstComponent(absl::string_view pipeline_name) const {
   TF_ASSIGN_OR_RETURN(const auto* pipeline, GetPipeline(pipeline_name));
   if (pipeline->components().empty()) {
@@ -347,7 +347,7 @@ BundleInterpreter::GetFirstComponent(absl::string_view pipeline_name) const {
   return &pipeline->components(0);
 }
 
-absl::StatusOr<const neptune_bundle_orchestration::ModelExecutionComponent*>
+absl::StatusOr<const xla_serving_bundle_orchestration::ModelExecutionComponent*>
 BundleInterpreter::GetLastComponent(absl::string_view pipeline_name) const {
   TF_ASSIGN_OR_RETURN(const auto* pipeline, GetPipeline(pipeline_name));
   if (pipeline->components().empty()) {

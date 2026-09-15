@@ -92,16 +92,16 @@ class BundleInterpreter : public Interpreter {
 
  private:
   absl::flat_hash_map<std::string, std::unique_ptr<Interpreter>> interpreters_;
-  neptune_bundle_orchestration::BundlePipelines master_orchestration_;
+  xla_serving_bundle_orchestration::BundlePipelines master_orchestration_;
   std::string bundle_path_;
   absl::Status Load();
   absl::StatusOr<std::unique_ptr<Interpreter>> CreateSubInterpreter(
       absl::string_view model_name) const;
-  absl::StatusOr<const neptune_bundle_orchestration::BundlePipeline*>
+  absl::StatusOr<const xla_serving_bundle_orchestration::BundlePipeline*>
   GetPipeline(absl::string_view pipeline_name) const;
-  absl::StatusOr<const neptune_bundle_orchestration::ModelExecutionComponent*>
+  absl::StatusOr<const xla_serving_bundle_orchestration::ModelExecutionComponent*>
   GetFirstComponent(absl::string_view pipeline_name) const;
-  absl::StatusOr<const neptune_bundle_orchestration::ModelExecutionComponent*>
+  absl::StatusOr<const xla_serving_bundle_orchestration::ModelExecutionComponent*>
   GetLastComponent(absl::string_view pipeline_name) const;
 };
 
