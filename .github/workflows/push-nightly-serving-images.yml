@@ -1,4 +1,4 @@
-name: Push Nightly Neptune Serving Images
+name: Push Nightly XLA Serving Images
 
 on:
   schedule:

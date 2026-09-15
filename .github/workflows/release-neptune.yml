@@ -1,4 +1,4 @@
-name: Release Neptune
+name: Release XLA Serving
 
 on:
   workflow_dispatch:
@@ -49,7 +49,7 @@ jobs:
   # Phase 1: Build Wheels & Run Full Verification Matrix
   # ---------------------------------------------------------------------------
   build-and-verify:
-    name: Build & Verify Neptune Wheels
+    name: Build & Verify XLA Serving Wheels
     runs-on: linux-x86-n2-16
     container:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest # zizmor: ignore[unpinned-images]

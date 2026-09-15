@@ -1,4 +1,4 @@
-name: Build Neptune Runtime
+name: Build XLA Serving Runtime
 
 on:
   push:
@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   build-and-test-runtime:
-    name: "Build Neptune Runtime"
+    name: "Build XLA Serving Runtime"
     runs-on: linux-x86-n2-32
     container:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest # zizmor: ignore[unpinned-images]
@@ -54,7 +54,7 @@ jobs:
         with:
           repository-cache: true
 
-      - name: Build and Test Neptune Runtime
+      - name: Build and Test XLA Serving Runtime
         if: github.event_name != 'pull_request' || steps.filter.outputs.runtime == 'true'
         env:
           CACHE_CONFIG: ${{ github.ref == 'refs/heads/main' && 'remote_cache_readwrite' || 'remote_cache_readonly' }}

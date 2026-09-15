@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   build-and-test:
-    name: "Build Neptune Model (Python ${{ matrix.python-version }}, jax ${{ matrix.jax-version }})"
+    name: "Build XLA SavedModel (Python ${{ matrix.python-version }}, jax ${{ matrix.jax-version }})"
     runs-on: linux-x86-n2-16
     container:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest # zizmor: ignore[unpinned-images]
@@ -110,7 +110,7 @@ jobs:
           retention-days: 1
 
   build-and-test-llm:
-    name: "Build Neptune LLM Module (Python ${{ matrix.python-version }}, jax ${{ matrix.jax-version }})"
+    name: "Build XLA SavedModel LLM Module (Python ${{ matrix.python-version }}, jax ${{ matrix.jax-version }})"
     runs-on: linux-x86-n2-16
     container:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest # zizmor: ignore[unpinned-images]
