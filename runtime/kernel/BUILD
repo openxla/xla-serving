@@ -92,7 +92,6 @@ cc_library(
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/types:span",
-        "@xla//xla/pjrt:pjrt_future",
         "@xla//xla/tsl/concurrency:future",
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",
@@ -100,6 +99,52 @@ cc_library(
         "@xla_serving//runtime/core:value",
         "@xla_serving//runtime/interpreter:context",
     ],
+)
+
+cc_library(
+    name = "aot_stablehlo_runner_op",
+    srcs = ["aot_stablehlo_runner_op.cc"],
+    hdrs = ["aot_stablehlo_runner_op.h"],
+    visibility = [":kernel_internal"],
+    deps = [
+        ":kernel",
+        ":kernel_builder_context",
+        ":kernel_io_data_type",
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/types:span",
+        "@tsl//tsl/profiler/lib:traceme",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/core:aot_stablehlo_runner",
+        "@xla_serving//runtime/core:flat_signature",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/core:ifrt_loaded_variable_registry",
+        "@xla_serving//runtime/core:stablehlo",
+        "@xla_serving//runtime/core:stablehlo_runner_base",
+        "@xla_serving//runtime/core:value",
+        "@xla_serving//runtime/core/streaming:utils",
+        "@xla_serving//runtime/interpreter:manifest_utils",
+    ],
+)
+
+cc_library(
+    name = "aot_kernel_init",
+    srcs = ["aot_kernel_init.cc"],
+    visibility = [":kernel_users"],
+    deps = [
+        ":aot_stablehlo_runner_op",
+        ":identity",
+        ":kernel",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@xla//xla/tsl/platform:errors",
+        "@xla_serving//runtime/kernel/batching:batch_runner_op",
+    ],
+    alwayslink = 1,
 )
 
 cc_library(
@@ -125,6 +170,7 @@ cc_library(
         "@xla//xla/python/ifrt",
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/core:aot_stablehlo_runner",
         "@xla_serving//runtime/core:device_buffer",
         "@xla_serving//runtime/core:flat_signature",
         "@xla_serving//runtime/core:host_buffer",
@@ -132,6 +178,7 @@ cc_library(
         "@xla_serving//runtime/core:stablehlo",
         "@xla_serving//runtime/core:stablehlo_optimizer",
         "@xla_serving//runtime/core:stablehlo_runner",
+        "@xla_serving//runtime/core:stablehlo_runner_base",
         "@xla_serving//runtime/core:value",
         "@xla_serving//runtime/core/streaming:utils",
         "@xla_serving//runtime/interpreter:manifest_utils",

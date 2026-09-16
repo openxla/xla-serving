@@ -31,7 +31,6 @@
 #include "runtime/core/flat_signature.h"  // from @xla_serving
 #include "runtime/core/value.h"  // from @xla_serving
 #include "runtime/kernel/kernel_builder_context.h"  // from @xla_serving
-#include "xla/pjrt/pjrt_future.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
@@ -137,7 +136,15 @@ absl::StatusOr<std::unique_ptr<Kernel>> KernelRegistry::Create(
   absl::MutexLock lock(mutex_);
   auto it = kernel_builders_.find(name);
   if (it == kernel_builders_.end()) {
-    return absl::NotFoundError(absl::StrCat("Kernel ", name, " not found."));
+    std::string hint;
+    if (name == "StableHloRunnerOp" || name == "AotStableHloRunnerOp") {
+      hint =
+          " Did you forget to link "
+          "//third_party/neptune/runtime/interpreter:aot_execution or "
+          "//third_party/neptune/runtime/interpreter:jit_compilation?";
+    }
+    return absl::NotFoundError(
+        absl::StrCat("Kernel ", name, " not found.", hint));
   }
   return it->second(context);
 }

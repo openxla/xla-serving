@@ -25,6 +25,7 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "runtime/core/flat_signature.h"  // from @xla_serving
 #include "runtime/core/stablehlo_runner.h"  // from @xla_serving
+#include "runtime/core/stablehlo_runner_base.h"  // from @xla_serving
 #include "runtime/kernel/kernel.h"  // from @xla_serving
 #include "runtime/kernel/kernel_builder_context.h"  // from @xla_serving
 #include "runtime/kernel/kernel_io_data_type.h"  // from @xla_serving
@@ -74,16 +75,17 @@ class StableHloRunnerOp : public CancellableKernel {
   }
 
  private:
-  explicit StableHloRunnerOp(std::unique_ptr<StableHloRunner> stablehlo_runner,
-                             std::unique_ptr<FlatSignature> input_signature,
-                             std::unique_ptr<FlatSignature> output_signature)
+  explicit StableHloRunnerOp(
+      std::unique_ptr<StableHloRunnerBase> stablehlo_runner,
+      std::unique_ptr<FlatSignature> input_signature,
+      std::unique_ptr<FlatSignature> output_signature)
       : CancellableKernel(std::move(input_signature),
                           std::move(output_signature)),
         stablehlo_runner_(std::move(stablehlo_runner)) {}
 
   absl::Status RunInternal(ExecuteContext& context) override;
 
-  std::unique_ptr<StableHloRunner> stablehlo_runner_;
+  std::unique_ptr<StableHloRunnerBase> stablehlo_runner_;
 
   friend class StableHloRunnerTestPeer;
 };

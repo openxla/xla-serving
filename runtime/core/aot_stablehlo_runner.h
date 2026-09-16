@@ -22,7 +22,7 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/stablehlo.h"  // from @xla_serving
-#include "runtime/core/stablehlo_runner.h"  // from @xla_serving
+#include "runtime/core/stablehlo_runner_base.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/executable.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
@@ -50,7 +50,7 @@ struct StableHloRunnerAotOptions {
   std::vector<std::shared_ptr<tsl::ReadOnlyMemoryRegion>> aot_memory_regions;
 };
 
-class AotStableHloRunner : public StableHloRunner {
+class AotStableHloRunner : public StableHloRunnerBase {
  public:
   // Statically constructs a StableHloRunner entirely driven by ahead-of-time
   // (AOT) loaded modules and weights, decoupling it from dynamic MLIR compiler
@@ -60,7 +60,7 @@ class AotStableHloRunner : public StableHloRunner {
 
  private:
   // Inherit constructor access via friendship
-  using StableHloRunner::StableHloRunner;
+  using StableHloRunnerBase::StableHloRunnerBase;
 
   tsl::Future<SharedCachedExecutableBundle> LookUpOrCreateExecutable(
       absl::Span<const xla::ifrt::Shape> input_shapes,

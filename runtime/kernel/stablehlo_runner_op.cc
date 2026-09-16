@@ -35,6 +35,7 @@
 #include "runtime/core/stablehlo.h"  // from @xla_serving
 #include "runtime/core/stablehlo_optimizer.h"  // from @xla_serving
 #include "runtime/core/stablehlo_runner.h"  // from @xla_serving
+#include "runtime/core/stablehlo_runner_base.h"  // from @xla_serving
 #include "runtime/core/streaming/utils.h"  // from @xla_serving
 #include "runtime/core/value.h"  // from @xla_serving
 #include "runtime/interpreter/manifest_utils.h"  // from @xla_serving
@@ -59,7 +60,7 @@ namespace xla_serving {
 
 namespace {
 
-absl::StatusOr<std::unique_ptr<StableHloRunner>> CreateAotRunner(
+absl::StatusOr<std::unique_ptr<StableHloRunnerBase>> CreateAotRunner(
     const KernelBuilderContext& context,
     std::vector<xla::ifrt::LoadedExecutableRef> loaded_executables,
     std::shared_ptr<StableHlo> stablehlo,
@@ -98,7 +99,7 @@ absl::StatusOr<std::unique_ptr<StableHloRunner>> CreateAotRunner(
   return AotStableHloRunner::Create(std::move(aot_options));
 }
 
-absl::StatusOr<std::unique_ptr<StableHloRunner>> CreateJitRunner(
+absl::StatusOr<std::unique_ptr<StableHloRunnerBase>> CreateJitRunner(
     const KernelBuilderContext& context, std::shared_ptr<StableHlo> stablehlo,
     std::shared_ptr<xla::ifrt::Client> ifrt_client,
     tsl::thread::ThreadPool* thread_pool,
@@ -197,7 +198,7 @@ absl::StatusOr<std::unique_ptr<Kernel>> StableHloRunnerOp::Create(
     return callback_id_status.status();
   }
 
-  std::unique_ptr<StableHloRunner> stablehlo_runner;
+  std::unique_ptr<StableHloRunnerBase> stablehlo_runner;
 
   auto loaded_executables =
       context.GetConfig<std::vector<xla::ifrt::LoadedExecutableRef>>(
@@ -244,8 +245,7 @@ absl::Status StableHloRunnerOp::RunInternal(ExecuteContext& context) {
         request_ids_buffer_status =
             CreateRequestIdsBuffer(context.run_context.request_ids);
       } else {
-        request_ids_buffer_status =
-            CreateScalarRequestIdBuffer(request_id);
+        request_ids_buffer_status = CreateScalarRequestIdBuffer(request_id);
       }
       TF_ASSIGN_OR_RETURN(HostBuffer request_ids_buffer,
                           request_ids_buffer_status);
