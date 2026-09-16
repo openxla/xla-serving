@@ -41,6 +41,7 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "include/dlpack/dlpack.h"  // from @dlpack
 #include "xla/tsl/platform/status_macros.h"
+#include "include/nanobind/nanobind.h"  // from @nanobind_bazel
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
 #include "data/processor/cc/api/value.h"  // from @xla_serving
@@ -706,6 +707,12 @@ std::string ValueRepr(const api::Value& value) { return value.DebugString(); }
 
 PYBIND11_MODULE(composite_processor_pybind, m) {
   m.doc() = "Composite Processor Python bindings";
+
+#if NB_VERSION_MAJOR >= 3
+  if (!nanobind::register_module(nanobind::handle(m.ptr()))) {
+    throw py::error_already_set();
+  }
+#endif
 
   tsl::ImportNumpy();
 

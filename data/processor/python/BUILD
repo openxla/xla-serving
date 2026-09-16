@@ -30,6 +30,7 @@ pybind_extension(
         "@abseil-cpp//absl/types:span",
         "@com_google_protobuf//:any_cc_proto",
         "@dlpack",
+        "@nanobind_bazel//:nanobind",
         "@pybind11_abseil//pybind11_abseil:status_casters",
         "@pybind11_protobuf//pybind11_protobuf:native_proto_caster",
         "@tsl//tsl/platform:tstring",
