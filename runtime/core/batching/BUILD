@@ -102,14 +102,17 @@ cc_library(
 
 cc_library(
     name = "shared_batch_scheduler",
+    srcs = ["shared_batch_scheduler.cc"],
     hdrs = ["shared_batch_scheduler.h"],
     deps = [
         ":batch_scheduler",
         ":batch_scheduler_utils",
-        ":batch_stats",
+        ":fifo_queue",
         ":periodic_function",
+        ":queue_base",
         ":queue_options",
         "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/flags:flag",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/log:check",
         "@abseil-cpp//absl/status",
@@ -125,9 +128,6 @@ cc_library(
         "@xla//xla/tsl/platform:criticality",
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:errors",
-        "@xla_serving//runtime/core:allocator",
-        "@xla_serving//runtime/core:default_allocator",
-        "@xla_serving//runtime/kernel/batching:batch_options_utils",
     ],
 )
 

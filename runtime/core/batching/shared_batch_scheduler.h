@@ -32,6 +32,8 @@
 #include <vector>
 
 #include "absl/base/thread_annotations.h"  // from @abseil-cpp
+#include "absl/flags/declare.h"  // from @abseil-cpp
+#include "absl/flags/flag.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
@@ -43,7 +45,9 @@
 #include "absl/time/time.h"  // from @abseil-cpp
 #include "runtime/core/batching/batch_scheduler.h"  // from @xla_serving
 #include "runtime/core/batching/batch_scheduler_utils.h"  // from @xla_serving
+#include "runtime/core/batching/fifo_queue.h"  // from @xla_serving
 #include "runtime/core/batching/periodic_function.h"  // from @xla_serving
+#include "runtime/core/batching/queue_base.h"  // from @xla_serving
 #include "runtime/core/batching/queue_options.h"  // from @xla_serving
 #include "xla/tsl/platform/criticality.h"  // from @xla
 #include "xla/tsl/platform/env.h"  // from @xla
@@ -53,6 +57,9 @@
 #include "tsl/profiler/lib/connected_traceme.h"  // from @tsl
 #include "tsl/profiler/lib/context_types.h"  // from @tsl
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
+
+// TODO: Remove this flag once the migration is complete.
+ABSL_DECLARE_FLAG(bool, jsv_use_queue_base);
 
 namespace xla_serving {
 namespace internal {
@@ -177,8 +184,15 @@ class SharedBatchScheduler
   explicit SharedBatchScheduler(const Options& options);
 
  private:
-  void GetNextWorkItem_Locked(internal::Queue<TaskType>** queue_for_batch_out,
-                              BatchTaskUniquePtr* batch_to_process_out)
+  void GetNextWorkItem_Locked(
+      internal::QueueBase<TaskType>** queue_for_batch_out,
+      BatchTaskUniquePtr* batch_to_process_out)
+      TF_EXCLUSIVE_LOCKS_REQUIRED(mu_);
+
+  // TODO: Clean up once the migration to QueueBase is complete.
+  void GetLegacyNextWorkItem_Locked(
+      internal::Queue<TaskType>** queue_for_batch_out,
+      BatchTaskUniquePtr* batch_to_process_out)
       TF_EXCLUSIVE_LOCKS_REQUIRED(mu_);
 
   // The code executed in 'batch_threads_'. Obtains a batch to process from the
@@ -201,7 +215,7 @@ class SharedBatchScheduler
   // A list of queues. (We use std::list instead of std::vector to ensure that
   // iterators are not invalidated by adding/removing elements. It also offers
   // efficient removal of elements from the middle.)
-  using QueueList = std::list<std::unique_ptr<internal::Queue<TaskType>>>;
+  using QueueList = std::list<std::unique_ptr<internal::QueueBase<TaskType>>>;
 
   // All "active" queues, i.e. ones that either:
   //  - have not been removed, or
@@ -211,6 +225,12 @@ class SharedBatchScheduler
   // An iterator over 'queues_', pointing to the queue from which the next
   // available batch thread should grab work.
   typename QueueList::iterator next_queue_to_schedule_ ABSL_GUARDED_BY(mu_);
+
+  // TODO: Clean up once the migration to QueueBase is complete.
+  using LegacyQueueList = std::list<std::unique_ptr<internal::Queue<TaskType>>>;
+  LegacyQueueList legacy_queues_ ABSL_GUARDED_BY(mu_);
+  typename LegacyQueueList::iterator next_legacy_queue_to_schedule_
+      ABSL_GUARDED_BY(mu_);
 
   // Used by idle batch threads to wait for work to enter the system. Notified
   // whenever a batch becomes schedulable.
@@ -491,13 +511,13 @@ class Queue {
   void operator=(const Queue&) = delete;
 };
 
-// A RAII-style object that points to a Queue and implements
+// A RAII-style object that points to a QueueBase and implements
 // the BatchScheduler API. To be handed out to clients who call AddQueue().
 template <typename TaskType>
 class QueueHandle : public BatchScheduler<TaskType> {
  public:
   QueueHandle(std::shared_ptr<SharedBatchScheduler<TaskType>> scheduler,
-              Queue<TaskType>* queue);
+              QueueBase<TaskType>* queue);
   ~QueueHandle() override;
 
   absl::Status Schedule(std::unique_ptr<TaskType>* task) override;
@@ -512,10 +532,37 @@ class QueueHandle : public BatchScheduler<TaskType> {
 
   // The queue this handle wraps. Owned by 'scheduler_', which keeps it alive at
   // least until this class's destructor closes it.
-  Queue<TaskType>* queue_;
+  QueueBase<TaskType>* queue_;
 
   QueueHandle(const QueueHandle&) = delete;
   void operator=(const QueueHandle&) = delete;
+};
+
+// TODO: Clean up once the migration to QueueBase is complete.
+template <typename TaskType>
+class LegacyQueueHandle : public BatchScheduler<TaskType> {
+ public:
+  LegacyQueueHandle(std::shared_ptr<SharedBatchScheduler<TaskType>> scheduler,
+                    Queue<TaskType>* queue);
+  ~LegacyQueueHandle() override;
+
+  absl::Status Schedule(std::unique_ptr<TaskType>* task) override;
+  size_t NumEnqueuedTasks() const override;
+  size_t SchedulingCapacity() const override;
+
+  size_t max_task_size() const override {
+    return legacy_queue_->max_task_size();
+  }
+
+ private:
+  // The scheduler that owns 'queue_'.
+  std::shared_ptr<SharedBatchScheduler<TaskType>> scheduler_;
+
+  // The legacy queue this handle wraps.
+  Queue<TaskType>* legacy_queue_;
+
+  LegacyQueueHandle(const LegacyQueueHandle&) = delete;
+  void operator=(const LegacyQueueHandle&) = delete;
 };
 
 }  // namespace internal
@@ -550,7 +597,7 @@ SharedBatchScheduler<TaskType>::~SharedBatchScheduler() {
   for (;;) {
     {
       absl::MutexLock l(mu_);
-      if (queues_.empty()) {
+      if (queues_.empty() && legacy_queues_.empty()) {
         break;
       }
     }
@@ -623,13 +670,53 @@ absl::Status SharedBatchScheduler<TaskType>::AddQueueAfterRewritingOptions(
     absl::MutexLock l(mu_);
     schedulable_batch_cv_.Signal();
   };
-  auto internal_queue =
-      std::unique_ptr<internal::Queue<TaskType>>(new internal::Queue<TaskType>(
-          options, options_.env, process_batch_callback,
-          schedulable_batch_callback));
-  auto handle = std::unique_ptr<BatchScheduler<TaskType>>(
-      new internal::QueueHandle<TaskType>(this->shared_from_this(),
-                                          internal_queue.get()));
+
+  // TODO: Clean up once the migration to QueueBase is complete.
+  if (!absl::GetFlag(FLAGS_jsv_use_queue_base)) {
+    auto internal_queue = std::unique_ptr<internal::Queue<TaskType>>(
+        new internal::Queue<TaskType>(options, options_.env,
+                                      process_batch_callback,
+                                      schedulable_batch_callback));
+    auto handle = std::unique_ptr<BatchScheduler<TaskType>>(
+        new internal::LegacyQueueHandle<TaskType>(this->shared_from_this(),
+                                                  internal_queue.get()));
+    {
+      absl::MutexLock l(mu_);
+      legacy_queues_.push_back(std::move(internal_queue));
+      if (next_legacy_queue_to_schedule_ == legacy_queues_.end()) {
+        next_legacy_queue_to_schedule_ = legacy_queues_.begin();
+      }
+    }
+    *queue = std::move(handle);
+    return absl::OkStatus();
+  }
+
+  typename internal::QueueBase<TaskType>::ProcessBatchCallback
+      queue_base_callback;
+  if (std::holds_alternative<
+          std::function<void(BatchTaskUniquePtr)>>(
+          process_batch_callback)) {
+    queue_base_callback = std::get<
+        std::function<void(BatchTaskUniquePtr)>>(
+        process_batch_callback);
+  } else {
+    auto& callback_with_padding = std::get<
+        std::function<void(BatchTaskUniquePtr,
+                           std::vector<std::unique_ptr<TaskType>>)>>(
+        process_batch_callback);
+    queue_base_callback = [callback_with_padding](BatchTaskUniquePtr batch) {
+      callback_with_padding(std::move(batch), {});
+    };
+  }
+
+  // TODO: Instantiate the appropriate queue (FifoQueue or
+  // PriorityAwareQueue) based on options.priority_batching_policy instead of
+  // hardcoding FifoQueue.
+  auto internal_queue = std::make_unique<internal::FifoQueue<TaskType>>(
+      options, options_.env, std::move(queue_base_callback),
+      schedulable_batch_callback);
+  auto handle = std::make_unique<internal::QueueHandle<TaskType>>(
+      this->shared_from_this(), internal_queue.get());
   {
     absl::MutexLock l(mu_);
     queues_.push_back(std::move(internal_queue));
@@ -643,7 +730,9 @@ absl::Status SharedBatchScheduler<TaskType>::AddQueueAfterRewritingOptions(
 
 template <typename TaskType>
 SharedBatchScheduler<TaskType>::SharedBatchScheduler(const Options& options)
-    : options_(options), next_queue_to_schedule_(queues_.end()) {
+    : options_(options),
+      next_queue_to_schedule_(queues_.end()),
+      next_legacy_queue_to_schedule_(legacy_queues_.end()) {
   // Kick off the batch threads.
   PeriodicFunction::Options periodic_fn_options;
   periodic_fn_options.thread_name_prefix =
@@ -664,11 +753,11 @@ bool SharedBatchScheduler<TaskType>::BatchExists(
 
 template <typename TaskType>
 void SharedBatchScheduler<TaskType>::GetNextWorkItem_Locked(
-    internal::Queue<TaskType>** queue_for_batch_out,
+    internal::QueueBase<TaskType>** queue_for_batch_out,
     BatchTaskUniquePtr* batch_to_process_out) {
   BatchTaskUniquePtr batch_to_process;
-  internal::Queue<TaskType>* queue_for_batch = nullptr;
-  std::optional<typename internal::Queue<TaskType>::BatchPriorityKey>
+  internal::QueueBase<TaskType>* queue_for_batch = nullptr;
+  std::optional<typename internal::QueueBase<TaskType>::BatchPriorityKey>
       batch_priority_key;
   const int num_queues = queues_.size();
   for (int num_queues_tried = 0;
@@ -726,11 +815,101 @@ void SharedBatchScheduler<TaskType>::GetNextWorkItem_Locked(
 }
 
 template <typename TaskType>
+void SharedBatchScheduler<TaskType>::GetLegacyNextWorkItem_Locked(
+    internal::Queue<TaskType>** queue_for_batch_out,
+    BatchTaskUniquePtr* batch_to_process_out) {
+  BatchTaskUniquePtr batch_to_process;
+  internal::Queue<TaskType>* queue_for_batch = nullptr;
+  std::optional<typename internal::QueueBase<TaskType>::BatchPriorityKey>
+      batch_priority_key;
+  const int num_queues = legacy_queues_.size();
+  for (int num_queues_tried = 0;
+       !BatchExists(batch_to_process) && num_queues_tried < num_queues;
+       ++num_queues_tried) {
+    DCHECK(next_legacy_queue_to_schedule_ != legacy_queues_.end());
+
+    // If a closed queue responds to ScheduleBatch() with nullptr, the queue
+    // will never yield any further batches so we can drop it. To avoid a
+    // race, we take a snapshot of the queue's closedness state *before*
+    // calling ScheduleBatch().
+    const bool queue_closed = (*next_legacy_queue_to_schedule_)->closed();
+
+    bool queue_has_work = false;
+
+    if (options_.rank_queues) {
+      auto key = (*next_legacy_queue_to_schedule_)->PeekBatchPriority();
+      queue_has_work = key.has_value();
+      if (key.has_value() && (!batch_priority_key.has_value() ||
+                              key.value() < batch_priority_key.value())) {
+        batch_priority_key = key;
+        queue_for_batch = next_legacy_queue_to_schedule_->get();
+      }
+    } else {
+      // Ask '*next_legacy_queue_to_schedule_' if it wants us to process a batch
+      batch_to_process = (*next_legacy_queue_to_schedule_)->ScheduleBatch();
+      queue_has_work = BatchExists(batch_to_process);
+
+      if (queue_has_work) {
+        queue_for_batch = next_legacy_queue_to_schedule_->get();
+      }
+    }
+
+    // Advance 'next_queue_base_to_schedule_'.
+    if (queue_closed && (*next_legacy_queue_to_schedule_)->IsEmpty() &&
+        !queue_has_work) {
+      // We've encountered a closed queue with no work to do. Drop it.
+      DCHECK_NE(queue_for_batch, next_legacy_queue_to_schedule_->get());
+      next_legacy_queue_to_schedule_ =
+          legacy_queues_.erase(next_legacy_queue_to_schedule_);
+    } else {
+      ++next_legacy_queue_to_schedule_;
+    }
+    if (next_legacy_queue_to_schedule_ == legacy_queues_.end() &&
+        !legacy_queues_.empty()) {
+      // We've hit the end. Wrap to the first queue.
+      next_legacy_queue_to_schedule_ = legacy_queues_.begin();
+    }
+  }
+
+  if (options_.rank_queues && batch_priority_key.has_value()) {
+    batch_to_process = queue_for_batch->ScheduleBatch();
+  }
+
+  *queue_for_batch_out = queue_for_batch;
+  *batch_to_process_out = std::move(batch_to_process);
+}
+
+template <typename TaskType>
 void SharedBatchScheduler<TaskType>::ThreadLogic() {
   // A batch to process next (or nullptr if no work to do).
   BatchTaskUniquePtr batch_to_process;
+  // TODO: Remove once the migration to QueueBase is complete.
+  if (!absl::GetFlag(FLAGS_jsv_use_queue_base)) {
+    // A batch to process next (or nullptr if no work to do).
+    BatchTaskUniquePtr batch_to_process;
+    // The queue with which 'batch_to_process' is associated.
+    internal::Queue<TaskType>* queue_for_batch = nullptr;
+    {
+      absl::MutexLock l(mu_);
+      while (true) {
+        GetLegacyNextWorkItem_Locked(&queue_for_batch, &batch_to_process);
+        if (BatchExists(batch_to_process)) break;
+        // We couldn't find any work to do. Wait until a new batch becomes
+        // schedulable, or some time has elapsed, before checking again.
+        schedulable_batch_cv_.WaitWithTimeout(&mu_, absl::Milliseconds(1));
+        if (legacy_queues_.empty()) return;
+      }
+    }
+
+    size_t batch_size_to_schedule = batch_to_process->size();
+    queue_for_batch->ProcessBatch(
+        std::move(batch_to_process),
+        queue_for_batch->GetLowPriorityTasksForPadding(batch_size_to_schedule));
+    return;
+  }
+
   // The queue with which 'batch_to_process' is associated.
-  internal::Queue<TaskType>* queue_for_batch = nullptr;
+  internal::QueueBase<TaskType>* queue_for_batch = nullptr;
   {
     absl::MutexLock l(mu_);
     while (true) {
@@ -743,10 +922,7 @@ void SharedBatchScheduler<TaskType>::ThreadLogic() {
     }
   }
 
-  size_t batch_size_to_schedule = batch_to_process->size();
-  queue_for_batch->ProcessBatch(
-      std::move(batch_to_process),
-      queue_for_batch->GetLowPriorityTasksForPadding(batch_size_to_schedule));
+  queue_for_batch->ProcessBatch(std::move(batch_to_process));
 }
 
 namespace internal {
@@ -1408,7 +1584,7 @@ TaskQueue<TaskType>& Queue<TaskType>::GetLowPriorityTaskQueue() {
 template <typename TaskType>
 QueueHandle<TaskType>::QueueHandle(
     std::shared_ptr<SharedBatchScheduler<TaskType>> scheduler,
-    Queue<TaskType>* queue)
+    QueueBase<TaskType>* queue)
     : scheduler_(scheduler), queue_(queue) {}
 
 template <typename TaskType>
@@ -1429,6 +1605,33 @@ size_t QueueHandle<TaskType>::NumEnqueuedTasks() const {
 template <typename TaskType>
 size_t QueueHandle<TaskType>::SchedulingCapacity() const {
   return queue_->SchedulingCapacity();
+}
+
+template <typename TaskType>
+LegacyQueueHandle<TaskType>::LegacyQueueHandle(
+    std::shared_ptr<SharedBatchScheduler<TaskType>> scheduler,
+    Queue<TaskType>* queue)
+    : scheduler_(scheduler), legacy_queue_(std::move(queue)) {}
+
+template <typename TaskType>
+LegacyQueueHandle<TaskType>::~LegacyQueueHandle() {
+  legacy_queue_->CloseAndWaitUntilEmpty();
+}
+
+template <typename TaskType>
+absl::Status LegacyQueueHandle<TaskType>::Schedule(
+    std::unique_ptr<TaskType>* task) {
+  return legacy_queue_->Schedule(task);
+}
+
+template <typename TaskType>
+size_t LegacyQueueHandle<TaskType>::NumEnqueuedTasks() const {
+  return legacy_queue_->NumEnqueuedTasks();
+}
+
+template <typename TaskType>
+size_t LegacyQueueHandle<TaskType>::SchedulingCapacity() const {
+  return legacy_queue_->SchedulingCapacity();
 }
 
 }  // namespace internal
