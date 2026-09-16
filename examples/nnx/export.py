@@ -28,7 +28,7 @@ from xla_saved_model._src.export import main_lib
 from xla_saved_model._src.export import serving_config
 
 
-def export_model(export_path: str, dtype: jnp.dtype = jnp.float32):
+def export_model(export_path: str, dtype: jnp.dtype = jnp.float32):  # pyrefly: ignore[bad-function-definition]
   """Exports the NNX recommender model using Neptune."""
 
   rngs = nnx.Rngs(0)

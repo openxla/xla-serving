@@ -40,7 +40,7 @@ _DTYPE_MAP = {
 def main(argv):
   if len(argv) > 1:
     raise app.UsageError('Too many command-line arguments.')
-  export.export_model(FLAGS.export_path, dtype=_DTYPE_MAP[FLAGS.dtype])
+  export.export_model(FLAGS.export_path, dtype=_DTYPE_MAP[FLAGS.dtype])  # pyrefly: ignore[bad-argument-type]
 
 
 if __name__ == '__main__':
