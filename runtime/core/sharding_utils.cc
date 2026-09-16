@@ -37,6 +37,7 @@
 #include "runtime/core/device_buffer.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "runtime/core/host_buffer_type_utils.h"  // from @xla_serving
+#include "runtime/core/host_buffer_utils.h"  // from @xla_serving
 #include "runtime/core/sharding_utils_core.h"  // from @xla_serving
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
@@ -62,6 +63,24 @@
 
 namespace xla_serving::sharding_internal {
 namespace {
+
+// Returns custom byte strides if `host_buffer` has non-default striding, or
+// `std::nullopt` for strings / default dense row-major buffers.
+std::optional<absl::Span<const int64_t>> GetByteStrides(
+    const HostBuffer& host_buffer) {
+  if (!host_buffer.byte_strides().has_value() ||
+      host_buffer.dtype().kind() == xla::ifrt::DType::Kind::kString) {
+    return std::nullopt;
+  }
+  std::optional<absl::InlinedVector<int64_t, 4>> default_strides =
+      CreateDefaultStrides(host_buffer.shape().dims(),
+                           host_buffer.storage_dtype());
+  if (default_strides.has_value() &&
+      *host_buffer.byte_strides() == *default_strides) {
+    return std::nullopt;
+  }
+  return absl::MakeConstSpan(*host_buffer.byte_strides());
+}
 
 // Shard the given `input_buffer` into equal shapes of slices.
 //
@@ -106,20 +125,20 @@ SplitAndCreateArraysFromHostBuffer(
       auto single_device_sharding = xla::ifrt::SingleDeviceSharding::Create(
           *device_iter, xla::ifrt::MemoryKind());
 
-      TF_ASSIGN_OR_RETURN(xla::ifrt::ArrayRef array,
-                          ifrt_client.MakeArrayFromHostBuffer(
-                              host_buffer.base(), host_buffer.dtype(),
-                              std::move(host_buffer.shape()), std::nullopt,
-                              std::move(single_device_sharding),
-                              /*layout=*/nullptr,
-                              xla::ifrt::Client::HostBufferSemantics::
-                                  kImmutableUntilTransferCompletes,
-                              [host_buffer, slice_idx]() {
-                                // Keep host_buffer alive
-                                VLOG(2) << "Done with host buffer for slice "
-                                        << slice_idx << " at "
-                                        << host_buffer.base();
-                              }));
+      TF_ASSIGN_OR_RETURN(
+          xla::ifrt::ArrayRef array,
+          ifrt_client.MakeArrayFromHostBuffer(
+              host_buffer.base(), host_buffer.dtype(),
+              std::move(host_buffer.shape()), GetByteStrides(host_buffer),
+              std::move(single_device_sharding),
+              /*layout=*/nullptr,
+              xla::ifrt::Client::HostBufferSemantics::
+                  kImmutableUntilTransferCompletes,
+              [host_buffer, slice_idx]() {
+                // Keep host_buffer alive
+                VLOG(2) << "Done with host buffer for slice " << slice_idx
+                        << " at " << host_buffer.base();
+              }));
       arrays.push_back(std::move(array));
       device_iter++;
     }
@@ -245,7 +264,7 @@ absl::StatusOr<xla::ifrt::ArrayRef> CreateArrayFromHostBufferForSingleDevice(
 
   return ifrt_client.MakeArrayFromHostBuffer(
       host_buffer.base(), host_buffer.dtype(), host_buffer.shape(),
-      std::nullopt, std::move(single_device_sharding),
+      GetByteStrides(host_buffer), std::move(single_device_sharding),
       /*layout=*/nullptr, semantics, [host_buffer]() {
         // Keep host_buffer alive
         VLOG(2) << "Done with single device host buffer for slice " << " at "
@@ -649,7 +668,7 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
     xla::ifrt::DType ifrt_dtype = input_host_buffer.dtype();
     return ifrt_client.MakeArrayFromHostBuffer(
         input_host_buffer.base(), ifrt_dtype, input_host_buffer.shape(),
-        std::nullopt, std::move(ifrt_sharding),
+        GetByteStrides(input_host_buffer), std::move(ifrt_sharding),
         /*layout=*/nullptr, semantics,
         [input_host_buffer]() {  // keep host_buffer alive
         });

@@ -32,6 +32,7 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/host_buffer_utils.h"  // from @xla_serving
 #include "runtime/core/sharding_utils.h"  // from @xla_serving
 #include "xla/literal.h"  // from @xla
 #include "xla/pjrt/pjrt_client.h"  // from @xla
@@ -72,7 +73,21 @@ struct ShardTarget {
 // Encapsulates planning information for an eligible batched input.
 struct BatchPlan {
   std::vector<ShardTarget> shard_targets;
+  // Sharding passed to `PjRtArray::Create` (`SingleDeviceSharding` for
+  // single-device `HloSharding` so device count matches `pjrt_buffers.size()`).
+  xla::ifrt::ShardingRef effective_sharding;
 };
+
+// Returns true if `input` has non-default (custom) byte strides.
+bool HasCustomByteStrides(const HostBuffer& input) {
+  if (!input.byte_strides().has_value()) {
+    return false;
+  }
+  std::optional<absl::InlinedVector<int64_t, 4>> default_strides =
+      CreateDefaultStrides(input.shape().dims(), input.storage_dtype());
+  return !default_strides.has_value() ||
+         *input.byte_strides() != *default_strides;
+}
 
 // Represents an entry in a per-device batch, mapping a device buffer slot back
 // to the output slot and the source host buffer.
@@ -128,7 +143,7 @@ absl::StatusOr<BatchPlan> GetShardedBatchPlan(
     int64_t target_size = first_shard_shape.dims()[dim];
     int64_t dim_size = input.shape().dims()[dim];
     if (target_size <= 0 || dim_size % target_size != 0) {
-      return absl::FailedPreconditionError(absl::StrCat(
+      return absl::UnimplementedError(absl::StrCat(
           "Only support even sharding, but input buffer dimension ", dim,
           " of size ", dim_size, " is not evenly divisible by shard size ",
           target_size));
@@ -223,6 +238,7 @@ absl::StatusOr<BatchPlan> GetShardedBatchPlan(
 
   return BatchPlan{
       .shard_targets = std::move(shard_targets),
+      .effective_sharding = sharding,
   };
 }
 
@@ -233,9 +249,10 @@ absl::StatusOr<BatchPlan> GetShardedBatchPlan(
 absl::StatusOr<std::optional<BatchPlan>> GetBatchPlanIfEligible(
     const HostBuffer& input, const xla::ifrt::ShardingRef& sharding,
     xla::ifrt::Client* client, tsl::thread::ThreadPool& thread_pool) {
-  // Disqualify strings and packed storage (sub-byte types).
+  // Disqualify strings, packed storage (sub-byte types), and 0-element tensors.
   if (input.dtype().kind() == xla::ifrt::DType::kString ||
-      input.dtype() != input.storage_dtype()) {
+      input.dtype() != input.storage_dtype() ||
+      input.shape().num_elements() == 0) {
     return std::nullopt;
   }
 
@@ -245,7 +262,7 @@ absl::StatusOr<std::optional<BatchPlan>> GetBatchPlanIfEligible(
   // Default MakeShape assumes a dense, major-to-minor layout.
   // If the buffer uses custom byte strides (e.g. view or slice),
   // route it to the fallback path which correctly handles host layouts.
-  if (input.byte_strides().has_value()) {
+  if (HasCustomByteStrides(input)) {
     return std::nullopt;
   }
 
@@ -266,6 +283,7 @@ absl::StatusOr<std::optional<BatchPlan>> GetBatchPlanIfEligible(
             .shape = std::move(xla_shape),
             .source_buffer = input,
         }},
+        .effective_sharding = sharding,
     };
   }
 
@@ -291,6 +309,8 @@ absl::StatusOr<std::optional<BatchPlan>> GetBatchPlanIfEligible(
               .shape = std::move(xla_shape),
               .source_buffer = input,
           }},
+          .effective_sharding = xla::ifrt::SingleDeviceSharding::Create(
+              target_device, sharding->memory_kind()),
       };
     }
   }
@@ -317,6 +337,7 @@ absl::StatusOr<std::optional<BatchPlan>> GetBatchPlanIfEligible(
     }
     return BatchPlan{
         .shard_targets = std::move(shard_targets),
+        .effective_sharding = sharding,
     };
   }
 
@@ -367,6 +388,7 @@ BatchedH2DTransferExecutor::ExecuteTransfer(
 
   absl::flat_hash_map<xla::ifrt::Device*, DeviceBatchData> batches_by_device;
   std::vector<std::optional<PjRtBuffers>> batched_inputs(inputs.size());
+  std::vector<xla::ifrt::ShardingRef> effective_shardings(inputs.size());
   std::vector<int> fallback_input_indices;
   fallback_input_indices.reserve(inputs.size());
 
@@ -382,6 +404,7 @@ BatchedH2DTransferExecutor::ExecuteTransfer(
       continue;
     }
 
+    effective_shardings[i] = std::move(batch_plan->effective_sharding);
     PjRtBuffers& slots =
         batched_inputs[i].emplace(batch_plan->shard_targets.size());
 
@@ -466,14 +489,13 @@ BatchedH2DTransferExecutor::ExecuteTransfer(
       continue;
     }
     PjRtBuffers& buffers = *batched_inputs[i];
-    xla::ifrt::PjRtArray::PjRtBuffers pjrt_buffers(
-        std::make_move_iterator(buffers.begin()),
-        std::make_move_iterator(buffers.end()));
+    xla::ifrt::PjRtArray::PjRtBuffers pjrt_buffers(buffers.begin(),
+                                                   buffers.end());
     TF_ASSIGN_OR_RETURN(
         tsl::RCReference<xla::ifrt::PjRtArray> array,
         xla::ifrt::PjRtArray::Create(
             client_, inputs[i].dtype(), inputs[i].shape(),
-            input_shardings[i], std::move(pjrt_buffers),
+            effective_shardings[i], std::move(pjrt_buffers),
             /*layout=*/std::shared_ptr<const xla::PjRtLayout>()));
     results[i] = tsl::RCReference<xla::ifrt::Array>(std::move(array));
   }

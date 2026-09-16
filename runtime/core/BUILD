@@ -123,6 +123,7 @@ cc_library(
         ":device_buffer",
         ":host_buffer",
         ":host_buffer_type_utils",
+        ":host_buffer_utils",
         ":sharding_utils_core",
         "@abseil-cpp//absl/container:btree",
         "@abseil-cpp//absl/log",
@@ -617,6 +618,7 @@ cc_library(
     deps = [
         ":h2d_transfer_executor",
         ":host_buffer",
+        ":host_buffer_utils",
         ":sharding_utils",
         "@abseil-cpp//absl/base:nullability",
         "@abseil-cpp//absl/container:flat_hash_map",
