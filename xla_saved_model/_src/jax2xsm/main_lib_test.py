@@ -327,7 +327,7 @@ class MainLibTest(test_utils.XsmTestCase):
         + model_function_name
         + """_jax_specific_info_supplemental.pb\"
                     }
-                    mime_type: "application/protobuf; type=xla_saved_model_jax_supplemental.Function"
+                    mime_type: "application/protobuf; type=orbax_model_jax_supplemental.Function"
                     version: "0.0.1"
                   }
                 }

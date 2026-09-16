@@ -186,6 +186,5 @@ class ApplyFunctionLoaderTest(absltest.TestCase):
       apply_function_loader.load_apply_fn(save_dir_path, 'abs_path_fn')
 
 
-
 if __name__ == '__main__':
   absltest.main()

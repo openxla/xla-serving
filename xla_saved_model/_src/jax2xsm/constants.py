@@ -26,6 +26,6 @@ XLA_COMPILE_OPTIONS_MIME_TYPE = (
 # JAX specific info constants.
 JAX_SPECIFIC_INFO = 'jax_specific_info'
 CURRENT_JAX_SUPPLEMENTAL_MIME_TYPE = (
-    'application/protobuf; type=xla_saved_model_jax_supplemental.Function'
+    'application/protobuf; type=orbax_model_jax_supplemental.Function'
 )
 CURRENT_JAX_SUPPLEMENTAL_VERSION = '0.0.1'

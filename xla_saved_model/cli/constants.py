@@ -48,7 +48,7 @@ MIME_TYPE_ORBAX_XLA_COMPILE_OPTIONS = (
 )
 
 MIME_TYPE_ORBAX_JAX_SUPPLEMENTAL = (
-    'application/protobuf; type=xla_saved_model_jax_supplemental.Function'
+    'application/protobuf; type=orbax_model_jax_supplemental.Function'
 )
 
 
