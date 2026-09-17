@@ -3,6 +3,8 @@ load("@rules_python//python:py_test.bzl", "py_test")
 
 package(default_visibility = ["@xla_serving//data/cpu_embedding:__subpackages__"])
 
+exports_files(["embedding_utils.py"])
+
 pybind_library(
     name = "array_caster",
     hdrs = ["array_caster.h"],

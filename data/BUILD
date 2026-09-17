@@ -131,10 +131,14 @@ genrule(
         "//data/resource_manager/python:resource_manager.py",
         "//data/resource_manager/python:resource_manager_pybind.so",
         "//data/resource_manager/proto:resource_manager_py_pb2",
+        "//data/cpu_embedding/python:embedding_utils.py",
     ],
     outs = [
         "xla_serving_data/__init__.py",
         "xla_serving_data/libxla_serving_data_core.so",
+        "xla_serving_data/cpu_embedding/__init__.py",
+        "xla_serving_data/cpu_embedding/python/__init__.py",
+        "xla_serving_data/cpu_embedding/python/embedding_utils.py",
         "xla_serving_data/ops/__init__.py",
         "xla_serving_data/ops/bucket_pad.py",
         "xla_serving_data/ops/cpu_embedding.py",
@@ -268,6 +272,11 @@ genrule(
     fi
   done
   cp $(location @pybind11_abseil//pybind11_abseil:status.so) $(@D)/xla_serving_data/pybind11_abseil/status.so
+  mkdir -p $(@D)/xla_serving_data/cpu_embedding/python
+  touch $(@D)/xla_serving_data/cpu_embedding/__init__.py
+  touch $(@D)/xla_serving_data/cpu_embedding/python/__init__.py
+  cp $(location //data/cpu_embedding/python:embedding_utils.py) $(@D)/xla_serving_data/cpu_embedding/python/embedding_utils.py
+  sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/cpu_embedding/python/embedding_utils.py
   """,
 )
 
@@ -275,6 +284,9 @@ py_library(
     name = "xla_serving_data_pkg",
     srcs = [
         "xla_serving_data/__init__.py",
+        "xla_serving_data/cpu_embedding/__init__.py",
+        "xla_serving_data/cpu_embedding/python/__init__.py",
+        "xla_serving_data/cpu_embedding/python/embedding_utils.py",
         "xla_serving_data/kernels/__init__.py",
         "xla_serving_data/kernels/cpu_embedding/__init__.py",
         "xla_serving_data/kernels/cpu_embedding/cpu_embedding_module.py",
