@@ -92,6 +92,9 @@ absl::Status DataTypeToPrimitiveType(tensorflow::DataType data_type,
     case tensorflow::DT_FLOAT8_E4M3FN:
       *type = xla::F8E4M3FN;
       return absl::OkStatus();
+    case tensorflow::DT_FLOAT4_E2M1FN:
+      *type = xla::F4E2M1FN;
+      return absl::OkStatus();
     case tensorflow::DT_BFLOAT16:
       *type = xla::BF16;
       return absl::OkStatus();
@@ -124,6 +127,8 @@ absl::StatusOr<tensorflow::DataType> EncodePrimitiveTypeAsDataType(
               {xla::PRED, tensorflow::DT_BOOL},
               {xla::F8E5M2, tensorflow::DT_FLOAT8_E5M2},
               {xla::F8E4M3FN, tensorflow::DT_FLOAT8_E4M3FN},
+              {xla::F4E2M1FN, tensorflow::DT_FLOAT4_E2M1FN},
+              {xla::F8E8M0FNU, tensorflow::DT_UINT8},
               {xla::BF16, tensorflow::DT_BFLOAT16},
               {xla::F16, tensorflow::DT_HALF},
               {xla::F32, tensorflow::DT_FLOAT},
@@ -166,6 +171,9 @@ absl::Status ConvertScalarTypeToDataType(mlir::Type type,
     return absl::OkStatus();
   } else if (mlir::isa<mlir::Float8E4M3FNType>(type)) {
     *dtype = tensorflow::DT_FLOAT8_E4M3FN;
+    return absl::OkStatus();
+  } else if (mlir::isa<mlir::Float4E2M1FNType>(type)) {
+    *dtype = tensorflow::DT_FLOAT4_E2M1FN;
     return absl::OkStatus();
   } else if (mlir::isa<mlir::Float8E5M2Type>(type)) {
     *dtype = tensorflow::DT_FLOAT8_E5M2;
