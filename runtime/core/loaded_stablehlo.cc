@@ -153,7 +153,7 @@ bool HasStreaming(mlir::ModuleOp module) {
     if (op->getName().getStringRef() == "stablehlo.custom_call") {
       if (auto target_attr =
               op->getAttrOfType<mlir::StringAttr>("call_target_name")) {
-        if (target_attr.getValue() == "neptune_stream") {
+        if (target_attr.getValue() == "xla_serving_stream") {
           found = true;
         }
       }

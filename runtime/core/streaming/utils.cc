@@ -51,7 +51,7 @@
 namespace xla_serving {
 namespace {
 
-constexpr absl::string_view kNeptuneStreamOpName = "neptune_stream";
+constexpr absl::string_view kXlaServingStreamOpName = "xla_serving_stream";
 constexpr absl::string_view kBackendConfigAttr = "mhlo.backend_config";
 constexpr absl::string_view kOutputNamesAttr = "output_names";
 
@@ -64,7 +64,7 @@ bool ContainsStreamingOpImpl(mlir::Operation* op,
 
   // Direct check for stablehlo.custom_call target name
   if (auto custom_call = llvm::dyn_cast<mlir::stablehlo::CustomCallOp>(op)) {
-    if (custom_call.getCallTargetName().str() == kNeptuneStreamOpName) {
+    if (custom_call.getCallTargetName().str() == kXlaServingStreamOpName) {
       return true;
     }
   }
@@ -86,7 +86,7 @@ bool ContainsStreamingOpImpl(mlir::Operation* op,
 
     if (auto custom_call =
             llvm::dyn_cast<mlir::stablehlo::CustomCallOp>(nested_op)) {
-      if (custom_call.getCallTargetName().str() == kNeptuneStreamOpName) {
+      if (custom_call.getCallTargetName().str() == kXlaServingStreamOpName) {
         found = true;
         return;
       }
@@ -334,7 +334,7 @@ absl::Status PropagateBlock(
 
     if (auto custom_call =
             llvm::dyn_cast<mlir::stablehlo::CustomCallOp>(current_op)) {
-      if (custom_call.getCallTargetName().str() == kNeptuneStreamOpName) {
+      if (custom_call.getCallTargetName().str() == kXlaServingStreamOpName) {
         TF_RETURN_IF_ERROR(
             AddStepIdToCustomCall(builder, custom_call, value_in_block[block]));
       }
@@ -393,9 +393,11 @@ absl::Status PropagateStreamingStepId(mlir::ModuleOp module, bool is_batched) {
         "Could not find entry 'main' function in StableHLO module");
   }
 
-  // Check if neptune_stream exists at all before mutating the entry function.
+  // Check if xla_serving_stream exists at all before mutating the entry
+  // function.
   if (!ContainsStreamingOp(main_func)) {
-    LOG(INFO) << "[PropagateStreamingStepId] Does not contain neptune_stream!";
+    LOG(INFO)
+        << "[PropagateStreamingStepId] Does not contain xla_serving_stream!";
     return absl::OkStatus();
   }
 
