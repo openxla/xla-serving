@@ -220,6 +220,15 @@ absl::StatusOr<std::unique_ptr<Kernel>> StableHloRunnerOp::Create(
     return loaded_executables.status();
   }
 
+  absl::StatusOr<int> num_execution_streams =
+      context.GetConfig<int>(kNumExecutionStreams);
+  if (num_execution_streams.ok()) {
+    TF_RETURN_IF_ERROR(
+        stablehlo_runner->SetNumExecutionStreams(*num_execution_streams));
+  } else if (!absl::IsNotFound(num_execution_streams.status())) {
+    return num_execution_streams.status();
+  }
+
   return absl::WrapUnique(new StableHloRunnerOp(std::move(stablehlo_runner),
                                                 std::move(input_sig),
                                                 std::move(output_sig)));

@@ -19,5 +19,6 @@
 #include "absl/flags/declare.h"  // from @abseil-cpp
 
 ABSL_DECLARE_FLAG(std::string, orbax_grpc_server_platform);
+ABSL_DECLARE_FLAG(int, num_execution_streams);
 
 #endif  // XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_FLAGS_H_

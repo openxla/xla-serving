@@ -719,6 +719,8 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateStableHloRunnerOp(
   }
   TF_RETURN_IF_ERROR(builder.SetConfig(kServingCoreSelector,
                                        create_options.serving_core_selector));
+  TF_RETURN_IF_ERROR(builder.SetConfig(kNumExecutionStreams,
+                                       create_options.num_execution_streams));
   TF_RETURN_IF_ERROR(
       builder.SetConfig(kStablehloOptimizer, create_options.optimizer.get()));
 

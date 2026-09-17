@@ -87,6 +87,13 @@ struct InterpreterCreateOptions {
   // Core selector for balancing serving load for IFRT portable executables. If
   // nullptr, LB-policy-based core selection is disabled.
   ServingCoreSelector* absl_nullable serving_core_selector = nullptr;
+  // Number of IFRT execution streams to spread StableHLO executions across.
+  // Executions on the same stream run in program order; executions on
+  // different streams may run concurrently. Serving batches are independent,
+  // so this is safe. It matters on the PjRt CPU client, where a device runs
+  // one program at a time per stream and the default of a single stream
+  // serializes every batch through one queue. Must be >= 1.
+  int num_execution_streams = 1;
 
   // AOT Flag. If true, allows falling back to JIT compilation if the AOT
   // artifact is missing or the hardware topology mismatches. By default,
