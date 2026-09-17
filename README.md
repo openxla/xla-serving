@@ -71,27 +71,27 @@ ModelRunner allows quickly testing inference on an exported model from Python.
 
 ```bash
 # Python 3.11
-bazel build //runtime/python:neptune_model_runner --@rules_python//python/config_settings:python_version=3.11
+bazel build //runtime/python:xla_saved_model_runner --@rules_python//python/config_settings:python_version=3.11
 
 # Python 3.12+
-bazel build //runtime/python:neptune_model_runner --@rules_python//python/config_settings:python_version=3.12
+bazel build //runtime/python:xla_saved_model_runner --@rules_python//python/config_settings:python_version=3.12
 ```
 
 Nanobind supports limited Python ABI for 3.12+, so you can use
-`neptune_model_runner` built with 3.12 for any Python 3.12+.
+`xla_saved_model_runner` built with 3.12 for any Python 3.12+.
 
 Install it with:
 
 ```bash
 # Replace *.whl with an actual version under your bazel-bin/.
-pip install bazel-bin/runtime/python/neptune_model_runner-0.0.1-cp311-cp311-manylinux_2_28_x86_64.whl
+pip install bazel-bin/runtime/python/xla_saved_model_runner-0.0.1-cp311-cp311-manylinux_2_28_x86_64.whl
 ```
 
 Test the model:
 
 ```python
 import numpy as np
-from neptune_model_runner import model_runner
+from xla_saved_model_runner import model_runner
 
 runner = model_runner.ModelRunner(model_path='/your/model')
 

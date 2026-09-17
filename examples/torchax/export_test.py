@@ -19,7 +19,7 @@ import numpy as np
 import torch
 from examples.torchax import export
 from examples.torchax import model as torch_model
-from neptune_model_runner import model_runner
+from xla_saved_model_runner import model_runner
 
 
 class ExportTest(absltest.TestCase):

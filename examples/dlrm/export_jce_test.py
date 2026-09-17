@@ -21,7 +21,7 @@ import numpy as np
 
 from examples.dlrm import export_jce as export
 from examples.dlrm import model_jce as model_lib
-from neptune_model_runner import model_runner
+from xla_saved_model_runner import model_runner
 
 
 class ExportTest(absltest.TestCase):

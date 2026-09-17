@@ -127,24 +127,24 @@ Prompt: The most unexpected thing happened when I opened the door,
 ## 5. Using the C++ Model Runner Python Bindings
 
 You can also run the exported bundle locally in Python without the gRPC server
-using Neptune's `neptune_model_runner` Python bindings.
+using Neptune's `xla_saved_model_runner` Python bindings.
 
-You can install `neptune_model_runner-*.whl` directly from
+You can install `xla_saved_model_runner-*.whl` directly from
 **[Neptune GitHub Releases](https://github.com/AI-Hypercomputer/neptune/releases)**,
 or build the wheel from source with Bazel:
 
 ```bash
 # Build the wheel from source:
-bazel build -c opt //runtime/python:neptune_model_runner --@rules_python//python/config_settings:python_version=3.12
+bazel build -c opt //runtime/python:xla_saved_model_runner --@rules_python//python/config_settings:python_version=3.12
 
 # Install the wheel:
-pip install bazel-bin/runtime/python/neptune_model_runner-*.whl
+pip install bazel-bin/runtime/python/xla_saved_model_runner-*.whl
 ```
 
 Run inference directly in Python:
 
 ```python
-from neptune_model_runner import model_runner
+from xla_saved_model_runner import model_runner
 import numpy as np
 
 # Load exported bundle on TPU

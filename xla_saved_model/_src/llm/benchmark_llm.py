@@ -56,7 +56,7 @@ from xla_saved_model.protos.xla.python.ifrt import dtype_pb2  # pylint: disable=
 
 # pylint: disable=g-import-not-at-top
 try:
-  from neptune_model_runner import model_runner
+  from xla_saved_model_runner import model_runner
 except ImportError:
   model_runner = None
 # pylint: enable=g-import-not-at-top

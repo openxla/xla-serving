@@ -25,7 +25,7 @@ from examples.nnx import export
 
 def _model_runner(model_path: str):
   try:
-    from neptune_model_runner import model_runner  # pylint: disable=g-import-not-at-top
+    from xla_saved_model_runner import model_runner  # pylint: disable=g-import-not-at-top
 
     return model_runner.ModelRunner(model_path=model_path)
   except ImportError:

@@ -152,7 +152,7 @@ jobs:
             --show_progress_rate_limit=30 \
             --curses=no
 
-          bazel build -c opt //data:xla_serving_data //data:xla_serving_data_test //runtime/python:neptune_model_runner \
+          bazel build -c opt //data:xla_serving_data //data:xla_serving_data_test //runtime/python:xla_saved_model_runner \
             --config=remote_cache_readonly \
             --output_filter=DONT_MATCH_ANYTHING \
             --ui_event_filters=-warning \
@@ -165,7 +165,7 @@ jobs:
       - name: Install Built Wheels in Clean Virtual Environment
         run: |
           uv pip install bazel-bin/data/xla_serving_data*.whl
-          uv pip install bazel-bin/runtime/python/neptune_model_runner*.whl
+          uv pip install bazel-bin/runtime/python/xla_saved_model_runner*.whl
           uv pip install dist/*.whl
 
       - name: Verify Package Imports
@@ -176,8 +176,8 @@ jobs:
           print('✅ Successfully imported xla_saved_model!')
           print(f'📦 Version: {xla_saved_model.__version__}')
 
-          from neptune_model_runner import model_runner
-          print('✅ Successfully imported neptune_model_runner!')
+          from xla_saved_model_runner import model_runner
+          print('✅ Successfully imported xla_saved_model_runner!')
           "
 
       - name: Run Model Unit Tests
@@ -207,7 +207,7 @@ jobs:
           mkdir -p release_artifacts
           cp dist/*.whl release_artifacts/
           cp bazel-bin/data/xla_serving_data*.whl release_artifacts/
-          cp bazel-bin/runtime/python/neptune_model_runner*.whl release_artifacts/
+          cp bazel-bin/runtime/python/xla_saved_model_runner*.whl release_artifacts/
           ls -la release_artifacts/
 
       - name: Upload Release Wheels Artifact
