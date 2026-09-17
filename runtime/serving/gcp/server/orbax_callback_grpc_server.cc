@@ -189,13 +189,11 @@ OrbaxCallbackGrpcServer::OrbaxCallbackGrpcServer(
     std::shared_ptr<xla::ifrt::Client> client,
     std::unique_ptr<tsl::thread::ThreadPool> execute_worker_thread_pool,
     std::unique_ptr<tsl::thread::ThreadPool> computation_thread_pool,
-    std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool,
-    std::unique_ptr<tsl::thread::ThreadPool> response_thread_pool)
+    std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool)
     : client_(std::move(client)),
       execute_worker_thread_pool_(std::move(execute_worker_thread_pool)),
       computation_thread_pool_(std::move(computation_thread_pool)),
       checkpoint_loader_thread_pool_(std::move(checkpoint_loader_thread_pool)),
-      response_thread_pool_(std::move(response_thread_pool)),
       models_(std::move(models)) {}
 
 OrbaxCallbackGrpcServer::OrbaxCallbackGrpcServer(
@@ -221,11 +219,6 @@ OrbaxCallbackGrpcServer::Create(const ModelServerConfig& config,
       config.model_config_list().configs().empty()) {
     return absl::InvalidArgumentError(
         "ModelServerConfig must contain a non-empty model_config_list.");
-  }
-  if (options.response_threads < -1) {
-    return absl::InvalidArgumentError(absl::StrCat(
-        "Invalid value for response_threads: ", options.response_threads,
-        ". Must be >= -1."));
   }
 
   std::string orbax_platform = absl::GetFlag(FLAGS_orbax_grpc_server_platform);
@@ -264,13 +257,6 @@ OrbaxCallbackGrpcServer::Create(const ModelServerConfig& config,
       std::make_unique<tsl::thread::ThreadPool>(
           tsl::Env::Default(), tsl::ThreadOptions(),
           "OrbaxCheckpointLoaderThreadPool", kThreadPoolNumThreads);
-  std::unique_ptr<tsl::thread::ThreadPool> response_thread_pool;
-  if (options.response_threads >= 0) {
-    response_thread_pool = std::make_unique<tsl::thread::ThreadPool>(
-        tsl::Env::Default(), tsl::ThreadOptions(), "OrbaxResponseThreadPool",
-        options.response_threads == 0 ? tsl::port::MaxParallelism()
-                                      : options.response_threads);
-  }
 
   absl::flat_hash_map<std::string, std::shared_ptr<ModelEntry>> models;
   for (const auto& model_config : config.model_config_list().configs()) {
@@ -329,8 +315,7 @@ OrbaxCallbackGrpcServer::Create(const ModelServerConfig& config,
   auto server = std::make_unique<OrbaxCallbackGrpcServer>(
       std::move(models), client, std::move(execute_worker_thread_pool),
       std::move(computation_thread_pool),
-      std::move(checkpoint_loader_thread_pool),
-      std::move(response_thread_pool));
+      std::move(checkpoint_loader_thread_pool));
 
   if (options.warmup_server) {
     for (const auto& model_config : config.model_config_list().configs()) {
@@ -440,8 +425,8 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
           pipeline_name, /*positional_inputs=*/{}, std::move(*input_with_names),
           run_options);
 
-  // Build the response on the response pool so the completing interpreter
-  // thread doesn't block on it.
+  // Build the response on the execute worker pool so the completing
+  // interpreter thread doesn't block on it.
   future.OnReady(
       [this, reactor, response, record_metrics, output_is_tensor, model_name,
        pipeline_name = std::string(pipeline_name)](
@@ -464,12 +449,8 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
               record_metrics(conversion_status);
               reactor->Finish(ToGrpcStatus(conversion_status));
             };
-        if (response_thread_pool_ == nullptr) {
-          // --response_threads=-1: finish inline on the completing thread.
-          build_response_and_finish();
-          return;
-        }
-        response_thread_pool_->Schedule(std::move(build_response_and_finish));
+        execute_worker_thread_pool_->Schedule(
+            std::move(build_response_and_finish));
       });
 
   return reactor;

@@ -85,10 +85,6 @@ ABSL_FLAG(int, max_send_message_size, -1,  // Unlimited, matches gRPC default
 ABSL_FLAG(int, thread_pool_num_threads, 0,
           "Number of threads for server execution thread pool. If 0, defaults "
           "to 4.");
-ABSL_FLAG(int, response_threads, 0,
-          "Threads for building Predict responses and finishing their RPCs. "
-          "0 = host parallelism; -1 = no pool, finish inline on the completing "
-          "thread.");
 
 void RunServer() {
   std::string server_address = absl::StrCat("[::]:", absl::GetFlag(FLAGS_port));
@@ -121,7 +117,6 @@ void RunServer() {
   options.warmup_server = absl::GetFlag(FLAGS_warmup_server);
   options.thread_pool_num_threads =
       absl::GetFlag(FLAGS_thread_pool_num_threads);
-  options.response_threads = absl::GetFlag(FLAGS_response_threads);
 
   LOG(INFO) << "Server address: " << server_address;
   absl::StatusOr<std::unique_ptr<xla_serving::serving::OrbaxCallbackGrpcServer>>
