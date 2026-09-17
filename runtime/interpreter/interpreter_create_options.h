@@ -32,7 +32,6 @@
 
 namespace xla_serving {
 
-// LINT.IfChange(InterpreterCreateOptions)
 // The options to create the interpreter. This is a virtual class to allow
 // subclasses to add more options. Therefore, one should always use the pointer
 // or reference instead of the object itself.
@@ -99,7 +98,6 @@ struct InterpreterCreateOptions {
   // against compiled_exec.target_topology_label() in the AOT manifest.
   std::string target_topology_label;
 };
-// LINT.ThenChange(//depot//third_party/neptune/runtime/interpreter/interpreter.cc:InterpreterCreateOptionsValidation)
 }  // namespace xla_serving
 
 #endif  // XLA_SERVING_RUNTIME_INTERPRETER_INTERPRETER_CREATE_OPTIONS_H_

@@ -96,12 +96,12 @@ inline constexpr std::initializer_list<double> kRequestLatencyBuckets = {
     1100000, 1300000, 1550000, 1800000, 2160000, 2600000, 3100000, 3800000};
 
 auto* const request_count_metric = tsl::monitoring::Counter<3>::New(
-    "/neptune/external/serving/request_count",
+    "/xla_serving/external/request_count",
     "Counts requests broken down by model_name, rpc_method, and status.",
     "model_name", "rpc_method", "status");
 
 auto* const request_latency_metric = tsl::monitoring::Sampler<3>::New(
-    {"/neptune/external/serving/request_latencies",
+    {"/xla_serving/external/request_latencies",
      "Request latencies for processed requests in milliseconds.", "model_name",
      "rpc_method", "status"},
     tsl::monitoring::Buckets::Explicit(kRequestLatencyBuckets));

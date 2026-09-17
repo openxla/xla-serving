@@ -755,7 +755,6 @@ NamedSignature GetNamedSignatureOfComponent(
   return {};
 }
 
-// LINT.IfChange(InterpreterCreateOptionsValidation)
 absl::Status ValidateInterpreterCreateOptions(
     const InterpreterCreateOptions& create_options) {
   if (create_options.model_path.empty()) {
@@ -775,7 +774,6 @@ absl::Status ValidateInterpreterCreateOptions(
   }
   return absl::OkStatus();
 }
-// LINT.ThenChange(//depot//third_party/neptune/runtime/interpreter/interpreter_create_options.h:InterpreterCreateOptions)
 
 // Modular execution bucket loader
 absl::StatusOr<BucketAotData> LoadAotExecutableForBucket(

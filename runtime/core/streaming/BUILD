@@ -7,7 +7,6 @@ package_group(
         "//runtime/core/...",
         "//runtime/interpreter/...",
         "//runtime/kernel/...",
-        "//runtime/serving/google/streaming/...",
     ],
 )
 

@@ -27,7 +27,7 @@ namespace xla_serving {
 using ::tsl::monitoring::Counter;
 
 static auto* core_selection_counter = Counter<2>::New(
-    "/third_party/neptune/runtime/core_selection_count",
+    "/xla_serving/runtime/core_selection_count",
     "Counts device reservations made by `ServingCoreSelector`, broken "
     "down by program fingerprint and device ID.",
     "program_fingerprint", "device_id");
@@ -35,7 +35,7 @@ static auto* core_selection_counter = Counter<2>::New(
 // only breaks down by device ID. It's added as a workaround for unit tests
 // that don't have easy access to the program fingerprint.
 static auto* core_selection_counter_by_device_id_only = Counter<1>::New(
-    "/third_party/neptune/runtime/core_selection_count_by_device_id_only",
+    "/xla_serving/runtime/core_selection_count_by_device_id_only",
     "Counts device reservations made by `ServingCoreSelector`, broken "
     "down by device ID only.",
     "device_id");
