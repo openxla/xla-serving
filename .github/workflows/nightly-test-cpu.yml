@@ -34,7 +34,7 @@ jobs:
     name: Nightly Serving Test (CPU)
     runs-on: ${{ inputs.runner || 'linux-x86-n2-16' }}
     container:
-      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest # zizmor: ignore[unpinned-images]
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:0ad60e35d5870853c4c463f1c23dff6ed2dbfe3b1f708406c25a7606a5cae078
     defaults:
       run:
         shell: bash
