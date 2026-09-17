@@ -396,6 +396,7 @@ cc_library(
     srcs = ["flat_signature.cc"],
     hdrs = ["flat_signature.h"],
     visibility = [
+        ":core_users",
         "@xla_serving//runtime/interpreter:__subpackages__",
         "@xla_serving//runtime/interpreter:interpreter_users",
         "@xla_serving//runtime/kernel:__subpackages__",
