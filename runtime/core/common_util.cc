@@ -27,14 +27,7 @@ namespace xla_serving {
 
 absl::Status IsOrbaxModelDirectory(absl::string_view path) {
   tsl::Env* env = tsl::Env::Default();
-  const std::string model_manifest_version_path =
-      tsl::io::JoinPath(path, kNeptuneModelManifestVersionTxt);
-  if (env->FileExists(model_manifest_version_path).ok()) {
-    return absl::OkStatus();
-  }
-  const std::string orbax_model_manifest_version_path =
-      tsl::io::JoinPath(path, kOrbaxModelManifestVersionTxt);
-  return env->FileExists(orbax_model_manifest_version_path);
+  return env->FileExists(tsl::io::JoinPath(path, kModelVersionTxt));
 }
 
 }  // namespace xla_serving

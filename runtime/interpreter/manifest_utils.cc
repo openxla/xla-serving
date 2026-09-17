@@ -236,16 +236,9 @@ absl::StatusOr<AssignedDevices> InferAssignedDevicesFromFunctionSignature(
 absl::StatusOr<ModelVersionMetadata> ParseModelVersionFile(
     absl::string_view model_path) {
   std::string metadata_str;
-  auto status = tsl::ReadFileToString(
-      tsl::Env::Default(),
-      tsl::io::JoinPath(model_path, kNeptuneModelManifestVersionTxt),
-      &metadata_str);
-  if (!status.ok()) {
-    TF_RETURN_IF_ERROR(tsl::ReadFileToString(
-        tsl::Env::Default(),
-        tsl::io::JoinPath(model_path, kOrbaxModelManifestVersionTxt),
-        &metadata_str));
-  }
+  TF_RETURN_IF_ERROR(tsl::ReadFileToString(
+      tsl::Env::Default(), tsl::io::JoinPath(model_path, kModelVersionTxt),
+      &metadata_str));
 
   std::string version;
   std::string mime_type;
@@ -274,11 +267,11 @@ absl::StatusOr<ModelVersionMetadata> ParseModelVersionFile(
     value = absl::StripPrefix(absl::StripSuffix(value, "\""), "\"");
 
     // Duplicate keys are overwritten.
-    if (key == kOrbaxModelManifestVersionKey) {
+    if (key == kModelManifestVersionKey) {
       version = value;
-    } else if (key == kOrbaxModelManifestMimeTypeKey) {
+    } else if (key == kModelManifestMimeTypeKey) {
       mime_type = value;
-    } else if (key == kOrbaxModelManifestManifestFilePathKey) {
+    } else if (key == kModelManifestFilePathKey) {
       manifest_file_path = value;
     } else {
       return absl::InvalidArgumentError(
@@ -474,12 +467,11 @@ absl::StatusOr<xla_saved_model_manifest::Manifest> GetManifest(
   // TODO: Once there is more than one version of the model
   // we will need to check the list of supported versions and customize the
   // loading process accordingly.
-  if (model_version_metadata.version != kOrbaxModelManifestVersion) {
+  if (model_version_metadata.version != kModelManifestVersion) {
     return absl::InvalidArgumentError(absl::StrCat(
         "Unsupported version: ", model_version_metadata.version));
   }
-  if (model_version_metadata.mime_type != kOrbaxModelManifestMimeType &&
-      model_version_metadata.mime_type != kOrbaxModelManifestMimeTypeLegacy) {
+  if (model_version_metadata.mime_type != kModelManifestMimeType) {
     return absl::InvalidArgumentError(absl::StrCat(
         "Unsupported type: ", model_version_metadata.mime_type));
   }

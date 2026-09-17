@@ -132,28 +132,6 @@ def save(
   with file_utils.open_file(str(manifest_path), 'wb') as f:
     f.write(manifest_proto.SerializeToString())
 
-  model_version = metadata.ModelVersion(
-      version=constants.MANIFEST_VERSION,
-      mime_type=constants.MANIFEST_MIME_TYPE,
-      manifest_file_path=constants.MANIFEST_FILE_PATH,
-  )
-  # Write the metadata files to detect and parse XSE/Orbax Model. The
-  # version files should be THE LAST files to be written. They are used to
-  # validate the export and identify a Model. We write both flavors for
-  # backwards compatibility.
-  model_version.save(
-      str(pathlib.Path(target_dir) / constants.MODEL_VERSION_FILENAME)
-  )
-
-  legacy_model_version = metadata.ModelVersion(
-      version=constants.MANIFEST_VERSION,
-      mime_type=constants.MANIFEST_LEGACY_MIME_TYPE,
-      manifest_file_path=constants.MANIFEST_FILE_PATH,
-  )
-  legacy_model_version.save(
-      str(pathlib.Path(target_dir) / constants.MODEL_VERSION_LEGACY_FILENAME)
-  )
-
   # Write the baseline modifications history file if it does not already exist.
   history_path = pathlib.Path(target_dir) / constants.HISTORY_FILENAME
   if not file_utils.exists(str(history_path)):
@@ -176,31 +154,30 @@ def save(
     with file_utils.open_file(str(history_path), 'w') as f:
       f.write(text_format.MessageToString(initial_history))
 
+  model_version = metadata.ModelVersion(
+      version=constants.MANIFEST_VERSION,
+      mime_type=constants.MANIFEST_MIME_TYPE,
+      manifest_file_path=constants.MANIFEST_FILE_PATH,
+  )
+  # The metadata file used to detect and parse an XSE/Orbax Model. It must be
+  # THE LAST file written, since it is what validates the export and identifies
+  # a Model.
+  model_version.save(
+      str(pathlib.Path(target_dir) / constants.MODEL_VERSION_FILENAME)
+  )
+
 
 def _load_model_version(
     saved_state_dir: str,
 ) -> metadata.ModelVersion:
   """Loads the model version from the saved state directory."""
-
-  current_path = (
+  version_path = (
       pathlib.Path(saved_state_dir) / constants.MODEL_VERSION_FILENAME
   )
-  if file_utils.exists(str(current_path)):
-    # pylint: disable=g-unsafe-pickle-load
-    return metadata.ModelVersion.load(str(current_path))
-
-  legacy_path = (
-      pathlib.Path(saved_state_dir) / constants.MODEL_VERSION_LEGACY_FILENAME
-  )
-  if file_utils.exists(str(legacy_path)):
-    # pylint: disable=g-unsafe-pickle-load
-    return metadata.ModelVersion.load(str(legacy_path))
-
-  raise FileNotFoundError(
-      f'No model version file found in {saved_state_dir}. Expected either'
-      f' {constants.MODEL_VERSION_FILENAME} or'
-      f' {constants.MODEL_VERSION_LEGACY_FILENAME}.'
-  )
+  if not file_utils.exists(str(version_path)):
+    raise FileNotFoundError(f'No model version file found at {version_path}.')
+  # pylint: disable=g-unsafe-pickle-load
+  return metadata.ModelVersion.load(str(version_path))
 
 
 def load(saved_state_dir: str) -> manifest_pb2.Manifest:
@@ -212,10 +189,7 @@ def load(saved_state_dir: str) -> manifest_pb2.Manifest:
   # loading process accordingly.
   if model_version.version != constants.MANIFEST_VERSION:
     raise ValueError(f'Unsupported manifest version "{model_version.version}"')
-  if (
-      model_version.mime_type != constants.MANIFEST_MIME_TYPE
-      and model_version.mime_type != constants.MANIFEST_LEGACY_MIME_TYPE
-  ):
+  if model_version.mime_type != constants.MANIFEST_MIME_TYPE:
     raise ValueError(f'Unsupported manifest type "{model_version.mime_type}"')
   if pathlib.Path(model_version.manifest_file_path).is_absolute():
     raise ValueError(
