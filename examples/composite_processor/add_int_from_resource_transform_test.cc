@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "examples/composite_processor/add_int_from_resource_transform.h"  // from @neptune
+#include "examples/composite_processor/add_int_from_resource_transform.h"  // from @xla_serving
 
 #include <fstream>
 #include <memory>
@@ -26,9 +26,9 @@
 #include "absl/status/status_matchers.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
-#include "data/resource_manager/cc/asset.h"  // from @neptune
-#include "examples/composite_processor/int_resource.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "data/resource_manager/cc/asset.h"  // from @xla_serving
+#include "examples/composite_processor/int_resource.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
@@ -95,7 +95,7 @@ TEST(AddIntFromResourceTransformTest, ExecuteWithNullResourceFails) {
   auto transform = std::move(transform_or).value();
 
   xla::ifrt::Shape shape({2});
-  neptune::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32), shape);
+  xla_serving::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32), shape);
   int* input_data = static_cast<int*>(input.base());
   input_data[0] = 1;
   input_data[1] = 2;
@@ -125,7 +125,7 @@ TEST(AddIntFromResourceTransformTest, ExecuteWithNonNullResourceSucceeds) {
   auto transform = std::move(transform_or).value();
 
   xla::ifrt::Shape shape({2});
-  neptune::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32), shape);
+  xla_serving::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32), shape);
   int* input_data = static_cast<int*>(input.base());
   input_data[0] = 1;
   input_data[1] = 2;
@@ -162,7 +162,7 @@ TEST(AddIntFromResourceTransformTest, ExecuteWithWrongDtypeFails) {
 
   xla::ifrt::Shape shape({2});
   // Use float instead of int.
-  neptune::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32), shape);
+  xla_serving::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32), shape);
   float* input_data = static_cast<float*>(input.base());
   input_data[0] = 1.0f;
   input_data[1] = 2.0f;

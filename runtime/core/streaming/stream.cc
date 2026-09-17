@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/streaming/stream.h"  // from @neptune
+#include "runtime/core/streaming/stream.h"  // from @xla_serving
 
 #include <cstdint>
 #include <cstring>
@@ -45,8 +45,8 @@
 #include "mlir/include/mlir/IR/BuiltinAttributes.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/Operation.h"  // from @llvm-project
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/streaming/utils.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/streaming/utils.h"  // from @xla_serving
 #include "stablehlo/dialect/StablehloOps.h"  // from @stablehlo
 #include "xla/executable_run_options.h"  // from @xla
 #include "xla/ffi/ffi.h"  // from @xla
@@ -61,7 +61,7 @@
 
 namespace ffi = xla::ffi;
 
-namespace neptune {
+namespace xla_serving {
 
 namespace {
 
@@ -86,10 +86,10 @@ constexpr absl::string_view kOutputNamesAttr = "output_names";
 //   A vector of pairs, where each pair contains:
 //     - The unique request ID (int64_t).
 //     - A vector of sliced HostBuffers corresponding to that request.
-absl::StatusOr<std::vector<std::pair<int64_t, std::vector<neptune::HostBuffer>>>>
+absl::StatusOr<std::vector<std::pair<int64_t, std::vector<xla_serving::HostBuffer>>>>
 SliceBuffersByRequestId(absl::Span<const int32_t> step_ids,
-                        absl::Span<const neptune::HostBuffer> combined_buffers) {
-  std::vector<std::pair<int64_t, std::vector<neptune::HostBuffer>>> responses;
+                        absl::Span<const xla_serving::HostBuffer> combined_buffers) {
+  std::vector<std::pair<int64_t, std::vector<xla_serving::HostBuffer>>> responses;
 
   int64_t batch_size = step_ids.size();
   int64_t start_idx = 0;
@@ -108,11 +108,11 @@ SliceBuffersByRequestId(absl::Span<const int32_t> step_ids,
     }
 
     // Slice all combined buffers for the current request's range.
-    std::vector<neptune::HostBuffer> sliced_user_buffers;
+    std::vector<xla_serving::HostBuffer> sliced_user_buffers;
     sliced_user_buffers.reserve(combined_buffers.size());
-    for (const neptune::HostBuffer& combined_buffer : combined_buffers) {
+    for (const xla_serving::HostBuffer& combined_buffer : combined_buffers) {
       TF_ASSIGN_OR_RETURN(
-          neptune::HostBuffer sliced_buffer,
+          xla_serving::HostBuffer sliced_buffer,
           combined_buffer.SliceAlongFirstDimension(start_idx, end_idx));
       sliced_user_buffers.push_back(std::move(sliced_buffer));
     }
@@ -255,7 +255,7 @@ void StreamCallbackRegistry::CallbackState::InvokeCallback(
 
 absl::StatusOr<ScopedStreamCallback> StreamCallbackRegistry::Register(
     absl::string_view model_name, int64_t callback_id, int64_t step_id,
-    absl::AnyInvocable<void(absl::flat_hash_map<std::string, neptune::HostBuffer>)>
+    absl::AnyInvocable<void(absl::flat_hash_map<std::string, xla_serving::HostBuffer>)>
         callback) {
   absl::MutexLock l(mu_);
 
@@ -414,7 +414,7 @@ absl::Status Stream(xla::RunId run_id, ffi::Dictionary attrs,
   }
   size_t num_user_args = args.size() - 1;
 
-  std::vector<neptune::HostBuffer> host_buffers;
+  std::vector<xla_serving::HostBuffer> host_buffers;
   host_buffers.reserve(num_user_args);
   for (size_t i = 0; i < num_user_args; ++i) {
     auto arg = args.get<ffi::AnyBuffer>(i);
@@ -429,7 +429,7 @@ absl::Status Stream(xla::RunId run_id, ffi::Dictionary attrs,
     TF_ASSIGN_OR_RETURN(xla::ifrt::DType dtype,
                         xla::ifrt::ToDType(arg->element_type()));
 
-    neptune::HostBuffer host_buffer(buffer->data(), dtype, shape, buffer);
+    xla_serving::HostBuffer host_buffer(buffer->data(), dtype, shape, buffer);
     host_buffers.push_back(std::move(host_buffer));
   }
 
@@ -446,7 +446,7 @@ absl::Status Stream(xla::RunId run_id, ffi::Dictionary attrs,
   }
 
   using ResponseType =
-      std::vector<std::pair<int64_t, std::vector<neptune::HostBuffer>>>;
+      std::vector<std::pair<int64_t, std::vector<xla_serving::HostBuffer>>>;
 
   if (step_id_arg->dimensions().empty()) {
     // Unbatched single-request inference: step_id is a rank-0 scalar tensor.
@@ -468,7 +468,7 @@ absl::Status Stream(xla::RunId run_id, ffi::Dictionary attrs,
       reinterpret_cast<const int32_t*>(step_id_arg->untyped_data());
 
   using ResponseType =
-      std::vector<std::pair<int64_t, std::vector<neptune::HostBuffer>>>;
+      std::vector<std::pair<int64_t, std::vector<xla_serving::HostBuffer>>>;
   TF_ASSIGN_OR_RETURN(
       ResponseType responses,
       SliceBuffersByRequestId(absl::MakeConstSpan(step_id_data, batch_size),
@@ -500,4 +500,4 @@ XLA_FFI_REGISTER_HANDLER(ffi::GetXlaFfiApi(), kNeptuneStreamOpName, "CUDA",
                              /*execute=*/kStream,
                          });
 
-}  // namespace neptune
+}  // namespace xla_serving

@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_NEPTUNE_DATA_COMPOSITE_PROCESSOR_OP_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_NEPTUNE_DATA_COMPOSITE_PROCESSOR_OP_H_
+#ifndef XLA_SERVING_RUNTIME_NEPTUNE_DATA_COMPOSITE_PROCESSOR_OP_H_
+#define XLA_SERVING_RUNTIME_NEPTUNE_DATA_COMPOSITE_PROCESSOR_OP_H_
 
 #include <memory>
 #include <string>
 
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "data/processor/cc/core/composite_processor.h"  // from @neptune
-#include "runtime/kernel/kernel.h"  // from @neptune
+#include "data/processor/cc/core/composite_processor.h"  // from @xla_serving
+#include "runtime/kernel/kernel.h"  // from @xla_serving
 
-namespace neptune {
+namespace xla_serving {
 namespace composite {
 
 // A kernel that executes a neptune::data::composite::CompositeProcessor.
@@ -48,6 +48,6 @@ class CompositeProcessorOp : public CancellableKernel {
 };
 
 }  // namespace composite
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_NEPTUNE_DATA_COMPOSITE_PROCESSOR_OP_H_
+#endif  // XLA_SERVING_RUNTIME_NEPTUNE_DATA_COMPOSITE_PROCESSOR_OP_H_

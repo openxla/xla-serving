@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_COMPOSITE_PROCESSOR_H_
-#define THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_COMPOSITE_PROCESSOR_H_
+#ifndef XLA_SERVING_DATA_PROCESSOR_CC_CORE_COMPOSITE_PROCESSOR_H_
+#define XLA_SERVING_DATA_PROCESSOR_CC_CORE_COMPOSITE_PROCESSOR_H_
 
 #include <cstddef>
 #include <memory>
@@ -22,12 +22,12 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/api/value.h"  // from @neptune
-#include "data/processor/cc/core/graph/execution_graph.h"  // from @neptune
-#include "data/processor/cc/core/graph/graph_executor.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/resource_manager/cc/resource_manager.h"  // from @neptune
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/api/value.h"  // from @xla_serving
+#include "data/processor/cc/core/graph/execution_graph.h"  // from @xla_serving
+#include "data/processor/cc/core/graph/graph_executor.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource_manager.h"  // from @xla_serving
 
 namespace neptune::data {
 namespace composite {
@@ -93,4 +93,4 @@ class CompositeProcessor {
 }  // namespace composite
 }  // namespace neptune::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_COMPOSITE_PROCESSOR_H_
+#endif  // XLA_SERVING_DATA_PROCESSOR_CC_CORE_COMPOSITE_PROCESSOR_H_

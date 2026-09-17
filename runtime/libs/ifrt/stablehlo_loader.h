@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_STABLEHLO_LOADER_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_STABLEHLO_LOADER_H_
+#ifndef XLA_SERVING_RUNTIME_LIBS_IFRT_STABLEHLO_LOADER_H_
+#define XLA_SERVING_RUNTIME_LIBS_IFRT_STABLEHLO_LOADER_H_
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
@@ -21,7 +21,7 @@
 #include "mlir/include/mlir/IR/MLIRContext.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/OwningOpRef.h"  // from @llvm-project
 
-namespace neptune {
+namespace xla_serving {
 
 class StableHloLoader {
  public:
@@ -38,6 +38,6 @@ class StableHloLoader {
   mlir::MLIRContext context_{mlir::MLIRContext::Threading::ENABLED};
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_STABLEHLO_LOADER_H_
+#endif  // XLA_SERVING_RUNTIME_LIBS_IFRT_STABLEHLO_LOADER_H_

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_KERNELS_CPU_EMBEDDING_PACK_HOST_BUFFER_VECTOR_TRANSFORM_H_
-#define THIRD_PARTY_NEPTUNE_DATA_KERNELS_CPU_EMBEDDING_PACK_HOST_BUFFER_VECTOR_TRANSFORM_H_
+#ifndef XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_PACK_HOST_BUFFER_VECTOR_TRANSFORM_H_
+#define XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_PACK_HOST_BUFFER_VECTOR_TRANSFORM_H_
 
 #include <memory>
 #include <vector>
@@ -21,11 +21,11 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/api/type_info.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/api/type_info.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 
 namespace neptune {
 namespace data {
@@ -74,4 +74,4 @@ class PackHostBufferVectorTransform : public TransformBase {
 }  // namespace data
 }  // namespace neptune
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_KERNELS_CPU_EMBEDDING_PACK_HOST_BUFFER_VECTOR_TRANSFORM_H_
+#endif  // XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_PACK_HOST_BUFFER_VECTOR_TRANSFORM_H_

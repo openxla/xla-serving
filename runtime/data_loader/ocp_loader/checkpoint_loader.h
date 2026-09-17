@@ -13,13 +13,13 @@
 // limitations under the License.
 
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/data_loader/ocp_loader/common_types.h"  // from @neptune
+#include "runtime/data_loader/ocp_loader/common_types.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
 // TODO(qidichen): move or add the unit test from MIRA.
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_
+#ifndef XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_
+#define XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_
 
 #include <optional>
 #include <string>
@@ -34,7 +34,7 @@
 #include "xla/python/ifrt/device_list.h"  // from @xla
 #include "xla/python/ifrt/memory.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // Struct to describe a potential param to be loaded as a weight array.
 struct ArraySpec {
@@ -91,6 +91,6 @@ LoadCheckpointFromOrbax(absl::string_view checkpoint_path,
                         const xla::ifrt::DeviceListRef& device_list,
                         xla::ifrt::Client& client);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_
+#endif  // XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_

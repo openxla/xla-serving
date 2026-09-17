@@ -12,20 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/value_utils.h"  // from @neptune
+#include "runtime/core/value_utils.h"  // from @xla_serving
 
 #include <utility>
 
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
-#include "runtime/core/device_buffer.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
+#include "runtime/core/device_buffer.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 absl::StatusOr<Value> Reshape(Value&& value,
                              const xla::ifrt::Shape& shape) {
@@ -60,4 +60,4 @@ absl::StatusOr<Value> Bitcast(Value&& value, xla::ifrt::DType dtype,
       "Value is neither a HostBuffer nor a DeviceBuffer.");
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

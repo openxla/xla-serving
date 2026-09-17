@@ -1,4 +1,4 @@
-name: Build Neptune Model
+name: Build XLA SavedModel
 
 on:
   push:
@@ -9,14 +9,14 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
   build-and-test:
-    name: "Build Neptune Model (Python ${{ matrix.python-version }}, jax ${{ matrix.jax-version }})"
+    name: "Build XLA SavedModel (Python ${{ matrix.python-version }}, jax ${{ matrix.jax-version }})"
     runs-on: linux-x86-n2-16
     container:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest # zizmor: ignore[unpinned-images]
@@ -28,7 +28,7 @@ jobs:
         jax-version: ["newest"]
         # include:
         #   - python-version: "3.10"
-        #     jax-version: "0.4.35"  # keep in sync with minimum version in neptune_model/pyproject.toml
+        #     jax-version: "0.4.35"  # keep in sync with minimum version in xla_saved_model/pyproject.toml
 
     steps:
       - name: Checkout repository
@@ -60,7 +60,7 @@ jobs:
 
       - name: Build neptune_data and neptune_data_test wheels
         env:
-          CACHE_CONFIG: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'remote_cache_readwrite' || 'remote_cache_readonly' }}
+          CACHE_CONFIG: ${{ github.ref == 'refs/heads/main' && 'remote_cache_readwrite' || 'remote_cache_readonly' }}
         run: |
           bazel build -c opt //data:neptune_data //data:neptune_data_test \
             --@rules_python//python/config_settings:python_version=${{ matrix.python-version }} \
@@ -74,7 +74,7 @@ jobs:
         run: |
           uv pip install bazel-bin/data/neptune_data*.whl
 
-      - name: Build the Neptune Model Wheel
+      - name: Build the XLA SavedModel Wheel
         run: |
           uv build --wheel
 
@@ -89,28 +89,28 @@ jobs:
           cd /tmp
           # 2. Try importing the package and printing the version
           python -c "
-          import neptune_model
-          print('✅ Successfully imported neptune_model!')
-          print(f'📦 Version: {neptune_model.__version__}')
+          import xla_saved_model
+          print('✅ Successfully imported xla_saved_model!')
+          print(f'📦 Version: {xla_saved_model.__version__}')
           "
 
       - name: Install Test Dependencies and Run Pytest
         run: |
           uv pip install ".[test,tf,torch]"
           uv pip uninstall triton 2>/dev/null || true
-          pytest -v -s --full-trace -n auto neptune_model/
+          pytest -v -s --full-trace -n auto xla_saved_model/
 
       - name: Upload Built Wheels
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: neptune-wheels
+          name: xla-saved-model-wheels
           path: |
             bazel-bin/data/neptune_data*.whl
             dist/*.whl
           retention-days: 1
 
   build-and-test-llm:
-    name: "Build Neptune LLM Module (Python ${{ matrix.python-version }}, jax ${{ matrix.jax-version }})"
+    name: "Build XLA SavedModel LLM Module (Python ${{ matrix.python-version }}, jax ${{ matrix.jax-version }})"
     runs-on: linux-x86-n2-16
     container:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest # zizmor: ignore[unpinned-images]
@@ -142,7 +142,7 @@ jobs:
       - name: Download Built Wheels
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: neptune-wheels
+          name: xla-saved-model-wheels
           path: wheels
 
       - name: Install Prebuilt Wheels
@@ -153,9 +153,9 @@ jobs:
         run: |
           cd /tmp
           python -c "
-          import neptune_model
-          print('✅ Successfully imported neptune_model!')
-          print(f'📦 Version: {neptune_model.__version__}')
+          import xla_saved_model
+          print('✅ Successfully imported xla_saved_model!')
+          print(f'📦 Version: {xla_saved_model.__version__}')
           "
 
       - name: Install Test Dependencies and Run Pytest for LLM Module
@@ -164,4 +164,4 @@ jobs:
         run: |
           uv pip install --pre ".[test]"
           uv pip uninstall triton 2>/dev/null || true
-          pytest -v -s -n auto neptune_model/_src/llm/
+          pytest -v -s -n auto xla_saved_model/_src/llm/

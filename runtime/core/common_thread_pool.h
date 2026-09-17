@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_COMMON_THREAD_POOL_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_COMMON_THREAD_POOL_H_
+#ifndef XLA_SERVING_RUNTIME_COMMON_THREAD_POOL_H_
+#define XLA_SERVING_RUNTIME_COMMON_THREAD_POOL_H_
 
 #include <cstdint>
 #include <functional>
 #include <utility>
 
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "runtime/core/thread_pool_interface.h"  // from @neptune
+#include "runtime/core/thread_pool_interface.h"  // from @xla_serving
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // An implementation of ThreadPoolInterface that uses a tsl::thread::ThreadPool
 // as the underlying thread pool.
@@ -55,6 +55,6 @@ class CommonThreadPool : public ThreadPoolInterface {
   tsl::thread::ThreadPool* underlying_thread_pool_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_COMMON_THREAD_POOL_H_
+#endif  // XLA_SERVING_RUNTIME_COMMON_THREAD_POOL_H_

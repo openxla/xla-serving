@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_GRPC_STATUS_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_GRPC_STATUS_UTILS_H_
+#ifndef XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_GRPC_STATUS_UTILS_H_
+#define XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_GRPC_STATUS_UTILS_H_
 
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "include/grpcpp/support/status.h"  // from @grpc
 
-namespace neptune {
+namespace xla_serving {
 namespace serving {
 
 grpc::Status ToGrpcStatus(const absl::Status& status);
 
 }  // namespace serving
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_GRPC_STATUS_UTILS_H_
+#endif  // XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_GRPC_STATUS_UTILS_H_

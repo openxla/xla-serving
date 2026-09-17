@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_TEST_BATCH_RESOURCE_BASE_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_TEST_BATCH_RESOURCE_BASE_H_
+#ifndef XLA_SERVING_RUNTIME_KERNEL_BATCHING_TEST_BATCH_RESOURCE_BASE_H_
+#define XLA_SERVING_RUNTIME_KERNEL_BATCHING_TEST_BATCH_RESOURCE_BASE_H_
 
 #include <cstdint>
 #include <functional>
@@ -30,25 +30,25 @@
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/core/allocator.h"  // from @neptune
-#include "runtime/core/batching/shared_batch_scheduler.h"  // from @neptune
-#include "runtime/core/default_allocator.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/kernel/batching/batch_resource_base.h"  // from @neptune
-#include "runtime/kernel/batching/batch_runner_op.h"  // from @neptune
-#include "runtime/kernel/kernel.h"  // from @neptune
+#include "runtime/core/allocator.h"  // from @xla_serving
+#include "runtime/core/batching/shared_batch_scheduler.h"  // from @xla_serving
+#include "runtime/core/default_allocator.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/kernel/batching/batch_resource_base.h"  // from @xla_serving
+#include "runtime/kernel/batching/batch_runner_op.h"  // from @xla_serving
+#include "runtime/kernel/kernel.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 class TestBatchResourceBase : public BatchResourceBase {
  public:
   TestBatchResourceBase(
       std::shared_ptr<SharedBatchScheduler<BatchResourceBase::BatchTask>>
           batcher,
-      const BatcherT::QueueOptions& batcher_queue_options,
+      const QueueOptions& batcher_queue_options,
       std::vector<int32_t> allowed_batch_sizes,
       std::vector<int32_t> low_priority_allowed_batch_sizes,
       tsl::thread::ThreadPool* thread_pool)
@@ -112,7 +112,7 @@ class TestFailedBatchResource : public BatchResourceBase {
   TestFailedBatchResource(
       std::shared_ptr<SharedBatchScheduler<BatchResourceBase::BatchTask>>
           batcher,
-      const BatcherT::QueueOptions& batcher_queue_options,
+      const QueueOptions& batcher_queue_options,
       std::vector<int32_t> allowed_batch_sizes,
       tsl::thread::ThreadPool* thread_pool,
       absl::Status failure_status =
@@ -141,7 +141,7 @@ class TestJsvBatchResource : public JsvBatchResource {
       std::vector<std::unique_ptr<Kernel>> batched_graph,
       std::shared_ptr<SharedBatchScheduler<BatchResourceBase::BatchTask>>
           batcher,
-      const BatchResourceBase::BatcherT::QueueOptions& queue_options,
+      const BatchResourceBase::QueueOptions& queue_options,
       const std::vector<int32_t>& allowed_batch_sizes,
       tsl::thread::ThreadPool* thread_pool)
       : JsvBatchResource(std::move(batched_graph), batcher, queue_options,
@@ -174,7 +174,7 @@ class TestRaggedBatchResourceBase : public BatchResourceBase {
   TestRaggedBatchResourceBase(
       std::shared_ptr<SharedBatchScheduler<BatchResourceBase::BatchTask>>
           batcher,
-      const BatcherT::QueueOptions& batcher_queue_options,
+      const QueueOptions& batcher_queue_options,
       std::vector<int32_t> allowed_batch_sizes,
       tsl::thread::ThreadPool* thread_pool,
       std::vector<RaggedInputSpec> ragged_inputs = {{.flat_values_index = 1,
@@ -238,6 +238,6 @@ class TestRaggedBatchResourceBase : public BatchResourceBase {
   Allocator* allocator_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_TEST_BATCH_RESOURCE_BASE_H_
+#endif  // XLA_SERVING_RUNTIME_KERNEL_BATCHING_TEST_BATCH_RESOURCE_BASE_H_

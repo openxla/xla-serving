@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_BUNDLE_INTERPRETER_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_BUNDLE_INTERPRETER_H_
+#ifndef XLA_SERVING_RUNTIME_INTERPRETER_BUNDLE_INTERPRETER_H_
+#define XLA_SERVING_RUNTIME_INTERPRETER_BUNDLE_INTERPRETER_H_
 
 #include <memory>
 #include <string>
@@ -24,14 +24,14 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "protos/bundle_orchestration.pb.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/interpreter/interpreter.h"  // from @neptune
-#include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
-#include "runtime/interpreter/run_options.h"  // from @neptune
+#include "protos/bundle_orchestration.pb.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/interpreter/interpreter.h"  // from @xla_serving
+#include "runtime/interpreter/interpreter_create_options.h"  // from @xla_serving
+#include "runtime/interpreter/run_options.h"  // from @xla_serving
 #include "xla/tsl/concurrency/future.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // BundleInterpreter manages a bundle of models and executes them sequentially
 // as defined in a BundleOrchestration proto.
@@ -67,7 +67,7 @@ class BundleInterpreter : public Interpreter {
   absl::StatusOr<FunctionFlatSignature> GetPipelineSignature(
       absl::string_view pipeline_name) const override;
 
-  absl::StatusOr<neptune_model_orchestration::Pipeline> GetPipelineProto(
+  absl::StatusOr<xla_saved_model_orchestration::Pipeline> GetPipelineProto(
       absl::string_view pipeline_name) const override;
 
   absl::StatusOr<KernelIODataType> GetModelInputDataType(
@@ -92,19 +92,19 @@ class BundleInterpreter : public Interpreter {
 
  private:
   absl::flat_hash_map<std::string, std::unique_ptr<Interpreter>> interpreters_;
-  neptune_bundle_orchestration::BundlePipelines master_orchestration_;
+  xla_serving_bundle_orchestration::BundlePipelines master_orchestration_;
   std::string bundle_path_;
   absl::Status Load();
   absl::StatusOr<std::unique_ptr<Interpreter>> CreateSubInterpreter(
       absl::string_view model_name) const;
-  absl::StatusOr<const neptune_bundle_orchestration::BundlePipeline*>
+  absl::StatusOr<const xla_serving_bundle_orchestration::BundlePipeline*>
   GetPipeline(absl::string_view pipeline_name) const;
-  absl::StatusOr<const neptune_bundle_orchestration::ModelExecutionComponent*>
+  absl::StatusOr<const xla_serving_bundle_orchestration::ModelExecutionComponent*>
   GetFirstComponent(absl::string_view pipeline_name) const;
-  absl::StatusOr<const neptune_bundle_orchestration::ModelExecutionComponent*>
+  absl::StatusOr<const xla_serving_bundle_orchestration::ModelExecutionComponent*>
   GetLastComponent(absl::string_view pipeline_name) const;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_BUNDLE_INTERPRETER_H_
+#endif  // XLA_SERVING_RUNTIME_INTERPRETER_BUNDLE_INTERPRETER_H_

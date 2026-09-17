@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @neptune
+#include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @xla_serving
 
 #include <cstddef>
 #include <cstdint>
@@ -24,11 +24,11 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/cpu_embedding/cc/cpu_embedding_engine.h"  // from @neptune
-#include "data/kernels/cpu_embedding/cpu_embedding.pb.h"  // from @neptune
-#include "data/resource_manager/cc/asset.h"  // from @neptune
-#include "data/resource_manager/cc/resource_manager.h"  // from @neptune
-#include "data/test_utils/status_macros.h"  // from @neptune
+#include "data/cpu_embedding/cc/cpu_embedding_engine.h"  // from @xla_serving
+#include "data/kernels/cpu_embedding/cpu_embedding.pb.h"  // from @xla_serving
+#include "data/resource_manager/cc/asset.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource_manager.h"  // from @xla_serving
+#include "data/test_utils/status_macros.h"  // from @xla_serving
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "tsl/platform/path.h"  // from @tsl
 

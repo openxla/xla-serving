@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/kernel/identity.h"  // from @neptune
+#include "runtime/kernel/identity.h"  // from @xla_serving
 
 #include <memory>
 #include <string>
@@ -21,12 +21,12 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
-#include "runtime/kernel/kernel.h"  // from @neptune
-#include "runtime/kernel/kernel_builder_constants.h"  // from @neptune
-#include "runtime/kernel/kernel_builder_context.h"  // from @neptune
+#include "runtime/kernel/kernel.h"  // from @xla_serving
+#include "runtime/kernel/kernel_builder_constants.h"  // from @xla_serving
+#include "runtime/kernel/kernel_builder_context.h"  // from @xla_serving
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 absl::StatusOr<std::unique_ptr<Kernel>> IdentityKernel::Create(
     const KernelBuilderContext& context) {
@@ -52,4 +52,4 @@ absl::Status IdentityKernel::RunInternal(ExecuteContext& context) {
   return absl::OkStatus();
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

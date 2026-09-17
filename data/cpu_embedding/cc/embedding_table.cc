@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/cpu_embedding/cc/embedding_table.h"  // from @neptune
+#include "data/cpu_embedding/cc/embedding_table.h"  // from @xla_serving
 
 #include <cstdint>
 #include <memory>
 #include <utility>
 
-#include "data/cpu_embedding/cc/array.h"  // from @neptune
+#include "data/cpu_embedding/cc/array.h"  // from @xla_serving
 #include "absl/memory/memory.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp

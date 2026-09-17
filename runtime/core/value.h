@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_VALUE_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_VALUE_H_
+#ifndef XLA_SERVING_RUNTIME_VALUE_H_
+#define XLA_SERVING_RUNTIME_VALUE_H_
 
 #include <new>
 #include <type_traits>
@@ -22,7 +22,7 @@
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 
 class Value;
 
@@ -237,7 +237,7 @@ struct InPlaceHandler {
                             !std::is_copy_constructible<V>::value, int> = 0>
   static void CopyInternal(Value* self, Value* dest) {
     LOG(FATAL)  // Crash Ok
-        << "Copying a `neptune::Value` whose underlying type is not copyable is a "
+        << "Copying a `xla_serving::Value` whose underlying type is not copyable is a "
            "runtime error.";
   }
 
@@ -299,7 +299,7 @@ struct OutOfPlaceHandler {
                             !std::is_copy_constructible<V>::value, int> = 0>
   static void CopyInternal(Value* self, Value* dest) {
     LOG(FATAL)  // Crash Ok
-        << "Copying a `neptune::Value` whose underlying type is not copyable is a "
+        << "Copying a `xla_serving::Value` whose underlying type is not copyable is a "
            "runtime error.";
   }
 
@@ -416,6 +416,6 @@ bool Value::IsType() const {
                   nullptr) == value_internal::GetTypeInfo<T>();
 }
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_VALUE_H_
+#endif  // XLA_SERVING_RUNTIME_VALUE_H_

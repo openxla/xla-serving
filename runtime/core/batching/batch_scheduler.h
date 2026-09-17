@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_BATCH_SCHEDULER_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_BATCH_SCHEDULER_H_
+#ifndef XLA_SERVING_RUNTIME_BATCHING_BATCH_SCHEDULER_H_
+#define XLA_SERVING_RUNTIME_BATCHING_BATCH_SCHEDULER_H_
 
 #include <algorithm>
 #include <cstddef>
@@ -32,14 +32,17 @@
 #include "tsl/platform/thread_annotations.h"  // from @tsl
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
-const absl::string_view kLowPriorityPaddingWithMaxBatchSizeAttrValue =
-    "low_priority_padding_with_max_batch_size";
-const absl::string_view kLowPriorityPaddingWithNextAllowedBatchSizeAttrValue =
-    "low_priority_padding_with_next_allowed_batch_size";
-const absl::string_view kPriorityIsolationAttrValue = "priority_isolation";
-const absl::string_view kPriorityMergeAttrValue = "priority_merge";
+inline constexpr absl::string_view
+    kLowPriorityPaddingWithMaxBatchSizeAttrValue =
+        "low_priority_padding_with_max_batch_size";
+inline constexpr absl::string_view
+    kLowPriorityPaddingWithNextAllowedBatchSizeAttrValue =
+        "low_priority_padding_with_next_allowed_batch_size";
+inline constexpr absl::string_view kPriorityIsolationAttrValue =
+    "priority_isolation";
+inline constexpr absl::string_view kPriorityMergeAttrValue = "priority_merge";
 
 enum class MixedPriorityBatchingPolicy {
   kLowPriorityPaddingWithMaxBatchSize,
@@ -50,6 +53,30 @@ enum class MixedPriorityBatchingPolicy {
 
 absl::StatusOr<MixedPriorityBatchingPolicy> GetMixedPriorityBatchingPolicy(
     absl::string_view attr_value);
+
+inline constexpr absl::string_view kStrictFifoAttrValue = "strict_fifo";
+inline constexpr absl::string_view kPriorityAwareAttrValue = "priority_aware";
+
+enum class PriorityBatchingPolicy {
+  kStrictFifo,
+  kPriorityAware,
+};
+
+// Options for priority-aware batching. Used iff priority_batching_policy is
+// set to PriorityBatchingPolicy::kPriorityAware.
+struct PriorityAwareBatchingOptions {
+  // The maximum sum of task sizes to enqueue. Default is 0, which means the
+  // limit is not set.
+  size_t max_queue_depth = 0;
+  // If true, the priority aware batch queue will resplit tasks into smaller
+  // subtasks if needed.
+  bool enable_task_resplit = false;
+
+  bool operator==(const PriorityAwareBatchingOptions& other) const {
+    return max_queue_depth == other.max_queue_depth &&
+           enable_task_resplit == other.enable_task_resplit;
+  }
+};
 
 // The abstract superclass for a unit of work to be done as part of a batch.
 //
@@ -75,6 +102,9 @@ class BatchTask {
   virtual tsl::criticality::Criticality criticality() const {
     return tsl::criticality::Criticality::kCritical;
   }
+
+  // Returns true if this task is a subtask produced by splitting a larger task.
+  virtual bool is_subtask() const { return false; }
 
   // Called when the task is finished, either successfully or with an error.
   //
@@ -589,6 +619,6 @@ void Batch<TaskType>::TryTrimToNewSize(
   size_ = new_size;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_BATCH_SCHEDULER_H_
+#endif  // XLA_SERVING_RUNTIME_BATCHING_BATCH_SCHEDULER_H_

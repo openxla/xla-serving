@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-package neptune_model_orchestration;
+package xla_saved_model_orchestration;
 
 import "protos/type.proto";
 
@@ -49,7 +49,7 @@ message Pipeline {
   // The overall output signature will be the output signature of the
   // post-processor if present, otherwise the output signature of the model
   // function.
-  neptune_model_type.FunctionSignature signature = 1;
+  xla_saved_model_type.FunctionSignature signature = 1;
 
   // An optional signature that is a (ordered) mapping from names to
   // `TensorType`. This signature is useful for some execution environments that
@@ -135,7 +135,7 @@ message NamedTensorTypeList {
 
 message NamedTensorType {
   string name = 1;
-  neptune_model_type.TensorType tensor_type = 2;
+  xla_saved_model_type.TensorType tensor_type = 2;
   // Number of downstream consumers of this tensor. This value is computed
   // by OEX during export and used by JSV to manage tensor cache eviction.
   optional int32 consumer_count = 3;

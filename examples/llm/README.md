@@ -1,7 +1,7 @@
 # Neptune LLM Example: Qwen3-0.6B Beam Search
 
 Note: Full documentation for Neptune LLM can be found at
-`neptune/neptune_model/_src/llm/README.md`.
+`xla_saved_model/_src/llm/README.md`.
 
 This example demonstrates how to export, serve, and benchmark an open-source
 Large Language Model (**[Qwen/Qwen3-0.6B](https://huggingface.co/Qwen/Qwen3-0.6B)**)
@@ -45,7 +45,7 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 Export the model directly using Neptune's LLM export CLI:
 
 ```bash
-python3 -m neptune_model._src.llm.export_llm \
+python3 -m xla_saved_model._src.llm.export_llm \
   --model Qwen/Qwen3-0.6B \
   --export-dir /tmp/qwen3_serving_b30_p2000 \
   --sampling-type beam_search \
@@ -65,20 +65,20 @@ The exported bundle at `/tmp/qwen3_serving_b30_p2000` contains:
 
 ---
 
-## 3. Serving via Neptune C++ Model Server
+## 3. Serving via XLA Serving C++ Model Server
 
 Build the standalone C++ Model Serving Server binary
-(`neptune_serving_main_tpu`) using Bazel (enabling TensorFlow tokenization
+(`xla_serving_main_tpu`) using Bazel (enabling TensorFlow tokenization
 support with `--define=ENABLE_TF=1`):
 
 ```bash
 # Build the server binary
-bazel build -c opt --define=ENABLE_TF=1 //runtime/serving/gcp/server:neptune_serving_main_tpu
+bazel build -c opt --define=ENABLE_TF=1 //runtime/serving/gcp/server:xla_serving_main_tpu
 
 # Launch the server on TPU
 export TPU_LIBRARY_PATH=$(python3 -c "import libtpu; print(libtpu.get_library_path())")
 
-./bazel-bin/runtime/serving/gcp/server/neptune_serving_main_tpu \
+./bazel-bin/runtime/serving/gcp/server/xla_serving_main_tpu \
   --model_name=qwen3 \
   --model_path=/tmp/qwen3_serving_b30_p2000 \
   --port=8500 \
@@ -170,12 +170,12 @@ print("Decoded Beams:", outputs["text_output"][0])
 
 ## 6. Benchmarking Performance (`benchmark_llm`)
 
-Use `neptune_model._src.llm.benchmark_llm` to measure latency, throughput (QPS),
+Use `xla_saved_model._src.llm.benchmark_llm` to measure latency, throughput (QPS),
 and token generation rates across different execution layers:
 
 ### A. Direct JAX Generation Loop (`model_fn`)
 ```bash
-python3 -m neptune_model._src.llm.benchmark_llm \
+python3 -m xla_saved_model._src.llm.benchmark_llm \
   --mode model_fn \
   --model Qwen/Qwen3-0.6B \
   --sampling-type beam_search \
@@ -188,7 +188,7 @@ python3 -m neptune_model._src.llm.benchmark_llm \
 
 ### B. End-to-End gRPC Server (`grpc_client`)
 ```bash
-python3 -m neptune_model._src.llm.benchmark_llm \
+python3 -m xla_saved_model._src.llm.benchmark_llm \
   --mode grpc_client \
   --server-address localhost:8500 \
   --model-name qwen3 \
@@ -200,7 +200,7 @@ python3 -m neptune_model._src.llm.benchmark_llm \
 
 ### C. Local C++ Model Runner (`model_runner`)
 ```bash
-python3 -m neptune_model._src.llm.benchmark_llm \
+python3 -m xla_saved_model._src.llm.benchmark_llm \
   --mode model_runner \
   --model-path /tmp/qwen3_serving_b30_p2000 \
   --prompt "The most unexpected thing happened when I opened the door," \

@@ -41,11 +41,11 @@
 #include "include/grpcpp/security/credentials.h"  // from @grpc
 #include "include/grpcpp/support/channel_arguments.h"  // from @grpc
 #include "include/grpcpp/support/status.h"  // from @grpc
-#include "protos/grpc/host_buffer.pb.h"  // from @neptune
-#include "protos/grpc/model.pb.h"  // from @neptune
-#include "protos/grpc/predict.pb.h"  // from @neptune
-#include "protos/grpc/prediction_service.grpc.pb.h"  // from @neptune
-#include "runtime/serving/gcp/auth/utils.h"  // from @neptune
+#include "protos/grpc/host_buffer.pb.h"  // from @xla_serving
+#include "protos/grpc/model.pb.h"  // from @xla_serving
+#include "protos/grpc/predict.pb.h"  // from @xla_serving
+#include "protos/grpc/prediction_service.grpc.pb.h"  // from @xla_serving
+#include "runtime/serving/gcp/auth/utils.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.pb.h"  // from @xla
 #include "xla/python/ifrt/shape.pb.h"  // from @xla
 
@@ -89,7 +89,7 @@ std::vector<std::string> LoadLabels(const std::string& path) {
   return labels;
 }
 
-void LogPredictResponse(const neptune::serving::PredictResponse& response,
+void LogPredictResponse(const xla_serving::serving::PredictResponse& response,
                         int32_t top_k,
                         const std::vector<std::string>& labels) {
   LOG(INFO) << "Model: " << response.model_spec().name()
@@ -101,7 +101,7 @@ void LogPredictResponse(const neptune::serving::PredictResponse& response,
     return;
   }
 
-  const neptune::HostBufferProto& output_buffer = it->second;
+  const xla_serving::HostBufferProto& output_buffer = it->second;
   LOG(INFO) << "Output shape: ["
             << absl::StrJoin(output_buffer.shape().dims(), ", ") << "]";
 
@@ -152,15 +152,15 @@ void LogPredictResponse(const neptune::serving::PredictResponse& response,
             << absl::ToDoubleMicroseconds(label_duration) << " us";
 }
 
-absl::StatusOr<neptune::serving::PredictResponse> RunPredict(
-    neptune::serving::PredictionService::Stub* stub,
+absl::StatusOr<xla_serving::serving::PredictResponse> RunPredict(
+    xla_serving::serving::PredictionService::Stub* stub,
     absl::string_view model_name, int32_t batch_size,
     const std::string& image_file, bool verbose) {
-  neptune::serving::PredictRequest request;
+  xla_serving::serving::PredictRequest request;
   request.mutable_model_spec()->set_name(model_name);
 
   auto* inputs = request.mutable_inputs();
-  neptune::HostBufferProto buffer_proto;
+  xla_serving::HostBufferProto buffer_proto;
   buffer_proto.mutable_dtype()->set_kind(xla::ifrt::DTypeProto::KIND_F32);
   auto* shape = buffer_proto.mutable_shape();
   shape->add_dims(batch_size);
@@ -215,7 +215,7 @@ absl::StatusOr<neptune::serving::PredictResponse> RunPredict(
               << "[" << batch_size << ", 224, 224, 3] float32.";
   }
 
-  neptune::serving::PredictResponse response;
+  xla_serving::serving::PredictResponse response;
   grpc::ClientContext context;
   if (verbose) {
     LOG(INFO) << "Sending PredictRequest.";
@@ -276,7 +276,7 @@ int main(int argc, char* argv[]) {
 
   // Build the gRPC stub once so per-request latencies don't include channel
   // setup cost.
-  auto creds_or = neptune::serving::CreateChannelCredentials(
+  auto creds_or = xla_serving::serving::CreateChannelCredentials(
       server_cert_chain_path, use_insecure_grpc_credentials);
   if (!creds_or.ok()) {
     LOG(ERROR) << "Failed to create channel credentials: " << creds_or.status();
@@ -287,8 +287,8 @@ int main(int argc, char* argv[]) {
   channel_args.SetMaxReceiveMessageSize(-1);
   std::shared_ptr<grpc::Channel> channel =
       grpc::CreateCustomChannel(server_address, *creds_or, channel_args);
-  std::unique_ptr<neptune::serving::PredictionService::Stub> stub =
-      neptune::serving::PredictionService::NewStub(channel);
+  std::unique_ptr<xla_serving::serving::PredictionService::Stub> stub =
+      xla_serving::serving::PredictionService::NewStub(channel);
   LOG(INFO) << "Connected to " << server_address;
 
   // Warmup phase (discard these timings)
@@ -306,7 +306,7 @@ int main(int argc, char* argv[]) {
   // Benchmark phase
   std::vector<double> latencies_ms;
   latencies_ms.reserve(num_requests);
-  neptune::serving::PredictResponse last_response;
+  xla_serving::serving::PredictResponse last_response;
 
   for (int i = 0; i < num_requests; ++i) {
     absl::Time start = absl::Now();

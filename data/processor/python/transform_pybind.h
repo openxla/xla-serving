@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_PYTHON_TRANSFORM_PYBIND_H_
-#define THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_PYTHON_TRANSFORM_PYBIND_H_
+#ifndef XLA_SERVING_DATA_PROCESSOR_PYTHON_TRANSFORM_PYBIND_H_
+#define XLA_SERVING_DATA_PROCESSOR_PYTHON_TRANSFORM_PYBIND_H_
 
 #include <atomic>
 #include <mutex>
@@ -26,12 +26,12 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/api/type_info.h"  // from @neptune
-#include "data/processor/cc/api/value.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/cc/core/transform_registry.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/api/type_info.h"  // from @xla_serving
+#include "data/processor/cc/api/value.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/cc/core/transform_registry.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
 #include "include/pybind11/pybind11.h"  // from @pybind11_bazel
 #include "include/pybind11/stl.h"  // from @pybind11_bazel
 #include "include/pybind11/trampoline_self_life_support.h"  // from @pybind11_bazel
@@ -263,4 +263,4 @@ void RegisterDynamicPybindTransformExt(pybind11::module& m,
 }  // namespace composite
 }  // namespace neptune::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_PYTHON_TRANSFORM_PYBIND_H_
+#endif  // XLA_SERVING_DATA_PROCESSOR_PYTHON_TRANSFORM_PYBIND_H_

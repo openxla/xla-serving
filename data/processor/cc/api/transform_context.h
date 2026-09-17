@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_API_TRANSFORM_CONTEXT_H_
-#define THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_API_TRANSFORM_CONTEXT_H_
+#ifndef XLA_SERVING_DATA_PROCESSOR_CC_API_TRANSFORM_CONTEXT_H_
+#define XLA_SERVING_DATA_PROCESSOR_CC_API_TRANSFORM_CONTEXT_H_
 
 #include <cstdint>
 #include <utility>
@@ -23,7 +23,7 @@
 #include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/processor/cc/api/value.h"  // from @neptune
+#include "data/processor/cc/api/value.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
@@ -87,4 +87,4 @@ struct ExecuteContext {
 }  // namespace composite
 }  // namespace neptune::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_API_TRANSFORM_CONTEXT_H_
+#endif  // XLA_SERVING_DATA_PROCESSOR_CC_API_TRANSFORM_CONTEXT_H_

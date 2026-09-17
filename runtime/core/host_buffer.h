@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_HOST_BUFFER_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_HOST_BUFFER_H_
+#ifndef XLA_SERVING_RUNTIME_HOST_BUFFER_H_
+#define XLA_SERVING_RUNTIME_HOST_BUFFER_H_
 
 #include <algorithm>
 #include <cstddef>
@@ -35,9 +35,9 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "Eigen/Core"
 #include "unsupported/Eigen/CXX11/Tensor"
-#include "protos/grpc/host_buffer.pb.h"  // from @neptune
-#include "runtime/core/allocator.h"  // from @neptune
-#include "runtime/core/default_allocator.h"  // from @neptune
+#include "protos/grpc/host_buffer.pb.h"  // from @xla_serving
+#include "runtime/core/allocator.h"  // from @xla_serving
+#include "runtime/core/default_allocator.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
@@ -49,7 +49,7 @@
 // go/lsc-fix-eigen-includes
 // IWYU pragma: no_include "Eigen/src/Core/util/ConfigureVectorization.h"
 
-namespace neptune {
+namespace xla_serving {
 
 // Converts xla::ifrt::Shape to Eigen::DSizes.
 template <int NDIMS, typename IndexType = Eigen::DenseIndex>
@@ -528,6 +528,6 @@ absl::StatusOr<HostBuffer> Concat(
     tsl::thread::ThreadPool* threadpool, absl::Span<const HostBuffer> inputs,
     Allocator* allocator = DefaultAllocator::GetInstance());
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_HOST_BUFFER_H_
+#endif  // XLA_SERVING_RUNTIME_HOST_BUFFER_H_

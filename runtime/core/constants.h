@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_CONSTANTS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_CONSTANTS_H_
+#ifndef XLA_SERVING_RUNTIME_CONSTANTS_H_
+#define XLA_SERVING_RUNTIME_CONSTANTS_H_
 
-namespace neptune {
+namespace xla_serving {
 
 // Orbax manifest version file name and known keys. The file is a text file
 // named 'orbax_model_version.txt' with the following format:
 //
 // version: "0.0.1"
-// mime_type: "application/protobuf; type=neptune_model_manifest.Manifest"
+// mime_type: "application/protobuf; type=xla_saved_model_manifest.Manifest"
 // manifest_file_path: "path/to/manifest.pb"
 //
 inline constexpr char kOrbaxModelManifestVersionTxt[] =
@@ -34,7 +34,7 @@ inline constexpr char kOrbaxModelManifestManifestFilePathKey[] =
     "manifest_file_path";
 inline constexpr char kOrbaxModelManifestVersion[] = "0.0.1";
 inline constexpr char kOrbaxModelManifestMimeType[] =
-    "application/protobuf; type=neptune_model_manifest.Manifest";
+    "application/protobuf; type=xla_saved_model_manifest.Manifest";
 inline constexpr char kOrbaxModelManifestMimeTypeLegacy[] =
     "application/protobuf; type=orbax_model_manifest.Manifest";
 
@@ -52,7 +52,7 @@ inline constexpr char kOexOrchestrationMultiPipelineMimeTypeLegacy[] =
 inline constexpr char kStableHloMimeType[] = "application/x.mlir-stablehlo";
 // XLA compile options mime type expression.
 inline constexpr char kXlaCompileOptionsMimeType[] =
-    "application/protobuf; type=neptune_model_manifest.CompileOptionsProtoMap";
+    "application/protobuf; type=xla_saved_model_manifest.CompileOptionsProtoMap";
 inline constexpr char kXlaCompileOptionsMimeTypeLegacy[] =
     "application/protobuf; type=orbax_model_manifest.CompileOptionsProtoMap";
 // TF SavedModel supplemental name.
@@ -68,6 +68,6 @@ inline constexpr char kTfConcreteFunctionHandleMimeTypeLegacy[] =
     "application/protobuf; "
     "type=orbax_model_tf_concrete_function_handle.TfConcreteFunctionHandle";
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CONSTANTS_H_
+#endif  // XLA_SERVING_RUNTIME_CONSTANTS_H_

@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_CC_EMBEDDING_TABLE_H_
-#define THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_CC_EMBEDDING_TABLE_H_
+#ifndef XLA_SERVING_DATA_CPU_EMBEDDING_CC_EMBEDDING_TABLE_H_
+#define XLA_SERVING_DATA_CPU_EMBEDDING_CC_EMBEDDING_TABLE_H_
 
 #include <cstdint>
 #include <memory>
 #include <string>
 
-#include "data/cpu_embedding/cc/array.h"  // from @neptune
+#include "data/cpu_embedding/cc/array.h"  // from @xla_serving
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
@@ -97,4 +97,4 @@ class EmbeddingTable {
 
 }  // namespace neptune::data::cpu_embedding
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_CC_EMBEDDING_TABLE_H_
+#endif  // XLA_SERVING_DATA_CPU_EMBEDDING_CC_EMBEDDING_TABLE_H_

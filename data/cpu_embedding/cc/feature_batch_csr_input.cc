@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @neptune
+#include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @xla_serving
 
 #include <algorithm>
 #include <cstddef>

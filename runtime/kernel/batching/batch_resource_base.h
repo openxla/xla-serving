@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_BATCH_RESOURCE_BASE_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_BATCH_RESOURCE_BASE_H_
+#ifndef XLA_SERVING_RUNTIME_KERNEL_BATCHING_BATCH_RESOURCE_BASE_H_
+#define XLA_SERVING_RUNTIME_KERNEL_BATCHING_BATCH_RESOURCE_BASE_H_
 
 #include <cstddef>
 #include <cstdint>
@@ -34,14 +34,15 @@
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/core/allocator.h"  // from @neptune
-#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
-#include "runtime/core/batching/resource_base.h"  // from @neptune
-#include "runtime/core/batching/shared_batch_scheduler.h"  // from @neptune
-#include "runtime/core/batching/threadsafe_status.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/kernel/kernel.h"  // from @neptune
+#include "runtime/core/allocator.h"  // from @xla_serving
+#include "runtime/core/batching/batch_scheduler.h"  // from @xla_serving
+#include "runtime/core/batching/queue_options.h"  // from @xla_serving
+#include "runtime/core/batching/resource_base.h"  // from @xla_serving
+#include "runtime/core/batching/shared_batch_scheduler.h"  // from @xla_serving
+#include "runtime/core/batching/threadsafe_status.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/kernel/kernel.h"  // from @xla_serving
 #include "xla/tsl/platform/criticality.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "tensorflow/core/common_runtime/cost_measurement.h"  // from @org_tensorflow
@@ -51,7 +52,7 @@
 
 ABSL_DECLARE_FLAG(bool, jsv_support_batching_for_ragged_inputs);
 
-namespace neptune {
+namespace xla_serving {
 
 struct RaggedInputSpec {
   // Index of the flat_values tensor in the flat signature.
@@ -84,7 +85,7 @@ class BatchResourceBase : public ResourceBase {
   //
   // Note input from one batch-op invocation is valid and considered a
   // specialized `slice`.
-  struct BatchTask : public neptune::BatchTask {
+  struct BatchTask : public xla_serving::BatchTask {
     BatchTask() : criticality_val(tsl::criticality::GetCriticality()) {};
 
     // A unique ID to identify this invocation of Batch.
@@ -150,6 +151,9 @@ class BatchResourceBase : public ResourceBase {
       return criticality_val;
     };
 
+    // Returns true if this task is a split subtask.
+    bool is_subtask() const override { return is_partial; }
+
     // If nonzero, make a batch of this size entirely out of padding. This
     // batch is processed, but is not propagated to the kernel outputs.
     int forced_warmup_batch_size = 0;
@@ -167,6 +171,7 @@ class BatchResourceBase : public ResourceBase {
     }
 
     void FinishTaskImpl(const absl::Status& status) override {
+      tsl::WithContext wc(this->propagated_context);
       if (!status.ok() && this->status) {
         this->status->Update(status);
       }
@@ -185,12 +190,13 @@ class BatchResourceBase : public ResourceBase {
   };
 
   using BatcherT = SharedBatchScheduler<BatchResourceBase::BatchTask>;
+  using QueueOptions = ::xla_serving::QueueOptions<BatchResourceBase::BatchTask>;
 
   using BatcherQueueT = BatchScheduler<BatchResourceBase::BatchTask>;
   using BatchT = Batch<BatchResourceBase::BatchTask>;
 
   BatchResourceBase(std::shared_ptr<BatcherT> batcher,
-                    const BatcherT::QueueOptions& batcher_queue_options,
+                    const QueueOptions& batcher_queue_options,
                     std::vector<int32_t> allowed_batch_sizes,
                     tsl::thread::ThreadPool* thread_pool,
                     std::vector<RaggedInputSpec> ragged_inputs = {})
@@ -226,7 +232,7 @@ class BatchResourceBase : public ResourceBase {
       const CreateBatchTaskFn& create_batch_task_fn,
       absl::AnyInvocable<void(absl::Status)> done_callback);
 
-  static BatcherT::QueueOptions GetBatcherQueueOptions(
+  static QueueOptions GetBatcherQueueOptions(
       int32_t num_batch_threads, int32_t max_batch_size,
       int32_t batch_timeout_micros, int32_t max_enqueued_batches,
       const std::vector<int32_t>& allowed_batch_sizes,
@@ -237,6 +243,8 @@ class BatchResourceBase : public ResourceBase {
       int32_t low_priority_max_enqueued_batches,
       const std::vector<int32_t>& low_priority_allowed_batch_sizes,
       MixedPriorityBatchingPolicy mixed_priority_batching_policy,
+      PriorityBatchingPolicy priority_batching_policy,
+      PriorityAwareBatchingOptions priority_aware_batching_options,
       tsl::thread::ThreadPool* thread_pool, Allocator* allocator,
       std::vector<RaggedInputSpec> ragged_inputs = {});
 
@@ -375,7 +383,7 @@ class BatchResourceBase : public ResourceBase {
   size_t outstanding_batch_total_size_ TF_GUARDED_BY(outstanding_batch_mu_) = 0;
   // A batch scheduler, and options for creating queues.
   std::shared_ptr<BatcherT> batcher_;
-  BatcherT::QueueOptions batcher_queue_options_;
+  QueueOptions batcher_queue_options_;
 
   // A collection of batcher queues, keyed on queue name.
   mutable absl::Mutex batcher_queues_mu_;
@@ -392,6 +400,6 @@ class BatchResourceBase : public ResourceBase {
   tsl::thread::ThreadPool* thread_pool_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_BATCH_RESOURCE_BASE_H_
+#endif  // XLA_SERVING_RUNTIME_KERNEL_BATCHING_BATCH_RESOURCE_BASE_H_

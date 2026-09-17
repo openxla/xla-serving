@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/kernels/cpu_embedding/dense_cpu_embedding_lookup_transform.h"  // from @neptune
+#include "data/kernels/cpu_embedding/dense_cpu_embedding_lookup_transform.h"  // from @xla_serving
 
 #include <cstdint>
 #include <limits>
@@ -28,17 +28,17 @@
 #include "absl/status/status_matchers.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/cpu_embedding/cc/array.h"  // from @neptune
-#include "data/cpu_embedding/cc/cpu_embedding_engine.h"  // from @neptune
-#include "data/cpu_embedding/cc/embedding_table.h"  // from @neptune
-#include "data/cpu_embedding/cc/feature_spec.h"  // from @neptune
-#include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @neptune
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/resource_manager/cc/asset.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
-#include "data/test_utils/status_macros.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "data/cpu_embedding/cc/array.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/cpu_embedding_engine.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/embedding_table.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/feature_spec.h"  // from @xla_serving
+#include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @xla_serving
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/resource_manager/cc/asset.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
+#include "data/test_utils/status_macros.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
@@ -93,12 +93,12 @@ TEST(DenseCpuEmbeddingLookupTransformTest, BasicDenseLookup) {
       1, 2, 3, 0,  // Row 0: 1 + 2 + 3 + 0 = 6.0
       4, 1, 2, 0,  // Row 1: 4 + 1 + 2 + 0 = 7.0
   };
-  neptune::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                          xla::ifrt::Shape({2, 4}));
   absl::c_copy(ids_vec, reinterpret_cast<int32_t*>(ids_hb.base()));
 
   // 4. Execute Transform
-  std::vector<neptune::HostBuffer> inputs;
+  std::vector<xla_serving::HostBuffer> inputs;
   inputs.push_back(std::move(ids_hb));
   ASSERT_OK_AND_ASSIGN(auto outputs, (*transform)(std::move(inputs)));
   ASSERT_EQ(outputs.size(), 1);
@@ -167,18 +167,18 @@ TEST(DenseCpuEmbeddingLookupTransformTest, MultiTableParallelLookup) {
   // 3. Prepare Inputs
   // Feat1: shape [2, 3] -> rows [1, 2, 0] (3.0) and [2, 2, 0] (4.0)
   std::vector<int32_t> feat1_ids = {1, 2, 0, 2, 2, 0};
-  neptune::HostBuffer hb1(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer hb1(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                       xla::ifrt::Shape({2, 3}));
   absl::c_copy(feat1_ids, reinterpret_cast<int32_t*>(hb1.base()));
 
   // Feat2: shape [2, 2] -> rows [1, 0] (10.0) and [2, 1] (30.0)
   std::vector<int32_t> feat2_ids = {1, 0, 2, 1};
-  neptune::HostBuffer hb2(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer hb2(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                       xla::ifrt::Shape({2, 2}));
   absl::c_copy(feat2_ids, reinterpret_cast<int32_t*>(hb2.base()));
 
   // 4. Execute Multi-Table in single call
-  std::vector<neptune::HostBuffer> inputs;
+  std::vector<xla_serving::HostBuffer> inputs;
   inputs.push_back(std::move(hb1));
   inputs.push_back(std::move(hb2));
 
@@ -295,11 +295,11 @@ TEST(DenseCpuEmbeddingLookupTransformTest, S64InputDenseLookup) {
       1, 2, 3, 0,
       4, 1, 2, 0,
   };
-  neptune::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS64),
+  xla_serving::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS64),
                          xla::ifrt::Shape({2, 4}));
   absl::c_copy(ids_vec, reinterpret_cast<int64_t*>(ids_hb.base()));
 
-  std::vector<neptune::HostBuffer> inputs;
+  std::vector<xla_serving::HostBuffer> inputs;
   inputs.push_back(std::move(ids_hb));
   ASSERT_OK_AND_ASSIGN(auto outputs, (*transform)(std::move(inputs)));
   ASSERT_EQ(outputs.size(), 1);
@@ -342,11 +342,11 @@ TEST(DenseCpuEmbeddingLookupTransformTest, AllPaddedSequenceFallback) {
 
   // Sequence of all padding tokens: [0, 0, 0]
   std::vector<int32_t> ids_vec = {0, 0, 0};
-  neptune::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                          xla::ifrt::Shape({1, 3}));
   absl::c_copy(ids_vec, reinterpret_cast<int32_t*>(ids_hb.base()));
 
-  std::vector<neptune::HostBuffer> inputs;
+  std::vector<xla_serving::HostBuffer> inputs;
   inputs.push_back(std::move(ids_hb));
   ASSERT_OK_AND_ASSIGN(auto outputs, (*transform)(std::move(inputs)));
   ASSERT_EQ(outputs.size(), 1);
@@ -407,18 +407,18 @@ TEST(DenseCpuEmbeddingLookupTransformTest, ErrorHandling) {
       absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 
   // Empty shape / rank-0 input check
-  neptune::HostBuffer rank0_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer rank0_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                            xla::ifrt::Shape({}));
-  std::vector<neptune::HostBuffer> rank0_inputs;
+  std::vector<xla_serving::HostBuffer> rank0_inputs;
   rank0_inputs.push_back(std::move(rank0_hb));
   EXPECT_THAT(
       (*transform)(std::move(rank0_inputs)),
       absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 
   // Invalid dtype (e.g. F32 IDs)
-  neptune::HostBuffer f32_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+  xla_serving::HostBuffer f32_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                          xla::ifrt::Shape({2, 2}));
-  std::vector<neptune::HostBuffer> invalid_inputs;
+  std::vector<xla_serving::HostBuffer> invalid_inputs;
   invalid_inputs.push_back(std::move(f32_hb));
   EXPECT_THAT(
       (*transform)(std::move(invalid_inputs)),
@@ -426,9 +426,9 @@ TEST(DenseCpuEmbeddingLookupTransformTest, ErrorHandling) {
 
   // Dimension overflow check (> INT32_MAX)
   int64_t huge_dim = static_cast<int64_t>(std::numeric_limits<int32_t>::max()) + 1;
-  neptune::HostBuffer overflow_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer overflow_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                               xla::ifrt::Shape({huge_dim, 1}));
-  std::vector<neptune::HostBuffer> overflow_inputs;
+  std::vector<xla_serving::HostBuffer> overflow_inputs;
   overflow_inputs.push_back(std::move(overflow_hb));
   EXPECT_THAT(
       (*transform)(std::move(overflow_inputs)),

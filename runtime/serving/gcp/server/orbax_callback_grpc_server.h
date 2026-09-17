@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_ORBAX_CALLBACK_GRPC_SERVER_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_ORBAX_CALLBACK_GRPC_SERVER_H_
+#ifndef XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_ORBAX_CALLBACK_GRPC_SERVER_H_
+#define XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_ORBAX_CALLBACK_GRPC_SERVER_H_
 
 #include <cstdint>
 #include <memory>
@@ -26,16 +26,17 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "include/grpcpp/server_context.h"  // from @grpc
 #include "include/grpcpp/support/server_callback.h"  // from @grpc
-#include "protos/grpc/get_model_metadata.pb.h"  // from @neptune
-#include "protos/grpc/predict.pb.h"  // from @neptune
-#include "protos/grpc/prediction_service.grpc.pb.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/interpreter/interpreter.h"  // from @neptune
-#include "runtime/interpreter/run_options.h"  // from @neptune
+#include "protos/grpc/get_model_metadata.pb.h"  // from @xla_serving
+#include "protos/grpc/model_server_config.pb.h"  // from @xla_serving
+#include "protos/grpc/predict.pb.h"  // from @xla_serving
+#include "protos/grpc/prediction_service.grpc.pb.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/interpreter/interpreter.h"  // from @xla_serving
+#include "runtime/interpreter/run_options.h"  // from @xla_serving
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 namespace serving {
 
 struct OrbaxCallbackGrpcServerOptions {
@@ -56,8 +57,14 @@ struct OrbaxCallbackGrpcServerOptions {
 
 class OrbaxCallbackGrpcServer final
 
-    : public neptune::serving::PredictionService::CallbackService {
+    : public xla_serving::serving::PredictionService::CallbackService {
  public:
+  struct ModelEntry {
+    std::string name;
+    std::string path;
+    std::unique_ptr<xla_serving::Interpreter> interpreter;
+  };
+
   OrbaxCallbackGrpcServer(OrbaxCallbackGrpcServer&& other) = default;
   OrbaxCallbackGrpcServer& operator=(OrbaxCallbackGrpcServer&& other) = default;
 
@@ -65,22 +72,30 @@ class OrbaxCallbackGrpcServer final
   OrbaxCallbackGrpcServer& operator=(const OrbaxCallbackGrpcServer&) = delete;
 
   OrbaxCallbackGrpcServer(
-      absl::string_view model_name,
-      std::unique_ptr<neptune::Interpreter> interpreter,
+      absl::flat_hash_map<std::string, std::shared_ptr<ModelEntry>> models,
       std::shared_ptr<xla::ifrt::Client> client,
       std::unique_ptr<tsl::thread::ThreadPool> execute_worker_thread_pool,
       std::unique_ptr<tsl::thread::ThreadPool> computation_thread_pool,
       std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool,
-      std::unique_ptr<tsl::thread::ThreadPool> response_thread_pool)
-      : model_name_(model_name),
-        client_(client),
-        execute_worker_thread_pool_(std::move(execute_worker_thread_pool)),
-        computation_thread_pool_(std::move(computation_thread_pool)),
-        checkpoint_loader_thread_pool_(
-            std::move(checkpoint_loader_thread_pool)),
-        response_thread_pool_(std::move(response_thread_pool)),
-        interpreter_(std::move(interpreter)) {}
+      std::unique_ptr<tsl::thread::ThreadPool> response_thread_pool);
 
+  // Backward-compatible constructor for a single model.
+  OrbaxCallbackGrpcServer(
+      absl::string_view model_name,
+      std::unique_ptr<xla_serving::Interpreter> interpreter,
+      std::shared_ptr<xla::ifrt::Client> client,
+      std::unique_ptr<tsl::thread::ThreadPool> execute_worker_thread_pool,
+      std::unique_ptr<tsl::thread::ThreadPool> computation_thread_pool,
+      std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool);
+
+  // Creates an OrbaxCallbackGrpcServer from a ModelServerConfig.
+  static absl::StatusOr<std::unique_ptr<OrbaxCallbackGrpcServer>> Create(
+      const ModelServerConfig& config,
+      const OrbaxCallbackGrpcServerOptions& options =
+          OrbaxCallbackGrpcServerOptions());
+
+  // Creates an OrbaxCallbackGrpcServer for a single model
+  // (backward-compatible).
   static absl::StatusOr<std::unique_ptr<OrbaxCallbackGrpcServer>> Create(
       absl::string_view model_name, absl::string_view model_path,
       const OrbaxCallbackGrpcServerOptions& options =
@@ -89,19 +104,18 @@ class OrbaxCallbackGrpcServer final
   // Handles the GetModelMetadata RPC.
   grpc::ServerUnaryReactor* GetModelMetadata(
       grpc::CallbackServerContext* context,
-      const neptune::serving::GetModelMetadataRequest* request,
-      neptune::serving::GetModelMetadataResponse* response) override;
+      const xla_serving::serving::GetModelMetadataRequest* request,
+      xla_serving::serving::GetModelMetadataResponse* response) override;
 
   // Handles the Predict RPC.
   grpc::ServerUnaryReactor* Predict(
       grpc::CallbackServerContext* context,
-      const neptune::serving::PredictRequest* request,
-      neptune::serving::PredictResponse* response) override;
+      const xla_serving::serving::PredictRequest* request,
+      xla_serving::serving::PredictResponse* response) override;
 
  private:
   static constexpr int kThreadPoolNumThreads = 16;
 
-  std::string model_name_;
   std::shared_ptr<xla::ifrt::Client> client_;
   std::unique_ptr<tsl::thread::ThreadPool> execute_worker_thread_pool_;
   std::unique_ptr<tsl::thread::ThreadPool> computation_thread_pool_;
@@ -109,17 +123,18 @@ class OrbaxCallbackGrpcServer final
   // Builds responses and finishes Predict RPCs off the interpreter threads.
   // nullptr if response_threads is -1 (finish inline).
   std::unique_ptr<tsl::thread::ThreadPool> response_thread_pool_;
-  std::unique_ptr<neptune::Interpreter> interpreter_;
+  absl::flat_hash_map<std::string, std::shared_ptr<ModelEntry>> models_;
 
-  absl::Status Warmup(absl::string_view model_path);
+  absl::Status Warmup(const ModelEntry& model_entry);
 
-  absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>>
-  RunPredictInternal(const neptune::serving::PredictRequest& request,
+  absl::StatusOr<absl::flat_hash_map<std::string, xla_serving::Value>>
+  RunPredictInternal(const ModelEntry& model_entry,
+                     const xla_serving::serving::PredictRequest& request,
                      absl::string_view pipeline_name,
-                     const neptune::RunOptions& run_options);
+                     const xla_serving::RunOptions& run_options);
 };
 
 }  // namespace serving
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_ORBAX_CALLBACK_GRPC_SERVER_H_
+#endif  // XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_ORBAX_CALLBACK_GRPC_SERVER_H_

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/data_loader/ocp_loader/tensorstore_utils.h"  // from @neptune
+#include "runtime/data_loader/ocp_loader/tensorstore_utils.h"  // from @xla_serving
 
 #include <cstdint>
 #include <filesystem>  // NOLINT(build/c++17)
@@ -43,7 +43,7 @@
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "tensorstore/data_type.h"  // from @tensorstore
 
-namespace neptune {
+namespace xla_serving {
 
 namespace {
 
@@ -107,7 +107,7 @@ absl::StatusOr<nlohmann::json> BuildKvstoreTspec(
     bool use_ocdbt,
     const std::optional<std::variant<int, std::string>>& process_id) {
   std::string default_driver = std::string(kDefaultDriver);
-  
+
   // TODO: Consider using tensorflow/tsl/platform/file_system.h to
   // replace `std::filesystem`.
   std::string normalized_directory =
@@ -304,4 +304,4 @@ absl::StatusOr<tensorstore::DataType> ToTensorStoreDType(
   }
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

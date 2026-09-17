@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/aot_stablehlo_runner.h"  // from @neptune
+#include "runtime/core/aot_stablehlo_runner.h"  // from @xla_serving
 
 #include <algorithm>
 #include <cstddef>
@@ -31,13 +31,13 @@
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/time/clock.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/core/ifrt_device_utils.h"  // from @neptune
-#include "runtime/core/loaded_stablehlo.h"  // from @neptune
-#include "runtime/core/sharding_utils.h"  // from @neptune
-#include "runtime/core/stablehlo.h"  // from @neptune
-#include "runtime/core/stablehlo_runner.h"  // from @neptune
-#include "runtime/core/stablehlo_utils.h"  // from @neptune
-#include "runtime/libs/ifrt/executable_build_utils.h"  // from @neptune
+#include "runtime/core/ifrt_device_utils.h"  // from @xla_serving
+#include "runtime/core/loaded_stablehlo.h"  // from @xla_serving
+#include "runtime/core/sharding_utils.h"  // from @xla_serving
+#include "runtime/core/stablehlo.h"  // from @xla_serving
+#include "runtime/core/stablehlo_runner.h"  // from @xla_serving
+#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
+#include "runtime/libs/ifrt/executable_build_utils.h"  // from @xla_serving
 #include "xla/python/ifrt/device.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
 #include "xla/python/ifrt/dtype.h"  // from @xla
@@ -48,7 +48,7 @@
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 namespace {}  // namespace
 
@@ -123,9 +123,14 @@ absl::Status AotStableHloRunner::PopulateAotExecutableCache(
                       executable_bundle->module_kept_var_indices.end(),
                       [num_weights](int idx) { return idx < num_weights; });
 
-    executable_bundle->io_spec.inputs = spec.inputs;
+    executable_bundle->io_spec.inputs.reserve(
+        executable_bundle->module_kept_var_indices.size());
+    for (int idx : executable_bundle->module_kept_var_indices) {
+      executable_bundle->io_spec.inputs.push_back(spec.inputs[idx]);
+    }
     executable_bundle->io_spec.outputs = spec.outputs;
-    executable_bundle->original_io_spec.inputs = spec.inputs;
+    executable_bundle->original_io_spec.inputs =
+        executable_bundle->io_spec.inputs;
     executable_bundle->original_io_spec.outputs = spec.outputs;
     executable_bundle->ifrt_executable = std::move(options.executables[i]);
     executable_bundle->program_fingerprint_with_timestamp =
@@ -133,12 +138,13 @@ absl::Status AotStableHloRunner::PopulateAotExecutableCache(
                                            absl::Now());
 
     std::vector<xla::ifrt::Shape> user_input_shapes;
-    user_input_shapes.reserve(executable_bundle->io_spec.inputs.size() -
-                              executable_bundle->input_offset);
-    for (int j = executable_bundle->input_offset;
-         j < executable_bundle->io_spec.inputs.size(); ++j) {
-      user_input_shapes.push_back(
-          executable_bundle->io_spec.inputs[j].GetIfrtShape());
+    // The cache key must span every user input the caller supplies at runtime,
+    // including inputs DCE pruned from the module. Slice the unpruned
+    // `spec.inputs`; `io_spec.inputs` holds only kept inputs and is indexed by
+    // `input_offset`, which counts kept weights rather than all weights.
+    user_input_shapes.reserve(spec.inputs.size() - num_weights);
+    for (size_t j = num_weights; j < spec.inputs.size(); ++j) {
+      user_input_shapes.push_back(spec.inputs[j].GetIfrtShape());
     }
 
     // IFRT requires an explicit device mapping when executing unbound
@@ -161,10 +167,10 @@ absl::Status AotStableHloRunner::PopulateAotExecutableCache(
       executable_bundle->output_shardings = std::move(output_map);
     } else {
       CachedExecutableBundle::ShardingList arg_list;
-      arg_list.reserve(executable_bundle->module_kept_var_indices.size());
+      arg_list.reserve(executable_bundle->io_spec.inputs.size());
       for (const auto& arg_spec : executable_bundle->io_spec.inputs) {
         TF_ASSIGN_OR_RETURN(auto ifrt_sharding,
-                            neptune::sharding_internal::ToIfrtSharding(
+                            xla_serving::sharding_internal::ToIfrtSharding(
                                 *options.base_options.client, arg_spec.sharding,
                                 assigned_device_list_));
         arg_list.push_back(std::move(ifrt_sharding));
@@ -175,7 +181,7 @@ absl::Status AotStableHloRunner::PopulateAotExecutableCache(
       output_list.reserve(executable_bundle->io_spec.outputs.size());
       for (const auto& out_spec : executable_bundle->io_spec.outputs) {
         TF_ASSIGN_OR_RETURN(auto ifrt_sharding,
-                            neptune::sharding_internal::ToIfrtSharding(
+                            xla_serving::sharding_internal::ToIfrtSharding(
                                 *options.base_options.client, out_spec.sharding,
                                 assigned_device_list_));
         output_list.push_back(std::move(ifrt_sharding));
@@ -208,4 +214,4 @@ AotStableHloRunner::LookUpOrCreateExecutable(
       absl::FailedPreconditionError("AOT cache miss: unseen input shape."));
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

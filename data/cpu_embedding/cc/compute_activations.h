@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_CC_COMPUTE_ACTIVATIONS_H_
-#define THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_CC_COMPUTE_ACTIVATIONS_H_
+#ifndef XLA_SERVING_DATA_CPU_EMBEDDING_CC_COMPUTE_ACTIVATIONS_H_
+#define XLA_SERVING_DATA_CPU_EMBEDDING_CC_COMPUTE_ACTIVATIONS_H_
 
 #include <cstdint>
 
-#include "data/cpu_embedding/cc/array.h"  // from @neptune
-#include "data/cpu_embedding/cc/embedding_table.h"  // from @neptune
-#include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @neptune
+#include "data/cpu_embedding/cc/array.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/embedding_table.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @xla_serving
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
@@ -54,4 +54,4 @@ absl::StatusOr<Array> LookupEmbeddingSequence(
 
 }  // namespace neptune::data::cpu_embedding
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_CC_COMPUTE_ACTIVATIONS_H_
+#endif  // XLA_SERVING_DATA_CPU_EMBEDDING_CC_COMPUTE_ACTIVATIONS_H_

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/tensorflow/utils/ifrt_tensor_utils.h"  // from @neptune
+#include "runtime/tensorflow/utils/ifrt_tensor_utils.h"  // from @xla_serving
 
 #include <cstdint>
 #include <numeric>
@@ -42,7 +42,7 @@
 #include "tensorflow/core/framework/tensor_shape.pb.h"  // from @org_tensorflow
 #include "tensorflow/core/framework/types.pb.h"  // from @org_tensorflow
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 // TODO: delete all these after tensor usage is removed.
 absl::Status DataTypeToPrimitiveType(tensorflow::DataType data_type,
@@ -328,4 +328,4 @@ tensorflow::PartialTensorShape MlirTypeToTensorShape(const mlir::Type& type) {
   return tensorflow::TensorShape();
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @neptune
+#include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @xla_serving
 
 #include <cstddef>
 
@@ -22,7 +22,7 @@
 #include "xla/tsl/framework/serving_device_selector.h"  // from @xla
 #include "xla/tsl/lib/monitoring/counter.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 using ::tsl::monitoring::Counter;
 
@@ -71,4 +71,4 @@ tsl::DeviceReservation ServingCoreSelector::ReserveDevice(
   return reservation;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

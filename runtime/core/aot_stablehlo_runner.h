@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_CORE_AOT_STABLEHLO_RUNNER_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_CORE_AOT_STABLEHLO_RUNNER_H_
+#ifndef XLA_SERVING_RUNTIME_CORE_AOT_STABLEHLO_RUNNER_H_
+#define XLA_SERVING_RUNTIME_CORE_AOT_STABLEHLO_RUNNER_H_
 
 #include <memory>
 #include <vector>
@@ -21,15 +21,15 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/core/stablehlo.h"  // from @neptune
-#include "runtime/core/stablehlo_runner.h"  // from @neptune
+#include "runtime/core/stablehlo.h"  // from @xla_serving
+#include "runtime/core/stablehlo_runner.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/executable.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/file_system.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // Configuration options for creating a StableHloRunner from pre-compiled AOT
 // executables.
@@ -77,6 +77,6 @@ class AotStableHloRunner : public StableHloRunner {
   friend class StableHloRunnerTestPeer;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_AOT_STABLEHLO_RUNNER_H_
+#endif  // XLA_SERVING_RUNTIME_CORE_AOT_STABLEHLO_RUNNER_H_

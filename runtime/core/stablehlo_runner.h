@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_STABLEHLO_RUNNER_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_STABLEHLO_RUNNER_H_
+#ifndef XLA_SERVING_RUNTIME_STABLEHLO_RUNNER_H_
+#define XLA_SERVING_RUNTIME_STABLEHLO_RUNNER_H_
 
 #include <atomic>
 #include <cstddef>
@@ -39,18 +39,18 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/core/h2d_transfer_executor.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune
-#include "runtime/core/loaded_stablehlo.h"  // from @neptune
-#include "runtime/core/stablehlo.h"  // from @neptune
-#include "runtime/core/stablehlo_optimizer.h"  // from @neptune
-#include "runtime/core/stablehlo_utils.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/interpreter/context.h"  // from @neptune
-#include "runtime/interpreter/manifest_utils.h"  // from @neptune
-#include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
-#include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @neptune
+#include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/ifrt_loaded_variable_registry.h"  // from @xla_serving
+#include "runtime/core/loaded_stablehlo.h"  // from @xla_serving
+#include "runtime/core/stablehlo.h"  // from @xla_serving
+#include "runtime/core/stablehlo_optimizer.h"  // from @xla_serving
+#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/interpreter/context.h"  // from @xla_serving
+#include "runtime/interpreter/manifest_utils.h"  // from @xla_serving
+#include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @xla_serving
+#include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @xla_serving
 #include "google/protobuf/message.h"
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
@@ -66,7 +66,7 @@
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 struct StableHloRunnerOptions {
   // IFRT Client backend (e.g. TPU, GPU) that the executables are bound to.
@@ -157,17 +157,17 @@ class StableHloRunner {
   // Only user provided input arguments are passed to this function. The weights
   // (as passed to `Create`) will be looked in `IfrtLoadedVariableRegistry` from
   // the variable name. These will be passed as the first arguments to the
-  // computation. The inputs and outputs are wrapped in `neptune::Value` containers.
+  // computation. The inputs and outputs are wrapped in `xla_serving::Value` containers.
   // Output placement is resolved via the 3-tier precedence hierarchy above:
-  // `Placement::kHost` returns a `neptune::HostBuffer`, while `Placement::kDevice`
-  // returns a `neptune::DeviceBuffer` (retained on accelerator device memory).
-  absl::StatusOr<std::vector<neptune::Value>> Execute(
-      absl::Span<const neptune::Value> inputs, ExecuteOptions options,
+  // `Placement::kHost` returns a `xla_serving::HostBuffer`, while `Placement::kDevice`
+  // returns a `xla_serving::DeviceBuffer` (retained on accelerator device memory).
+  absl::StatusOr<std::vector<xla_serving::Value>> Execute(
+      absl::Span<const xla_serving::Value> inputs, ExecuteOptions options,
       const RunContext& run_context);
 
   // Executes the computation using the default ExecuteOptions.
-  absl::StatusOr<std::vector<neptune::Value>> Execute(
-      absl::Span<const neptune::Value> inputs, const RunContext& run_context) {
+  absl::StatusOr<std::vector<xla_serving::Value>> Execute(
+      absl::Span<const xla_serving::Value> inputs, const RunContext& run_context) {
     return Execute(inputs, ExecuteOptions{}, run_context);
   }
 
@@ -298,9 +298,9 @@ class StableHloRunner {
         const CachedExecutableBundle& executable_bundle,
         absl::Span<const int> stablehlo_indices) const;
 
-    // Converts the outputs from `xla::ifrt::Array` to `neptune::Value` according
+    // Converts the outputs from `xla::ifrt::Array` to `xla_serving::Value` according
     // to `placements`.
-    absl::StatusOr<std::vector<neptune::Value>> ConvertOutput(
+    absl::StatusOr<std::vector<xla_serving::Value>> ConvertOutput(
         absl::Span<const xla::ifrt::ArrayRef> stablehlo_outputs,
         const CachedExecutableBundle& executable_bundle,
         absl::Span<const Placement> placements);
@@ -519,6 +519,6 @@ class StableHloRunner {
   friend class AotStableHloRunner;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_STABLEHLO_RUNNER_H_
+#endif  // XLA_SERVING_RUNTIME_STABLEHLO_RUNNER_H_

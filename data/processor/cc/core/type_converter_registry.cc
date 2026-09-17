@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/processor/cc/core/type_converter_registry.h"  // from @neptune
+#include "data/processor/cc/core/type_converter_registry.h"  // from @xla_serving
 
 #include <memory>
 #include <utility>
@@ -23,8 +23,8 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
-#include "data/processor/cc/api/type_converter.h"  // from @neptune
-#include "data/processor/cc/api/type_info.h"  // from @neptune
+#include "data/processor/cc/api/type_converter.h"  // from @xla_serving
+#include "data/processor/cc/api/type_info.h"  // from @xla_serving
 
 namespace neptune::data {
 namespace composite {

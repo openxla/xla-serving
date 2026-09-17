@@ -2,7 +2,7 @@ load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(default_visibility = [
-    "@neptune//:__subpackages__",
+    "@xla_serving//:__subpackages__",
 ])
 
 package_group(
@@ -30,11 +30,11 @@ cc_library(
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/types:span",
-        "@neptune//protos:manifest_cc_proto",
-        "@neptune//runtime/core:ifrt_loaded_variable_registry",
-        "@neptune//runtime/interpreter:manifest_utils",
         "@xla//xla/python/ifrt",
         "@xla//xla/tsl/platform:env",
+        "@xla_serving//protos:manifest_cc_proto",
+        "@xla_serving//runtime/core:ifrt_loaded_variable_registry",
+        "@xla_serving//runtime/interpreter:manifest_utils",
     ],
 )
 
@@ -55,15 +55,6 @@ cc_library(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
-        "@neptune//protos:manifest_cc_proto",
-        "@neptune//runtime/core:constants",
-        "@neptune//runtime/core:ifrt_device_utils",
-        "@neptune//runtime/core:ifrt_loaded_variable_registry",
-        "@neptune//runtime/core:stablehlo_utils",
-        "@neptune//runtime/core:value",
-        "@neptune//runtime/data_loader/ocp_loader:checkpoint_loader",
-        "@neptune//runtime/data_loader/ocp_loader:metadata_util",
-        "@neptune//runtime/interpreter:manifest_utils",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/hlo/ir:hlo_sharding",
         "@xla//xla/python/ifrt",
@@ -71,6 +62,15 @@ cc_library(
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//protos:manifest_cc_proto",
+        "@xla_serving//runtime/core:constants",
+        "@xla_serving//runtime/core:ifrt_device_utils",
+        "@xla_serving//runtime/core:ifrt_loaded_variable_registry",
+        "@xla_serving//runtime/core:stablehlo_utils",
+        "@xla_serving//runtime/core:value",
+        "@xla_serving//runtime/data_loader/ocp_loader:checkpoint_loader",
+        "@xla_serving//runtime/data_loader/ocp_loader:metadata_util",
+        "@xla_serving//runtime/interpreter:manifest_utils",
     ],
 )
 
@@ -83,7 +83,7 @@ cc_library(
         ":default_data_loader",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/status:statusor",
-        "@neptune//protos:manifest_cc_proto",
+        "@xla_serving//protos:manifest_cc_proto",
     ],
     alwayslink = 1,
 )

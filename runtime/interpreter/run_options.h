@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_RUN_OPTIONS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_RUN_OPTIONS_H_
+#ifndef XLA_SERVING_RUNTIME_INTERPRETER_RUN_OPTIONS_H_
+#define XLA_SERVING_RUNTIME_INTERPRETER_RUN_OPTIONS_H_
 
 #include <cstdint>
 #include <functional>
@@ -21,10 +21,10 @@
 
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/stablehlo_utils.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
 
-namespace neptune {
+namespace xla_serving {
 
 // Per-request options for running a model. This struct is part of the public
 // API, and, thus, adding new fields should be done with caution since they may
@@ -41,9 +41,9 @@ struct RunOptions {
 
   // Sparse named output placement map, keyed by output tensor name.
   // Controls whether each returned model output is transferred to host memory
-  // (Placement::kHost, producing neptune::HostBuffer) or retained on accelerator
+  // (Placement::kHost, producing xla_serving::HostBuffer) or retained on accelerator
   // device memory (Placement::kDevice, wrapping xla::ifrt::Array in
-  // neptune::DeviceBuffer). Unspecified outputs default to the manifest-defined
+  // xla_serving::DeviceBuffer). Unspecified outputs default to the manifest-defined
   // placement if present, or fall back to Placement::kHost. Note: Input
   // placement is determined automatically by the concrete type of the input
   // value (HostBuffer vs DeviceBuffer) and does not use a placement map.
@@ -54,6 +54,6 @@ struct RunOptions {
   int32_t request_id = -1;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_RUN_OPTIONS_H_
+#endif  // XLA_SERVING_RUNTIME_INTERPRETER_RUN_OPTIONS_H_

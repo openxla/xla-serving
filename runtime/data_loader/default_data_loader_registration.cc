@@ -17,17 +17,17 @@
 
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
-#include "runtime/data_loader/data_loader.h"  // from @neptune
-#include "runtime/data_loader/default_data_loader.h"  // from @neptune
+#include "protos/manifest.pb.h"  // from @xla_serving
+#include "runtime/data_loader/data_loader.h"  // from @xla_serving
+#include "runtime/data_loader/default_data_loader.h"  // from @xla_serving
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 bool kUnused = []() {
   const auto s =
       DataLoaderFactoryRegistry::GetGlobalRegistry().RegisterDataLoaderFactory(
-          neptune_model_manifest::LoaderType::LOADER_TYPE_DEFAULT,
+          xla_saved_model_manifest::LoaderType::LOADER_TYPE_DEFAULT,
           [](DataLoader::CreateOptions create_options)
               -> absl::StatusOr<std::unique_ptr<DataLoader>> {
             return DefaultDataLoader::Create(std::move(create_options));
@@ -37,4 +37,4 @@ bool kUnused = []() {
 }();
 
 }  // namespace
-}  // namespace neptune
+}  // namespace xla_serving

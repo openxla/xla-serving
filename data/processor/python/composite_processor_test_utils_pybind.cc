@@ -16,9 +16,9 @@
 #include <thread>
 #include <vector>
 
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/cc/utils/buffer_utils.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/cc/utils/buffer_utils.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "include/pybind11/gil.h"  // from @pybind11_bazel
 #include "include/pybind11/numpy.h"  // from @pybind11_bazel
 #include "include/pybind11/pybind11.h"  // from @pybind11_bazel
@@ -53,7 +53,7 @@ PYBIND11_MODULE(composite_processor_test_utils_pybind, m) {
   });
 
   m.def("get_ref_count_from_ref",
-        [](const neptune::HostBuffer& hb) { return hb.ref_count(); });
+        [](const xla_serving::HostBuffer& hb) { return hb.ref_count(); });
 
   m.def("run_transform_methods_concurrently",
         [](const std::shared_ptr<TransformBase>& transform) {

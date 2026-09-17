@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_RESOURCE_MANAGER_CC_RESOURCE_H_
-#define THIRD_PARTY_NEPTUNE_DATA_RESOURCE_MANAGER_CC_RESOURCE_H_
+#ifndef XLA_SERVING_DATA_RESOURCE_MANAGER_CC_RESOURCE_H_
+#define XLA_SERVING_DATA_RESOURCE_MANAGER_CC_RESOURCE_H_
 
 #include <cstdint>
 #include <memory>
@@ -29,9 +29,9 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "xla/tsl/platform/status_macros.h"
-#include "data/resource_manager/cc/asset.h"  // from @neptune
-#include "data/resource_manager/cc/resource_internal.h"  // from @neptune
-#include "data/resource_manager/proto/resource_manager.pb.h"  // from @neptune
+#include "data/resource_manager/cc/asset.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource_internal.h"  // from @xla_serving
+#include "data/resource_manager/proto/resource_manager.pb.h"  // from @xla_serving
 
 namespace neptune::data {
 
@@ -116,4 +116,4 @@ absl::Status RegisterResource(const std::string& class_name) {
 #define ND_REGISTER_RESOURCE(Type, Name) \
   ND_REGISTER_RESOURCE_INTERNAL(Type, Name, __COUNTER__)
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_RESOURCE_MANAGER_CC_RESOURCE_H_
+#endif  // XLA_SERVING_DATA_RESOURCE_MANAGER_CC_RESOURCE_H_

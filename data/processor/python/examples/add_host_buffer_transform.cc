@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/processor/python/examples/add_host_buffer_transform.h"  // from @neptune
+#include "data/processor/python/examples/add_host_buffer_transform.h"  // from @xla_serving
 
 #include <cstdint>
 #include <memory>
@@ -21,12 +21,12 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/processor/cc/api/registry.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/cc/core/transform_registry.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/cc/core/transform_registry.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 
 namespace neptune::data {
@@ -37,8 +37,8 @@ AddHostBufferTransform::Create() {
   return std::make_unique<AddHostBufferTransform>();
 }
 
-absl::StatusOr<neptune::HostBuffer> AddHostBufferTransform::operator()(
-    neptune::HostBuffer in_buffer1, neptune::HostBuffer in_buffer2) {
+absl::StatusOr<xla_serving::HostBuffer> AddHostBufferTransform::operator()(
+    xla_serving::HostBuffer in_buffer1, xla_serving::HostBuffer in_buffer2) {
   if (in_buffer1.shape() != in_buffer2.shape()) {
     return absl::InvalidArgumentError("Input buffers must have the same shape");
   }
@@ -46,8 +46,8 @@ absl::StatusOr<neptune::HostBuffer> AddHostBufferTransform::operator()(
       in_buffer1.dtype().kind() != xla::ifrt::DType::kS32) {
     return absl::InvalidArgumentError("Input buffers must have the same dtype");
   }
-  neptune::HostBuffer out_buffer =
-      neptune::HostBuffer(in_buffer1.dtype(), in_buffer1.shape());
+  xla_serving::HostBuffer out_buffer =
+      xla_serving::HostBuffer(in_buffer1.dtype(), in_buffer1.shape());
 
   int64_t num_elements = in_buffer1.shape().num_elements();
   const int* data1 = static_cast<const int*>(in_buffer1.base());
@@ -78,8 +78,8 @@ AddHostBufferVectorTransform::Create() {
   return std::make_unique<AddHostBufferVectorTransform>();
 }
 
-absl::StatusOr<neptune::HostBuffer> AddHostBufferVectorTransform::operator()(
-    std::vector<neptune::HostBuffer> in_buffers) {
+absl::StatusOr<xla_serving::HostBuffer> AddHostBufferVectorTransform::operator()(
+    std::vector<xla_serving::HostBuffer> in_buffers) {
   if (in_buffers.empty()) {
     return absl::InvalidArgumentError("Input buffers must not be empty");
   }
@@ -99,7 +99,7 @@ absl::StatusOr<neptune::HostBuffer> AddHostBufferVectorTransform::operator()(
     }
   }
 
-  neptune::HostBuffer out_buffer = neptune::HostBuffer(dtype, shape);
+  xla_serving::HostBuffer out_buffer = xla_serving::HostBuffer(dtype, shape);
   int64_t num_elements = shape.num_elements();
   int* out_data = static_cast<int*>(out_buffer.base());
   for (int64_t i = 0; i < num_elements; ++i) {

@@ -29,8 +29,11 @@
 #include "include/grpcpp/security/server_credentials.h"  // from @grpc
 #include "include/grpcpp/server.h"  // from @grpc
 #include "include/grpcpp/server_builder.h"  // from @grpc
-#include "runtime/serving/gcp/auth/utils.h"  // from @neptune
-#include "runtime/serving/gcp/server/orbax_callback_grpc_server.h"  // from @neptune
+#include "protos/grpc/model_server_config.pb.h"  // from @xla_serving
+#include "runtime/serving/gcp/auth/utils.h"  // from @xla_serving
+#include "runtime/serving/gcp/server/orbax_callback_grpc_server.h"  // from @xla_serving
+#include "google/protobuf/text_format.h"
+#include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/status.h"  // from @xla
 #include "xla/tsl/profiler/rpc/profiler_server.h"  // from @xla
 #include "tsl/platform/init_main.h"  // from @tsl
@@ -39,6 +42,8 @@ ABSL_FLAG(int, port, 8500, "Port for the gRPC server to listen on.");
 
 ABSL_FLAG(std::string, model_name, "", "Name of the model.");
 ABSL_FLAG(std::string, model_path, "", "Path to the model.");
+ABSL_FLAG(std::string, model_config_file, "",
+          "Path to ModelServerConfig file in text format.");
 
 ABSL_FLAG(std::string, server_private_key_path, "",
           "Path to the server's private key file for SSL/TLS.");
@@ -67,9 +72,9 @@ ABSL_FLAG(bool, warmup_server, false,
           "('assets.extra/neptune_serving_warmup_requests') to be present in "
           "the model directory. The file must contain size-prefixed records "
           "(varint32 length prefix followed by serialized proto bytes) of "
-          "neptune::serving::PredictionLog containing PredictRequests. This file "
+          "xla_serving::serving::PredictionLog containing PredictRequests. This file "
           "can be generated automatically during model export by passing "
-          "`warmup_examples` to `neptune_model.save()`. See "
+          "`warmup_examples` to `xla_saved_model.save()`. See "
           "https://github.com/AI-Hypercomputer/neptune/blob/main/"
           "README.md#server-warmup-on-startup for details.");
 ABSL_FLAG(int, max_receive_message_size,
@@ -88,7 +93,23 @@ ABSL_FLAG(int, response_threads, 0,
 void RunServer() {
   std::string server_address = absl::StrCat("[::]:", absl::GetFlag(FLAGS_port));
 
-  neptune::serving::OrbaxCallbackGrpcServerOptions options;
+  std::string model_config_file = absl::GetFlag(FLAGS_model_config_file);
+  std::string model_name = absl::GetFlag(FLAGS_model_name);
+  std::string model_path = absl::GetFlag(FLAGS_model_path);
+  bool has_config = !model_config_file.empty();
+  bool has_model_name = !model_name.empty();
+  bool has_model_path = !model_path.empty();
+
+  if (has_config && (has_model_name || has_model_path)) {
+    LOG(FATAL) << "Cannot specify both --model_config_file and "
+                  "--model_name/--model_path.";
+  }
+  if (!has_config && (!has_model_name || !has_model_path)) {
+    LOG(FATAL) << "Either --model_config_file or both --model_name and "
+                  "--model_path must be specified.";
+  }
+
+  xla_serving::serving::OrbaxCallbackGrpcServerOptions options;
   options.enable_lazy_loading = absl::GetFlag(FLAGS_enable_lazy_loading);
   options.lazy_loading_use_graph_executor =
       absl::GetFlag(FLAGS_lazy_loading_use_graph_executor);
@@ -103,9 +124,24 @@ void RunServer() {
   options.response_threads = absl::GetFlag(FLAGS_response_threads);
 
   LOG(INFO) << "Server address: " << server_address;
-  auto service_or = neptune::serving::OrbaxCallbackGrpcServer::Create(
-      absl::GetFlag(FLAGS_model_name), absl::GetFlag(FLAGS_model_path),
-      options);
+  absl::StatusOr<std::unique_ptr<xla_serving::serving::OrbaxCallbackGrpcServer>>
+      service_or;
+  if (has_config) {
+    std::string config_content;
+    TF_CHECK_OK(tsl::ReadFileToString(tsl::Env::Default(), model_config_file,
+                                      &config_content));
+    xla_serving::serving::ModelServerConfig model_server_config;
+    if (!google::protobuf::TextFormat::ParseFromString(config_content,
+                                              &model_server_config)) {
+      LOG(FATAL) << "Failed to parse ModelServerConfig from "
+                 << model_config_file;
+    }
+    service_or = xla_serving::serving::OrbaxCallbackGrpcServer::Create(
+        model_server_config, options);
+  } else {
+    service_or = xla_serving::serving::OrbaxCallbackGrpcServer::Create(
+        model_name, model_path, options);
+  }
   TF_CHECK_OK(service_or.status());
 
   grpc::ServerBuilder builder;
@@ -115,7 +151,7 @@ void RunServer() {
   bool use_insecure_grpc_credentials =
       absl::GetFlag(FLAGS_use_insecure_grpc_credentials);
   absl::StatusOr<std::shared_ptr<grpc::ServerCredentials>> creds =
-      neptune::serving::CreateServerCredentials(private_key_path, cert_chain_path,
+      xla_serving::serving::CreateServerCredentials(private_key_path, cert_chain_path,
                                             root_certs_path,
                                             use_insecure_grpc_credentials);
   TF_CHECK_OK(creds.status());
@@ -137,9 +173,10 @@ void RunServer() {
 int main(int argc, char* argv[]) {
   absl::ParseCommandLine(argc, argv);
   tsl::port::InitMain(argv[0], &argc, &argv);
-  LOG(INFO) << "Starting Neptune Server on GCP with flags: "
+  LOG(INFO) << "Starting XSE Server on GCP with flags: "
             << absl::GetFlag(FLAGS_model_name) << " "
             << absl::GetFlag(FLAGS_model_path) << " "
+            << absl::GetFlag(FLAGS_model_config_file) << " "
             << absl::GetFlag(FLAGS_server_private_key_path) << " "
             << absl::GetFlag(FLAGS_server_cert_chain_path) << " "
             << absl::GetFlag(FLAGS_client_cert_chain_path) << " "

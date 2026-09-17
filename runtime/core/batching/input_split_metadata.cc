@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/batching/input_split_metadata.h"  // from @neptune
+#include "runtime/core/batching/input_split_metadata.h"  // from @xla_serving
 
 #include <algorithm>
 #include <string>
@@ -20,7 +20,7 @@
 #include "absl/container/fixed_array.h"  // from @abseil-cpp
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 namespace internal {
 namespace {
 int compute_task_size_from_open_batch(int input_task_size,
@@ -94,4 +94,4 @@ absl::FixedArray<int> InputSplitMetadata::generate_task_sizes(
   return task_sizes;
 }
 }  // namespace internal
-}  // namespace neptune
+}  // namespace xla_serving

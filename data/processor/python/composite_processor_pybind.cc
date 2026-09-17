@@ -41,19 +41,20 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "include/dlpack/dlpack.h"  // from @dlpack
 #include "xla/tsl/platform/status_macros.h"
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/api/type_info.h"  // from @neptune
-#include "data/processor/cc/api/value.h"  // from @neptune
-#include "data/processor/cc/core/composite_processor.h"  // from @neptune
-#include "data/processor/cc/core/graph/execution_graph.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/cc/core/transform_registry.h"  // from @neptune
-#include "data/processor/cc/utils/buffer_utils.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/processor/python/transform_pybind.h"  // from @neptune
-#include "data/resource_manager/proto/resource_manager.pb.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "include/nanobind/nanobind.h"  // from @nanobind_bazel
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/api/type_info.h"  // from @xla_serving
+#include "data/processor/cc/api/value.h"  // from @xla_serving
+#include "data/processor/cc/core/composite_processor.h"  // from @xla_serving
+#include "data/processor/cc/core/graph/execution_graph.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/cc/core/transform_registry.h"  // from @xla_serving
+#include "data/processor/cc/utils/buffer_utils.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/processor/python/transform_pybind.h"  // from @xla_serving
+#include "data/resource_manager/proto/resource_manager.pb.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "include/pybind11/gil.h"  // from @pybind11_bazel
 #include "include/pybind11/numpy.h"  // from @pybind11_bazel
 #include "include/pybind11/pybind11.h"  // from @pybind11_bazel
@@ -208,9 +209,9 @@ bool IsBufferContiguous(const py::buffer_info& info) {
 }
 
 template <typename InputIterator>
-absl::StatusOr<neptune::HostBuffer> CreateSharedStringHostBuffer(
+absl::StatusOr<xla_serving::HostBuffer> CreateSharedStringHostBuffer(
     InputIterator begin, InputIterator end, const xla::ifrt::Shape& shape) {
-  neptune::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kString), shape);
+  xla_serving::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kString), shape);
   tsl::tstring* ptr = reinterpret_cast<tsl::tstring*>(hb.base());
 
   auto it = begin;
@@ -367,7 +368,7 @@ class DLPackHostBufferBuilder {
  public:
   explicit DLPackHostBufferBuilder(py::capsule cap, std::optional<bool> copy)
       : cap_(cap), copy_(copy) {}
-  neptune::HostBuffer ConstructHostBuffer() {
+  xla_serving::HostBuffer ConstructHostBuffer() {
     // Extract the tensor.
     auto* dl_managed_tensor = static_cast<MT*>(cap_.get_pointer());
     if (!dl_managed_tensor) {
@@ -444,12 +445,12 @@ class DLPackHostBufferBuilder {
     // If no copy is needed, return the buffer directly.
     if (!needs_alignment_copy && is_contiguous &&
         (!copy_.has_value() || !*copy_)) {
-      return neptune::HostBuffer(data, *dtype, shape, owner);
+      return xla_serving::HostBuffer(data, *dtype, shape, owner);
     }
 
     // Perform a copy.
     const int elem_size = dl_tensor->dtype.bits / 8;
-    neptune::HostBuffer hb(*dtype, shape);
+    xla_serving::HostBuffer hb(*dtype, shape);
     if (is_contiguous) {
       std::memcpy(hb.base(), data, shape.num_elements() * elem_size);
       return hb;
@@ -515,7 +516,7 @@ class DLPackHostBufferBuilder {
   }
 };
 
-neptune::HostBuffer HostBufferFromDLPack(py::object obj, std::optional<bool> copy) {
+xla_serving::HostBuffer HostBufferFromDLPack(py::object obj, std::optional<bool> copy) {
   if (!py::hasattr(obj, "__dlpack__") ||
       !py::hasattr(obj, "__dlpack_device__")) {
     throw py::value_error(
@@ -614,7 +615,7 @@ struct DLPackHostBuffer {
   using MT = std::conditional_t<IsVersioned, DLManagedTensorVersioned,
                                 DLManagedTensor>;
 
-  neptune::HostBuffer hb;
+  xla_serving::HostBuffer hb;
   std::vector<int64_t> shape;
   std::vector<int64_t> strides;
   MT tensor{};
@@ -628,7 +629,7 @@ struct DLPackHostBuffer {
   }
 
   static absl::StatusOr<std::unique_ptr<DLPackHostBuffer<IsVersioned>>> Create(
-      const neptune::HostBuffer& host_buffer) {
+      const xla_serving::HostBuffer& host_buffer) {
     auto type = IfrtDTypeToDLDataType(host_buffer.dtype());
     if (!type.ok()) {
       return type.status();
@@ -639,7 +640,7 @@ struct DLPackHostBuffer {
     pack->shape.assign(hb_shape.dims().begin(), hb_shape.dims().end());
 
     // Calculate strides using the default row-major order.
-    // neptune::HostBuffer doesn't provides strides, so we need to calculate them.
+    // xla_serving::HostBuffer doesn't provides strides, so we need to calculate them.
     pack->strides.resize(pack->shape.size());
     int64_t stride = 1;
     for (int i = pack->shape.size() - 1; i >= 0; --i) {
@@ -668,7 +669,7 @@ struct DLPackHostBuffer {
     return pack;
   }
 
-  static py::capsule CreateCapsule(const neptune::HostBuffer& host_buffer) {
+  static py::capsule CreateCapsule(const xla_serving::HostBuffer& host_buffer) {
     auto pack = Create(host_buffer);
     if (!pack.ok()) {
       throw std::runtime_error(pack.status().ToString());
@@ -686,7 +687,7 @@ struct DLPackHostBuffer {
   }
 
  private:
-  explicit DLPackHostBuffer(const neptune::HostBuffer& host_buffer)
+  explicit DLPackHostBuffer(const xla_serving::HostBuffer& host_buffer)
       // Copy the host buffer to avoid lifetime issues.
       : hb(host_buffer) {}
 
@@ -697,7 +698,7 @@ struct DLPackHostBuffer {
   }
 };
 
-std::string HostBufferRepr(const neptune::HostBuffer& hb) {
+std::string HostBufferRepr(const xla_serving::HostBuffer& hb) {
   return absl::StrCat("<HostBuffer: dtype=", hb.dtype(), " shape=", hb.shape(),
                       ">");
 }
@@ -706,6 +707,12 @@ std::string ValueRepr(const api::Value& value) { return value.DebugString(); }
 
 PYBIND11_MODULE(composite_processor_pybind, m) {
   m.doc() = "Composite Processor Python bindings";
+
+#if NB_VERSION_MAJOR >= 3
+  if (!nanobind::register_module(nanobind::handle(m.ptr()))) {
+    throw py::error_already_set();
+  }
+#endif
 
   tsl::ImportNumpy();
 
@@ -735,18 +742,18 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
       .def_static("float", []() { return api::CreateTypeInfo<float>(); })
       .def_static("string", []() { return api::CreateTypeInfo<std::string>(); })
       .def_static("host_buffer",
-                  []() { return api::CreateTypeInfo<neptune::HostBuffer>(); })
+                  []() { return api::CreateTypeInfo<xla_serving::HostBuffer>(); })
       .def_static(
           "host_buffer_vector",
-          []() { return api::CreateTypeInfo<std::vector<neptune::HostBuffer>>(); })
+          []() { return api::CreateTypeInfo<std::vector<xla_serving::HostBuffer>>(); })
       .def_static("protobuf_any", []() {
         return api::CreateTypeInfo<google::protobuf::Any>();
       });
 
   // Internal API only. Do not export.
-  py::class_<neptune::HostBuffer>(m, "HostBuffer")
-      .def(py::init<neptune::HostBuffer>())
-      .def("get_ref_count", &neptune::HostBuffer::ref_count)
+  py::class_<xla_serving::HostBuffer>(m, "HostBuffer")
+      .def(py::init<xla_serving::HostBuffer>())
+      .def("get_ref_count", &xla_serving::HostBuffer::ref_count)
       .def_static(
           "create_int64_array",
           [](std::vector<int64_t> vals,
@@ -761,7 +768,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
                 shape.has_value()
                     ? shape.value()
                     : std::vector<int64_t>{static_cast<int64_t>(vals.size())});
-            neptune::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS64),
+            xla_serving::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS64),
                                ifrt_shape);
             int64_t* ptr = reinterpret_cast<int64_t*>(hb.base());
             for (int64_t val : vals) {
@@ -785,7 +792,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
                 shape.has_value()
                     ? shape.value()
                     : std::vector<int64_t>{static_cast<int64_t>(vals.size())});
-            neptune::HostBuffer hb(
+            xla_serving::HostBuffer hb(
                 xla::ifrt::DType(xla::ifrt::DType::Kind::kString), ifrt_shape);
             tsl::tstring* ptr = reinterpret_cast<tsl::tstring*>(hb.base());
             for (std::string& val : vals) {
@@ -797,7 +804,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
           py::arg("vals"), py::arg("shape") = std::nullopt)
       .def_static(
           "create_from_bytes_object_ndarray",
-          [](py::array arr) -> neptune::HostBuffer {
+          [](py::array arr) -> xla_serving::HostBuffer {
             py::dtype dt = arr.dtype();
             if (dt.kind() != 'O') {
               throw py::value_error("Expected an object array.");
@@ -825,7 +832,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
           py::arg("arr"))
       .def_static("create_int64",
                   [](int64_t val) {
-                    neptune::HostBuffer hb(
+                    xla_serving::HostBuffer hb(
                         xla::ifrt::DType(xla::ifrt::DType::Kind::kS64),
                         xla::ifrt::Shape({}));
                     int64_t* ptr = reinterpret_cast<int64_t*>(hb.base());
@@ -834,7 +841,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
                   })
       .def_static("create_int32",
                   [](int64_t val) {
-                    neptune::HostBuffer hb(
+                    xla_serving::HostBuffer hb(
                         xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                         xla::ifrt::Shape({}));
                     int32_t* ptr = reinterpret_cast<int32_t*>(hb.base());
@@ -843,7 +850,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
                   })
       .def_static("create_string",
                   [](std::string val) {
-                    neptune::HostBuffer hb(
+                    xla_serving::HostBuffer hb(
                         xla::ifrt::DType(xla::ifrt::DType::Kind::kString),
                         xla::ifrt::Shape({}));
                     tsl::tstring* ptr =
@@ -879,13 +886,13 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
           py::arg("vals"), py::arg("shape") = std::nullopt)
       .def_static(
           "from_dlpack",
-          [](py::object obj, std::optional<bool> copy) -> neptune::HostBuffer {
+          [](py::object obj, std::optional<bool> copy) -> xla_serving::HostBuffer {
             return HostBufferFromDLPack(std::move(obj), copy);
           },
           py::arg("obj"), py::arg("copy") = py::none())
       .def("__repr__", &HostBufferRepr)
       .def("to_int64",
-           [](const neptune::HostBuffer& self) {
+           [](const xla_serving::HostBuffer& self) {
              if (self.dtype().kind() != xla::ifrt::DType::Kind::kS64 ||
                  self.shape().num_elements() <= 0) {
                throw py::value_error("HostBuffer is not of expected type");
@@ -894,7 +901,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
              return *ptr;
            })
       .def("to_int32",
-           [](const neptune::HostBuffer& self) {
+           [](const xla_serving::HostBuffer& self) {
              if (self.dtype().kind() != xla::ifrt::DType::Kind::kS32 ||
                  self.shape().num_elements() <= 0) {
                throw py::value_error("HostBuffer is not of expected type");
@@ -903,7 +910,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
              return *ptr;
            })
       .def("to_float",
-           [](const neptune::HostBuffer& self) {
+           [](const xla_serving::HostBuffer& self) {
              if (self.dtype().kind() != xla::ifrt::DType::Kind::kF32 ||
                  self.shape().num_elements() <= 0) {
                throw py::value_error("HostBuffer is not of expected type");
@@ -912,7 +919,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
              return *ptr;
            })
       .def("to_double",
-           [](const neptune::HostBuffer& self) {
+           [](const xla_serving::HostBuffer& self) {
              if (self.dtype().kind() != xla::ifrt::DType::Kind::kF64 ||
                  self.shape().num_elements() <= 0) {
                throw py::value_error("HostBuffer is not of expected type");
@@ -921,7 +928,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
              return *ptr;
            })
       .def("to_string",
-           [](const neptune::HostBuffer& self) {
+           [](const xla_serving::HostBuffer& self) {
              if (self.dtype().kind() != xla::ifrt::DType::Kind::kString ||
                  self.shape().num_elements() <= 0) {
                throw py::value_error("HostBuffer is not of expected type");
@@ -931,7 +938,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
              return std::string(*ptr);
            })
       .def("to_string_array",
-           [](const neptune::HostBuffer& self) {
+           [](const xla_serving::HostBuffer& self) {
              if (self.dtype().kind() != xla::ifrt::DType::Kind::kString) {
                throw py::value_error("HostBuffer is not of expected type");
              }
@@ -942,7 +949,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
                                           element_idx);
            })
       .def("to_bytes",
-           [](const neptune::HostBuffer& self) {
+           [](const xla_serving::HostBuffer& self) {
              if (self.dtype().kind() != xla::ifrt::DType::Kind::kString ||
                  self.shape().num_elements() <= 0) {
                throw py::value_error("HostBuffer is not of expected type");
@@ -952,7 +959,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
              return py::bytes(ptr->data(), ptr->size());
            })
       .def("to_bytes_array",
-           [](const neptune::HostBuffer& self) {
+           [](const xla_serving::HostBuffer& self) {
              if (self.dtype().kind() != xla::ifrt::DType::Kind::kString) {
                throw py::value_error("HostBuffer is not of expected type");
              }
@@ -963,24 +970,24 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
                                          element_idx);
            })
       .def_property_readonly("dtype",
-                             [](const neptune::HostBuffer& self) {
+                             [](const xla_serving::HostBuffer& self) {
                                return IfrtDTypeToPyObject(self.dtype());
                              })
       .def_property_readonly("shape",
-                             [](const neptune::HostBuffer& self) {
+                             [](const xla_serving::HostBuffer& self) {
                                return IfrtShapeToPyTuple(self.shape());
                              })
       .def_property_readonly("storage_dtype",
-                             [](const neptune::HostBuffer& self) {
+                             [](const xla_serving::HostBuffer& self) {
                                return IfrtDTypeToPyObject(self.storage_dtype());
                              })
       .def("__dlpack_device__",
-           [](const neptune::HostBuffer& self) {
+           [](const xla_serving::HostBuffer& self) {
              return py::make_tuple(static_cast<int>(kDLCPU), 0);
            })
       .def(
           "__dlpack__",
-          [](neptune::HostBuffer& self, py::object stream, py::object max_version,
+          [](xla_serving::HostBuffer& self, py::object stream, py::object max_version,
              py::object dl_device, py::object copy) -> py::object {
             if (!copy.is_none() && py::cast<bool>(copy)) {
               throw std::invalid_argument(
@@ -1019,13 +1026,13 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
       .def(py::init([](int i) { return api::Value(i); }))
       .def(py::init([](float f) { return api::Value(f); }))
       .def(py::init([](std::string s) { return api::Value(s); }))
-      .def(py::init([](const neptune::HostBuffer& hb) { return api::Value(hb); }))
-      .def(py::init([](const std::vector<neptune::HostBuffer>& hb_vec) {
+      .def(py::init([](const xla_serving::HostBuffer& hb) { return api::Value(hb); }))
+      .def(py::init([](const std::vector<xla_serving::HostBuffer>& hb_vec) {
         return api::Value(hb_vec);
       }))
       .def(py::init(
           [](const google::protobuf::Any& any) { return api::Value(any); }))
-      .def(py::init([](const std::map<std::string, neptune::HostBuffer>& d) {
+      .def(py::init([](const std::map<std::string, xla_serving::HostBuffer>& d) {
         return api::Value(d);
       }))
       .def("__repr__", &ValueRepr)
@@ -1037,7 +1044,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
             if (!self.HasValue()) {
               return py::none();
             }
-            using DictType = std::map<std::string, neptune::HostBuffer>;
+            using DictType = std::map<std::string, xla_serving::HostBuffer>;
             using CastFunc = py::object (*)(api::Value&);
 
             static const auto* const kCastMap =
@@ -1050,13 +1057,13 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
                      [](api::Value& v) {
                        return py::cast(v.Get<std::string>());
                      }},
-                    {api::CreateTypeInfo<neptune::HostBuffer>(),
+                    {api::CreateTypeInfo<xla_serving::HostBuffer>(),
                      [](api::Value& v) {
-                       return py::cast(v.Get<neptune::HostBuffer>());
+                       return py::cast(v.Get<xla_serving::HostBuffer>());
                      }},
-                    {api::CreateTypeInfo<std::vector<neptune::HostBuffer>>(),
+                    {api::CreateTypeInfo<std::vector<xla_serving::HostBuffer>>(),
                      [](api::Value& v) {
-                       return py::cast(v.Get<std::vector<neptune::HostBuffer>>());
+                       return py::cast(v.Get<std::vector<xla_serving::HostBuffer>>());
                      }},
                     {api::CreateTypeInfo<DictType>(),
                      [](api::Value& v) { return py::cast(v.Get<DictType>()); }},

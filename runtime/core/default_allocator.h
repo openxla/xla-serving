@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_DEFAULT_ALLOCATOR_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_DEFAULT_ALLOCATOR_H_
+#ifndef XLA_SERVING_RUNTIME_DEFAULT_ALLOCATOR_H_
+#define XLA_SERVING_RUNTIME_DEFAULT_ALLOCATOR_H_
 
 #include <cstddef>
 #include <cstdint>
 #include <new>
 
 #include "absl/base/no_destructor.h"  // from @abseil-cpp
-#include "runtime/core/allocator.h"  // from @neptune
+#include "runtime/core/allocator.h"  // from @xla_serving
 
-namespace neptune {
+namespace xla_serving {
 
 // An allocator that allocates host memory.
 class DefaultAllocator : public Allocator {
@@ -45,6 +45,6 @@ class DefaultAllocator : public Allocator {
   DefaultAllocator() = default;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DEFAULT_ALLOCATOR_H_
+#endif  // XLA_SERVING_RUNTIME_DEFAULT_ALLOCATOR_H_

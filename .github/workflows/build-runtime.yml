@@ -1,15 +1,18 @@
-name: Build Neptune Runtime
+name: Build XLA Serving Runtime
 
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  schedule:
+    # Run nightly at 02:00 UTC to refresh the Bazel remote cache ahead of nightly image builds
+    - cron: '0 2 * * *'
   workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -17,7 +20,7 @@ permissions:
 
 jobs:
   build-and-test-runtime:
-    name: "Build Neptune Runtime"
+    name: "Build XLA Serving Runtime"
     runs-on: linux-x86-n2-32
     container:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest # zizmor: ignore[unpinned-images]
@@ -36,10 +39,14 @@ jobs:
               - 'runtime/**'
               - 'data/**'
               - 'protos/**'
+              - 'third_party/**'
               - '.github/workflows/build-runtime.yml'
               - '.bazelrc'
+              - '.bazelversion'
               - 'MODULE.bazel'
               - 'BUILD'
+              - '*.BUILD.bazel'
+              - 'version.bzl'
 
       - name: Setup Bazel
         if: github.event_name != 'pull_request' || steps.filter.outputs.runtime == 'true'
@@ -47,10 +54,10 @@ jobs:
         with:
           repository-cache: true
 
-      - name: Build and Test Neptune Runtime
+      - name: Build and Test XLA Serving Runtime
         if: github.event_name != 'pull_request' || steps.filter.outputs.runtime == 'true'
         env:
-          CACHE_CONFIG: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'remote_cache_readwrite' || 'remote_cache_readonly' }}
+          CACHE_CONFIG: ${{ github.ref == 'refs/heads/main' && 'remote_cache_readwrite' || 'remote_cache_readonly' }}
         run: |
           bazel test -c opt --test_output=errors //runtime/... //data/... \
             --config=${CACHE_CONFIG} \

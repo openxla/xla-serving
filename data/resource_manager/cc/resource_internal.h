@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_RESOURCE_MANAGER_CC_RESOURCE_INTERNAL_H_
-#define THIRD_PARTY_NEPTUNE_DATA_RESOURCE_MANAGER_CC_RESOURCE_INTERNAL_H_
+#ifndef XLA_SERVING_DATA_RESOURCE_MANAGER_CC_RESOURCE_INTERNAL_H_
+#define XLA_SERVING_DATA_RESOURCE_MANAGER_CC_RESOURCE_INTERNAL_H_
 
 #include <cstdint>
 #include <memory>
@@ -28,7 +28,7 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
-#include "data/resource_manager/cc/asset.h"  // from @neptune
+#include "data/resource_manager/cc/asset.h"  // from @xla_serving
 
 namespace neptune::data {
 
@@ -73,4 +73,4 @@ class ResourceFactory {
 }  // namespace internal
 }  // namespace neptune::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_RESOURCE_MANAGER_CC_RESOURCE_INTERNAL_H_
+#endif  // XLA_SERVING_DATA_RESOURCE_MANAGER_CC_RESOURCE_INTERNAL_H_

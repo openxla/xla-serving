@@ -1,4 +1,4 @@
-name: Release Neptune
+name: Release XLA Serving
 
 on:
   workflow_dispatch:
@@ -49,7 +49,7 @@ jobs:
   # Phase 1: Build Wheels & Run Full Verification Matrix
   # ---------------------------------------------------------------------------
   build-and-verify:
-    name: Build & Verify Neptune Wheels
+    name: Build & Verify XLA Serving Wheels
     runs-on: linux-x86-n2-16
     container:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest # zizmor: ignore[unpinned-images]
@@ -159,7 +159,7 @@ jobs:
             --show_progress_rate_limit=30 \
             --curses=no
 
-      - name: Build Neptune Model Wheel
+      - name: Build XLA SavedModel Wheel
         run: uv build --wheel
 
       - name: Install Built Wheels in Clean Virtual Environment
@@ -172,9 +172,9 @@ jobs:
         run: |
           cd /tmp
           python -c "
-          import neptune_model
-          print('✅ Successfully imported neptune_model!')
-          print(f'📦 Version: {neptune_model.__version__}')
+          import xla_saved_model
+          print('✅ Successfully imported xla_saved_model!')
+          print(f'📦 Version: {xla_saved_model.__version__}')
 
           from neptune_model_runner import model_runner
           print('✅ Successfully imported neptune_model_runner!')
@@ -184,14 +184,14 @@ jobs:
         run: |
           uv pip install ".[test,tf,torch]"
           uv pip uninstall triton 2>/dev/null || true
-          pytest -v -s --full-trace -n auto neptune_model/
+          pytest -v -s --full-trace -n auto xla_saved_model/
 
       - name: Run LLM Module Tests
         env:
           VLLM_TARGET_DEVICE: tpu
         run: |
           uv pip install --pre ".[test]"
-          pytest -v -s -n auto neptune_model/_src/llm/
+          pytest -v -s -n auto xla_saved_model/_src/llm/
 
       - name: Run Runtime C++ Tests
         run: |

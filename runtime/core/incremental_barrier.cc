@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/incremental_barrier.h"  // from @neptune
+#include "runtime/core/incremental_barrier.h"  // from @xla_serving
 
 #include <atomic>
 #include <utility>
@@ -20,7 +20,7 @@
 #include "absl/functional/bind_front.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 
 class InternalIncrementalBarrier {
  public:
@@ -60,4 +60,4 @@ IncrementalBarrier::BarrierCallback IncrementalBarrier::Inc() {
   return internal_barrier_->Inc();
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

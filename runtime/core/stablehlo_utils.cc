@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/stablehlo_utils.h"  // from @neptune
+#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
 
 #include <algorithm>
 #include <cstddef>
@@ -42,7 +42,7 @@
 #include "mlir/include/mlir/IR/Value.h"  // from @llvm-project
 #include "mlir/include/mlir/Support/DebugStringHelper.h"  // from @llvm-project
 #include "mlir/include/mlir/Support/LLVM.h"  // from @llvm-project
-#include "runtime/libs/mlir/utils.h"  // from @neptune
+#include "runtime/libs/mlir/utils.h"  // from @xla_serving
 #include "shardy/dialect/sdy/ir/dialect.h"  // from @shardy
 #include "shardy/dialect/sdy/ir/utils.h"  // from @shardy
 #include "stablehlo/dialect/StablehloOps.h"  // from @stablehlo
@@ -62,7 +62,7 @@
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 constexpr absl::string_view kPolymorphicShapeAttrName =
@@ -528,4 +528,4 @@ xla::ifrt::Shape ToIfrtShape(const ArgShape& shape) {
   return xla::ifrt::Shape(dimensions);
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/kernels/cpu_embedding/pack_host_buffer_vector_transform.h"  // from @neptune
+#include "data/kernels/cpu_embedding/pack_host_buffer_vector_transform.h"  // from @xla_serving
 
 #include <memory>
 #include <string>
@@ -23,13 +23,13 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/kernels/cpu_embedding/cpu_embedding.pb.h"  // from @neptune
-#include "data/processor/cc/api/registry.h"  // from @neptune
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/api/type_info.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "data/kernels/cpu_embedding/cpu_embedding.pb.h"  // from @xla_serving
+#include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/api/type_info.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 
 namespace neptune {
 namespace data {
@@ -46,16 +46,16 @@ PackHostBufferVectorTransform::Create(int input_count) {
 
 PackHostBufferVectorTransform::PackHostBufferVectorTransform(int input_count)
     : input_count_(input_count) {
-  input_types_.resize(input_count_, api::CreateTypeInfo<neptune::HostBuffer>());
-  output_types_.push_back(api::CreateTypeInfo<std::vector<neptune::HostBuffer>>());
+  input_types_.resize(input_count_, api::CreateTypeInfo<xla_serving::HostBuffer>());
+  output_types_.push_back(api::CreateTypeInfo<std::vector<xla_serving::HostBuffer>>());
 }
 
 absl::Status PackHostBufferVectorTransform::Execute(
     api::ExecuteContext& context) {
-  std::vector<neptune::HostBuffer> packed;
+  std::vector<xla_serving::HostBuffer> packed;
   packed.reserve(context.inputs.size());
   for (const auto& val : context.inputs) {
-    packed.push_back(val.Get<neptune::HostBuffer>());
+    packed.push_back(val.Get<xla_serving::HostBuffer>());
   }
   context.outputs.push_back(api::Value(std::move(packed)));
   return absl::OkStatus();

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "examples/composite_processor/add_int_from_resource_transform.h"  // from @neptune
+#include "examples/composite_processor/add_int_from_resource_transform.h"  // from @xla_serving
 
 #include <cstdint>
 #include <memory>
@@ -24,14 +24,14 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/processor/cc/api/registry.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/cc/core/transform_registry.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
-#include "data/resource_manager/proto/resource_manager.pb.h"  // from @neptune
-#include "examples/composite_processor/int_resource.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/cc/core/transform_registry.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
+#include "data/resource_manager/proto/resource_manager.pb.h"  // from @xla_serving
+#include "examples/composite_processor/int_resource.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 
 namespace neptune_examples {
@@ -56,8 +56,8 @@ AddIntFromResourceTransform::GetAllResources() const {
       std::const_pointer_cast<IntResource>(resource_))};
 }
 
-absl::StatusOr<neptune::HostBuffer> AddIntFromResourceTransform::operator()(
-    neptune::HostBuffer in_buffer) {
+absl::StatusOr<xla_serving::HostBuffer> AddIntFromResourceTransform::operator()(
+    xla_serving::HostBuffer in_buffer) {
   if (resource_ == nullptr) {
     return absl::FailedPreconditionError(
         "Resource not loaded. Ensure this transform runs in a "
@@ -67,8 +67,8 @@ absl::StatusOr<neptune::HostBuffer> AddIntFromResourceTransform::operator()(
     return absl::InvalidArgumentError("Input buffer must have S32 dtype");
   }
 
-  neptune::HostBuffer out_buffer =
-      neptune::HostBuffer(in_buffer.dtype(), in_buffer.shape());
+  xla_serving::HostBuffer out_buffer =
+      xla_serving::HostBuffer(in_buffer.dtype(), in_buffer.shape());
 
   int64_t num_elements = in_buffer.shape().num_elements();
   const int* data = static_cast<const int*>(in_buffer.base());

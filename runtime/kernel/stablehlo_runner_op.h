@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_STABLEHLO_RUNNER_OP_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_STABLEHLO_RUNNER_OP_H_
+#ifndef XLA_SERVING_RUNTIME_KERNEL_STABLEHLO_RUNNER_OP_H_
+#define XLA_SERVING_RUNTIME_KERNEL_STABLEHLO_RUNNER_OP_H_
 
 #include <cstdint>
 #include <memory>
@@ -23,17 +23,17 @@
 
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
-#include "runtime/core/flat_signature.h"  // from @neptune
-#include "runtime/core/stablehlo_runner.h"  // from @neptune
-#include "runtime/kernel/kernel.h"  // from @neptune
-#include "runtime/kernel/kernel_builder_context.h"  // from @neptune
-#include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
+#include "runtime/core/flat_signature.h"  // from @xla_serving
+#include "runtime/core/stablehlo_runner.h"  // from @xla_serving
+#include "runtime/kernel/kernel.h"  // from @xla_serving
+#include "runtime/kernel/kernel_builder_context.h"  // from @xla_serving
+#include "runtime/kernel/kernel_io_data_type.h"  // from @xla_serving
 
-namespace neptune {
+namespace xla_serving {
 
 // A kernel that runs a StableHlo computation.
-// It takes a list of `neptune::HostBuffer` as inputs and outputs.
-// It also supports loading variables from an `neptune::IfrtLoadedVariableRegistry`.
+// It takes a list of `xla_serving::HostBuffer` as inputs and outputs.
+// It also supports loading variables from an `xla_serving::IfrtLoadedVariableRegistry`.
 // The variable names are provided as a list of strings. The variable names are
 // expected to be in the same order as the variable arguments in the
 // computation. It is also assumed that variables will always be at the
@@ -88,6 +88,6 @@ class StableHloRunnerOp : public CancellableKernel {
   friend class StableHloRunnerTestPeer;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_STABLEHLO_RUNNER_OP_H_
+#endif  // XLA_SERVING_RUNTIME_KERNEL_STABLEHLO_RUNNER_OP_H_

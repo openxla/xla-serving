@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/batching/fake_clock_env.h"  // from @neptune
+#include "runtime/core/batching/fake_clock_env.h"  // from @xla_serving
 
 #include <cstdint>
 
@@ -20,7 +20,7 @@
 #include "absl/synchronization/notification.h"  // from @abseil-cpp
 #include "xla/tsl/platform/env.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 namespace test_util {
 
 FakeClockEnv::FakeClockEnv(Env* wrapped) : EnvWrapper(wrapped) {}
@@ -88,4 +88,4 @@ void FakeClockEnv::SleepForMicroseconds(int64_t micros) {
 }
 
 }  // namespace test_util
-}  // namespace neptune
+}  // namespace xla_serving

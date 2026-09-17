@@ -1,4 +1,4 @@
-name: Push Nightly Neptune Serving Images
+name: Push Nightly XLA Serving Images
 
 on:
   schedule:
@@ -58,37 +58,37 @@ jobs:
         variant:
           - id: cpu-jax-only
             name: "CPU JAX"
-            target: "//runtime/serving/gcp/server:neptune_serving_pusher"
+            target: "//runtime/serving/gcp/server:xla_serving_pusher"
             flags: "-c opt"
             repository: "gcr.io/neptune-serving-engine/cpu-jax-only"
           - id: cpu-jax-with-tf
             name: "CPU JAX + TF"
-            target: "//runtime/serving/gcp/server:neptune_serving_pusher"
+            target: "//runtime/serving/gcp/server:xla_serving_pusher"
             flags: "-c opt --define ENABLE_TF=1"
             repository: "gcr.io/neptune-serving-engine/cpu-jax-with-tf"
           - id: gpu-jax-cuda12
             name: "CUDA 12 JAX"
-            target: "//runtime/serving/gcp/server:neptune_serving_pusher_gpu"
+            target: "//runtime/serving/gcp/server:xla_serving_pusher_gpu"
             flags: "-c opt --config=cuda_v12 --verbose_failures"
             repository: "gcr.io/neptune-serving-engine/gpu-jax-cuda12"
           - id: gpu-jax-cuda12-with-tf
             name: "CUDA 12 JAX + TF"
-            target: "//runtime/serving/gcp/server:neptune_serving_pusher_gpu"
+            target: "//runtime/serving/gcp/server:xla_serving_pusher_gpu"
             flags: "-c opt --config=cuda_v12 --define ENABLE_TF=1 --verbose_failures"
             repository: "gcr.io/neptune-serving-engine/gpu-jax-cuda12-with-tf"
           - id: gpu-jax-cuda13
             name: "CUDA 13 JAX"
-            target: "//runtime/serving/gcp/server:neptune_serving_pusher_gpu"
+            target: "//runtime/serving/gcp/server:xla_serving_pusher_gpu"
             flags: "-c opt --config=cuda_v13 --verbose_failures"
             repository: "gcr.io/neptune-serving-engine/gpu-jax-cuda13"
           - id: gpu-jax-cuda13-with-tf
             name: "CUDA 13 JAX + TF"
-            target: "//runtime/serving/gcp/server:neptune_serving_pusher_gpu"
+            target: "//runtime/serving/gcp/server:xla_serving_pusher_gpu"
             flags: "-c opt --config=cuda_v13 --define ENABLE_TF=1 --verbose_failures"
             repository: "gcr.io/neptune-serving-engine/gpu-jax-cuda13-with-tf"
           - id: tpu-jax-only
             name: "TPU JAX"
-            target: "//runtime/serving/gcp/server:neptune_serving_pusher_tpu"
+            target: "//runtime/serving/gcp/server:xla_serving_pusher_tpu"
             flags: "-c opt"
             repository: "gcr.io/neptune-serving-engine/tpu-jax-only"
 

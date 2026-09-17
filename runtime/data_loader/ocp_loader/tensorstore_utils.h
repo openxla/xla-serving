@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_UTILS_H_
+#ifndef XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_UTILS_H_
+#define XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_UTILS_H_
 
 #include <cstdint>
 #include <optional>
@@ -30,7 +30,7 @@
 #include "xla/xla_data.pb.h"  // from @xla
 #include "tensorstore/data_type.h"  // from @tensorstore
 
-namespace neptune {
+namespace xla_serving {
 
 /*
  * Constructs a JSON specification for the serialization process based on
@@ -104,6 +104,6 @@ absl::StatusOr<xla::ifrt::ArrayRef> AssembleOpaqueIfrtArray(
 absl::StatusOr<tensorstore::DataType> ToTensorStoreDType(
     xla::ifrt::DType dtype);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_UTILS_H_
+#endif  // XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_UTILS_H_

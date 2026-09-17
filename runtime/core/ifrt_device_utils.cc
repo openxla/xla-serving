@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/ifrt_device_utils.h"  // from @neptune
+#include "runtime/core/ifrt_device_utils.h"  // from @xla_serving
 
 #include <cstdint>
 #include <optional>
@@ -28,7 +28,7 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "runtime/core/grid.h"  // from @neptune
+#include "runtime/core/grid.h"  // from @xla_serving
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/attribute_map.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
@@ -39,7 +39,7 @@
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 static constexpr int kTpuTopologyRank = 4;  // (x, y, z, core).
 
@@ -165,4 +165,4 @@ absl::StatusOr<std::vector<xla::ifrt::Device*>> GetAssignedIfrtDevices(
   return result;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

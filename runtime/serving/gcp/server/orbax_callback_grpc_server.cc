@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/serving/gcp/server/orbax_callback_grpc_server.h"  // from @neptune
+#include "runtime/serving/gcp/server/orbax_callback_grpc_server.h"  // from @xla_serving
 
 #include <cstdint>
 #include <memory>
@@ -33,15 +33,15 @@
 #include "include/grpcpp/server_context.h"  // from @grpc
 #include "include/grpcpp/support/server_callback.h"  // from @grpc
 #include "include/grpcpp/support/status.h"  // from @grpc
-#include "protos/grpc/host_buffer.pb.h"  // from @neptune
-#include "protos/grpc/model.pb.h"  // from @neptune
-#include "protos/grpc/prediction_log.pb.h"  // from @neptune
-#include "protos/grpc/prediction_service.pb.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/interpreter/interpreter.h"  // from @neptune
-#include "runtime/interpreter/run_options.h"  // from @neptune
-#include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
+#include "protos/grpc/host_buffer.pb.h"  // from @xla_serving
+#include "protos/grpc/model.pb.h"  // from @xla_serving
+#include "protos/grpc/prediction_log.pb.h"  // from @xla_serving
+#include "protos/grpc/prediction_service.pb.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/interpreter/interpreter.h"  // from @xla_serving
+#include "runtime/interpreter/run_options.h"  // from @xla_serving
+#include "runtime/kernel/kernel_io_data_type.h"  // from @xla_serving
 #include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 #include "google/protobuf/util/delimited_message_util.h"
 #include "xla/tsl/lib/monitoring/counter.h"  // from @xla
@@ -49,14 +49,15 @@
 #include "xla/tsl/platform/file_system.h"  // from @xla
 #include "tsl/platform/cpu_info.h"  // from @tsl
 #if ENABLE_TF == 1
-  #include "runtime/tensorflow/tf_compatible_interpreter_create_options.h"  // from @neptune
+  #include "runtime/tensorflow/tf_compatible_interpreter_create_options.h"  // from @xla_serving
 #else
-  #include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
+  #include "runtime/interpreter/interpreter_create_options.h"  // from @xla_serving
 #endif
-#include "runtime/serving/gcp/server/flags.h"  // from @neptune
-#include "runtime/serving/gcp/server/grpc_status_utils.h"  // from @neptune
-#include "runtime/serving/gcp/server/ifrt_client_creator.h"  // from @neptune
-#include "runtime/tensorflow/utils/tf_to_host_buffer.h"  // from @neptune
+#include "protos/grpc/model_server_config.pb.h"  // from @xla_serving
+#include "runtime/serving/gcp/server/flags.h"  // from @xla_serving
+#include "runtime/serving/gcp/server/grpc_status_utils.h"  // from @xla_serving
+#include "runtime/serving/gcp/server/ifrt_client_creator.h"  // from @xla_serving
+#include "runtime/tensorflow/utils/tf_to_host_buffer.h"  // from @xla_serving
 #include "xla/pjrt/pjrt_api.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
@@ -68,7 +69,7 @@
 #include "tensorflow/core/framework/tensor.h"  // from @org_tensorflow
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 namespace serving {
 
 namespace {
@@ -132,40 +133,40 @@ tensorflow::tfrt_stub::SavedModel::Options GetSavedModelOptions(
 
 #endif
 
-absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>> PrepareInputs(
-    const neptune::serving::PredictRequest& request,
-    absl::string_view pipeline_name, neptune::Interpreter* interpreter) {
-  TF_ASSIGN_OR_RETURN(neptune::KernelIODataType input_data_type,
+absl::StatusOr<absl::flat_hash_map<std::string, xla_serving::Value>> PrepareInputs(
+    const xla_serving::serving::PredictRequest& request,
+    absl::string_view pipeline_name, xla_serving::Interpreter* interpreter) {
+  TF_ASSIGN_OR_RETURN(xla_serving::KernelIODataType input_data_type,
                       interpreter->GetModelInputDataType(pipeline_name));
   bool input_expects_tensor =
-      (input_data_type == neptune::KernelIODataType::kTensor);
+      (input_data_type == xla_serving::KernelIODataType::kTensor);
 
-  absl::flat_hash_map<std::string, neptune::Value> input_with_names;
+  absl::flat_hash_map<std::string, xla_serving::Value> input_with_names;
   input_with_names.reserve(request.inputs().size());
   for (const auto& [name, host_buffer_proto] : request.inputs()) {
-    TF_ASSIGN_OR_RETURN(neptune::HostBuffer host_buffer,
-                        neptune::HostBuffer::FromProto(host_buffer_proto));
+    TF_ASSIGN_OR_RETURN(xla_serving::HostBuffer host_buffer,
+                        xla_serving::HostBuffer::FromProto(host_buffer_proto));
     if (input_expects_tensor) {
       TF_ASSIGN_OR_RETURN(tensorflow::Tensor tensor, ToTFTensor(host_buffer));
-      input_with_names[name] = neptune::Value(std::move(tensor));
+      input_with_names[name] = xla_serving::Value(std::move(tensor));
     } else {
-      input_with_names[name] = neptune::Value(std::move(host_buffer));
+      input_with_names[name] = xla_serving::Value(std::move(host_buffer));
     }
   }
   return input_with_names;
 }
 
 absl::Status ConvertOutputsToResponse(
-    absl::flat_hash_map<std::string, neptune::Value> output_with_names,
+    absl::flat_hash_map<std::string, xla_serving::Value> output_with_names,
     bool output_is_tensor, absl::string_view pipeline_name,
-    absl::string_view model_name, neptune::serving::PredictResponse* response) {
+    absl::string_view model_name, xla_serving::serving::PredictResponse* response) {
   tsl::profiler::TraceMe traceme_serialization("ConvertOutputs");
   for (auto& [name, value] : output_with_names) {
-    absl::StatusOr<neptune::HostBuffer> host_buffer;
+    absl::StatusOr<xla_serving::HostBuffer> host_buffer;
     if (output_is_tensor) {
       host_buffer = ToHostBuffer(value.Get<tensorflow::Tensor>());
     } else {
-      host_buffer = value.Get<neptune::HostBuffer>();
+      host_buffer = value.Get<xla_serving::HostBuffer>();
     }
     if (!host_buffer.ok()) {
       return host_buffer.status();
@@ -183,10 +184,45 @@ absl::Status ConvertOutputsToResponse(
 
 }  // namespace
 
+OrbaxCallbackGrpcServer::OrbaxCallbackGrpcServer(
+    absl::flat_hash_map<std::string, std::shared_ptr<ModelEntry>> models,
+    std::shared_ptr<xla::ifrt::Client> client,
+    std::unique_ptr<tsl::thread::ThreadPool> execute_worker_thread_pool,
+    std::unique_ptr<tsl::thread::ThreadPool> computation_thread_pool,
+    std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool,
+    std::unique_ptr<tsl::thread::ThreadPool> response_thread_pool)
+    : client_(std::move(client)),
+      execute_worker_thread_pool_(std::move(execute_worker_thread_pool)),
+      computation_thread_pool_(std::move(computation_thread_pool)),
+      checkpoint_loader_thread_pool_(std::move(checkpoint_loader_thread_pool)),
+      response_thread_pool_(std::move(response_thread_pool)),
+      models_(std::move(models)) {}
+
+OrbaxCallbackGrpcServer::OrbaxCallbackGrpcServer(
+    absl::string_view model_name, std::unique_ptr<xla_serving::Interpreter> interpreter,
+    std::shared_ptr<xla::ifrt::Client> client,
+    std::unique_ptr<tsl::thread::ThreadPool> execute_worker_thread_pool,
+    std::unique_ptr<tsl::thread::ThreadPool> computation_thread_pool,
+    std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool)
+    : client_(std::move(client)),
+      execute_worker_thread_pool_(std::move(execute_worker_thread_pool)),
+      computation_thread_pool_(std::move(computation_thread_pool)),
+      checkpoint_loader_thread_pool_(std::move(checkpoint_loader_thread_pool)) {
+  auto entry = std::make_shared<ModelEntry>();
+  entry->name = std::string(model_name);
+  entry->interpreter = std::move(interpreter);
+  models_[entry->name] = std::move(entry);
+}
+
 absl::StatusOr<std::unique_ptr<OrbaxCallbackGrpcServer>>
-OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
-                                absl::string_view model_path,
+OrbaxCallbackGrpcServer::Create(const ModelServerConfig& config,
                                 const OrbaxCallbackGrpcServerOptions& options) {
+  if (!config.has_model_config_list() ||
+      config.model_config_list().configs().empty()) {
+    return absl::InvalidArgumentError(
+        "ModelServerConfig must contain a non-empty model_config_list.");
+  }
+
   std::string orbax_platform = absl::GetFlag(FLAGS_orbax_grpc_server_platform);
   LOG(INFO) << "Creating Orbax Server for Orbax platform: " << orbax_platform;
   std::string pjrt_platform = orbax_platform;
@@ -230,58 +266,136 @@ OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
         options.response_threads == 0 ? tsl::port::MaxParallelism()
                                       : options.response_threads);
   }
-  #if ENABLE_TF == 1
+
+  absl::flat_hash_map<std::string, std::shared_ptr<ModelEntry>> models;
+  for (const auto& model_config : config.model_config_list().configs()) {
+    const std::string& model_name = model_config.name();
+    const std::string& model_path = model_config.base_path();
+    if (model_name.empty()) {
+      return absl::InvalidArgumentError("ModelConfig name must not be empty.");
+    }
+    if (model_path.empty()) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("ModelConfig base_path must not be empty for model '",
+                       model_name, "'."));
+    }
+    if (models.contains(model_name)) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Duplicate model name '", model_name, "' in ModelServerConfig."));
+    }
+
+#if ENABLE_TF == 1
     auto create_options =
-        std::make_unique<neptune::TfCompatibleInterpreterCreateOptions>();
+        std::make_unique<xla_serving::TfCompatibleInterpreterCreateOptions>();
     create_options->tfrt_options.saved_model_options =
         GetSavedModelOptions(options);
 #else
-  auto create_options = std::make_unique<neptune::InterpreterCreateOptions>();
+    auto create_options = std::make_unique<xla_serving::InterpreterCreateOptions>();
 #endif
-
     create_options->checkpoint_loader_thread_pool =
         checkpoint_loader_thread_pool.get();
     create_options->model_name = model_name;
+    // TODO: Support model versioning.
     create_options->model_version = 0;
     create_options->model_path = model_path;
-  create_options->execute_worker_thread_pool = execute_worker_thread_pool.get();
+    create_options->execute_worker_thread_pool =
+        execute_worker_thread_pool.get();
     create_options->ifrt_client = client;
     create_options->computation_thread_pool = computation_thread_pool.get();
     create_options->platform_name = orbax_platform;
-    std::unique_ptr<neptune::Interpreter> interpreter;
+
+    // TODO: Support loading and warming up models concurrently.
+    std::unique_ptr<xla_serving::Interpreter> interpreter;
     TF_ASSIGN_OR_RETURN(interpreter,
-                        neptune::Interpreter::Create(std::move(create_options)));
-    auto server = std::make_unique<OrbaxCallbackGrpcServer>(
-        model_name, std::move(interpreter), client,
-        std::move(execute_worker_thread_pool),
-        std::move(computation_thread_pool),
-        std::move(checkpoint_loader_thread_pool),
-        std::move(response_thread_pool));
-    if (options.warmup_server) {
-      TF_RETURN_IF_ERROR(server->Warmup(model_path));
+                        xla_serving::Interpreter::Create(std::move(create_options)));
+
+    auto entry = std::make_shared<ModelEntry>();
+    entry->name = model_name;
+    entry->path = model_path;
+    entry->interpreter = std::move(interpreter);
+    auto [_, inserted] = models.insert({model_name, std::move(entry)});
+    if (!inserted) {
+      return absl::AlreadyExistsError(
+          absl::StrCat("Duplicate model name '", model_name,
+                       "' in ModelServerConfig."));
     }
-    return server;
+  }
+
+  auto server = std::make_unique<OrbaxCallbackGrpcServer>(
+      std::move(models), client, std::move(execute_worker_thread_pool),
+      std::move(computation_thread_pool),
+      std::move(checkpoint_loader_thread_pool),
+      std::move(response_thread_pool));
+
+  if (options.warmup_server) {
+    for (const auto& model_config : config.model_config_list().configs()) {
+      auto it = server->models_.find(model_config.name());
+      if (it != server->models_.end()) {
+        TF_RETURN_IF_ERROR(server->Warmup(*it->second));
+      }
+    }
+  }
+  return server;
+}
+
+absl::StatusOr<std::unique_ptr<OrbaxCallbackGrpcServer>>
+OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
+                                absl::string_view model_path,
+                                const OrbaxCallbackGrpcServerOptions& options) {
+  ModelServerConfig config;
+  auto* model_config = config.mutable_model_config_list()->add_configs();
+  model_config->set_name(std::string(model_name));
+  model_config->set_base_path(std::string(model_path));
+  return Create(config, options);
 }
 
 grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
     grpc::CallbackServerContext* context,
-    const neptune::serving::PredictRequest* request,
-    neptune::serving::PredictResponse* response) {
+    const xla_serving::serving::PredictRequest* request,
+    xla_serving::serving::PredictResponse* response) {
   VLOG(4) << "Received PredictRequest: " << request->DebugString();
   grpc::ServerUnaryReactor* reactor = context->DefaultReactor();
 
   absl::Time start_time = absl::Now();
 
-  auto record_metrics = [this, start_time](const absl::Status& status) {
+  std::string model_name(request->model_spec().name());
+  if (model_name.empty()) {
+    if (models_.size() == 1) {
+      model_name = models_.begin()->first;
+    } else {
+      absl::Status status = absl::InvalidArgumentError(
+          "Model name not specified in request, and server has multiple "
+          "models loaded.");
+      double latency_ms = absl::ToDoubleMilliseconds(absl::Now() - start_time);
+      std::string status_str = absl::StatusCodeToString(status.code());
+      request_count_metric->GetCell("", "Predict", status_str)->IncrementBy(1);
+      request_latency_metric->GetCell("", "Predict", status_str)
+          ->Add(latency_ms);
+      reactor->Finish(ToGrpcStatus(status));
+      return reactor;
+    }
+  }
+
+  auto record_metrics = [start_time, model_name](const absl::Status& status) {
     double latency_ms = absl::ToDoubleMilliseconds(absl::Now() - start_time);
     std::string status_str = absl::StatusCodeToString(status.code());
-    request_count_metric->GetCell(model_name_, "Predict", status_str)
+    request_count_metric->GetCell(model_name, "Predict", status_str)
         ->IncrementBy(1);
-    request_latency_metric->GetCell(model_name_, "Predict", status_str)
+    request_latency_metric->GetCell(model_name, "Predict", status_str)
         ->Add(latency_ms);
   };
 
-  if (interpreter_ == nullptr) {
+  auto it = models_.find(model_name);
+  if (it == models_.end()) {
+    absl::Status status = absl::NotFoundError(
+        absl::StrCat("Model not found: '", model_name, "'"));
+    record_metrics(status);
+    reactor->Finish(ToGrpcStatus(status));
+    return reactor;
+  }
+
+  const auto& model_entry = it->second;
+  if (model_entry->interpreter == nullptr) {
     absl::Status status =
         absl::FailedPreconditionError("Interpreter not initialized.");
     record_metrics(status);
@@ -295,42 +409,42 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
           : absl::string_view(request->model_spec().signature_name());
   VLOG(1) << "Using pipeline name: '" << pipeline_name << "'";
 
-  absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>>
-      input_with_names =
-          PrepareInputs(*request, pipeline_name, interpreter_.get());
+  absl::StatusOr<absl::flat_hash_map<std::string, xla_serving::Value>>
+      input_with_names = PrepareInputs(*request, pipeline_name,
+                                       model_entry->interpreter.get());
   if (!input_with_names.ok()) {
     record_metrics(input_with_names.status());
     reactor->Finish(ToGrpcStatus(input_with_names.status()));
     return reactor;
   }
 
-  absl::StatusOr<neptune::KernelIODataType> output_data_type =
-      interpreter_->GetModelOutputDataType(pipeline_name);
+  absl::StatusOr<xla_serving::KernelIODataType> output_data_type =
+      model_entry->interpreter->GetModelOutputDataType(pipeline_name);
   if (!output_data_type.ok()) {
     record_metrics(output_data_type.status());
     reactor->Finish(ToGrpcStatus(output_data_type.status()));
     return reactor;
   }
-  bool output_is_tensor = (*output_data_type == neptune::KernelIODataType::kTensor);
+  bool output_is_tensor = (*output_data_type == xla_serving::KernelIODataType::kTensor);
 
-  neptune::RunOptions run_options;
+  xla_serving::RunOptions run_options;
   run_options.deadline = absl::FromChrono(context->deadline());
 
-  tsl::Future<absl::flat_hash_map<std::string, neptune::Value>> future =
-      interpreter_->RunAsyncWithMapReturn(
+  tsl::Future<absl::flat_hash_map<std::string, xla_serving::Value>> future =
+      model_entry->interpreter->RunAsyncWithMapReturn(
           pipeline_name, /*positional_inputs=*/{}, std::move(*input_with_names),
           run_options);
 
   // Build the response on the response pool so the completing interpreter
   // thread doesn't block on it.
   future.OnReady(
-      [this, reactor, response, record_metrics, output_is_tensor,
+      [this, reactor, response, record_metrics, output_is_tensor, model_name,
        pipeline_name = std::string(pipeline_name)](
-          absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>>
+          absl::StatusOr<absl::flat_hash_map<std::string, xla_serving::Value>>
               output_with_names) mutable {
         auto build_response_and_finish =
-            [this, reactor, response,
-             record_metrics = std::move(record_metrics), output_is_tensor,
+            [reactor, response, record_metrics = std::move(record_metrics),
+             output_is_tensor, model_name = std::move(model_name),
              pipeline_name = std::move(pipeline_name),
              output_with_names = std::move(output_with_names)]() mutable {
               if (!output_with_names.ok()) {
@@ -341,7 +455,7 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
 
               absl::Status conversion_status = ConvertOutputsToResponse(
                   std::move(*output_with_names), output_is_tensor,
-                  pipeline_name, model_name_, response);
+                  pipeline_name, model_name, response);
               record_metrics(conversion_status);
               reactor->Finish(ToGrpcStatus(conversion_status));
             };
@@ -356,26 +470,26 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
   return reactor;
 }
 
-absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>>
+absl::StatusOr<absl::flat_hash_map<std::string, xla_serving::Value>>
 OrbaxCallbackGrpcServer::RunPredictInternal(
-    const neptune::serving::PredictRequest& request,
-    absl::string_view pipeline_name, const neptune::RunOptions& run_options) {
+    const ModelEntry& model_entry, const xla_serving::serving::PredictRequest& request,
+    absl::string_view pipeline_name, const xla_serving::RunOptions& run_options) {
   TF_ASSIGN_OR_RETURN(
       auto input_with_names,
-      PrepareInputs(request, pipeline_name, interpreter_.get()));
+      PrepareInputs(request, pipeline_name, model_entry.interpreter.get()));
 
-  return interpreter_->RunWithMapReturn(
-      pipeline_name, /*positional_inputs=*/{}, input_with_names,
-      run_options);
+  return model_entry.interpreter->RunWithMapReturn(
+      pipeline_name, /*positional_inputs=*/{}, input_with_names, run_options);
 }
 
-absl::Status OrbaxCallbackGrpcServer::Warmup(absl::string_view model_path) {
+absl::Status OrbaxCallbackGrpcServer::Warmup(const ModelEntry& model_entry) {
   std::string warmup_path =
-      absl::StrCat(model_path, "/", kWarmupRequestsRelativePath);
+      absl::StrCat(model_entry.path, "/", kWarmupRequestsRelativePath);
   tsl::Env* env = tsl::Env::Default();
   TF_RETURN_IF_ERROR(env->FileExists(warmup_path));
 
-  LOG(INFO) << "Running warmup from " << warmup_path;
+  LOG(INFO) << "Running warmup for model '" << model_entry.name << "' from "
+            << warmup_path;
 
   std::unique_ptr<tsl::RandomAccessFile> file;
   TF_RETURN_IF_ERROR(env->NewRandomAccessFile(warmup_path, &file));
@@ -393,9 +507,9 @@ absl::Status OrbaxCallbackGrpcServer::Warmup(absl::string_view model_path) {
 
   google::protobuf::io::ArrayInputStream array_input(result.data(), result.size());
 
-  neptune::RunOptions run_options;  // Default options, no deadline.
+  xla_serving::RunOptions run_options;  // Default options, no deadline.
   bool clean_eof = false;
-  neptune::serving::PredictionLog prediction_log;
+  xla_serving::serving::PredictionLog prediction_log;
   // TODO: Evaluate if parallelizing the warmup can speed up
   // server startup.
   while (google::protobuf::util::ParseDelimitedFromZeroCopyStream(
@@ -404,16 +518,17 @@ absl::Status OrbaxCallbackGrpcServer::Warmup(absl::string_view model_path) {
       LOG(WARNING) << "PredictionLog does not have predict_log, skipping.";
       continue;
     }
-    const neptune::serving::PredictRequest& request =
+    const xla_serving::serving::PredictRequest& request =
         prediction_log.predict_log().request();
     absl::string_view pipeline_name =
         request.model_spec().signature_name().empty()
             ? absl::string_view(kDefaultServingSignatureDefKey)
             : absl::string_view(request.model_spec().signature_name());
-    absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>> warmup_status =
-        RunPredictInternal(request, pipeline_name, run_options);
+    absl::StatusOr<absl::flat_hash_map<std::string, xla_serving::Value>> warmup_status =
+        RunPredictInternal(model_entry, request, pipeline_name, run_options);
     if (!warmup_status.ok()) {
-      LOG(ERROR) << "Warmup failed for pipeline '" << pipeline_name
+      LOG(ERROR) << "Warmup failed for model '" << model_entry.name
+                 << "' pipeline '" << pipeline_name
                  << "': " << warmup_status.status();
       return warmup_status.status();
     }
@@ -425,23 +540,25 @@ absl::Status OrbaxCallbackGrpcServer::Warmup(absl::string_view model_path) {
         "Failed to parse warmup file (truncated or corrupt)");
   }
 
-  LOG(INFO) << "Warmup completed successfully.";
+  LOG(INFO) << "Warmup completed successfully for model '" << model_entry.name
+            << "'.";
   return absl::OkStatus();
 }
 
 grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::GetModelMetadata(
     grpc::CallbackServerContext* context,
-    const neptune::serving::GetModelMetadataRequest* request,
-    neptune::serving::GetModelMetadataResponse* response) {
+    const xla_serving::serving::GetModelMetadataRequest* request,
+    xla_serving::serving::GetModelMetadataResponse* response) {
   VLOG(4) << "Received GetModelMetadataRequest: " << request->DebugString();
   grpc::ServerUnaryReactor* reactor = context->DefaultReactor();
 
   absl::Time start_time = absl::Now();
   absl::Status status = absl::OkStatus();
 
-  std::string target_model_name =
-      interpreter_ != nullptr ? std::string(interpreter_->GetModelName())
-                              : model_name_;
+  std::string target_model_name(request->model_spec().name());
+  if (target_model_name.empty() && models_.size() == 1) {
+    target_model_name = models_.begin()->first;
+  }
 
   auto record_metrics_on_exit = absl::MakeCleanup([&]() {
     double latency_ms = absl::ToDoubleMilliseconds(absl::Now() - start_time);
@@ -454,16 +571,18 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::GetModelMetadata(
         ->Add(latency_ms);
   });
 
-  if (interpreter_ == nullptr) {
-    status = absl::FailedPreconditionError("Interpreter not initialized.");
+  auto it = models_.find(target_model_name);
+  if (it == models_.end()) {
+    status = absl::NotFoundError(
+        absl::StrCat("Model not found or model name mismatch: [",
+                     request->model_spec().name(), "]"));
     reactor->Finish(ToGrpcStatus(status));
     return reactor;
   }
 
-  if (request->model_spec().name() != interpreter_->GetModelName()) {
-    status = absl::FailedPreconditionError(
-        absl::StrCat("Model name mismatch: got [", request->model_spec().name(),
-                     "] but expected [", interpreter_->GetModelName(), "]"));
+  const auto& model_entry = it->second;
+  if (model_entry->interpreter == nullptr) {
+    status = absl::FailedPreconditionError("Interpreter not initialized.");
     reactor->Finish(ToGrpcStatus(status));
     return reactor;
   }
@@ -473,7 +592,7 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::GetModelMetadata(
           ? absl::string_view(kDefaultServingSignatureDefKey)
           : absl::string_view(request->model_spec().signature_name());
 
-  auto pipeline_or = interpreter_->GetPipelineProto(signature_name);
+  auto pipeline_or = model_entry->interpreter->GetPipelineProto(signature_name);
   if (!pipeline_or.ok()) {
     status = pipeline_or.status();
     reactor->Finish(ToGrpcStatus(pipeline_or.status()));
@@ -482,10 +601,13 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::GetModelMetadata(
   const auto& pipeline = pipeline_or.value();
 
   response->mutable_model_spec()->CopyFrom(request->model_spec());
+  if (response->model_spec().name().empty()) {
+    response->mutable_model_spec()->set_name(target_model_name);
+  }
 
   for (const auto& field : request->metadata_field()) {
     if (field == "signature_def") {
-      neptune::serving::SignatureDefMap signature_def_map;
+      xla_serving::serving::SignatureDefMap signature_def_map;
       auto& sig_def =
           (*signature_def_map
                 .mutable_signature_def())[std::string(signature_name)];
@@ -505,4 +627,4 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::GetModelMetadata(
 }
 
 }  // namespace serving
-}  // namespace neptune
+}  // namespace xla_serving

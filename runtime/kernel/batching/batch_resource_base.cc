@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/kernel/batching/batch_resource_base.h"  // from @neptune
+#include "runtime/kernel/batching/batch_resource_base.h"  // from @xla_serving
 
 #include <algorithm>
 #include <cstddef>
@@ -44,19 +44,19 @@
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/core/allocator.h"  // from @neptune
-#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
-#include "runtime/core/batching/batch_scheduler_utils.h"  // from @neptune
-#include "runtime/core/batching/batch_stats.h"  // from @neptune
-#include "runtime/core/batching/input_split_metadata.h"  // from @neptune
-#include "runtime/core/batching/threadsafe_status.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/incremental_barrier.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
-#include "runtime/kernel/batching/ragged_utils.h"  // from @neptune
-#include "runtime/kernel/batching/warmup.h"  // from @neptune
-#include "runtime/kernel/kernel.h"  // from @neptune
+#include "runtime/core/allocator.h"  // from @xla_serving
+#include "runtime/core/batching/batch_scheduler.h"  // from @xla_serving
+#include "runtime/core/batching/batch_scheduler_utils.h"  // from @xla_serving
+#include "runtime/core/batching/batch_stats.h"  // from @xla_serving
+#include "runtime/core/batching/input_split_metadata.h"  // from @xla_serving
+#include "runtime/core/batching/threadsafe_status.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/incremental_barrier.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/kernel/batching/batch_options_utils.h"  // from @xla_serving
+#include "runtime/kernel/batching/ragged_utils.h"  // from @xla_serving
+#include "runtime/kernel/batching/warmup.h"  // from @xla_serving
+#include "runtime/kernel/kernel.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/lib/monitoring/counter.h"  // from @xla
@@ -81,7 +81,7 @@
 ABSL_FLAG(bool, jsv_support_batching_for_ragged_inputs, false,
           "Whether to support composite types in batching.");
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 using BufferMatrix = BatchResourceBase::BufferMatrix;
@@ -496,7 +496,7 @@ absl::Status BatchResourceBase::RegisterInput(
   return batcher_queue->Schedule(&batch_components);
 }
 
-/*static*/ BatchResourceBase::BatcherT::QueueOptions
+/*static*/ BatchResourceBase::QueueOptions
 BatchResourceBase::GetBatcherQueueOptions(
     int32_t num_batch_threads, int32_t max_batch_size,
     int32_t batch_timeout_micros, int32_t max_enqueued_batches,
@@ -507,9 +507,11 @@ BatchResourceBase::GetBatcherQueueOptions(
     int32_t low_priority_max_enqueued_batches,
     const std::vector<int32_t>& low_priority_allowed_batch_sizes,
     MixedPriorityBatchingPolicy mixed_priority_batching_policy,
+    PriorityBatchingPolicy priority_batching_policy,
+    PriorityAwareBatchingOptions priority_aware_batching_options,
     tsl::thread::ThreadPool* thread_pool, Allocator* allocator,
     std::vector<RaggedInputSpec> ragged_inputs) {
-  BatcherT::QueueOptions batcher_queue_options;
+  QueueOptions batcher_queue_options;
   batcher_queue_options.input_batch_size_limit = max_batch_size;
   batcher_queue_options.max_enqueued_batches = max_enqueued_batches;
   batcher_queue_options.batch_timeout_micros = batch_timeout_micros;
@@ -539,6 +541,9 @@ BatchResourceBase::GetBatcherQueueOptions(
       low_priority_allowed_batch_sizes;
   batcher_queue_options.mixed_priority_batching_policy =
       mixed_priority_batching_policy;
+  batcher_queue_options.priority_batching_policy = priority_batching_policy;
+  batcher_queue_options.priority_aware_batching_options =
+      priority_aware_batching_options;
   batcher_queue_options.enable_large_batch_splitting =
       enable_large_batch_splitting;
   batcher_queue_options.allocator = allocator;
@@ -830,7 +835,6 @@ absl::Status BatchResourceBase::SplitOutputBuffers(
 
 void BatchResourceBase::CleanUpFunctionHelper(
     BatchTask& task, const absl::Status& status) const {
-  tsl::WithContext wc(task.propagated_context);
   if (!status.ok() &&
       absl::StrContains(status.message(),
                         "Function was cancelled before it was started")) {
@@ -1340,4 +1344,4 @@ void BatchResourceBase::RecordBatchDelayMetrics(
   }
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

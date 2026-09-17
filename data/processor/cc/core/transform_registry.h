@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_TRANSFORM_REGISTRY_H_
-#define THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_TRANSFORM_REGISTRY_H_
+#ifndef XLA_SERVING_DATA_PROCESSOR_CC_CORE_TRANSFORM_REGISTRY_H_
+#define XLA_SERVING_DATA_PROCESSOR_CC_CORE_TRANSFORM_REGISTRY_H_
 
 #include <cstddef>
 #include <cstdint>
@@ -43,12 +43,12 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/api/type_info.h"  // from @neptune
-#include "data/processor/cc/api/value.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/api/type_info.h"  // from @xla_serving
+#include "data/processor/cc/api/value.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 
 namespace neptune::data {
@@ -576,4 +576,4 @@ class TransformRegistrar {
 }  // namespace composite
 }  // namespace neptune::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_TRANSFORM_REGISTRY_H_
+#endif  // XLA_SERVING_DATA_PROCESSOR_CC_CORE_TRANSFORM_REGISTRY_H_

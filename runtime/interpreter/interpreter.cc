@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/interpreter/interpreter.h"  // from @neptune
+#include "runtime/interpreter/interpreter.h"  // from @xla_serving
 
 #include <algorithm>
 #include <cstdint>
@@ -44,34 +44,34 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
-#include "protos/orchestration.pb.h"  // from @neptune
-#include "protos/type.pb.h"  // from @neptune
-#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
-#include "runtime/core/constants.h"  // from @neptune
-#include "runtime/core/flat_signature.h"  // from @neptune
-#include "runtime/core/ifrt_device_utils.h"  // from @neptune
-#include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune
-#include "runtime/core/stablehlo.h"  // from @neptune
-#include "runtime/core/stablehlo_utils.h"  // from @neptune
-#include "runtime/core/streaming/stream.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/data_loader/data_loader.h"  // from @neptune
-#include "runtime/interpreter/bundle_interpreter.h"  // from @neptune
-#include "runtime/interpreter/context.h"  // from @neptune
-#include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
-#include "runtime/interpreter/linear_graph_execute.h"  // from @neptune
-#include "runtime/interpreter/manifest_utils.h"  // from @neptune
-#include "runtime/interpreter/optional_function_handler.h"  // from @neptune
-#include "runtime/interpreter/optional_function_handler_factory.h"  // from @neptune
-#include "runtime/interpreter/run_options.h"  // from @neptune
-#include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
-#include "runtime/kernel/batching/batch_resource_base.h"  // from @neptune
-#include "runtime/kernel/batching/batch_runner_op.h"  // from @neptune
-#include "runtime/kernel/kernel.h"  // from @neptune
-#include "runtime/kernel/kernel_builder_constants.h"  // from @neptune
-#include "runtime/kernel/kernel_builder_context.h"  // from @neptune
-#include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
+#include "protos/manifest.pb.h"  // from @xla_serving
+#include "protos/orchestration.pb.h"  // from @xla_serving
+#include "protos/type.pb.h"  // from @xla_serving
+#include "runtime/core/batching/batch_scheduler.h"  // from @xla_serving
+#include "runtime/core/constants.h"  // from @xla_serving
+#include "runtime/core/flat_signature.h"  // from @xla_serving
+#include "runtime/core/ifrt_device_utils.h"  // from @xla_serving
+#include "runtime/core/ifrt_loaded_variable_registry.h"  // from @xla_serving
+#include "runtime/core/stablehlo.h"  // from @xla_serving
+#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
+#include "runtime/core/streaming/stream.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/data_loader/data_loader.h"  // from @xla_serving
+#include "runtime/interpreter/bundle_interpreter.h"  // from @xla_serving
+#include "runtime/interpreter/context.h"  // from @xla_serving
+#include "runtime/interpreter/interpreter_create_options.h"  // from @xla_serving
+#include "runtime/interpreter/linear_graph_execute.h"  // from @xla_serving
+#include "runtime/interpreter/manifest_utils.h"  // from @xla_serving
+#include "runtime/interpreter/optional_function_handler.h"  // from @xla_serving
+#include "runtime/interpreter/optional_function_handler_factory.h"  // from @xla_serving
+#include "runtime/interpreter/run_options.h"  // from @xla_serving
+#include "runtime/kernel/batching/batch_options_utils.h"  // from @xla_serving
+#include "runtime/kernel/batching/batch_resource_base.h"  // from @xla_serving
+#include "runtime/kernel/batching/batch_runner_op.h"  // from @xla_serving
+#include "runtime/kernel/kernel.h"  // from @xla_serving
+#include "runtime/kernel/kernel_builder_constants.h"  // from @xla_serving
+#include "runtime/kernel/kernel_builder_context.h"  // from @xla_serving
+#include "runtime/kernel/kernel_io_data_type.h"  // from @xla_serving
 #include "google/protobuf/repeated_ptr_field.h"
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
@@ -95,9 +95,9 @@
 ABSL_FLAG(bool, jsv_enable_parallel_loading_pipelines, true,
           "When set to true, load the pipelines in parallel.");
 
-namespace neptune {
+namespace xla_serving {
 
-using neptune_model_orchestration::BatchOptions;
+using xla_saved_model_orchestration::BatchOptions;
 
 namespace {
 
@@ -127,7 +127,7 @@ struct BucketAotData {
 };
 
 absl::Status ValidateStableHlo(
-    absl::Span<const neptune_model_manifest::Function* absl_nonnull const>
+    absl::Span<const xla_saved_model_manifest::Function* absl_nonnull const>
         funcs) {
   for (auto* func : funcs) {
     // TODO: mapping from function name to kernel
@@ -148,7 +148,7 @@ absl::Status ValidateStableHlo(
 
 absl::StatusOr<std::shared_ptr<tsl::ReadOnlyMemoryRegion>> MapAotMemoryRegion(
     absl::string_view model_path,
-    const neptune_model_manifest::CompiledExecutableBody& compiled_exec) {
+    const xla_saved_model_manifest::CompiledExecutableBody& compiled_exec) {
   if (!compiled_exec.has_aot_executable()) {
     return absl::InvalidArgumentError(
         "CompiledExecutableBody missing aot_executable.");
@@ -171,8 +171,8 @@ absl::StatusOr<std::shared_ptr<tsl::ReadOnlyMemoryRegion>> MapAotMemoryRegion(
   return std::shared_ptr<tsl::ReadOnlyMemoryRegion>(std::move(memory_region));
 }
 
-absl::StatusOr<const neptune_model_manifest::CompiledExecutableBody*>
-SelectCompiledExecutable(const neptune_model_manifest::Function& func,
+absl::StatusOr<const xla_saved_model_manifest::CompiledExecutableBody*>
+SelectCompiledExecutable(const xla_saved_model_manifest::Function& func,
                          absl::string_view target_topology_label) {
   if (target_topology_label.empty()) {
     return absl::InvalidArgumentError(
@@ -193,7 +193,7 @@ SelectCompiledExecutable(const neptune_model_manifest::Function& func,
 
 absl::Status VerifyExecutableCompatibility(
     xla::ifrt::Client& ifrt_client,
-    const neptune_model_manifest::CompiledExecutableBody& compiled_exec,
+    const xla_saved_model_manifest::CompiledExecutableBody& compiled_exec,
     xla::ifrt::DeviceListRef ifrt_device_list,
     xla::ifrt::Serialized* serialized_executable_version) {
   // An empty executable_version indicates that the exporter did not provide
@@ -229,7 +229,7 @@ absl::Status VerifyExecutableCompatibility(
 }
 
 bool ShouldShloRunOnHost(
-    absl::Span<const neptune_model_manifest::Function* absl_nonnull const>
+    absl::Span<const xla_saved_model_manifest::Function* absl_nonnull const>
         funcs,
     absl::string_view platform_name) {
   if (absl::EqualsIgnoreCase(platform_name, "cpu")) {
@@ -251,7 +251,7 @@ bool ShouldShloRunOnHost(
 }
 
 absl::StatusOr<std::string> GetKeyFromProcessorMimeType(
-    const neptune_model_manifest::Function& func) {
+    const xla_saved_model_manifest::Function& func) {
   if (func.body().other().has_mime_type()) {
     return std::string(func.body().other().mime_type());
   }
@@ -261,27 +261,27 @@ absl::StatusOr<std::string> GetKeyFromProcessorMimeType(
 }
 
 void CreateAuxiliaryComponents(
-    neptune_model_orchestration::Pipeline& pipeline) {
+    xla_saved_model_orchestration::Pipeline& pipeline) {
   for (const auto& pre_processor_name : pipeline.pre_processor_names()) {
-    neptune_model_orchestration::Component* component =
+    xla_saved_model_orchestration::Component* component =
         pipeline.add_components();
     component->set_function_name(pre_processor_name);
-    component->set_role(neptune_model_orchestration::ROLE_PREPROCESSOR);
+    component->set_role(xla_saved_model_orchestration::ROLE_PREPROCESSOR);
   }
   for (const auto& model_function : pipeline.model_functions()) {
-    neptune_model_orchestration::Component* component =
+    xla_saved_model_orchestration::Component* component =
         pipeline.add_components();
     component->set_function_name(model_function.model_function_name());
-    component->set_role(neptune_model_orchestration::ROLE_MODEL);
+    component->set_role(xla_saved_model_orchestration::ROLE_MODEL);
     if (model_function.has_weights_name()) {
       component->set_weights_name(model_function.weights_name());
     }
   }
   for (const auto& post_processor_name : pipeline.post_processor_names()) {
-    neptune_model_orchestration::Component* component =
+    xla_saved_model_orchestration::Component* component =
         pipeline.add_components();
     component->set_function_name(post_processor_name);
-    component->set_role(neptune_model_orchestration::ROLE_POSTPROCESSOR);
+    component->set_role(xla_saved_model_orchestration::ROLE_POSTPROCESSOR);
   }
 }
 
@@ -289,7 +289,7 @@ void CreateAuxiliaryComponents(
 
 absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
     std::vector<std::unique_ptr<Kernel>> batched_kernels,
-    const neptune_model_orchestration::Pipeline& pipeline,
+    const xla_saved_model_orchestration::Pipeline& pipeline,
     const InterpreterCreateOptions* create_options,
     tsl::thread::ThreadPool* thread_pool) {
   LOG(INFO) << "Building the batch kernel.";
@@ -324,6 +324,9 @@ absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
       MixedPriorityBatchingPolicy mixed_priority_batching_policy,
       GetMixedPriorityBatchingPolicy(
           batch_options.mixed_priority_batching_policy()));
+  TF_ASSIGN_OR_RETURN(
+      PriorityBatchingPolicy priority_batching_policy,
+      GetPriorityBatchingPolicy(batch_options.priority_batching_policy()));
 
   BatchRunnerOpOptions batch_runner_op_options = {
       .input_signature = std::move(input_signature),
@@ -345,6 +348,7 @@ absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
           !batch_options.disable_large_batch_splitting() && !has_streaming,
       .batch_padding_policy = std::move(batch_padding_policy_string),
       .mixed_priority_batching_policy = mixed_priority_batching_policy,
+      .priority_batching_policy = priority_batching_policy,
       .allocator = create_options->allocator,
       .ragged_inputs =
           [&]() {
@@ -376,6 +380,12 @@ absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
             low_priority_batch_options.allowed_batch_sizes().begin(),
             low_priority_batch_options.allowed_batch_sizes().end()};
   }
+  if (batch_options.has_priority_aware_batching_options()) {
+    TF_ASSIGN_OR_RETURN(
+        batch_runner_op_options.priority_aware_batching_options,
+        GetPriorityAwareBatchingOptions(
+            batch_options.priority_aware_batching_options()));
+  }
 
   return CreateBatchRunnerOp(std::move(batched_kernels),
                              batch_runner_op_options, thread_pool);
@@ -383,9 +393,9 @@ absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
 
 // TODO: Merge this function with
 // GetStableHloFunctionsByObjectName in manifest_utils.cc.
-absl::StatusOr<const neptune_model_manifest::Function*> GetFunctionByObjectName(
+absl::StatusOr<const xla_saved_model_manifest::Function*> GetFunctionByObjectName(
     const absl::flat_hash_map<std::string,
-                              const neptune_model_manifest::TopLevelObject*>&
+                              const xla_saved_model_manifest::TopLevelObject*>&
         manifest_objects,
     absl::string_view function_object_name) {
   if (!manifest_objects.contains(function_object_name)) {
@@ -393,7 +403,7 @@ absl::StatusOr<const neptune_model_manifest::Function*> GetFunctionByObjectName(
         absl::StrCat("Failed to find function object with name: \"",
                      function_object_name, "\""));
   }
-  const neptune_model_manifest::TopLevelObject* function_obj =
+  const xla_saved_model_manifest::TopLevelObject* function_obj =
       manifest_objects.at(function_object_name);
 
   if (!function_obj->has_function() ||
@@ -426,7 +436,7 @@ struct BatchingConfig {
 
 BatchingConfig GetBatchingConfig(
     bool enable_batching,
-    const neptune_model_orchestration::Pipeline& pipeline) {
+    const xla_saved_model_orchestration::Pipeline& pipeline) {
   BatchOptions::BatchComponent batch_component =
       BatchOptions::BATCH_COMPONENT_UNSPECIFIED;
   if (enable_batching && pipeline.has_batch_options()) {
@@ -456,7 +466,7 @@ BatchingConfig GetBatchingConfig(
 //    normalize.
 // 3. Sets the `use_batching` flag for each component based on its role and the
 //    batching configuration.
-absl::Status NormalizePipeline(neptune_model_orchestration::Pipeline& pipeline,
+absl::Status NormalizePipeline(xla_saved_model_orchestration::Pipeline& pipeline,
                        bool enable_batching) {
   if (pipeline.components().empty()) {
     CreateAuxiliaryComponents(pipeline);
@@ -471,13 +481,13 @@ absl::Status NormalizePipeline(neptune_model_orchestration::Pipeline& pipeline,
   for (auto& component : *pipeline.mutable_components()) {
     bool use_batching = false;
     switch (component.role()) {
-      case neptune_model_orchestration::ROLE_PREPROCESSOR:
+      case xla_saved_model_orchestration::ROLE_PREPROCESSOR:
         use_batching = batching_config.batch_preprocessing;
         break;
-      case neptune_model_orchestration::ROLE_MODEL:
+      case xla_saved_model_orchestration::ROLE_MODEL:
         use_batching = batching_config.batch_model;
         break;
-      case neptune_model_orchestration::ROLE_POSTPROCESSOR:
+      case xla_saved_model_orchestration::ROLE_POSTPROCESSOR:
         use_batching = batching_config.batch_postprocessing;
         break;
       default:
@@ -533,7 +543,7 @@ absl::Status ValidateMapReturnIsAllowed(
 
 // Loads the input signature from the given pipeline.
 absl::StatusOr<FlatSignature> LoadPipelineInputSignature(
-    const neptune_model_orchestration::Pipeline& pipeline) {
+    const xla_saved_model_orchestration::Pipeline& pipeline) {
   if (pipeline.has_named_signature() &&
       pipeline.named_signature().has_inputs()) {
     // Get the flat signature from the `NamedSignature` in orchestration.
@@ -547,7 +557,7 @@ absl::StatusOr<FlatSignature> LoadPipelineInputSignature(
 
 // Loads the output signature from the given pipeline.
 absl::StatusOr<FlatSignature> LoadPipelineOutputSignature(
-    const neptune_model_orchestration::Pipeline& pipeline) {
+    const xla_saved_model_orchestration::Pipeline& pipeline) {
   if (pipeline.has_named_signature() &&
       pipeline.named_signature().has_outputs()) {
     // Get the flat signature from the `NamedSignature` in orchestration.
@@ -562,12 +572,12 @@ absl::StatusOr<FlatSignature> LoadPipelineOutputSignature(
 absl::StatusOr<std::variant<std::string, absl::string_view>>
 GetStableHloMlirString(
     absl::string_view model_path,
-    const neptune_model_manifest::StableHloFunctionBody& stable_hlo_body) {
+    const xla_saved_model_manifest::StableHloFunctionBody& stable_hlo_body) {
   switch (stable_hlo_body.stable_hlo().data_case()) {
-    case neptune_model_manifest::UnstructuredData::kInlinedBytes:
+    case xla_saved_model_manifest::UnstructuredData::kInlinedBytes:
       return std::variant<std::string, absl::string_view>(
           absl::string_view(stable_hlo_body.stable_hlo().inlined_bytes()));
-    case neptune_model_manifest::UnstructuredData::kFileSystemLocation: {
+    case xla_saved_model_manifest::UnstructuredData::kFileSystemLocation: {
       // The file system location should contain a relative path with respect to
       // the `model_path`.
       std::string mlir_path = tsl::io::JoinPath(
@@ -595,7 +605,7 @@ GetStableHloMlirString(
 // proto representations in `Function`s.
 absl::StatusOr<std::unique_ptr<StableHlo>> BuildStableHloFromFunctions(
     absl::string_view model_path,
-    absl::Span<const neptune_model_manifest::Function* const>
+    absl::Span<const xla_saved_model_manifest::Function* const>
         stable_hlo_funcs) {
   std::vector<StableHlo::Spec> stablehlo_specs;
   stablehlo_specs.reserve(stable_hlo_funcs.size());
@@ -605,8 +615,8 @@ absl::StatusOr<std::unique_ptr<StableHlo>> BuildStableHloFromFunctions(
                         GetOutputSpec(*func));
     TF_RETURN_IF_ERROR(CheckMimeAndDataType(
         func->body().stable_hlo_body().stable_hlo(), {kStableHloMimeType},
-        {neptune_model_manifest::UnstructuredData::kInlinedBytes,
-         neptune_model_manifest::UnstructuredData::kFileSystemLocation},
+        {xla_saved_model_manifest::UnstructuredData::kInlinedBytes,
+         xla_saved_model_manifest::UnstructuredData::kFileSystemLocation},
         "StableHlo MLIR module"));
     std::variant<std::string, absl::string_view> mlir_module;
     TF_ASSIGN_OR_RETURN(
@@ -629,7 +639,7 @@ absl::StatusOr<std::unique_ptr<StableHlo>> BuildStableHloFromFunctions(
 
 // Loads the signature from the given pipeline.
 absl::StatusOr<FunctionFlatSignature> LoadPipelineSignature(
-    const neptune_model_orchestration::Pipeline& pipeline) {
+    const xla_saved_model_orchestration::Pipeline& pipeline) {
   TF_ASSIGN_OR_RETURN(FlatSignature input_flat_signature,
                       LoadPipelineInputSignature(pipeline));
   if (input_flat_signature.IsAllSpecWithName()) {
@@ -664,11 +674,11 @@ absl::StatusOr<FunctionFlatSignature> LoadPipelineSignature(
 // function(s). When there are multiple StableHLO functions, they are
 // concretized StableHLOs for a single polymorphic function.
 absl::StatusOr<std::unique_ptr<Kernel>> CreateStableHloRunnerOp(
-    absl::Span<const neptune_model_manifest::Function* const> stable_hlo_funcs,
-    const neptune_model_manifest::Manifest& manifest,
+    absl::Span<const xla_saved_model_manifest::Function* const> stable_hlo_funcs,
+    const xla_saved_model_manifest::Manifest& manifest,
     const std::vector<std::string>& weight_names,
-    const neptune_model_orchestration::NamedTensorTypeList* named_inputs,
-    const neptune_model_orchestration::NamedTensorTypeList* named_outputs,
+    const xla_saved_model_orchestration::NamedTensorTypeList* named_inputs,
+    const xla_saved_model_orchestration::NamedTensorTypeList* named_outputs,
     xla::CompileOptionsProto* absl_nullable compile_options,
     std::shared_ptr<xla::ifrt::Client> ifrt_client,
     const InterpreterCreateOptions& create_options,
@@ -732,12 +742,12 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateStableHloRunnerOp(
 }
 
 struct NamedSignature {
-  const neptune_model_orchestration::NamedTensorTypeList* inputs = nullptr;
-  const neptune_model_orchestration::NamedTensorTypeList* outputs = nullptr;
+  const xla_saved_model_orchestration::NamedTensorTypeList* inputs = nullptr;
+  const xla_saved_model_orchestration::NamedTensorTypeList* outputs = nullptr;
 };
 
 NamedSignature GetNamedSignatureOfComponent(
-    const neptune_model_orchestration::Component& component) {
+    const xla_saved_model_orchestration::Component& component) {
   if (component.has_named_signature()) {
     return {.inputs = &component.named_signature().inputs(),
             .outputs = &component.named_signature().outputs()};
@@ -769,7 +779,7 @@ absl::Status ValidateInterpreterCreateOptions(
 
 // Modular execution bucket loader
 absl::StatusOr<BucketAotData> LoadAotExecutableForBucket(
-    const neptune_model_manifest::Function& func,
+    const xla_saved_model_manifest::Function& func,
     absl::string_view target_topology_label, absl::string_view component_name,
     absl::string_view model_path, const AssignedDevices& assigned_devices,
     xla::ifrt::Client* ifrt_client,
@@ -860,7 +870,7 @@ struct BatchIndices {
 // Finds the start and end indices of consecutive batched components in a
 // pipeline. Returns an error if batched components are non-consecutive.
 absl::StatusOr<std::optional<BatchIndices>> FindBatchIndices(
-    const google::protobuf::RepeatedPtrField<neptune_model_orchestration::Component>&
+    const google::protobuf::RepeatedPtrField<xla_saved_model_orchestration::Component>&
         components) {
   std::optional<BatchIndices> indices;
   bool batch_completed = false;
@@ -945,7 +955,7 @@ absl::StatusOr<FunctionFlatSignature> Interpreter::GetPipelineSignature(
   return graph_bundle->signature;
 }
 
-absl::StatusOr<neptune_model_orchestration::Pipeline>
+absl::StatusOr<xla_saved_model_orchestration::Pipeline>
 Interpreter::GetPipelineProto(absl::string_view pipeline_name) const {
   TF_ASSIGN_OR_RETURN(const GraphBundle* graph_bundle,
                       GetGraphBundle(pipeline_name));
@@ -960,7 +970,7 @@ absl::Status Interpreter::Load() {
   }
 
   TF_ASSIGN_OR_RETURN(
-      neptune_model_orchestration::Pipelines pipelines,
+      xla_saved_model_orchestration::Pipelines pipelines,
       GetOexOrchestration(create_options_->model_path, manifest_));
 
   if (pipelines.name_to_pipeline().empty()) {
@@ -1046,7 +1056,7 @@ absl::Status Interpreter::LoadGraphs() {
 // TODO: Support partial loading of per-function data.
 absl::StatusOr<std::vector<std::string>> Interpreter::GetOrLoadWeightNames(
     absl::string_view weights_name,
-    absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs,
+    absl::Span<const xla_saved_model_manifest::Function* const> stablehlo_funcs,
     const AssignedDevices& assigned_devices,
     std::shared_ptr<xla::ifrt::Client> ifrt_client) {
   if (weights_name.empty()) {
@@ -1074,11 +1084,11 @@ absl::StatusOr<std::vector<std::string>> Interpreter::GetOrLoadWeightNames(
 
 absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadStableHloRunnerOp(
     absl::string_view model_function_name, absl::string_view weights_name,
-    const neptune_model_orchestration::NamedTensorTypeList* named_inputs,
-    const neptune_model_orchestration::NamedTensorTypeList* named_outputs,
+    const xla_saved_model_orchestration::NamedTensorTypeList* named_inputs,
+    const xla_saved_model_orchestration::NamedTensorTypeList* named_outputs,
     const std::string& platform_name) {
   TF_ASSIGN_OR_RETURN(
-      std::vector<const neptune_model_manifest::Function*> stablehlo_funcs,
+      std::vector<const xla_saved_model_manifest::Function*> stablehlo_funcs,
       GetStableHloFunctionsByObjectName(manifest_objects_,
                                         model_function_name));
 
@@ -1127,8 +1137,8 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadStableHloRunnerOp(
 }
 
 absl::StatusOr<Interpreter::AotLoadResult> Interpreter::LoadAotExecutable(
-    const neptune_model_orchestration::Component& component,
-    absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs,
+    const xla_saved_model_orchestration::Component& component,
+    absl::Span<const xla_saved_model_manifest::Function* const> stablehlo_funcs,
     absl::string_view target_topology_label) {
   if (stablehlo_funcs.empty()) {
     return absl::InternalError("stablehlo_funcs must not be empty.");
@@ -1204,8 +1214,8 @@ absl::StatusOr<Interpreter::AotLoadResult> Interpreter::LoadAotExecutable(
 
 absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadAotRunnerOp(
     AotLoadResult aot_result,
-    const neptune_model_orchestration::NamedTensorTypeList* named_inputs,
-    const neptune_model_orchestration::NamedTensorTypeList* named_outputs) {
+    const xla_saved_model_orchestration::NamedTensorTypeList* named_inputs,
+    const xla_saved_model_orchestration::NamedTensorTypeList* named_outputs) {
   KernelBuilderContext builder;
   TF_RETURN_IF_ERROR(builder.SetConfig(kStableHlo, aot_result.aot_stablehlo));
   TF_RETURN_IF_ERROR(builder.SetConfig(kIfrtLoadedExecutables,
@@ -1241,11 +1251,11 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadAotRunnerOp(
 }
 
 absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadModelRunnerOp(
-    const neptune_model_orchestration::Component& component,
-    const neptune_model_orchestration::NamedTensorTypeList* named_inputs,
-    const neptune_model_orchestration::NamedTensorTypeList* named_outputs) {
+    const xla_saved_model_orchestration::Component& component,
+    const xla_saved_model_orchestration::NamedTensorTypeList* named_inputs,
+    const xla_saved_model_orchestration::NamedTensorTypeList* named_outputs) {
   TF_ASSIGN_OR_RETURN(
-      std::vector<const neptune_model_manifest::Function*> stablehlo_funcs,
+      std::vector<const xla_saved_model_manifest::Function*> stablehlo_funcs,
       GetStableHloFunctionsByObjectName(manifest_objects_,
                                         component.function_name()));
 
@@ -1291,11 +1301,11 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadModelRunnerOp(
 }
 
 absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadOnHostFunction(
-    const neptune_model_orchestration::Component& component,
+    const xla_saved_model_orchestration::Component& component,
     int component_index, int total_components, bool keyword_arguments_based) {
   LOG(INFO) << "Adding function: " << component.function_name();
   TF_ASSIGN_OR_RETURN(
-      const neptune_model_manifest::Function* func,
+      const xla_saved_model_manifest::Function* func,
       GetFunctionByObjectName(manifest_objects_, component.function_name()));
 
   NamedSignature named_signature = keyword_arguments_based
@@ -1343,13 +1353,13 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadOnHostFunction(
 
 
 absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
-    const neptune_model_orchestration::Pipeline& pipeline) {
+    const xla_saved_model_orchestration::Pipeline& pipeline) {
   if (pipeline.components().empty()) {
     return absl::InvalidArgumentError(
         "Pipeline does not contain any component.");
   }
 
-  const google::protobuf::RepeatedPtrField<neptune_model_orchestration::Component>&
+  const google::protobuf::RepeatedPtrField<xla_saved_model_orchestration::Component>&
       components = pipeline.components();
 
   bool keyword_arguments_based = pipeline.keyword_arguments_based();
@@ -1364,7 +1374,7 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
   for (int component_idx = 0; component_idx < components.size();
        ++component_idx) {
     const auto& component = components[component_idx];
-    if (component.role() == neptune_model_orchestration::ROLE_MODEL) {
+    if (component.role() == xla_saved_model_orchestration::ROLE_MODEL) {
       NamedSignature named_signature =
           keyword_arguments_based ? GetNamedSignatureOfComponent(component)
                                   : NamedSignature{};
@@ -1380,7 +1390,7 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
        ++component_idx) {
     const auto& component = components[component_idx];
 
-    if (component.role() != neptune_model_orchestration::ROLE_MODEL) {
+    if (component.role() != xla_saved_model_orchestration::ROLE_MODEL) {
       TF_ASSIGN_OR_RETURN(
           loaded_kernels[component_idx],
           LoadOnHostFunction(component, component_idx, total_components,
@@ -1430,7 +1440,7 @@ absl::StatusOr<KernelGraph> Interpreter::LoadGraphFromComponentProto(
 // fields and remove this function once all models are migrated to the new
 // components.
 absl::StatusOr<KernelGraph> Interpreter::LoadGraph(
-    const neptune_model_orchestration::Pipeline& pipeline) {
+    const xla_saved_model_orchestration::Pipeline& pipeline) {
   return LoadGraphFromComponentProto(pipeline);
 }
 
@@ -1472,7 +1482,7 @@ Interpreter::GetGraphBundle(absl::string_view pipeline_name) const {
 
 absl::StatusOr<DataLoader::LoadResult> Interpreter::LoadWeights(
     absl::string_view weight_set_name,
-    absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs,
+    absl::Span<const xla_saved_model_manifest::Function* const> stablehlo_funcs,
     const AssignedDevices& assigned_devices,
     std::shared_ptr<xla::ifrt::Client> ifrt_client) {
   const auto it = manifest_objects_.find(weight_set_name);
@@ -1481,12 +1491,12 @@ absl::StatusOr<DataLoader::LoadResult> Interpreter::LoadWeights(
         absl::StrCat("Object key for weight names ", weight_set_name,
                      " not found in manifest."));
   }
-  const neptune_model_manifest::Value& value = it->second->value();
+  const xla_saved_model_manifest::Value& value = it->second->value();
   if (!value.has_external()) {
     return absl::InvalidArgumentError(absl::StrCat(
         "Weights name ", weight_set_name, " is not an external value."));
   }
-  const neptune_model_manifest::ExternalValue& external = value.external();
+  const xla_saved_model_manifest::ExternalValue& external = value.external();
   TF_ASSIGN_OR_RETURN(
       std::unique_ptr<DataLoader> data_loader,
       DataLoaderFactoryRegistry::GetGlobalRegistry().CreateDataLoader(
@@ -1528,12 +1538,11 @@ absl::StatusOr<std::vector<Value>> Interpreter::Run(
   VLOG(2) << "Interpreter::Run: pipeline_name=" << pipeline_name
           << ", model_name=" << create_options_->model_name;
 
-  std::optional<neptune::ScopedStreamCallback> scoped_stream_callback;
+  std::optional<ScopedStreamCallback> scoped_stream_callback;
   if (run_options.streamed_output_callback != nullptr &&
       callback_id_.has_value()) {
-    TF_ASSIGN_OR_RETURN(
-        neptune::StreamCallbackRegistry * stream_callback_registry,
-        neptune::GetGlobalStreamCallbackRegistry());
+    TF_ASSIGN_OR_RETURN(StreamCallbackRegistry * stream_callback_registry,
+                        GetGlobalStreamCallbackRegistry());
     TF_ASSIGN_OR_RETURN(
         scoped_stream_callback,
         stream_callback_registry->Register(
@@ -1621,15 +1630,15 @@ tsl::Future<std::vector<Value>> Interpreter::RunAsync(
   VLOG(2) << "Interpreter::RunAsync: pipeline_name=" << pipeline_name
           << ", model_name=" << create_options_->model_name;
 
-  std::shared_ptr<neptune::ScopedStreamCallback> scoped_stream_callback;
+  std::shared_ptr<ScopedStreamCallback> scoped_stream_callback;
   if (run_options.streamed_output_callback != nullptr &&
       callback_id_.has_value()) {
-    absl::StatusOr<neptune::StreamCallbackRegistry*> stream_callback_registry =
-        neptune::GetGlobalStreamCallbackRegistry();
+    absl::StatusOr<StreamCallbackRegistry*> stream_callback_registry =
+        GetGlobalStreamCallbackRegistry();
     if (!stream_callback_registry.ok()) {
       return tsl::Future<std::vector<Value>>(stream_callback_registry.status());
     }
-    absl::StatusOr<neptune::ScopedStreamCallback> registered_callback =
+    absl::StatusOr<ScopedStreamCallback> registered_callback =
         (*stream_callback_registry)
             ->Register(create_options_->model_name, *callback_id_,
                        run_options.request_id,
@@ -1637,8 +1646,8 @@ tsl::Future<std::vector<Value>> Interpreter::RunAsync(
     if (!registered_callback.ok()) {
       return tsl::Future<std::vector<Value>>(registered_callback.status());
     }
-    scoped_stream_callback = std::make_shared<neptune::ScopedStreamCallback>(
-        std::move(*registered_callback));
+    scoped_stream_callback =
+        std::make_shared<ScopedStreamCallback>(std::move(*registered_callback));
   }
 
   auto future = [this, pipeline_name, &positional_inputs, &keyword_inputs,
@@ -1733,18 +1742,18 @@ absl::StatusOr<KernelIODataType> Interpreter::GetModelInputDataType(
   // When lazy loading is enabled, the graph may not be loaded yet. For this
   // simple query, instead of loading the graph and getting the data type from
   // the first kernel, we just infer the data type.
-  const neptune_model_orchestration::Pipeline& pipeline =
+  const xla_saved_model_orchestration::Pipeline& pipeline =
       graph_bundle->pipeline;
   const auto first_pipeline_component = pipeline.components().begin();
   if (first_pipeline_component->role() ==
-      neptune_model_orchestration::ROLE_MODEL) {
+      xla_saved_model_orchestration::ROLE_MODEL) {
     return KernelIODataType::kHostBuffer;
   }
   const std::string& first_component_name =
       first_pipeline_component->function_name();
 
   TF_ASSIGN_OR_RETURN(
-      const neptune_model_manifest::Function* func,
+      const xla_saved_model_manifest::Function* func,
       GetFunctionByObjectName(manifest_objects_, first_component_name));
   // If the first pipeline component has a StableHLO body, the corresponding
   // kernel will take HostBuffer as input.
@@ -1766,17 +1775,17 @@ absl::StatusOr<KernelIODataType> Interpreter::GetModelOutputDataType(
   // When lazy loading is enabled, the graph may not be loaded yet. For this
   // simple query, instead of loading the graph and getting the data type from
   // the last kernel, we just infer the data type.
-  const neptune_model_orchestration::Pipeline& pipeline =
+  const xla_saved_model_orchestration::Pipeline& pipeline =
       graph_bundle->pipeline;
   const auto last_pipeline_component = pipeline.components().rbegin();
   if (last_pipeline_component->role() ==
-      neptune_model_orchestration::ROLE_MODEL) {
+      xla_saved_model_orchestration::ROLE_MODEL) {
     return KernelIODataType::kHostBuffer;
   }
   // If the last pipeline component has a StableHLO body, the corresponding
   // kernel will return HostBuffer.
   TF_ASSIGN_OR_RETURN(
-      const neptune_model_manifest::Function* func,
+      const xla_saved_model_manifest::Function* func,
       GetFunctionByObjectName(manifest_objects_,
                               last_pipeline_component->function_name()));
   if (func->body().has_stable_hlo_body()) {
@@ -1822,4 +1831,4 @@ int32_t Interpreter::GenerateNextRequestId() {
   return next_id;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

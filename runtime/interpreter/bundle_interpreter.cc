@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/interpreter/bundle_interpreter.h"  // from @neptune
+#include "runtime/interpreter/bundle_interpreter.h"  // from @xla_serving
 
 #include <cstdint>
 #include <memory>
@@ -26,27 +26,27 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "protos/bundle_orchestration.pb.h"  // from @neptune
-#include "runtime/core/common_util.h"  // from @neptune
-#include "runtime/core/flat_signature.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/interpreter/interpreter.h"  // from @neptune
-#include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
-#include "runtime/interpreter/run_options.h"  // from @neptune
-#include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
+#include "protos/bundle_orchestration.pb.h"  // from @xla_serving
+#include "runtime/core/common_util.h"  // from @xla_serving
+#include "runtime/core/flat_signature.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/interpreter/interpreter.h"  // from @xla_serving
+#include "runtime/interpreter/interpreter_create_options.h"  // from @xla_serving
+#include "runtime/interpreter/run_options.h"  // from @xla_serving
+#include "runtime/kernel/kernel_io_data_type.h"  // from @xla_serving
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "tsl/platform/path.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
 namespace {
 
-absl::StatusOr<neptune_bundle_orchestration::BundlePipelines>
+absl::StatusOr<xla_serving_bundle_orchestration::BundlePipelines>
 ParseBundleOrchestration(absl::string_view bundle_path) {
-  neptune_bundle_orchestration::BundlePipelines proto;
+  xla_serving_bundle_orchestration::BundlePipelines proto;
   std::string pb_path =
       tsl::io::JoinPath(bundle_path, "bundle_orchestration.pb");
   TF_RETURN_IF_ERROR(
@@ -165,7 +165,7 @@ absl::StatusOr<FunctionFlatSignature> BundleInterpreter::GetPipelineSignature(
   };
 }
 
-absl::StatusOr<neptune_model_orchestration::Pipeline>
+absl::StatusOr<xla_saved_model_orchestration::Pipeline>
 BundleInterpreter::GetPipelineProto(absl::string_view pipeline_name) const {
   return absl::UnimplementedError(
       "GetPipelineProto is not implemented for BundleInterpreter.");
@@ -326,7 +326,7 @@ BundleInterpreter::CreateSubInterpreter(absl::string_view model_name) const {
   return Interpreter::Create(std::move(sub_options));
 }
 
-absl::StatusOr<const neptune_bundle_orchestration::BundlePipeline*>
+absl::StatusOr<const xla_serving_bundle_orchestration::BundlePipeline*>
 BundleInterpreter::GetPipeline(absl::string_view pipeline_name) const {
   auto pipe_it =
       master_orchestration_.pipelines().find(std::string(pipeline_name));
@@ -337,7 +337,7 @@ BundleInterpreter::GetPipeline(absl::string_view pipeline_name) const {
   return &pipe_it->second;
 }
 
-absl::StatusOr<const neptune_bundle_orchestration::ModelExecutionComponent*>
+absl::StatusOr<const xla_serving_bundle_orchestration::ModelExecutionComponent*>
 BundleInterpreter::GetFirstComponent(absl::string_view pipeline_name) const {
   TF_ASSIGN_OR_RETURN(const auto* pipeline, GetPipeline(pipeline_name));
   if (pipeline->components().empty()) {
@@ -347,7 +347,7 @@ BundleInterpreter::GetFirstComponent(absl::string_view pipeline_name) const {
   return &pipeline->components(0);
 }
 
-absl::StatusOr<const neptune_bundle_orchestration::ModelExecutionComponent*>
+absl::StatusOr<const xla_serving_bundle_orchestration::ModelExecutionComponent*>
 BundleInterpreter::GetLastComponent(absl::string_view pipeline_name) const {
   TF_ASSIGN_OR_RETURN(const auto* pipeline, GetPipeline(pipeline_name));
   if (pipeline->components().empty()) {
@@ -357,4 +357,4 @@ BundleInterpreter::GetLastComponent(absl::string_view pipeline_name) const {
   return &pipeline->components(pipeline->components_size() - 1);
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

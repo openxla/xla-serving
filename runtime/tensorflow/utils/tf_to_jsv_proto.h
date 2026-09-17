@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_UTILS_TF_TO_JSV_PROTO_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_UTILS_TF_TO_JSV_PROTO_H_
+#ifndef XLA_SERVING_RUNTIME_TENSORFLOW_UTILS_TF_TO_JSV_PROTO_H_
+#define XLA_SERVING_RUNTIME_TENSORFLOW_UTILS_TF_TO_JSV_PROTO_H_
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
-#include "protos/grpc/host_buffer.pb.h"  // from @neptune
-#include "protos/grpc/predict.pb.h"  // from @neptune
+#include "protos/grpc/host_buffer.pb.h"  // from @xla_serving
+#include "protos/grpc/predict.pb.h"  // from @xla_serving
 #include "tensorflow/core/framework/tensor.pb.h"  // from @org_tensorflow
 
-namespace neptune {
+namespace xla_serving {
 
-absl::StatusOr<neptune::HostBufferProto> FromTfTensorProto(
+absl::StatusOr<xla_serving::HostBufferProto> FromTfTensorProto(
     const tensorflow::TensorProto& tf_tensor_proto);
 
 }
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_UTILS_TF_TO_JSV_PROTO_H_
+#endif  // XLA_SERVING_RUNTIME_TENSORFLOW_UTILS_TF_TO_JSV_PROTO_H_

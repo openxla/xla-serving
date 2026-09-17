@@ -2,7 +2,7 @@ load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(default_visibility = [
-    "@neptune//:__subpackages__",
+    "@xla_serving//:__subpackages__",
 ])
 
 cc_library(
@@ -46,7 +46,6 @@ cc_library(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/time",
         "@llvm-project//mlir:IR",
-        "@neptune//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",
         "@xla//xla:debug_options_flags",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/pjrt:pjrt_compiler",
@@ -58,6 +57,7 @@ cc_library(
         "@xla//xla/service:compilation_environments",
         "@xla//xla/service:computation_placer",
         "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",
     ],
 )
 
@@ -76,7 +76,6 @@ cc_library(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/time",
         "@llvm-project//mlir:IR",
-        "@neptune//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",
         "@xla//xla:debug_options_flags",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/pjrt:pjrt_compiler",
@@ -88,5 +87,6 @@ cc_library(
         "@xla//xla/service:compilation_environments",
         "@xla//xla/service:computation_placer",
         "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",
     ],
 )

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_UTILS_DEFAULT_VALUE_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_UTILS_DEFAULT_VALUE_UTILS_H_
+#ifndef XLA_SERVING_DATA_PROCESSOR_CC_UTILS_DEFAULT_VALUE_UTILS_H_
+#define XLA_SERVING_DATA_PROCESSOR_CC_UTILS_DEFAULT_VALUE_UTILS_H_
 
 #include <cstdint>
 #include <string>
@@ -22,7 +22,7 @@
 #include "google/protobuf/any.pb.h"
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
-#include "data/processor/cc/utils/default_value.pb.h"  // from @neptune
+#include "data/processor/cc/utils/default_value.pb.h"  // from @xla_serving
 #include "tsl/platform/tstring.h"  // from @tsl
 
 namespace neptune::data {
@@ -157,4 +157,4 @@ absl::StatusOr<google::protobuf::Any> PackToAny(T val) {
 }  // namespace composite
 }  // namespace neptune::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_UTILS_DEFAULT_VALUE_UTILS_H_
+#endif  // XLA_SERVING_DATA_PROCESSOR_CC_UTILS_DEFAULT_VALUE_UTILS_H_

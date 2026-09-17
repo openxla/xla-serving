@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_TYPE_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_TYPE_H_
+#ifndef XLA_SERVING_RUNTIME_TYPE_H_
+#define XLA_SERVING_RUNTIME_TYPE_H_
 
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/container/btree_map.h"  // from @abseil-cpp
-#include "runtime/core/value.h"  // from @neptune
+#include "runtime/core/value.h"  // from @xla_serving
 
-namespace neptune::type {
+namespace xla_serving::type {
 
 /* A structured-data (a.k.a. "tree") system (to e.g. represent function
 signatures).
@@ -63,12 +63,12 @@ struct None {};
 // leaves should be things like `HostBuffer` or `tensorflow::Tensor` while
 // `Type`'s leaves should be things like `ArgSpec`.
 //
-// `Type` is isomorphic to `neptune_model_type::Type`.
+// `Type` is isomorphic to `xla_saved_model_type::Type`.
 using Type = Tree;
 
 // A list of (key, value) pairs for `Tree`.
 using StringTypePairs = std::vector<std::pair<std::string, Type>>;
 
-}  // namespace neptune::type
+}  // namespace xla_serving::type
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_TYPE_H_
+#endif  // XLA_SERVING_RUNTIME_TYPE_H_

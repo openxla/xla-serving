@@ -21,9 +21,9 @@ from absl import flags
 import grpc
 import numpy as np
 
-from neptune_model.protos.grpc import host_buffer_pb2
-from neptune_model.protos.grpc import predict_pb2
-from neptune_model.protos.xla.python.ifrt import dtype_pb2  # pylint: disable=g-direct-tensorflow-import
+from xla_saved_model.protos.grpc import host_buffer_pb2
+from xla_saved_model.protos.grpc import predict_pb2
+from xla_saved_model.protos.xla.python.ifrt import dtype_pb2  # pylint: disable=g-direct-tensorflow-import
 
 _SERVER_ADDRESS = flags.DEFINE_string(
     "server_address", "localhost:8500", "gRPC address of the Neptune server."

@@ -48,8 +48,8 @@
 //     PeriodicFunction periodic_function_;
 //   };
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_PERIODIC_FUNCTION_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_PERIODIC_FUNCTION_H_
+#ifndef XLA_SERVING_RUNTIME_BATCHING_PERIODIC_FUNCTION_H_
+#define XLA_SERVING_RUNTIME_BATCHING_PERIODIC_FUNCTION_H_
 
 #include <cstdint>
 #include <memory>
@@ -59,7 +59,7 @@
 #include "absl/synchronization/notification.h"  // from @abseil-cpp
 #include "xla/tsl/platform/env.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 namespace internal {
 class PeriodicFunctionTestAccess;
@@ -120,6 +120,6 @@ class PeriodicFunction {
   void operator=(const PeriodicFunction&) = delete;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_PERIODIC_FUNCTION_H_
+#endif  // XLA_SERVING_RUNTIME_BATCHING_PERIODIC_FUNCTION_H_

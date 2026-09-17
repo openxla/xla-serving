@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_CORE_BATCHING_FIFO_QUEUE_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_CORE_BATCHING_FIFO_QUEUE_H_
+#ifndef XLA_SERVING_RUNTIME_CORE_BATCHING_FIFO_QUEUE_H_
+#define XLA_SERVING_RUNTIME_CORE_BATCHING_FIFO_QUEUE_H_
 
 #include <stddef.h>
 
@@ -35,17 +35,17 @@
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/time/clock.h"  // from @abseil-cpp
-#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
-#include "runtime/core/batching/batch_scheduler_utils.h"  // from @neptune
-#include "runtime/core/batching/queue_base.h"  // from @neptune
-#include "runtime/core/batching/shared_batch_scheduler.h"  // from @neptune
+#include "runtime/core/batching/batch_scheduler.h"  // from @xla_serving
+#include "runtime/core/batching/batch_scheduler_utils.h"  // from @xla_serving
+#include "runtime/core/batching/queue_base.h"  // from @xla_serving
+#include "runtime/core/batching/queue_options.h"  // from @xla_serving
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "tsl/profiler/lib/connected_traceme.h"  // from @tsl
 #include "tsl/profiler/lib/context_types.h"  // from @tsl
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 namespace internal {
 
 template <typename TaskType>
@@ -62,7 +62,7 @@ class FifoQueue : public QueueBase<TaskType> {
   using BatchPriorityKey = typename QueueBase<TaskType>::BatchPriorityKey;
 
   FifoQueue(
-      const typename SharedBatchScheduler<TaskType>::QueueOptions& options,
+      const QueueOptions<TaskType>& options,
       tsl::Env* env, ProcessBatchCallback process_batch_callback,
       SchedulableBatchCallback schedulable_batch_callback);
 
@@ -148,7 +148,7 @@ class FifoQueue : public QueueBase<TaskType> {
 
 template <typename TaskType>
 FifoQueue<TaskType>::FifoQueue(
-    const typename SharedBatchScheduler<TaskType>::QueueOptions& options,
+    const QueueOptions<TaskType>& options,
     tsl::Env* env, ProcessBatchCallback process_batch_callback,
     SchedulableBatchCallback schedulable_batch_callback)
     : QueueBase<TaskType>(options, env, process_batch_callback,
@@ -458,6 +458,6 @@ FifoQueue<TaskType>::GetBatches() const {
 }
 
 }  // namespace internal
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_BATCHING_FIFO_QUEUE_H_
+#endif  // XLA_SERVING_RUNTIME_CORE_BATCHING_FIFO_QUEUE_H_

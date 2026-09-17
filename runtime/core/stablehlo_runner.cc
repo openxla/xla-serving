@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/stablehlo_runner.h"  // from @neptune
+#include "runtime/core/stablehlo_runner.h"  // from @xla_serving
 
 #include <atomic>
 #include <cstddef>
@@ -49,25 +49,25 @@
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/OperationSupport.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/OwningOpRef.h"  // from @llvm-project
-#include "runtime/core/device_buffer.h"  // from @neptune
-#include "runtime/core/h2d_transfer_executor.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/ifrt_device_utils.h"  // from @neptune
-#include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune
-#include "runtime/core/loaded_stablehlo.h"  // from @neptune
-#include "runtime/core/sharding_utils.h"  // from @neptune
-#include "runtime/core/stablehlo.h"  // from @neptune
-#include "runtime/core/stablehlo_optimizer.h"  // from @neptune
-#include "runtime/core/stablehlo_utils.h"  // from @neptune
-#include "runtime/core/streaming/stream.h"  // from @neptune
-#include "runtime/core/streaming/utils.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/interpreter/context.h"  // from @neptune
-#include "runtime/interpreter/manifest_utils.h"  // from @neptune
-#include "runtime/libs/ifrt/executable_build_utils.h"  // from @neptune
-#include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
-#include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @neptune
-#include "runtime/libs/mlir/dump_mlir_util.h"  // from @neptune
+#include "runtime/core/device_buffer.h"  // from @xla_serving
+#include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/ifrt_device_utils.h"  // from @xla_serving
+#include "runtime/core/ifrt_loaded_variable_registry.h"  // from @xla_serving
+#include "runtime/core/loaded_stablehlo.h"  // from @xla_serving
+#include "runtime/core/sharding_utils.h"  // from @xla_serving
+#include "runtime/core/stablehlo.h"  // from @xla_serving
+#include "runtime/core/stablehlo_optimizer.h"  // from @xla_serving
+#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
+#include "runtime/core/streaming/stream.h"  // from @xla_serving
+#include "runtime/core/streaming/utils.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/interpreter/context.h"  // from @xla_serving
+#include "runtime/interpreter/manifest_utils.h"  // from @xla_serving
+#include "runtime/libs/ifrt/executable_build_utils.h"  // from @xla_serving
+#include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @xla_serving
+#include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @xla_serving
+#include "runtime/libs/mlir/dump_mlir_util.h"  // from @xla_serving
 #include "google/protobuf/message.h"
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/layout.h"  // from @xla
@@ -96,7 +96,7 @@
 #include "xla/xla_data.pb.h"  // from @xla
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
 std::atomic<uint32_t> StableHloRunner::launch_id_(1);
 
@@ -340,7 +340,7 @@ StableHloRunner::DataConverter::ConvertInput(
   return ExecuteDefaultTransfer(inputs, shardings_span);
 }
 
-absl::StatusOr<std::vector<neptune::Value>>
+absl::StatusOr<std::vector<xla_serving::Value>>
 StableHloRunner::DataConverter::ConvertOutput(
     absl::Span<const xla::ifrt::ArrayRef> stablehlo_outputs,
     const CachedExecutableBundle& executable_bundle,
@@ -394,7 +394,7 @@ StableHloRunner::DataConverter::ConvertOutput(
     }
   }
 
-  std::vector<neptune::Value> converted_outputs;
+  std::vector<xla_serving::Value> converted_outputs;
   converted_outputs.reserve(stablehlo_outputs.size());
   for (int i = 0; i < stablehlo_outputs.size(); ++i) {
     if (placements[i] == Placement::kHost) {
@@ -410,13 +410,13 @@ StableHloRunner::DataConverter::ConvertOutput(
         }
         HostBuffer reshaped_buffer(host_buffer.base(), host_buffer.dtype(),
                                    expected_ifrt_shape, host_buffer.owner());
-        converted_outputs.push_back(neptune::Value(std::move(reshaped_buffer)));
+        converted_outputs.push_back(xla_serving::Value(std::move(reshaped_buffer)));
       } else {
-        converted_outputs.push_back(neptune::Value(std::move(host_buffer)));
+        converted_outputs.push_back(xla_serving::Value(std::move(host_buffer)));
       }
     } else {
       converted_outputs.push_back(
-          neptune::Value(neptune::DeviceBuffer{.ifrt_client = ifrt_client_,
+          xla_serving::Value(xla_serving::DeviceBuffer{.ifrt_client = ifrt_client_,
                                        .ifrt_array = stablehlo_outputs[i],
                                        .sharding = output_shardings[i],
                                        .device_list = device_list_}));
@@ -576,8 +576,8 @@ StableHloRunner::CreateExecutableSynchronously(
     // for streaming models.
     bool is_batched_in_streaming =
         !input_shapes.empty() && input_shapes.back().dims().size() == 1;
-    TF_RETURN_IF_ERROR(neptune::PropagateStreamingStepId(
-        module_bundle->module.get(), is_batched_in_streaming));
+    TF_RETURN_IF_ERROR(PropagateStreamingStepId(module_bundle->module.get(),
+                                                is_batched_in_streaming));
 
     if (VLOG_IS_ON(1)) {
       DumpMlirOpToFile("stablehlo_module_after_streaming_step_id_propagation",
@@ -592,9 +592,9 @@ StableHloRunner::CreateExecutableSynchronously(
   // compiled executable as streaming (e.g. adding extra request_id input).
   std::optional<int64_t> callback_id;
   if (streaming_host_callback_id_.has_value()) {
-    TF_ASSIGN_OR_RETURN(callback_id, neptune::SetStreamCallbackId(
-                                         module_bundle->module.get(),
-                                         *streaming_host_callback_id_));
+    TF_ASSIGN_OR_RETURN(callback_id,
+                        SetStreamCallbackId(module_bundle->module.get(),
+                                            *streaming_host_callback_id_));
   }
 
   TF_ASSIGN_OR_RETURN(
@@ -878,8 +878,8 @@ StableHloRunner::LookupWeights(std::optional<size_t> device_id) {
   return arrays;
 }
 
-absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
-    absl::Span<const neptune::Value> inputs, ExecuteOptions options,
+absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunner::Execute(
+    absl::Span<const xla_serving::Value> inputs, ExecuteOptions options,
     const RunContext& run_context) {
   tsl::profiler::TraceMe trace_me([&]() {
     return tsl::profiler::TraceMeEncode("StableHloRunner::Execute", {});
@@ -922,13 +922,13 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
       const auto& host_buf = input.Get<HostBuffer>();
       input_shapes.push_back(host_buf.shape());
       input_dtypes.push_back(host_buf.dtype());
-    } else if (input.IsType<neptune::DeviceBuffer>()) {
-      const auto& device_buf = input.Get<neptune::DeviceBuffer>();
+    } else if (input.IsType<xla_serving::DeviceBuffer>()) {
+      const auto& device_buf = input.Get<xla_serving::DeviceBuffer>();
       input_shapes.push_back(device_buf.ifrt_array->shape());
       input_dtypes.push_back(device_buf.ifrt_array->dtype());
     } else {
       return absl::InvalidArgumentError(
-          "StableHloRunner inputs must be HostBuffer or neptune::DeviceBuffer.");
+          "StableHloRunner inputs must be HostBuffer or xla_serving::DeviceBuffer.");
     }
   }
   // If the model is streaming and the caller did not provide the request ID
@@ -972,7 +972,7 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
                       resources_it->second->weight_arrays);
   DataConverter* data_converter = resources_it->second->data_converter.get();
 
-  std::vector<neptune::Value> unpacked_inputs(inputs.begin(), inputs.end());
+  std::vector<xla_serving::Value> unpacked_inputs(inputs.begin(), inputs.end());
 
   // `used_input_indices` is used to track the index of used inputs in
   // stablehlo spec because some inputs may be presented in the model signature
@@ -997,8 +997,8 @@ absl::StatusOr<std::vector<neptune::Value>> StableHloRunner::Execute(
     int idx_in_stablehlo_spec = i + executable_bundle->input_offset;
     int original_input_idx = used_input_indices[i];
     auto& original_input_value = unpacked_inputs[original_input_idx];
-    if (original_input_value.IsType<neptune::DeviceBuffer>()) {
-      auto& device_buf = original_input_value.Get<neptune::DeviceBuffer>();
+    if (original_input_value.IsType<xla_serving::DeviceBuffer>()) {
+      auto& device_buf = original_input_value.Get<xla_serving::DeviceBuffer>();
       xla::ifrt::ArrayRef original_input = std::move(device_buf.ifrt_array);
 
       TF_RETURN_IF_ERROR(ValidateDeviceBufferInput(
@@ -1144,4 +1144,4 @@ absl::Status StableHloRunner::CreateResourcesPerDeviceList(
   return absl::OkStatus();
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

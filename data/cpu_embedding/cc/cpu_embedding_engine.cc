@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/cpu_embedding/cc/cpu_embedding_engine.h"  // from @neptune
+#include "data/cpu_embedding/cc/cpu_embedding_engine.h"  // from @xla_serving
 
 #include <algorithm>
 #include <cstddef>
@@ -38,11 +38,11 @@
 #include "Eigen/Core"
 #include "unsupported/Eigen/CXX11/Tensor"
 #include "unsupported/Eigen/CXX11/ThreadPool"
-#include "data/cpu_embedding/cc/array.h"  // from @neptune
-#include "data/cpu_embedding/cc/compute_activations.h"  // from @neptune
-#include "data/cpu_embedding/cc/embedding_table.h"  // from @neptune
-#include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @neptune
-#include "data/cpu_embedding/cc/feature_spec.h"  // from @neptune
+#include "data/cpu_embedding/cc/array.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/compute_activations.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/embedding_table.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/feature_spec.h"  // from @xla_serving
 namespace neptune::data::cpu_embedding {
 namespace {
 

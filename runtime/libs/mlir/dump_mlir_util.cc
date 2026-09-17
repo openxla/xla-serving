@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/libs/mlir/dump_mlir_util.h"  // from @neptune
+#include "runtime/libs/mlir/dump_mlir_util.h"  // from @xla_serving
 
 #include <cstdint>
 #include <cstdio>
@@ -45,7 +45,7 @@
 
 using llvm::raw_ostream;
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 struct NameCounts {
@@ -219,4 +219,4 @@ std::string GetDumpDirFromEnvVar() {
   }
   return result;
 }
-}  // namespace neptune
+}  // namespace xla_serving

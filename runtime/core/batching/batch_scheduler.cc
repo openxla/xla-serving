@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
+#include "runtime/core/batching/batch_scheduler.h"  // from @xla_serving
 
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 
 absl::StatusOr<MixedPriorityBatchingPolicy> GetMixedPriorityBatchingPolicy(
     absl::string_view attr_value) {
@@ -38,4 +38,4 @@ absl::StatusOr<MixedPriorityBatchingPolicy> GetMixedPriorityBatchingPolicy(
       "Unknown mixed priority batching policy: %s", attr_value));
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

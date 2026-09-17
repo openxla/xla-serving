@@ -3,14 +3,14 @@ load("@com_google_protobuf//bazel:py_proto_library.bzl", "py_proto_library")
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_proto//proto:defs.bzl", "proto_library")
 
-package(default_visibility = ["@neptune//data:neptune_data_internal"])
+package(default_visibility = ["@xla_serving//data:neptune_data_internal"])
 
 proto_library(
     name = "transform_config_proto",
     srcs = ["transform_config.proto"],
     deps = [
         "@com_google_protobuf//:any_proto",
-        "@neptune//data/resource_manager/proto:resource_manager_proto",
+        "@xla_serving//data/resource_manager/proto:resource_manager_proto",
     ],
 )
 
@@ -18,7 +18,7 @@ py_proto_library(
     name = "transform_config_py_pb2",
     visibility = [
         "//third_party/py/orbax/export:__subpackages__",
-        "@neptune//data:neptune_data_internal",
+        "@xla_serving//data:neptune_data_internal",
     ],
     deps = [":transform_config_proto"],
 )

@@ -12,22 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_HOST_BUFFER_TEST_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_HOST_BUFFER_TEST_UTILS_H_
+#ifndef XLA_SERVING_RUNTIME_HOST_BUFFER_TEST_UTILS_H_
+#define XLA_SERVING_RUNTIME_HOST_BUFFER_TEST_UTILS_H_
 
 #include <type_traits>
 #include <utility>
 
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/core/allocator.h"  // from @neptune
-#include "runtime/core/default_allocator.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/host_buffer_type_utils.h"  // from @neptune
+#include "runtime/core/allocator.h"  // from @xla_serving
+#include "runtime/core/default_allocator.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/host_buffer_type_utils.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // Builds a `HostBuffer` from a list of values and a shape with the given
 // allocator. It will pick a `xla::ifrt::Dtype` that has the same storage width
@@ -79,6 +79,6 @@ HostBuffer AsHostBuffer(
   return host_buffer;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_HOST_BUFFER_TEST_UTILS_H_
+#endif  // XLA_SERVING_RUNTIME_HOST_BUFFER_TEST_UTILS_H_

@@ -24,7 +24,7 @@ from data.ops import packing
 from data.processor.proto import transform_config_pb2
 from data.processor.python import composite_processor_pybind
 from data.processor.python import processor
-from neptune_model._src.processors import composite_processor
+from xla_saved_model._src.processors import composite_processor
 
 
 def build_embedding_lookup(

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_VALUE_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_VALUE_UTILS_H_
+#ifndef XLA_SERVING_RUNTIME_VALUE_UTILS_H_
+#define XLA_SERVING_RUNTIME_VALUE_UTILS_H_
 
 #include <algorithm>
 #include <utility>
@@ -25,11 +25,11 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/core/value.h"  // from @neptune
+#include "runtime/core/value.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // Returns a new Value containing a buffer reshaped to the shape specified.
 // Supports HostBuffer and DeviceBuffer.
@@ -100,6 +100,6 @@ absl::StatusOr<std::vector<T>> UnpackFromValues(
 }
 
 }  // namespace internal
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_VALUE_UTILS_H_
+#endif  // XLA_SERVING_RUNTIME_VALUE_UTILS_H_

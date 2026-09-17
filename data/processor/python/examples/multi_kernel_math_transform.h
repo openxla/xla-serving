@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_PYTHON_EXAMPLES_MULTI_KERNEL_MATH_TRANSFORM_H_
-#define THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_PYTHON_EXAMPLES_MULTI_KERNEL_MATH_TRANSFORM_H_
+#ifndef XLA_SERVING_DATA_PROCESSOR_PYTHON_EXAMPLES_MULTI_KERNEL_MATH_TRANSFORM_H_
+#define XLA_SERVING_DATA_PROCESSOR_PYTHON_EXAMPLES_MULTI_KERNEL_MATH_TRANSFORM_H_
 
 #include <cstdint>
 #include <memory>
@@ -21,10 +21,10 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 
 namespace neptune::data {
 namespace composite {
@@ -34,7 +34,7 @@ class MultiKernelMathTransform : public TransformBase {
  public:
   static absl::StatusOr<std::unique_ptr<MultiKernelMathTransform<T>>> Create();
 
-  absl::StatusOr<neptune::HostBuffer> operator()(neptune::HostBuffer in_buffer);
+  absl::StatusOr<xla_serving::HostBuffer> operator()(xla_serving::HostBuffer in_buffer);
 
   absl::StatusOr<TransformConfig> ToProto() const override;
 
@@ -50,4 +50,4 @@ class MultiKernelMathTransform : public TransformBase {
 }  // namespace composite
 }  // namespace neptune::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_PYTHON_EXAMPLES_MULTI_KERNEL_MATH_TRANSFORM_H_
+#endif  // XLA_SERVING_DATA_PROCESSOR_PYTHON_EXAMPLES_MULTI_KERNEL_MATH_TRANSFORM_H_

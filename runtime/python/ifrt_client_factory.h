@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_PYTHON_IFRT_CLIENT_FACTORY_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_PYTHON_IFRT_CLIENT_FACTORY_H_
+#ifndef XLA_SERVING_RUNTIME_PYTHON_IFRT_CLIENT_FACTORY_H_
+#define XLA_SERVING_RUNTIME_PYTHON_IFRT_CLIENT_FACTORY_H_
 
 #include <memory>
 #include <string>
@@ -23,7 +23,7 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "xla/python/ifrt/client.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // Factory function type for creating an IFRT client.
 using IfrtClientFactory =
@@ -41,6 +41,6 @@ void RegisterIfrtClientFactory(std::string platform_name,
 absl::StatusOr<std::shared_ptr<xla::ifrt::Client>> CreateIfrtClient(
     absl::string_view platform);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_PYTHON_IFRT_CLIENT_FACTORY_H_
+#endif  // XLA_SERVING_RUNTIME_PYTHON_IFRT_CLIENT_FACTORY_H_

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/kernels/cpu_embedding/unpack_host_buffer_vector_transform.h"  // from @neptune
+#include "data/kernels/cpu_embedding/unpack_host_buffer_vector_transform.h"  // from @xla_serving
 
 #include <memory>
 #include <string>
@@ -23,13 +23,13 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/kernels/cpu_embedding/cpu_embedding.pb.h"  // from @neptune
-#include "data/processor/cc/api/registry.h"  // from @neptune
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/api/type_info.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "data/kernels/cpu_embedding/cpu_embedding.pb.h"  // from @xla_serving
+#include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/api/type_info.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 
 namespace neptune {
 namespace data {
@@ -47,14 +47,14 @@ UnpackHostBufferVectorTransform::Create(int output_count) {
 UnpackHostBufferVectorTransform::UnpackHostBufferVectorTransform(
     int output_count)
     : output_count_(output_count) {
-  input_types_.push_back(api::CreateTypeInfo<std::vector<neptune::HostBuffer>>());
-  output_types_.resize(output_count_, api::CreateTypeInfo<neptune::HostBuffer>());
+  input_types_.push_back(api::CreateTypeInfo<std::vector<xla_serving::HostBuffer>>());
+  output_types_.resize(output_count_, api::CreateTypeInfo<xla_serving::HostBuffer>());
 }
 
 absl::Status UnpackHostBufferVectorTransform::Execute(
     api::ExecuteContext& context) {
-  const std::vector<neptune::HostBuffer>& packed =
-      context.inputs[0].Get<std::vector<neptune::HostBuffer>>();
+  const std::vector<xla_serving::HostBuffer>& packed =
+      context.inputs[0].Get<std::vector<xla_serving::HostBuffer>>();
 
   if (packed.size() != output_count_) {
     return absl::InternalError(absl::StrCat(

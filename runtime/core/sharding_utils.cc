@@ -16,7 +16,7 @@
 
 #define EIGEN_USE_THREADS
 
-#include "runtime/core/sharding_utils.h"  // from @neptune
+#include "runtime/core/sharding_utils.h"  // from @xla_serving
 
 #include <algorithm>
 #include <cstdint>
@@ -34,10 +34,10 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "unsupported/Eigen/CXX11/Tensor"
-#include "runtime/core/device_buffer.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/host_buffer_type_utils.h"  // from @neptune
-#include "runtime/core/sharding_utils_core.h"  // from @neptune
+#include "runtime/core/device_buffer.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/host_buffer_type_utils.h"  // from @xla_serving
+#include "runtime/core/sharding_utils_core.h"  // from @xla_serving
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
@@ -60,7 +60,7 @@
 #include "xla/xla_data.pb.h"  // from @xla
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
-namespace neptune::sharding_internal {
+namespace xla_serving::sharding_internal {
 namespace {
 
 // Shard the given `input_buffer` into equal shapes of slices.
@@ -868,4 +868,4 @@ absl::StatusOr<DeviceBuffer> MakeDeviceBufferFromPinnedHost(
   };
 }
 
-}  // namespace neptune::sharding_internal
+}  // namespace xla_serving::sharding_internal

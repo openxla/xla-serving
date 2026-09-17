@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_IFRT_LOADED_VARIABLE_REGISTRY_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_IFRT_LOADED_VARIABLE_REGISTRY_H_
+#ifndef XLA_SERVING_RUNTIME_IFRT_LOADED_VARIABLE_REGISTRY_H_
+#define XLA_SERVING_RUNTIME_IFRT_LOADED_VARIABLE_REGISTRY_H_
 
 #include <optional>
 #include <string>
@@ -28,13 +28,13 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
-#include "runtime/core/value.h"  // from @neptune
+#include "runtime/core/value.h"  // from @xla_serving
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/layout.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // This class is thread safe.
 class IfrtLoadedVariableRegistry {
@@ -113,6 +113,6 @@ class IfrtLoadedVariableRegistryTestPeer {
   IfrtLoadedVariableRegistry* absl_nonnull registry_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_IFRT_LOADED_VARIABLE_REGISTRY_H_
+#endif  // XLA_SERVING_RUNTIME_IFRT_LOADED_VARIABLE_REGISTRY_H_

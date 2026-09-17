@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_FLAGS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_FLAGS_H_
+#ifndef XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_FLAGS_H_
+#define XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_FLAGS_H_
 
 #include <string>
 #include "absl/flags/declare.h"  // from @abseil-cpp
 
 ABSL_DECLARE_FLAG(std::string, orbax_grpc_server_platform);
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_FLAGS_H_
+#endif  // XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_FLAGS_H_

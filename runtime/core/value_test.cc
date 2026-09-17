@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/value.h"  // from @neptune
+#include "runtime/core/value.h"  // from @xla_serving
 
 #include <utility>
 
 #include "gtest/gtest.h"
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 TEST(ValueTest, SmallCopyable) {
@@ -172,4 +172,4 @@ TEST(ValueTest, Error) {
 }
 
 }  // namespace
-}  // namespace neptune
+}  // namespace xla_serving

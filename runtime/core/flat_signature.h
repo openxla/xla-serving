@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_FLAT_SIGNATURE_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_FLAT_SIGNATURE_H_
+#ifndef XLA_SERVING_RUNTIME_FLAT_SIGNATURE_H_
+#define XLA_SERVING_RUNTIME_FLAT_SIGNATURE_H_
 
 #include <optional>
 #include <string>
@@ -24,10 +24,10 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "runtime/core/stablehlo_utils.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
+#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
 
-namespace neptune {
+namespace xla_serving {
 
 // An enhanced version of `ArgSpec` that contains more information about the
 // argument.
@@ -112,11 +112,11 @@ class FlatSignature {
   //    indices and defaults unmapped tensors to manifest placement or
   //    Placement::kHost. Entries not found in the signature are skipped.
   //
-  // Note: In the Neptune execution pipeline, this method is invoked
+  // Note: In the XSE execution pipeline, this method is invoked
   // exclusively on `FunctionFlatSignature::output_signature` to resolve
   // `RunOptions::output_placement_map`. Inputs carry their own physical
-  // placement intrinsically via their runtime type (neptune::HostBuffer vs
-  // neptune::DeviceBuffer) and bypass placement map resolution.
+  // placement intrinsically via their runtime type (xla_serving::HostBuffer vs
+  // xla_serving::DeviceBuffer) and bypass placement map resolution.
   std::vector<Placement> ResolvePlacements(
       const absl::flat_hash_map<std::string, Placement>& placement_map) const;
 
@@ -142,6 +142,6 @@ struct FunctionFlatSignature {
   FlatSignature output_signature;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_FLAT_SIGNATURE_H_
+#endif  // XLA_SERVING_RUNTIME_FLAT_SIGNATURE_H_

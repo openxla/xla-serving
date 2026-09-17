@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_EXAMPLES_COMPOSITE_PROCESSOR_INT_RESOURCE_H_
-#define THIRD_PARTY_NEPTUNE_EXAMPLES_COMPOSITE_PROCESSOR_INT_RESOURCE_H_
+#ifndef XLA_SERVING_EXAMPLES_COMPOSITE_PROCESSOR_INT_RESOURCE_H_
+#define XLA_SERVING_EXAMPLES_COMPOSITE_PROCESSOR_INT_RESOURCE_H_
 
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "data/resource_manager/cc/resource.h"  // from @neptune
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
 
 namespace neptune_examples {
 namespace composite {
@@ -34,4 +34,4 @@ class IntResource : public neptune::data::Resource {
 }  // namespace composite
 }  // namespace neptune_examples
 
-#endif  // THIRD_PARTY_NEPTUNE_EXAMPLES_COMPOSITE_PROCESSOR_INT_RESOURCE_H_
+#endif  // XLA_SERVING_EXAMPLES_COMPOSITE_PROCESSOR_INT_RESOURCE_H_

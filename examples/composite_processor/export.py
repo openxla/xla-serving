@@ -24,11 +24,11 @@ from neptune_data.resource_manager.python import resource_manager
 from neptune_data_test.examples.composite_processor import add_int_from_resource_transform_pybind
 from neptune_data_test.examples.composite_processor import add_two_input_buffers_transform_pybind
 from neptune_data_test.examples.composite_processor import int_resource_pybind
-from neptune_model._src.core import typing
-from neptune_model._src.export import jax_model
-from neptune_model._src.export import main_lib
-from neptune_model._src.export import serving_config
-from neptune_model.protos import orchestration_pb2
+from xla_saved_model.protos import orchestration_pb2
+from xla_saved_model._src.core import typing
+from xla_saved_model._src.export import jax_model
+from xla_saved_model._src.export import main_lib
+from xla_saved_model._src.export import serving_config
 
 
 class AddTwoInputBuffersModule:

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/resource_manager/cc/asset.h"  // from @neptune
+#include "data/resource_manager/cc/asset.h"  // from @xla_serving
 
 #include <string>
 

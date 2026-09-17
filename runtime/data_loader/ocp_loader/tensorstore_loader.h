@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_LOADER_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_LOADER_H_
+#ifndef XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_LOADER_H_
+#define XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_LOADER_H_
 
 #include <cstdint>
 #include <optional>
@@ -28,14 +28,14 @@
 #include "absl/time/time.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "nlohmann/json.hpp"  // from @nlohmann_json
-#include "runtime/data_loader/ocp_loader/common_types.h"  // from @neptune
+#include "runtime/data_loader/ocp_loader/common_types.h"  // from @xla_serving
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/memory.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 #include "tensorstore/context.h"  // from @tensorstore
 
-namespace neptune {
+namespace xla_serving {
 
 // Loads an Array from tensorstore.
 struct TensorStoreLoadSpec {
@@ -124,6 +124,6 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadFromTensorstore(
     absl::string_view base_dir, LoadFromTensorstoreExtraOptions opts,
     CheckpointType checkpoint_type);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_LOADER_H_
+#endif  // XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_TENSORSTORE_LOADER_H_

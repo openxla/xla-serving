@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/kernel/batching/batch_runner_op.h"  // from @neptune
+#include "runtime/kernel/batching/batch_runner_op.h"  // from @xla_serving
 
 #include <cstdint>
 #include <functional>
@@ -28,18 +28,18 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/core/batching/shared_batch_scheduler.h"  // from @neptune
-#include "runtime/core/flat_signature.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/streaming/utils.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/core/value_utils.h"  // from @neptune
-#include "runtime/interpreter/context.h"  // from @neptune
-#include "runtime/interpreter/linear_graph_execute.h"  // from @neptune
-#include "runtime/kernel/batching/batch_resource_base.h"  // from @neptune
-#include "runtime/kernel/batching/warmup.h"  // from @neptune
-#include "runtime/kernel/kernel.h"  // from @neptune
-#include "runtime/kernel/kernel_builder_context.h"  // from @neptune
+#include "runtime/core/batching/shared_batch_scheduler.h"  // from @xla_serving
+#include "runtime/core/flat_signature.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/streaming/utils.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/core/value_utils.h"  // from @xla_serving
+#include "runtime/interpreter/context.h"  // from @xla_serving
+#include "runtime/interpreter/linear_graph_execute.h"  // from @xla_serving
+#include "runtime/kernel/batching/batch_resource_base.h"  // from @xla_serving
+#include "runtime/kernel/batching/warmup.h"  // from @xla_serving
+#include "runtime/kernel/kernel.h"  // from @xla_serving
+#include "runtime/kernel/kernel_builder_context.h"  // from @xla_serving
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
@@ -51,7 +51,7 @@
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 #include "tsl/profiler/lib/traceme_encode.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
 void JsvBatchResource::ProcessFuncBatchImpl(
     const BatchResourceBase::BatchTask& propagated_task,
@@ -190,7 +190,7 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateBatchRunnerOp(
   std::shared_ptr<SharedBatchScheduler<BatchResourceBase::BatchTask>> batcher;
   TF_RETURN_IF_ERROR(SharedBatchScheduler<BatchResourceBase::BatchTask>::Create(
       scheduler_options, &batcher));
-  BatchResourceBase::BatcherT::QueueOptions queue_options =
+  BatchResourceBase::QueueOptions queue_options =
       JsvBatchResource::GetBatcherQueueOptions(
           scheduler_options.num_batch_threads, options.max_batch_size,
           options.batch_timeout_micros, options.max_enqueued_batches,
@@ -200,7 +200,9 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateBatchRunnerOp(
           options.low_priority_batch_timeout_micros,
           options.low_priority_max_enqueued_batches,
           options.low_priority_allowed_batch_sizes,
-          options.mixed_priority_batching_policy, thread_pool,
+          options.mixed_priority_batching_policy,
+          options.priority_batching_policy,
+          options.priority_aware_batching_options, thread_pool,
           options.allocator, options.ragged_inputs);
 
   tsl::core::RefCountPtr<JsvBatchResource> batch_resource(new JsvBatchResource(
@@ -221,4 +223,4 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateBatchRunnerOp(
                                          std::move(output_signature));
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

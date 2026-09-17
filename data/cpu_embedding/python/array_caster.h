@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_PYTHON_ARRAY_CASTER_H_
-#define THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_PYTHON_ARRAY_CASTER_H_
+#ifndef XLA_SERVING_DATA_CPU_EMBEDDING_PYTHON_ARRAY_CASTER_H_
+#define XLA_SERVING_DATA_CPU_EMBEDDING_PYTHON_ARRAY_CASTER_H_
 
 #include <any>
 #include <cstdint>
@@ -24,7 +24,7 @@
 #include <vector>
 
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "data/cpu_embedding/cc/array.h"  // from @neptune
+#include "data/cpu_embedding/cc/array.h"  // from @xla_serving
 #include "include/pybind11/numpy.h"  // from @pybind11_bazel
 #include "include/pybind11/pybind11.h"  // from @pybind11_bazel
 
@@ -169,4 +169,4 @@ struct type_caster<::neptune::data::cpu_embedding::Array> {
 
 }  // namespace pybind11::detail
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_PYTHON_ARRAY_CASTER_H_
+#endif  // XLA_SERVING_DATA_CPU_EMBEDDING_PYTHON_ARRAY_CASTER_H_

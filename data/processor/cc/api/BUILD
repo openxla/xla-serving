@@ -2,7 +2,7 @@ load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
-package(default_visibility = ["@neptune//data:processor_internal"])
+package(default_visibility = ["@xla_serving//data:processor_internal"])
 
 cc_library(
     name = "type_info",
@@ -56,7 +56,7 @@ cc_library(
     hdrs = ["registry.h"],
     defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
-        "@neptune//data/processor/cc/core:transform",
+        "@xla_serving//data/processor/cc/core:transform",
     ],
 )
 
@@ -89,6 +89,6 @@ cc_test(
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@googletest//:gtest_main",
-        "@neptune//data/test_utils:status_macros",
+        "@xla_serving//data/test_utils:status_macros",
     ],
 )
