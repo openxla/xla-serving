@@ -27,7 +27,7 @@
 #include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @xla_serving
 #include "data/test_utils/status_macros.h"  // from @xla_serving
 
-namespace neptune::data::cpu_embedding {
+namespace xla_serving::data::cpu_embedding {
 namespace {
 
 using ::testing::ElementsAre;
@@ -253,4 +253,4 @@ INSTANTIATE_TYPED_TEST_SUITE_P(test, ComputeActivationsTest, MyTypes,
                                TypeNamer);
 
 }  // namespace
-}  // namespace neptune::data::cpu_embedding
+}  // namespace xla_serving::data::cpu_embedding

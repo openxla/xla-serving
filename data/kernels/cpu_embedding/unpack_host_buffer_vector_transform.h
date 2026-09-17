@@ -27,7 +27,7 @@
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 
-namespace neptune {
+namespace xla_serving {
 namespace data {
 namespace composite {
 namespace transforms {
@@ -40,8 +40,8 @@ class UnpackHostBufferVectorTransform : public TransformBase {
 
   static absl::StatusOr<std::unique_ptr<UnpackHostBufferVectorTransform>>
   CreateFromTransformConfig(
-      const ::neptune::data::composite::TransformConfig& config,
-      absl::Span<const std::shared_ptr<neptune::data::Resource>> resources);
+      const ::xla_serving::data::composite::TransformConfig& config,
+      absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources);
 
   explicit UnpackHostBufferVectorTransform(int output_count);
 
@@ -58,7 +58,7 @@ class UnpackHostBufferVectorTransform : public TransformBase {
     return output_types_;
   }
 
-  absl::StatusOr<::neptune::data::composite::TransformConfig> ToProto()
+  absl::StatusOr<::xla_serving::data::composite::TransformConfig> ToProto()
       const override;
 
   std::string DebugName() const override;
@@ -72,6 +72,6 @@ class UnpackHostBufferVectorTransform : public TransformBase {
 }  // namespace transforms
 }  // namespace composite
 }  // namespace data
-}  // namespace neptune
+}  // namespace xla_serving
 
 #endif  // XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_UNPACK_HOST_BUFFER_VECTOR_TRANSFORM_H_

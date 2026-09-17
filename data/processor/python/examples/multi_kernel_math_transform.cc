@@ -32,7 +32,7 @@
 #include "runtime/core/host_buffer_type_utils.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 template <typename T>
@@ -83,7 +83,7 @@ ND_REGISTER_TRANSFORM(MultiKernelMathTransform<int32_t>,
                       "MultiKernelMathTransform")
     .SetDeserializer(
         [](const TransformConfig&,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>>)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>>)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           return MultiKernelMathTransform<int32_t>::Create();
         })
@@ -93,11 +93,11 @@ ND_REGISTER_TRANSFORM(MultiKernelMathTransform<float>,
                       "MultiKernelMathTransform")
     .SetDeserializer(
         [](const TransformConfig&,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>>)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>>)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           return MultiKernelMathTransform<float>::Create();
         })
     .SetInputConstraints({{.allowed_dtypes = {xla::ifrt::DType::kF32}}});
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

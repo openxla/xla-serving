@@ -31,7 +31,7 @@
 #include "data/resource_manager/cc/asset.h"  // from @xla_serving
 #include "xla/tsl/platform/env.h"  // from @xla
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 absl::StatusOr<std::vector<Asset>> SerializeCpuEmbedding(
@@ -74,4 +74,4 @@ absl::StatusOr<std::vector<Asset>> SerializeCpuEmbedding(
 }
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

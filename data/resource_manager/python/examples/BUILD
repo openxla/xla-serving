@@ -4,7 +4,7 @@ load("@xla_serving//data/resource_manager/python:build_defs.bzl", "resource_pybi
 
 package(default_visibility = [
     "@xla_serving//:__subpackages__",
-    "@xla_serving//data:neptune_data_internal",
+    "@xla_serving//data:xla_serving_data_internal",
 ])
 
 cc_library(
@@ -22,7 +22,7 @@ resource_pybind_library(
     name = "concrete_resource_pybind",
     testonly = 1,
     hdrs = ["concrete_resource.h"],
-    dynamic_deps = ["@xla_serving//data:neptune_data_test_core"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
     deps = [":concrete_resource"],
 )
 
@@ -43,6 +43,6 @@ resource_pybind_library(
     testonly = 1,
     srcs = ["another_concrete_resource.cc"],
     hdrs = ["another_concrete_resource.h"],
-    dynamic_deps = ["@xla_serving//data:neptune_data_test_core"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
     deps = [":another_concrete_resource"],
 )

@@ -25,7 +25,7 @@
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "data/resource_manager/cc/asset.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 
 AssetManager& AssetManager::GetInstance() {
   static absl::NoDestructor<AssetManager> instance;
@@ -55,4 +55,4 @@ absl::StatusOr<const Asset*> AssetManager::GetAsset(absl::string_view name) {
   return it->second.get();
 }
 
-}  // namespace neptune::data
+}  // namespace xla_serving::data

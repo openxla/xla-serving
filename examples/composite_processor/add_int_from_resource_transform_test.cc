@@ -48,7 +48,7 @@ TEST(AddIntFromResourceTransformTest, GetAllResourcesWithNullResource) {
 
 TEST(AddIntFromResourceTransformTest, GetAllResourcesWithNonNullResource) {
   auto resource = std::make_shared<IntResource>(
-      /*id=*/1, "int_resource", std::vector<neptune::data::Asset>{},
+      /*id=*/1, "int_resource", std::vector<xla_serving::data::Asset>{},
       "ExamplesIntResource");
   auto transform_or = AddIntFromResourceTransform::Create(resource);
   ASSERT_TRUE(transform_or.ok());
@@ -74,7 +74,7 @@ TEST(AddIntFromResourceTransformTest, ToProtoWithNullResource) {
 
 TEST(AddIntFromResourceTransformTest, ToProtoWithNonNullResource) {
   auto resource = std::make_shared<IntResource>(
-      /*id=*/42, "int_resource", std::vector<neptune::data::Asset>{},
+      /*id=*/42, "int_resource", std::vector<xla_serving::data::Asset>{},
       "ExamplesIntResource");
   auto transform_or = AddIntFromResourceTransform::Create(resource);
   ASSERT_TRUE(transform_or.ok());
@@ -114,8 +114,8 @@ TEST(AddIntFromResourceTransformTest, ExecuteWithNonNullResourceSucceeds) {
   out.close();
 
   // Create and load the resource.
-  std::vector<neptune::data::Asset> assets = {
-      neptune::data::Asset{.name = "val", .path = temp_file}};
+  std::vector<xla_serving::data::Asset> assets = {
+      xla_serving::data::Asset{.name = "val", .path = temp_file}};
   auto resource = std::make_shared<IntResource>(
       /*id=*/1, "int_resource", assets, "ExamplesIntResource");
   ASSERT_TRUE(resource->Load().ok());
@@ -150,8 +150,8 @@ TEST(AddIntFromResourceTransformTest, ExecuteWithWrongDtypeFails) {
   out.close();
 
   // Create and load the resource.
-  std::vector<neptune::data::Asset> assets = {
-      neptune::data::Asset{.name = "val", .path = temp_file}};
+  std::vector<xla_serving::data::Asset> assets = {
+      xla_serving::data::Asset{.name = "val", .path = temp_file}};
   auto resource = std::make_shared<IntResource>(
       /*id=*/1, "int_resource", assets, "ExamplesIntResource");
   ASSERT_TRUE(resource->Load().ok());

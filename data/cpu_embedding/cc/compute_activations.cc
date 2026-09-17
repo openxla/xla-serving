@@ -30,7 +30,7 @@
 #include "data/cpu_embedding/cc/embedding_table.h"  // from @xla_serving
 #include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @xla_serving
 
-namespace neptune::data::cpu_embedding {
+namespace xla_serving::data::cpu_embedding {
 namespace {
 
 template <typename T, int Dim = Eigen::Dynamic>
@@ -345,4 +345,4 @@ absl::StatusOr<Array> LookupEmbeddingSequence(
   }
 }
 
-}  // namespace neptune::data::cpu_embedding
+}  // namespace xla_serving::data::cpu_embedding

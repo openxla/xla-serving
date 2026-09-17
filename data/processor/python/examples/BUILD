@@ -3,7 +3,7 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@xla_serving//data/processor/python:build_defs.bzl", "transform_pybind_library")
 load("@xla_serving//data/resource_manager/python:build_defs.bzl", "resource_pybind_library")
 
-package(default_visibility = ["@xla_serving//data:neptune_data_internal"])
+package(default_visibility = ["@xla_serving//data:xla_serving_data_internal"])
 
 cc_library(
     name = "add_int_transform",
@@ -31,8 +31,8 @@ transform_pybind_library(
     testonly = 1,
     srcs = ["add_int_transform.cc"],
     hdrs = ["add_int_transform.h"],
-    dynamic_deps = ["@xla_serving//data:neptune_data_test_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../xla_serving_data_test:$$ORIGIN/../../../../xla_serving_data"],
     deps = [
         ":add_int_transform",
     ],
@@ -64,8 +64,8 @@ transform_pybind_library(
     testonly = 1,
     srcs = ["add_host_buffer_transform.cc"],
     hdrs = ["add_host_buffer_transform.h"],
-    dynamic_deps = ["@xla_serving//data:neptune_data_test_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../xla_serving_data_test:$$ORIGIN/../../../../xla_serving_data"],
     deps = [":add_host_buffer_transform"],
 )
 
@@ -95,8 +95,8 @@ transform_pybind_library(
     testonly = 1,
     srcs = ["add_two_transform.cc"],
     hdrs = ["add_two_transform.h"],
-    dynamic_deps = ["@xla_serving//data:neptune_data_test_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../xla_serving_data_test:$$ORIGIN/../../../../xla_serving_data"],
     deps = [":add_two_transform"],
 )
 
@@ -126,8 +126,8 @@ transform_pybind_library(
     testonly = 1,
     srcs = ["multiply_by_five_transform.cc"],
     hdrs = ["multiply_by_five_transform.h"],
-    dynamic_deps = ["@xla_serving//data:neptune_data_test_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../xla_serving_data_test:$$ORIGIN/../../../../xla_serving_data"],
     deps = [":multiply_by_five_transform"],
 )
 
@@ -159,8 +159,8 @@ transform_pybind_library(
     testonly = 1,
     srcs = ["dummy_resource_transform.cc"],
     hdrs = ["dummy_resource_transform.h"],
-    dynamic_deps = ["@xla_serving//data:neptune_data_test_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../xla_serving_data_test:$$ORIGIN/../../../../xla_serving_data"],
     deps = [":dummy_resource_transform"],
 )
 
@@ -191,8 +191,8 @@ transform_pybind_library(
     testonly = 1,
     srcs = ["suffix_transform.cc"],
     hdrs = ["suffix_transform.h"],
-    dynamic_deps = ["@xla_serving//data:neptune_data_test_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../xla_serving_data_test:$$ORIGIN/../../../../xla_serving_data"],
     deps = [":suffix_transform"],
 )
 
@@ -225,8 +225,8 @@ transform_pybind_library(
     testonly = 1,
     srcs = ["add_from_resource_transform.cc"],
     hdrs = ["add_from_resource_transform.h"],
-    dynamic_deps = ["@xla_serving//data:neptune_data_test_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../xla_serving_data_test:$$ORIGIN/../../../../xla_serving_data"],
     deps = [":add_from_resource_transform"],
 )
 
@@ -249,8 +249,8 @@ resource_pybind_library(
     testonly = 1,
     srcs = ["int_resource.cc"],
     hdrs = ["int_resource.h"],
-    dynamic_deps = ["@xla_serving//data:neptune_data_test_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../xla_serving_data_test:$$ORIGIN/../../../../xla_serving_data"],
     deps = [":int_resource"],
 )
 
@@ -280,8 +280,8 @@ transform_pybind_library(
     testonly = 1,
     srcs = ["make_dict_transform.cc"],
     hdrs = ["make_dict_transform.h"],
-    dynamic_deps = ["@xla_serving//data:neptune_data_test_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../xla_serving_data_test:$$ORIGIN/../../../../xla_serving_data"],
     deps = [":make_dict_transform"],
 )
 
@@ -314,7 +314,7 @@ transform_pybind_library(
     testonly = 1,
     srcs = ["multi_kernel_math_transform.cc"],
     hdrs = ["multi_kernel_math_transform.h"],
-    dynamic_deps = ["@xla_serving//data:neptune_data_test_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../xla_serving_data_test:$$ORIGIN/../../../../xla_serving_data"],
     deps = [":multi_kernel_math_transform"],
 )

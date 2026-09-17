@@ -46,7 +46,7 @@
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
-namespace neptune::data::composite {
+namespace xla_serving::data::composite {
 
 DenseCpuEmbeddingLookupTransform::DenseCpuEmbeddingLookupTransform(
     std::shared_ptr<CpuEmbeddingEngineResource> resource,
@@ -100,7 +100,7 @@ DenseCpuEmbeddingLookupTransform::CreateForFeature(
                 {});
 }
 
-std::vector<std::shared_ptr<neptune::data::Resource>>
+std::vector<std::shared_ptr<xla_serving::data::Resource>>
 DenseCpuEmbeddingLookupTransform::GetAllResources() const {
   return {resource_};
 }
@@ -203,7 +203,7 @@ DenseCpuEmbeddingLookupTransform::operator()(
           active_count = 1;
         }
         int32_t next_offset = 0;
-        if (!neptune::data::utils::SafeAdd(row_pointers.back(), active_count,
+        if (!xla_serving::data::utils::SafeAdd(row_pointers.back(), active_count,
                                            &next_offset)) {
           return absl::InvalidArgumentError(
               "Row pointer offset overflowed int32_t.");
@@ -283,7 +283,7 @@ ND_REGISTER_TRANSFORM(DenseCpuEmbeddingLookupTransform,
                       "DenseCpuEmbeddingLookupTransform")
     .SetDeserializer(
         [](const TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           if (resources.empty()) {
             return absl::InvalidArgumentError(
@@ -342,4 +342,4 @@ absl::Status DenseCpuEmbeddingLookupTransform::PropagateSignatureImpl(
   return absl::OkStatus();
 }
 
-}  // namespace neptune::data::composite
+}  // namespace xla_serving::data::composite

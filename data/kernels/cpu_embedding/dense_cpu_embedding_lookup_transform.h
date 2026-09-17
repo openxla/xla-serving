@@ -32,7 +32,7 @@
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 
-namespace neptune::data::composite {
+namespace xla_serving::data::composite {
 
 // Transform for high-performance dense CPU embedding lookup.
 //
@@ -54,7 +54,7 @@ class DenseCpuEmbeddingLookupTransform : public TransformBase {
   CreateForFeature(std::shared_ptr<CpuEmbeddingEngineResource> resource,
                    std::string feature_name, int64_t pad_value = 0);
 
-  std::vector<std::shared_ptr<neptune::data::Resource>> GetAllResources()
+  std::vector<std::shared_ptr<xla_serving::data::Resource>> GetAllResources()
       const override;
 
   absl::Status Execute(api::ExecuteContext& context) override;
@@ -91,6 +91,6 @@ class DenseCpuEmbeddingLookupTransform : public TransformBase {
   std::string debug_string_;
 };
 
-}  // namespace neptune::data::composite
+}  // namespace xla_serving::data::composite
 
 #endif  // XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_DENSE_CPU_EMBEDDING_LOOKUP_TRANSFORM_H_

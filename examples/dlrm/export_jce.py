@@ -26,12 +26,12 @@ import jaxtyping
 import numpy as np
 import orbax.checkpoint as ocp
 
-from neptune_data.cpu_embedding.python import embedding_utils
-from neptune_data.kernels.cpu_embedding import cpu_embedding_module
-from neptune_data.ops import packing
-from neptune_data.processor.proto import transform_config_pb2
-from neptune_data.processor.python import composite_processor_pybind
-from neptune_data.resource_manager.python import resource_manager_pybind
+from xla_serving_data.cpu_embedding.python import embedding_utils
+from xla_serving_data.kernels.cpu_embedding import cpu_embedding_module
+from xla_serving_data.ops import packing
+from xla_serving_data.processor.proto import transform_config_pb2
+from xla_serving_data.processor.python import composite_processor_pybind
+from xla_serving_data.resource_manager.python import resource_manager_pybind
 from examples.dlrm import model_jce as model_lib
 from xla_saved_model.protos import orchestration_pb2
 from xla_saved_model._src import assets2xsm

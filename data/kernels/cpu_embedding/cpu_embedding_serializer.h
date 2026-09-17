@@ -24,7 +24,7 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 absl::StatusOr<std::vector<Asset>> SerializeCpuEmbedding(
@@ -33,6 +33,6 @@ absl::StatusOr<std::vector<Asset>> SerializeCpuEmbedding(
     std::string_view manifest_proto_text);
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_SERIALIZER_H_

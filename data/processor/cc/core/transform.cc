@@ -32,12 +32,12 @@
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 absl::StatusOr<std::unique_ptr<TransformBase>> TransformBase::FromProto(
     const TransformConfig& config,
-    absl::Span<const std::shared_ptr<neptune::data::Resource>> resources) {
+    absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources) {
   return core::TransformRegistry::Instance().DeserializeTransform(config,
                                                                   resources);
 }
@@ -100,4 +100,4 @@ absl::Status TransformBase::PropagateSignatureImpl(
 }
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

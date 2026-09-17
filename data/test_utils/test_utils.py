@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Test utils for Neptune data library."""
+"""Test utils for the data library."""
 
 import collections.abc
 

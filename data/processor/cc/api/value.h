@@ -27,7 +27,7 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace api {
 
@@ -478,6 +478,6 @@ bool Value::IsType() const {
 
 }  // namespace api
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_PROCESSOR_CC_API_VALUE_H_

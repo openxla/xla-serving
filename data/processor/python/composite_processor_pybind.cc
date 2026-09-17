@@ -69,7 +69,7 @@
 
 #include "xla/tsl/python/lib/core/numpy.h"
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace {
 
@@ -1242,7 +1242,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
              py::object module;
              try {
                module = py::module::import(
-                   "neptune_data.processor.proto.transform_config_pb2");
+                   "xla_serving_data.processor.proto.transform_config_pb2");
              } catch (py::error_already_set& e) {
                try {
                  module = py::module::import(
@@ -1250,7 +1250,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
                      "transform_config_pb2");
                } catch (const py::error_already_set& e2) {
                  throw std::runtime_error(
-                     "Failed to import both neptune_data and data. Original "
+                     "Failed to import both xla_serving_data and data. Original "
                      "error: " +
                      std::string(e.what()));
                }
@@ -1416,4 +1416,4 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
 
 }  // namespace
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

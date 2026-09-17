@@ -26,7 +26,7 @@
 #include "data/cpu_embedding/cc/array.h"  // from @xla_serving
 #include "data/test_utils/status_macros.h"  // from @xla_serving
 
-namespace neptune::data::cpu_embedding {
+namespace xla_serving::data::cpu_embedding {
 namespace {
 
 using ::absl_testing::StatusIs;
@@ -92,4 +92,4 @@ TEST(EmbeddingTableTest, LookupUnsupportedDType) {
 }
 
 }  // namespace
-}  // namespace neptune::data::cpu_embedding
+}  // namespace xla_serving::data::cpu_embedding

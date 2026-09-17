@@ -44,7 +44,7 @@
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace core {
 namespace {
@@ -171,7 +171,7 @@ ND_REGISTER_TRANSFORM(MacroRegisteredTransform<1>,
                       "MacroRegisteredWithDeserializerTransform")
     .SetDeserializer(
         [](const TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           return std::make_unique<MacroRegisteredTransform<1>>();
         });
@@ -323,7 +323,7 @@ class ConstrainedDummyTransform : public TransformBase {
 ND_REGISTER_TRANSFORM(ConstrainedDummyTransform, "ConstrainedDummyTransform")
     .SetDeserializer(
         [](const TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           return ConstrainedDummyTransform::Create();
         })
@@ -390,7 +390,7 @@ ND_REGISTER_TRANSFORM(DummyTransformWithoutShapeInference,
                       "DummyTransformWithoutShapeInference")
     .SetDeserializer(
         [](const TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           return DummyTransformWithoutShapeInference::Create();
         });
@@ -682,4 +682,4 @@ TEST(DynamicDispatchTransformTest, ConcurrentAccessAndInitialization) {
 }  // namespace
 }  // namespace core
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

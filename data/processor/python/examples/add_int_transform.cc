@@ -26,7 +26,7 @@
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 absl::StatusOr<std::unique_ptr<AddIntTransform>> AddIntTransform::Create() {
@@ -44,7 +44,7 @@ absl::StatusOr<TransformConfig> AddIntTransform::ToProto() const {
 ND_REGISTER_TRANSFORM(AddIntTransform, "AddIntTransform")
     .SetDeserializer(
         [](const TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           return std::make_unique<AddIntTransform>();
         });
@@ -71,4 +71,4 @@ absl::Status AddIntTransform::PropagateSignatureImpl(
 }
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

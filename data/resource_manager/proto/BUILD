@@ -4,7 +4,7 @@ load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_proto//proto:defs.bzl", "proto_library")
 
 package(default_visibility = [
-    "@xla_serving//data:neptune_data_internal",
+    "@xla_serving//data:xla_serving_data_internal",
 ])
 
 proto_library(

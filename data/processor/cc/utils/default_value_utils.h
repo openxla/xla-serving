@@ -25,7 +25,7 @@
 #include "data/processor/cc/utils/default_value.pb.h"  // from @xla_serving
 #include "tsl/platform/tstring.h"  // from @tsl
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace utils {
 
@@ -155,6 +155,6 @@ absl::StatusOr<google::protobuf::Any> PackToAny(T val) {
 
 }  // namespace utils
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_PROCESSOR_CC_UTILS_DEFAULT_VALUE_UTILS_H_

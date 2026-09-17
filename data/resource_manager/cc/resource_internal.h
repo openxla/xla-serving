@@ -30,7 +30,7 @@
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "data/resource_manager/cc/asset.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 
 class Resource;
 
@@ -71,6 +71,6 @@ class ResourceFactory {
 };
 
 }  // namespace internal
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_RESOURCE_MANAGER_CC_RESOURCE_INTERNAL_H_

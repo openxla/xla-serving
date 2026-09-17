@@ -1,4 +1,4 @@
-// Copyright 2024 The Neptune Authors.
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 
-namespace neptune::data::composite::transforms {
+namespace xla_serving::data::composite::transforms {
 
 // A transform that dynamically pads a tensor along a specified axis to the
 // smallest pre-determined bucket dimension D_fixed >= C from target_dimensions.
@@ -47,8 +47,8 @@ class BucketPadTransform : public TransformBase {
 
   static absl::StatusOr<std::unique_ptr<BucketPadTransform>>
   CreateFromTransformConfig(
-      const ::neptune::data::composite::TransformConfig& config,
-      absl::Span<const std::shared_ptr<neptune::data::Resource>> resources);
+      const ::xla_serving::data::composite::TransformConfig& config,
+      absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources);
 
   BucketPadTransform(std::vector<int64_t> target_dimensions, int32_t axis,
                      utils::DefaultValue pad_value);
@@ -66,7 +66,7 @@ class BucketPadTransform : public TransformBase {
     return output_types_;
   }
 
-  absl::StatusOr<::neptune::data::composite::TransformConfig> ToProto()
+  absl::StatusOr<::xla_serving::data::composite::TransformConfig> ToProto()
       const override;
 
   absl::StatusOr<xla_serving::HostBuffer> operator()(
@@ -88,6 +88,6 @@ class BucketPadTransform : public TransformBase {
   std::vector<api::TypeInfo> output_types_;
 };
 
-}  // namespace neptune::data::composite::transforms
+}  // namespace xla_serving::data::composite::transforms
 
 #endif  // XLA_SERVING_DATA_KERNELS_BUCKET_PAD_BUCKET_PAD_TRANSFORM_H_

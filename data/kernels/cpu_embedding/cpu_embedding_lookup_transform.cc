@@ -39,7 +39,7 @@
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 namespace {}  // namespace
@@ -115,7 +115,7 @@ CpuEmbeddingLookupTransform::Create(
           std::move(output_shapes)));
 }
 
-std::vector<std::shared_ptr<neptune::data::Resource>>
+std::vector<std::shared_ptr<xla_serving::data::Resource>>
 CpuEmbeddingLookupTransform::GetAllResources() const {
   return {resource_};
 }
@@ -396,7 +396,7 @@ absl::StatusOr<TransformConfig> CpuEmbeddingLookupTransform::ToProto() const {
     config.add_resource_ids(resource_->id());
   }
 
-  namespace jce = ::neptune::data::composite::transforms::cpu_embedding;
+  namespace jce = ::xla_serving::data::composite::transforms::cpu_embedding;
   jce::CpuEmbeddingLookupTransformConfig detail;
   if (!feature_names_.empty()) {
     detail.set_feature(feature_names_[0]);
@@ -418,21 +418,21 @@ ND_REGISTER_TRANSFORM(CpuEmbeddingLookupTransform,
                       "CpuEmbeddingLookupTransform")
     .SetDeserializer(
         [](const TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           if (resources.empty()) {
             return absl::InvalidArgumentError(
                 "CpuEmbeddingLookupTransform requires a resource.");
           }
           auto resource = std::dynamic_pointer_cast<CpuEmbeddingEngineResource>(
-              const_cast<std::shared_ptr<neptune::data::Resource>&>(
+              const_cast<std::shared_ptr<xla_serving::data::Resource>&>(
                   resources[0]));
           if (resource == nullptr) {
             return absl::InvalidArgumentError(
                 "Resource is not a CpuEmbeddingEngineResource.");
           }
 
-          namespace jce = ::neptune::data::composite::transforms::cpu_embedding;
+          namespace jce = ::xla_serving::data::composite::transforms::cpu_embedding;
           jce::CpuEmbeddingLookupTransformConfig detail;
           std::vector<std::string> feature_names;
           std::vector<std::string> output_feature_names;
@@ -468,4 +468,4 @@ ND_REGISTER_TRANSFORM(CpuEmbeddingLookupTransform,
         });
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

@@ -20,10 +20,10 @@ import tempfile
 import jax
 import jax.numpy as jnp
 
-from neptune_data.resource_manager.python import resource_manager
-from neptune_data_test.examples.composite_processor import add_int_from_resource_transform_pybind
-from neptune_data_test.examples.composite_processor import add_two_input_buffers_transform_pybind
-from neptune_data_test.examples.composite_processor import int_resource_pybind
+from xla_serving_data.resource_manager.python import resource_manager
+from xla_serving_data_test.examples.composite_processor import add_int_from_resource_transform_pybind
+from xla_serving_data_test.examples.composite_processor import add_two_input_buffers_transform_pybind
+from xla_serving_data_test.examples.composite_processor import int_resource_pybind
 from xla_saved_model.protos import orchestration_pb2
 from xla_saved_model._src.core import typing
 from xla_saved_model._src.export import jax_model

@@ -32,7 +32,7 @@
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "tsl/platform/path.h"  // from @tsl
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace {
 
@@ -138,4 +138,4 @@ TEST(CpuEmbeddingEngineResourceTest, LoadFromAssets) {
 
 }  // namespace
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

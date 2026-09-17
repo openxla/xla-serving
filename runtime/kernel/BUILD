@@ -5,8 +5,8 @@ package_group(
     name = "kernel_users",
     packages = [
         "//runtime/interpreter/...",
-        "//runtime/neptune_data/...",
         "//runtime/tensorflow/...",
+        "//runtime/xla_serving_data/...",
     ],
 )
 

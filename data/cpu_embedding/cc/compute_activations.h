@@ -24,7 +24,7 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 
-namespace neptune::data::cpu_embedding {
+namespace xla_serving::data::cpu_embedding {
 
 // Compute the embedding activations, return them as an NDArray. The shape of
 // the output activations will be (batch_size, embedding_dim). The DType of the
@@ -52,6 +52,6 @@ absl::StatusOr<Array> LookupEmbeddingSequence(
     const FeatureBatchCsrInput& feature_batch,
     const EmbeddingTable& embedding_table, int64_t max_sequence_length);
 
-}  // namespace neptune::data::cpu_embedding
+}  // namespace xla_serving::data::cpu_embedding
 
 #endif  // XLA_SERVING_DATA_CPU_EMBEDDING_CC_COMPUTE_ACTIVATIONS_H_

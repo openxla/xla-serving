@@ -21,9 +21,9 @@
 namespace neptune_examples {
 namespace composite {
 
-class IntResource : public neptune::data::Resource {
+class IntResource : public xla_serving::data::Resource {
  public:
-  using neptune::data::Resource::Resource;
+  using xla_serving::data::Resource::Resource;
   absl::Status LoadImpl() override;
   int value() const { return value_; }
 

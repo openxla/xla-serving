@@ -26,7 +26,7 @@
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 template <typename T>
@@ -48,6 +48,6 @@ class MultiKernelMathTransform : public TransformBase {
 };
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_PROCESSOR_PYTHON_EXAMPLES_MULTI_KERNEL_MATH_TRANSFORM_H_

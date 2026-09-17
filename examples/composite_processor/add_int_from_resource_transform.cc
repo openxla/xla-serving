@@ -47,12 +47,12 @@ AddIntFromResourceTransform::Create(
   return absl::WrapUnique(new AddIntFromResourceTransform(std::move(resource)));
 }
 
-std::vector<std::shared_ptr<neptune::data::Resource>>
+std::vector<std::shared_ptr<xla_serving::data::Resource>>
 AddIntFromResourceTransform::GetAllResources() const {
   if (resource_ == nullptr) {
     return {};
   }
-  return {std::static_pointer_cast<neptune::data::Resource>(
+  return {std::static_pointer_cast<xla_serving::data::Resource>(
       std::const_pointer_cast<IntResource>(resource_))};
 }
 
@@ -80,9 +80,9 @@ absl::StatusOr<xla_serving::HostBuffer> AddIntFromResourceTransform::operator()(
   return out_buffer;
 }
 
-absl::StatusOr<neptune::data::composite::TransformConfig>
+absl::StatusOr<xla_serving::data::composite::TransformConfig>
 AddIntFromResourceTransform::ToProto() const {
-  neptune::data::composite::TransformConfig config;
+  xla_serving::data::composite::TransformConfig config;
   config.set_op_name("AddIntFromResourceTransform");
   if (resource_ != nullptr) {
     config.add_resource_ids(resource_->id());
@@ -93,10 +93,10 @@ AddIntFromResourceTransform::ToProto() const {
 ND_REGISTER_TRANSFORM(AddIntFromResourceTransform,
                       "AddIntFromResourceTransform")
     .SetDeserializer(
-        [](const neptune::data::composite::TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+        [](const xla_serving::data::composite::TransformConfig& config,
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<
-                std::unique_ptr<neptune::data::composite::TransformBase>> {
+                std::unique_ptr<xla_serving::data::composite::TransformBase>> {
           if (resources.empty()) {
             return absl::InternalError(
                 "AddIntFromResourceTransform requires a resource.");

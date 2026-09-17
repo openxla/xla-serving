@@ -18,7 +18,7 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 class IntResource : public Resource {
@@ -42,6 +42,6 @@ class IntContentResource : public Resource {
 };
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_PROCESSOR_PYTHON_EXAMPLES_INT_RESOURCE_H_

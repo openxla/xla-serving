@@ -1,4 +1,4 @@
-// Copyright 2024 The Neptune Authors.
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
-namespace neptune::data::composite::transforms {
+namespace xla_serving::data::composite::transforms {
 namespace {
 
 template <typename T>
@@ -165,8 +165,8 @@ BucketPadTransform::CreateFromProto(const BucketPadArgs& args) {
 
 absl::StatusOr<std::unique_ptr<BucketPadTransform>>
 BucketPadTransform::CreateFromTransformConfig(
-    const ::neptune::data::composite::TransformConfig& config,
-    absl::Span<const std::shared_ptr<neptune::data::Resource>> resources) {
+    const ::xla_serving::data::composite::TransformConfig& config,
+    absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources) {
   BucketPadArgs args;
   if (!config.detail().UnpackTo(&args)) {
     return absl::InvalidArgumentError(
@@ -348,9 +348,9 @@ absl::Status BucketPadTransform::PropagateSignatureImpl(
   return absl::OkStatus();
 }
 
-absl::StatusOr<::neptune::data::composite::TransformConfig>
+absl::StatusOr<::xla_serving::data::composite::TransformConfig>
 BucketPadTransform::ToProto() const {
-  ::neptune::data::composite::TransformConfig config;
+  ::xla_serving::data::composite::TransformConfig config;
   config.set_op_name("BucketPadTransform");
 
   BucketPadArgs args;
@@ -373,4 +373,4 @@ std::string BucketPadTransform::DebugName() const {
 ND_REGISTER_TRANSFORM(BucketPadTransform, "BucketPadTransform")
     .SetDeserializer(&BucketPadTransform::CreateFromTransformConfig);
 
-}  // namespace neptune::data::composite::transforms
+}  // namespace xla_serving::data::composite::transforms

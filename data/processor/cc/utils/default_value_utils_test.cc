@@ -25,7 +25,7 @@
 #include "data/processor/cc/utils/default_value.pb.h"  // from @xla_serving
 #include "data/test_utils/status_macros.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace utils {
 namespace {
@@ -197,4 +197,4 @@ TEST(DefaultValueUtilsTest, PackToAnyUnimplementedFailure) {
 }  // namespace
 }  // namespace utils
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

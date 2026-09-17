@@ -173,7 +173,7 @@ transform_pybind_library(
     name = "dense_cpu_embedding_lookup_transform_pybind",
     srcs = ["dense_cpu_embedding_lookup_transform.cc"],
     hdrs = ["dense_cpu_embedding_lookup_transform.h"],
-    dynamic_deps = ["@xla_serving//data:neptune_data_core"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_core"],
     generate_wrappers = False,
     linkopts = ["-Wl,-rpath,$$ORIGIN/../.."],
     deps = [
@@ -242,7 +242,7 @@ resource_pybind_library(
     name = "cpu_embedding_resource_pybind",
     srcs = ["cpu_embedding_resource.cc"],
     hdrs = ["cpu_embedding_resource.h"],
-    dynamic_deps = ["@xla_serving//data:neptune_data_core"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_core"],
     linkopts = ["-Wl,-rpath,$$ORIGIN/../.."],
     deps = [
         ":cpu_embedding_resource",
@@ -253,7 +253,7 @@ transform_pybind_library(
     name = "cpu_embedding_lookup_transform_pybind",
     srcs = ["cpu_embedding_lookup_transform.cc"],
     hdrs = ["cpu_embedding_lookup_transform.h"],
-    dynamic_deps = ["@xla_serving//data:neptune_data_core"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_core"],
     linkopts = ["-Wl,-rpath,$$ORIGIN/../.."],
     deps = [
         ":cpu_embedding_lookup_transform",
@@ -282,7 +282,7 @@ cc_library(
 pybind_extension(
     name = "cpu_embedding_serializer_pybind",
     srcs = ["cpu_embedding_serializer_pybind.cc"],
-    dynamic_deps = ["@xla_serving//data:neptune_data_core"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_core"],
     linkopts = ["-Wl,-rpath,$$ORIGIN/../.."],
     deps = [
         ":cpu_embedding_resource",
@@ -342,7 +342,7 @@ transform_pybind_library(
     name = "pack_host_buffer_vector_transform_pybind",
     srcs = ["pack_host_buffer_vector_transform.cc"],
     hdrs = ["pack_host_buffer_vector_transform.h"],
-    dynamic_deps = ["@xla_serving//data:neptune_data_core"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_core"],
     generate_wrappers = False,
     linkopts = ["-Wl,-rpath,$$ORIGIN/../.."],
     deps = [
@@ -354,7 +354,7 @@ transform_pybind_library(
     name = "unpack_host_buffer_vector_transform_pybind",
     srcs = ["unpack_host_buffer_vector_transform.cc"],
     hdrs = ["unpack_host_buffer_vector_transform.h"],
-    dynamic_deps = ["@xla_serving//data:neptune_data_core"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_core"],
     generate_wrappers = False,
     linkopts = ["-Wl,-rpath,$$ORIGIN/../.."],
     deps = [

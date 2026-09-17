@@ -14,7 +14,7 @@ py_library(
 pybind_extension(
     name = "composite_processor_pybind",
     srcs = ["composite_processor_pybind.cc"],
-    dynamic_deps = ["@xla_serving//data:neptune_data_core"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_core"],
     linkopts = ["-Wl,-rpath,$$ORIGIN/../.."],
     deps = [
         ":transform_pybind",

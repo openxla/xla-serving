@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef XLA_SERVING_RUNTIME_NEPTUNE_DATA_COMPOSITE_PROCESSOR_OP_H_
-#define XLA_SERVING_RUNTIME_NEPTUNE_DATA_COMPOSITE_PROCESSOR_OP_H_
+#ifndef XLA_SERVING_RUNTIME_XLA_SERVING_DATA_COMPOSITE_PROCESSOR_OP_H_
+#define XLA_SERVING_RUNTIME_XLA_SERVING_DATA_COMPOSITE_PROCESSOR_OP_H_
 
 #include <memory>
 #include <string>
@@ -26,12 +26,12 @@
 namespace xla_serving {
 namespace composite {
 
-// A kernel that executes a neptune::data::composite::CompositeProcessor.
+// A kernel that executes a xla_serving::data::composite::CompositeProcessor.
 class CompositeProcessorOp : public CancellableKernel {
  public:
   explicit CompositeProcessorOp(
       absl_nonnull
-      std::unique_ptr<neptune::data::composite::core::CompositeProcessor>
+      std::unique_ptr<xla_serving::data::composite::core::CompositeProcessor>
           processor);
 
   std::string Name() const override;
@@ -43,11 +43,11 @@ class CompositeProcessorOp : public CancellableKernel {
   absl::Status RunInternal(ExecuteContext& context) override;
 
   absl_nonnull
-  std::unique_ptr<neptune::data::composite::core::CompositeProcessor>
+  std::unique_ptr<xla_serving::data::composite::core::CompositeProcessor>
       processor_;
 };
 
 }  // namespace composite
 }  // namespace xla_serving
 
-#endif  // XLA_SERVING_RUNTIME_NEPTUNE_DATA_COMPOSITE_PROCESSOR_OP_H_
+#endif  // XLA_SERVING_RUNTIME_XLA_SERVING_DATA_COMPOSITE_PROCESSOR_OP_H_

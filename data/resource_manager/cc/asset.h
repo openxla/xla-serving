@@ -19,7 +19,7 @@
 
 #include "absl/status/status.h"  // from @abseil-cpp
 
-namespace neptune::data {
+namespace xla_serving::data {
 
 struct Asset {
   const std::string name;
@@ -37,6 +37,6 @@ struct Asset {
   }
 };
 
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_RESOURCE_MANAGER_CC_ASSET_H_

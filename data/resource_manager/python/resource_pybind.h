@@ -28,7 +28,7 @@
 #include "include/pybind11/trampoline_self_life_support.h"  // from @pybind11_bazel
 #include "pybind11_abseil/status_casters.h"  // from @pybind11_abseil
 
-namespace neptune::data {
+namespace xla_serving::data {
 
 // Trampoline class for Resource to allow overriding virtual methods in Python.
 class PyResource : public Resource,
@@ -53,6 +53,6 @@ void RegisterPybindResourceExt(pybind11::module& m, const std::string& name) {
   cls.def_property_readonly("class_name", &Resource::class_name);
 }
 
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_RESOURCE_MANAGER_PYTHON_RESOURCE_PYBIND_H_

@@ -28,7 +28,7 @@
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
 #include "data/test_utils/status_macros.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace core {
 namespace {
@@ -184,4 +184,4 @@ TEST(GraphValidatorTest, NegativeInternalEdgePortIndexFails) {
 }  // namespace
 }  // namespace core
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

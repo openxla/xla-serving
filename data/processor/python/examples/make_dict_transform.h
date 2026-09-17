@@ -28,7 +28,7 @@
 #include "data/processor/cc/core/transform.h"  // from @xla_serving
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 class MakeDictTransform : public TransformBase {
@@ -40,6 +40,6 @@ class MakeDictTransform : public TransformBase {
 };
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_PROCESSOR_PYTHON_EXAMPLES_MAKE_DICT_TRANSFORM_H_

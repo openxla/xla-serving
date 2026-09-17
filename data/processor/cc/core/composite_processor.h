@@ -29,7 +29,7 @@
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
 #include "data/resource_manager/cc/resource_manager.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace core {
 
@@ -68,7 +68,7 @@ class CompositeProcessor {
       const CompositeProcessorConfig& config,
       std::unique_ptr<GraphExecutor> executor = nullptr);
 
-  const neptune::data::ResourceManager& resource_manager() const;
+  const xla_serving::data::ResourceManager& resource_manager() const;
   GraphExecutor& executor() { return *executor_; }
   const GraphExecutor& executor() const { return *executor_; }
 
@@ -80,17 +80,17 @@ class CompositeProcessor {
  private:
   explicit CompositeProcessor(
       ExecutionGraph graph,
-      std::unique_ptr<neptune::data::ResourceManager> resource_manager =
+      std::unique_ptr<xla_serving::data::ResourceManager> resource_manager =
           nullptr,
       std::unique_ptr<GraphExecutor> executor = nullptr);
 
   ExecutionGraph graph_;
-  std::unique_ptr<neptune::data::ResourceManager> resource_manager_;
+  std::unique_ptr<xla_serving::data::ResourceManager> resource_manager_;
   std::unique_ptr<GraphExecutor> executor_;
 };
 
 }  // namespace core
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_PROCESSOR_CC_CORE_COMPOSITE_PROCESSOR_H_

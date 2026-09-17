@@ -30,7 +30,7 @@
 
 namespace py = pybind11;
 
-namespace neptune::data::cpu_embedding {
+namespace xla_serving::data::cpu_embedding {
 
 // Wraps a py::array object to ensure GIL-safe destruction.
 struct NdarrayOwner {
@@ -131,39 +131,39 @@ inline py::array ArrayToNumpy(const Array& self) {
       base_handle);
 }
 
-}  // namespace neptune::data::cpu_embedding
+}  // namespace xla_serving::data::cpu_embedding
 
 namespace pybind11::detail {
 
 template <>
-struct type_caster<::neptune::data::cpu_embedding::Array> {
+struct type_caster<::xla_serving::data::cpu_embedding::Array> {
  public:
   PYBIND11_TYPE_CASTER(
-      ::neptune::data::cpu_embedding::Array,
+      ::xla_serving::data::cpu_embedding::Array,
       const_name("Union[numpy.ndarray, jax_cpu_embedding.Array]"));
 
   bool load(handle src, bool convert) {
     // 1. Try to load from an existing cpu_embedding::Array instance.
-    type_caster_base<::neptune::data::cpu_embedding::Array> base_caster;
+    type_caster_base<::xla_serving::data::cpu_embedding::Array> base_caster;
     if (base_caster.load(src, convert)) {
       value = std::move(
-          static_cast<::neptune::data::cpu_embedding::Array&>(base_caster));
+          static_cast<::xla_serving::data::cpu_embedding::Array&>(base_caster));
       return true;
     }
 
     // 2. Try to load from NumPy.
     py::array np_array = py::array::ensure(src, py::array::c_style);
     if (np_array) {
-      value = ::neptune::data::cpu_embedding::ArrayFromNumpy(np_array);
+      value = ::xla_serving::data::cpu_embedding::ArrayFromNumpy(np_array);
       return true;
     }
 
     return false;
   }
 
-  static handle cast(const ::neptune::data::cpu_embedding::Array& src,
+  static handle cast(const ::xla_serving::data::cpu_embedding::Array& src,
                      return_value_policy policy, handle parent) {
-    return ::neptune::data::cpu_embedding::ArrayToNumpy(src).release();
+    return ::xla_serving::data::cpu_embedding::ArrayToNumpy(src).release();
   }
 };
 

@@ -26,7 +26,7 @@
 #include "data/processor/cc/api/type_converter.h"  // from @xla_serving
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace core {
 
@@ -71,6 +71,6 @@ class TypeConverterRegistry {
 
 }  // namespace core
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_PROCESSOR_CC_CORE_TYPE_CONVERTER_REGISTRY_H_

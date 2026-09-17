@@ -19,7 +19,7 @@
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
 #include "data/processor/cc/api/value.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace api {
 
@@ -58,6 +58,6 @@ class TypeConverter : public TypeConverterBase {
 
 }  // namespace api
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_PROCESSOR_CC_API_TYPE_CONVERTER_H_

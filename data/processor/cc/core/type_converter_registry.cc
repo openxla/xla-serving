@@ -26,7 +26,7 @@
 #include "data/processor/cc/api/type_converter.h"  // from @xla_serving
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace core {
 
@@ -64,4 +64,4 @@ TypeConverterRegistry::LookupConverter(api::TypeInfo input_type,
 
 }  // namespace core
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

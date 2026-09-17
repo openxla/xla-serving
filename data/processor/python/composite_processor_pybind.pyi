@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 
 import .google.protobuf.any_pb2 as any_pb2
-from .third_party.neptune.data.processor.proto import transform_config_pb2
+from data.processor.proto import transform_config_pb2
 
 TransformConfig = transform_config_pb2.TransformConfig
 CompositeProcessorConfig = transform_config_pb2.CompositeProcessorConfig

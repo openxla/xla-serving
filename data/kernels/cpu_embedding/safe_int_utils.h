@@ -17,7 +17,7 @@
 
 #include <type_traits>
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace utils {
 
 // Safely multiplies two integers, storing the result in 'result'.
@@ -44,6 +44,6 @@ template <typename T, typename U, typename V>
 }
 
 }  // namespace utils
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_SAFE_INT_UTILS_H_

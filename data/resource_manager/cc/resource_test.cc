@@ -32,7 +32,7 @@
 namespace test_namespace {
 namespace {
 
-class FakeResource : public neptune::data::Resource {
+class FakeResource : public xla_serving::data::Resource {
  public:
   using Resource::Resource;
 
@@ -45,7 +45,7 @@ class FakeResource : public neptune::data::Resource {
 }  // namespace
 }  // namespace test_namespace
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace {
 
 using ::absl_testing::StatusIs;
@@ -222,4 +222,4 @@ TEST(ResourceTest, LoadImplCalledOnlyOnce) {
 }
 
 }  // namespace
-}  // namespace neptune::data
+}  // namespace xla_serving::data

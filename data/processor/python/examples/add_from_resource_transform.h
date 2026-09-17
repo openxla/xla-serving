@@ -25,7 +25,7 @@
 #include "data/processor/python/examples/int_resource.h"  // from @xla_serving
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 // Simple transform for testing purposes that adds an integer loaded from a
@@ -36,7 +36,7 @@ class AddFromResourceTransform : public TransformBase {
       std::shared_ptr<const IntResource> resource);
   absl::StatusOr<int> operator()(int a);
   absl::StatusOr<TransformConfig> ToProto() const override;
-  std::vector<std::shared_ptr<neptune::data::Resource>> GetAllResources()
+  std::vector<std::shared_ptr<xla_serving::data::Resource>> GetAllResources()
       const override;
   absl::string_view DebugString() const override {
     return "AddFromResourceTransform";
@@ -56,7 +56,7 @@ class AddFromResourceContentTransform : public TransformBase {
   Create(std::shared_ptr<const IntContentResource> resource);
   absl::StatusOr<int> operator()(int a);
   absl::StatusOr<TransformConfig> ToProto() const override;
-  std::vector<std::shared_ptr<neptune::data::Resource>> GetAllResources()
+  std::vector<std::shared_ptr<xla_serving::data::Resource>> GetAllResources()
       const override;
   absl::string_view DebugString() const override {
     return "AddFromResourceContentTransform";
@@ -69,6 +69,6 @@ class AddFromResourceContentTransform : public TransformBase {
 };
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_PROCESSOR_PYTHON_EXAMPLES_ADD_FROM_RESOURCE_TRANSFORM_H_

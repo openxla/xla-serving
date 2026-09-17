@@ -26,12 +26,12 @@ namespace neptune_examples {
 namespace composite {
 
 class AddTwoInputBuffersTransform
-    : public neptune::data::composite::TransformBase {
+    : public xla_serving::data::composite::TransformBase {
  public:
   static absl::StatusOr<std::unique_ptr<AddTwoInputBuffersTransform>> Create();
   absl::StatusOr<xla_serving::HostBuffer> operator()(xla_serving::HostBuffer in_buffer1,
                                              xla_serving::HostBuffer in_buffer2);
-  absl::StatusOr<neptune::data::composite::TransformConfig> ToProto()
+  absl::StatusOr<xla_serving::data::composite::TransformConfig> ToProto()
       const override;
 };
 

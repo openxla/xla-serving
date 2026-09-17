@@ -18,7 +18,7 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 
 // Concrete C++ resource for factory registration.
 class CppConcreteResource : public Resource {
@@ -40,6 +40,6 @@ class OkConcreteResource : public Resource {
 
 ND_REGISTER_RESOURCE(OkConcreteResource, "OkConcreteResource");
 
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_RESOURCE_MANAGER_PYTHON_EXAMPLES_CONCRETE_RESOURCE_H_

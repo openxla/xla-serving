@@ -20,7 +20,7 @@
 
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 
-namespace neptune::data::cpu_embedding {
+namespace xla_serving::data::cpu_embedding {
 
 struct FeatureSpec {
   std::string name;
@@ -34,6 +34,6 @@ void AbslStringify(Sink& sink, const FeatureSpec& spec) {
                spec.name, spec.table_name, spec.max_sequence_length);
 }
 
-}  // namespace neptune::data::cpu_embedding
+}  // namespace xla_serving::data::cpu_embedding
 
 #endif  // XLA_SERVING_DATA_CPU_EMBEDDING_CC_FEATURE_SPEC_H_

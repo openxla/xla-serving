@@ -27,7 +27,7 @@
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 absl::StatusOr<std::unique_ptr<SuffixTransform>> SuffixTransform::Create(
@@ -51,7 +51,7 @@ absl::StatusOr<TransformConfig> SuffixTransform::ToProto() const {
 ND_REGISTER_TRANSFORM(SuffixTransform, "SuffixTransform")
     .SetDeserializer(
         [](const TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           google::protobuf::StringValue suffix_proto;
           if (config.has_detail()) {
@@ -61,4 +61,4 @@ ND_REGISTER_TRANSFORM(SuffixTransform, "SuffixTransform")
         });
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

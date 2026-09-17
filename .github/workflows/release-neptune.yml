@@ -152,7 +152,7 @@ jobs:
             --show_progress_rate_limit=30 \
             --curses=no
 
-          bazel build -c opt //data:neptune_data //data:neptune_data_test //runtime/python:neptune_model_runner \
+          bazel build -c opt //data:xla_serving_data //data:xla_serving_data_test //runtime/python:neptune_model_runner \
             --config=remote_cache_readonly \
             --output_filter=DONT_MATCH_ANYTHING \
             --ui_event_filters=-warning \
@@ -164,7 +164,7 @@ jobs:
 
       - name: Install Built Wheels in Clean Virtual Environment
         run: |
-          uv pip install bazel-bin/data/neptune_data*.whl
+          uv pip install bazel-bin/data/xla_serving_data*.whl
           uv pip install bazel-bin/runtime/python/neptune_model_runner*.whl
           uv pip install dist/*.whl
 
@@ -206,7 +206,7 @@ jobs:
         run: |
           mkdir -p release_artifacts
           cp dist/*.whl release_artifacts/
-          cp bazel-bin/data/neptune_data*.whl release_artifacts/
+          cp bazel-bin/data/xla_serving_data*.whl release_artifacts/
           cp bazel-bin/runtime/python/neptune_model_runner*.whl release_artifacts/
           ls -la release_artifacts/
 

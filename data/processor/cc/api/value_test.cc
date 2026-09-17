@@ -22,7 +22,7 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace api {
 namespace {
@@ -247,4 +247,4 @@ TEST(ValueTest, DebugStringAndStringify) {
 }  // namespace
 }  // namespace api
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

@@ -14,7 +14,7 @@
 
 edition = "2024";
 
-package neptune.data.composite.utils;
+package xla_serving.data.composite.utils;
 
 option features.field_presence = IMPLICIT;
 

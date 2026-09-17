@@ -24,7 +24,7 @@
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
 #include "data/test_utils/status_macros.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace core {
 
@@ -79,4 +79,4 @@ TEST_F(TypeConverterRegistryTest, LookupFails) {
 
 }  // namespace core
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

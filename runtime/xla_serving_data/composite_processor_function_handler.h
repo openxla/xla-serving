@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef XLA_SERVING_RUNTIME_NEPTUNE_DATA_COMPOSITE_PROCESSOR_FUNCTION_HANDLER_H_
-#define XLA_SERVING_RUNTIME_NEPTUNE_DATA_COMPOSITE_PROCESSOR_FUNCTION_HANDLER_H_
+#ifndef XLA_SERVING_RUNTIME_XLA_SERVING_DATA_COMPOSITE_PROCESSOR_FUNCTION_HANDLER_H_
+#define XLA_SERVING_RUNTIME_XLA_SERVING_DATA_COMPOSITE_PROCESSOR_FUNCTION_HANDLER_H_
 
 #include <memory>
 #include <vector>
@@ -34,13 +34,13 @@ namespace composite {
 
 constexpr char kCompositeProcessorMimeType[] =
     "application/protobuf; "
-    "type=neptune.data.composite.CompositeProcessorConfig";
+    "type=xla_serving.data.composite.CompositeProcessorConfig";
 
 constexpr char kLegacyCompositeProcessorMimeType[] =
     "application/protobuf; type=jax_data.composite.CompositeProcessorConfig";
 
 // An implementation of `OptionalFunctionHandler` that can handle
-// neptune::data::composite::CompositeProcessor.
+// xla_serving::data::composite::CompositeProcessor.
 class CompositeProcessorFunctionHandler : public OptionalFunctionHandler {
  public:
   absl::StatusOr<std::unique_ptr<Kernel>> HandleFunction(
@@ -73,4 +73,4 @@ class CompositeProcessorFunctionHandlerFactory
 }  // namespace composite
 }  // namespace xla_serving
 
-#endif  // XLA_SERVING_RUNTIME_NEPTUNE_DATA_COMPOSITE_PROCESSOR_FUNCTION_HANDLER_H_
+#endif  // XLA_SERVING_RUNTIME_XLA_SERVING_DATA_COMPOSITE_PROCESSOR_FUNCTION_HANDLER_H_

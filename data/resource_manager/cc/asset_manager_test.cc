@@ -21,7 +21,7 @@
 #include "data/resource_manager/cc/asset.h"  // from @xla_serving
 #include "data/test_utils/status_macros.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace {
 
 using ::absl_testing::StatusIs;
@@ -63,4 +63,4 @@ TEST(AssetManagerTest, AddAndGetDifferentResources) {
 }
 
 }  // namespace
-}  // namespace neptune::data
+}  // namespace xla_serving::data

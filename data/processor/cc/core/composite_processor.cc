@@ -43,12 +43,12 @@
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace core {
 namespace {
 
-using ResourceManagerPtr = const ::neptune::data::ResourceManager* absl_nonnull;
+using ResourceManagerPtr = const ::xla_serving::data::ResourceManager* absl_nonnull;
 
 constexpr int kCompositeProcessorConfigVersion = 1;
 
@@ -110,7 +110,7 @@ absl::StatusOr<CompositeProcessor> CompositeProcessor::Create(
     ExecutionGraph graph, std::unique_ptr<GraphExecutor> executor) {
   RETURN_IF_ERROR(GraphValidator::Validate(graph));
 
-  auto resource_manager = std::make_unique<neptune::data::ResourceManager>();
+  auto resource_manager = std::make_unique<xla_serving::data::ResourceManager>();
   for (const auto& node : graph.nodes()) {
     for (auto& resource : node.transform->GetAllResources()) {
       RETURN_IF_ERROR(
@@ -186,7 +186,7 @@ namespace {
 
 absl::StatusOr<std::unique_ptr<TransformBase>> DeserializeTransform(
     const TransformConfig& transform_config,
-    const neptune::data::ResourceManager& resource_manager) {
+    const xla_serving::data::ResourceManager& resource_manager) {
   std::vector<std::shared_ptr<Resource>> transform_resources;
   transform_resources.reserve(transform_config.resource_ids_size());
   for (uint64_t id : transform_config.resource_ids()) {
@@ -208,7 +208,7 @@ absl::StatusOr<std::unique_ptr<TransformBase>> DeserializeTransform(
 // CompositeProcessor only supported linear execution.
 absl::StatusOr<ExecutionGraph> DeserializeV0(
     const CompositeProcessorConfig& config,
-    const neptune::data::ResourceManager& resource_manager) {
+    const xla_serving::data::ResourceManager& resource_manager) {
   ExecutionGraph graph;
   for (const auto& transform_config : config.transforms()) {
     ASSIGN_OR_RETURN(auto transform,
@@ -261,7 +261,7 @@ absl::StatusOr<ExecutionGraph> DeserializeV0(
 
 absl::StatusOr<ExecutionGraph> DeserializeV1(
     const CompositeProcessorConfig& config,
-    const neptune::data::ResourceManager& resource_manager) {
+    const xla_serving::data::ResourceManager& resource_manager) {
   ExecutionGraph graph;
   for (const auto& transform_config : config.transforms()) {
     ASSIGN_OR_RETURN(auto transform,
@@ -343,7 +343,7 @@ absl::StatusOr<CompositeProcessor> CompositeProcessor::FromProto(
     *rm_proto.add_resources() = r;
   }
   ASSIGN_OR_RETURN(auto resource_manager,
-                   neptune::data::ResourceManager::FromProto(rm_proto));
+                   xla_serving::data::ResourceManager::FromProto(rm_proto));
   for (const auto& resource : resource_manager->GetAllResources()) {
     RETURN_IF_ERROR(resource->Load());
   }
@@ -459,24 +459,24 @@ absl::Status CompositeProcessor::PropagateSignature(
 
 CompositeProcessor::CompositeProcessor(
     ExecutionGraph graph,
-    std::unique_ptr<neptune::data::ResourceManager> resource_manager,
+    std::unique_ptr<xla_serving::data::ResourceManager> resource_manager,
     std::unique_ptr<GraphExecutor> executor)
     : graph_(std::move(graph)),
       resource_manager_(std::move(resource_manager)),
       executor_(std::move(executor)) {
   if (resource_manager_ == nullptr) {
-    resource_manager_ = std::make_unique<neptune::data::ResourceManager>();
+    resource_manager_ = std::make_unique<xla_serving::data::ResourceManager>();
   }
   if (executor_ == nullptr) {
     executor_ = std::make_unique<SingleThreadedSynchronousGraphExecutor>();
   }
 }
 
-const neptune::data::ResourceManager& CompositeProcessor::resource_manager()
+const xla_serving::data::ResourceManager& CompositeProcessor::resource_manager()
     const {
   return *resource_manager_;
 }
 
 }  // namespace core
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

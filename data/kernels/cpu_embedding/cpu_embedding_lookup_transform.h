@@ -32,7 +32,7 @@
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 class CpuEmbeddingLookupTransform : public TransformBase {
@@ -44,7 +44,7 @@ class CpuEmbeddingLookupTransform : public TransformBase {
       int64_t embedding_dim = 128,
       std::vector<std::vector<int64_t>> output_shapes = {});
 
-  std::vector<std::shared_ptr<neptune::data::Resource>> GetAllResources()
+  std::vector<std::shared_ptr<xla_serving::data::Resource>> GetAllResources()
       const override;
 
   absl::StatusOr<std::vector<xla_serving::HostBuffer>> operator()(
@@ -77,6 +77,6 @@ class CpuEmbeddingLookupTransform : public TransformBase {
 };
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_LOOKUP_TRANSFORM_H_

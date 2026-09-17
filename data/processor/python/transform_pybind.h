@@ -39,7 +39,7 @@
 #include "pybind11_abseil/status_casters.h"  // from @pybind11_abseil
 #include "pybind11_protobuf/native_proto_caster.h"  // from @pybind11_protobuf
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace pybind_internal {
 
@@ -57,7 +57,7 @@ void SetFactoryInternal(pybind11::module& m, const std::string& name,
         r.status();
         *std::move(r);
       }, "Create method must return an absl::StatusOr");
-  auto cls = pybind11::classh<T, neptune::data::composite::TransformBase>(
+  auto cls = pybind11::classh<T, xla_serving::data::composite::TransformBase>(
       m, name.c_str());
   cls.def(pybind11::init([factory](Args... args) {
             auto result = factory(std::forward<Args>(args)...);
@@ -211,7 +211,7 @@ template <typename T, typename ReturnType, typename... Args>
 void SetDynamicFactoryInternal(pybind11::module& m, const std::string& name,
                                ReturnType (*factory)(Args...)) {
   auto cls = pybind11::classh<core::DynamicDispatchTransform,
-                              neptune::data::composite::TransformBase>(
+                              xla_serving::data::composite::TransformBase>(
       m, name.c_str());
   cls.def(pybind11::init([name](Args... args) {
             std::vector<api::Value> values;
@@ -261,6 +261,6 @@ void RegisterDynamicPybindTransformExt(pybind11::module& m,
 }
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_PROCESSOR_PYTHON_TRANSFORM_PYBIND_H_

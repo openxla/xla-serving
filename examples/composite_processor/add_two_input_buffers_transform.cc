@@ -56,9 +56,9 @@ absl::StatusOr<xla_serving::HostBuffer> AddTwoInputBuffersTransform::operator()(
   return out_buffer;
 }
 
-absl::StatusOr<neptune::data::composite::TransformConfig>
+absl::StatusOr<xla_serving::data::composite::TransformConfig>
 AddTwoInputBuffersTransform::ToProto() const {
-  neptune::data::composite::TransformConfig config;
+  xla_serving::data::composite::TransformConfig config;
   config.set_op_name("AddTwoInputBuffersTransform");
   return config;
 }
@@ -66,10 +66,10 @@ AddTwoInputBuffersTransform::ToProto() const {
 ND_REGISTER_TRANSFORM(AddTwoInputBuffersTransform,
                       "AddTwoInputBuffersTransform")
     .SetDeserializer(
-        [](const neptune::data::composite::TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+        [](const xla_serving::data::composite::TransformConfig& config,
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<
-                std::unique_ptr<neptune::data::composite::TransformBase>> {
+                std::unique_ptr<xla_serving::data::composite::TransformBase>> {
           return std::make_unique<AddTwoInputBuffersTransform>();
         });
 

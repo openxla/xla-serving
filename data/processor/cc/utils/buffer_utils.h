@@ -22,7 +22,7 @@
 // go/lsc-fix-eigen-includes
 // IWYU pragma: no_include "Eigen/src/Core/util/ConfigureVectorization.h"
 
-namespace neptune::data::composite::utils {
+namespace xla_serving::data::composite::utils {
 
 #if EIGEN_MAX_ALIGN_BYTES != 0
 inline bool IsBufferEigenAligned(const void* data_ptr) {
@@ -32,7 +32,7 @@ inline bool IsBufferEigenAligned(const void* data_ptr) {
 inline bool IsBufferEigenAligned(const void* data_ptr) { return true; }
 #endif
 
-}  // namespace neptune::data::composite::utils
+}  // namespace xla_serving::data::composite::utils
 
 #endif  // XLA_SERVING_DATA_PROCESSOR_CC_UTILS_BUFFER_UTILS_H_
 

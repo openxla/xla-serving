@@ -29,7 +29,7 @@
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 absl::StatusOr<std::unique_ptr<AddHostBufferTransform>>
@@ -68,7 +68,7 @@ absl::StatusOr<TransformConfig> AddHostBufferTransform::ToProto() const {
 ND_REGISTER_TRANSFORM(AddHostBufferTransform, "AddHostBufferTransform")
     .SetDeserializer(
         [](const TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           return std::make_unique<AddHostBufferTransform>();
         });
@@ -124,7 +124,7 @@ ND_REGISTER_TRANSFORM(AddHostBufferVectorTransform,
                       "AddHostBufferVectorTransform")
     .SetDeserializer(
         [](const TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           return std::make_unique<AddHostBufferVectorTransform>();
         })
@@ -132,4 +132,4 @@ ND_REGISTER_TRANSFORM(AddHostBufferVectorTransform,
                            .is_list = true}});
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

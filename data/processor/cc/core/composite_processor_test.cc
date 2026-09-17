@@ -58,13 +58,13 @@
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace core {
 namespace {
 
 using ::absl_testing::StatusIs;
-using ::neptune::data::test_utils::EqualsProto;
+using ::xla_serving::data::test_utils::EqualsProto;
 using ::google::protobuf::TextFormat;
 using ::testing::HasSubstr;
 
@@ -104,7 +104,7 @@ bool RegisterExpectedResourcesTransform(const char* name) {
   };
   auto deserializer =
       [](const TransformConfig& config,
-         absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+         absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
       -> absl::StatusOr<std::unique_ptr<TransformBase>> {
     std::vector<uint64_t> expected = {ExpectedIds...};
     EXPECT_EQ(resources.size(), expected.size());
@@ -151,15 +151,15 @@ class UnpackIntAnyTransform : public TransformBase {
 ND_REGISTER_TRANSFORM(UnpackIntAnyTransform, "UnpackIntAnyTransform")
     .SetDeserializer(
         [](const TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           return UnpackIntAnyTransform::Create();
         });
 
-class TestResource : public neptune::data::Resource {
+class TestResource : public xla_serving::data::Resource {
  public:
   TestResource(uint64_t id, std::string name)
-      : neptune::data::Resource(id, std::move(name), {}, "TestResource") {}
+      : xla_serving::data::Resource(id, std::move(name), {}, "TestResource") {}
 
  protected:
   absl::Status LoadImpl() override { return absl::OkStatus(); }
@@ -188,18 +188,18 @@ class MockDynamicResourcesTransform : public TransformBase {
     return config;
   }
 
-  std::vector<std::shared_ptr<neptune::data::Resource>> GetAllResources()
+  std::vector<std::shared_ptr<xla_serving::data::Resource>> GetAllResources()
       const override {
     return resources_;
   }
 
-  void AddResource(std::shared_ptr<neptune::data::Resource> resource) {
+  void AddResource(std::shared_ptr<xla_serving::data::Resource> resource) {
     resources_.push_back(resource);
   }
 
  private:
   explicit MockDynamicResourcesTransform() = default;
-  std::vector<std::shared_ptr<neptune::data::Resource>> resources_;
+  std::vector<std::shared_ptr<xla_serving::data::Resource>> resources_;
 };
 
 TEST(CompositeProcessorTest,
@@ -938,7 +938,7 @@ ND_REGISTER_TRANSFORM(MultiKernelMathTransform<int32_t>,
                       "MultiKernelMathTransform")
     .SetDeserializer(
         [](const TransformConfig&,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>>)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>>)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           return MultiKernelMathTransform<int32_t>::Create();
         })
@@ -948,7 +948,7 @@ ND_REGISTER_TRANSFORM(MultiKernelMathTransform<float>,
                       "MultiKernelMathTransform")
     .SetDeserializer(
         [](const TransformConfig&,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>>)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>>)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           return MultiKernelMathTransform<float>::Create();
         })
@@ -1099,7 +1099,7 @@ ND_REGISTER_TRANSFORM(MultiKernelMathGpuTransform<float>,
     .SetDevice(Device::kGpu)
     .SetDeserializer(
         [](const TransformConfig&,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>>)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>>)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           return MultiKernelMathGpuTransform<float>::Create();
         })
@@ -1210,4 +1210,4 @@ TEST(CompositeProcessorTest, GpuDynamicDispatchExecution) {
 }  // namespace
 }  // namespace core
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

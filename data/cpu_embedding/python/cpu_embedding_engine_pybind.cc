@@ -37,7 +37,7 @@
 #include "pybind11_abseil/status_casters.h"  // from @pybind11_abseil
 
 namespace py = pybind11;
-namespace cpu_embedding = ::neptune::data::cpu_embedding;
+namespace cpu_embedding = ::xla_serving::data::cpu_embedding;
 
 PYBIND11_MODULE(cpu_embedding_engine_pybind, m) {
   m.doc() = "Python extension module to access CPU embedding engine.";

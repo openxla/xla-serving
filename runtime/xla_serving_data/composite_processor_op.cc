@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/neptune_data/composite_processor_op.h"  // from @xla_serving
+#include "runtime/xla_serving_data/composite_processor_op.h"  // from @xla_serving
 
 #include <memory>
 #include <string>
@@ -35,7 +35,7 @@ namespace composite {
 
 CompositeProcessorOp::CompositeProcessorOp(
     absl_nonnull
-    std::unique_ptr<neptune::data::composite::core::CompositeProcessor>
+    std::unique_ptr<xla_serving::data::composite::core::CompositeProcessor>
         processor)
     : processor_(std::move(processor)) {}
 
@@ -57,7 +57,7 @@ int CompositeProcessorOp::GetNumOutputs() const {
 }
 
 absl::Status CompositeProcessorOp::RunInternal(ExecuteContext& context) {
-  neptune::data::composite::api::ExecuteContext jax_data_context{
+  xla_serving::data::composite::api::ExecuteContext jax_data_context{
       .metadata =
           {
               .model_name = context.metadata.model_name,
@@ -66,7 +66,7 @@ absl::Status CompositeProcessorOp::RunInternal(ExecuteContext& context) {
           },
   };
 
-  std::vector<neptune::data::composite::api::Value> converted_inputs;
+  std::vector<xla_serving::data::composite::api::Value> converted_inputs;
   converted_inputs.reserve(context.inputs.size());
   for (const auto& input : context.inputs) {
     if (!input.IsType<xla_serving::HostBuffer>()) {
@@ -80,7 +80,7 @@ absl::Status CompositeProcessorOp::RunInternal(ExecuteContext& context) {
     //                    ref counter is not as cheap as moving the underlying
     //                    HostBuffer.
     converted_inputs.push_back(
-        neptune::data::composite::api::Value(input.Get<xla_serving::HostBuffer>()));
+        xla_serving::data::composite::api::Value(input.Get<xla_serving::HostBuffer>()));
   }
 
   jax_data_context.inputs = absl::MakeSpan(converted_inputs);

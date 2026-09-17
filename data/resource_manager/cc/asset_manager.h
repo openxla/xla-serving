@@ -27,7 +27,7 @@
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "data/resource_manager/cc/asset.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 
 class AssetManager {
  public:
@@ -45,6 +45,6 @@ class AssetManager {
       ABSL_GUARDED_BY(mu_);
 };
 
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_RESOURCE_MANAGER_CC_ASSET_MANAGER_H_

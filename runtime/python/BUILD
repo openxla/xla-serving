@@ -25,7 +25,7 @@ pybind_extension(
         ":ifrt_client_factory",
         ":numpy_utils",
         "//examples/composite_processor:composite_processor_example_support",
-        "//runtime/neptune_data:interpreter_composite_processor_support",
+        "//runtime/xla_serving_data:interpreter_composite_processor_support",
         "@abseil-cpp//absl/base:nullability",
         "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/flags:flag",

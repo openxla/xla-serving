@@ -31,7 +31,7 @@
 #include "data/resource_manager/cc/resource_internal.h"  // from @xla_serving
 #include "data/resource_manager/proto/resource_manager.pb.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 
 namespace {
 
@@ -169,4 +169,4 @@ ResourceManagerProto ResourceManager::ToProto() const {
   return proto;
 }
 
-}  // namespace neptune::data
+}  // namespace xla_serving::data

@@ -51,7 +51,7 @@
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace core {
 
@@ -175,7 +175,7 @@ class TransformFactoryHolder {
   using TransformDeserializer =
       absl::AnyInvocable<absl::StatusOr<std::unique_ptr<TransformBase>>(
           const TransformConfig&,
-          absl::Span<const std::shared_ptr<neptune::data::Resource>>) const>;
+          absl::Span<const std::shared_ptr<xla_serving::data::Resource>>) const>;
 
   using ExecutorFunc = absl::AnyInvocable<absl::Status(
       TransformBase*, api::ExecuteContext&) const>;
@@ -196,7 +196,7 @@ class TransformFactoryHolder {
 
   absl::StatusOr<std::unique_ptr<TransformBase>> DeserializeTransform(
       const TransformConfig& config,
-      absl::Span<const std::shared_ptr<neptune::data::Resource>> resources = {})
+      absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources = {})
       const {
     if (deserializer_ == nullptr) {
       return absl::UnimplementedError(
@@ -263,7 +263,7 @@ class TransformRegistry {
   // Deserialize a transform from a configuration proto.
   absl::StatusOr<std::unique_ptr<TransformBase>> DeserializeTransform(
       const TransformConfig& config,
-      absl::Span<const std::shared_ptr<neptune::data::Resource>> resources = {})
+      absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources = {})
       ABSL_LOCKS_EXCLUDED(transform_registry_mu_);
 
   // Register a transform deserializer for a given name and type_index.
@@ -328,7 +328,7 @@ class DynamicDispatchTransform : public TransformBase {
     ASSIGN_OR_RETURN(auto holder,
                      TransformRegistry::Instance().GetAnyTransformFactoryHolder(
                          op_name, device));
-    std::vector<std::shared_ptr<neptune::data::Resource>> resources;
+    std::vector<std::shared_ptr<xla_serving::data::Resource>> resources;
     if (!args.empty()) {
       auto kernel = holder->CreateTransform(args);
       if (kernel == nullptr) {
@@ -344,7 +344,7 @@ class DynamicDispatchTransform : public TransformBase {
 
   static absl::StatusOr<std::unique_ptr<DynamicDispatchTransform>> Create(
       TransformConfig config,
-      std::vector<std::shared_ptr<neptune::data::Resource>> resources = {},
+      std::vector<std::shared_ptr<xla_serving::data::Resource>> resources = {},
       Device device = Device::kCpu) {
     return absl::WrapUnique(new DynamicDispatchTransform(
         std::move(config), std::move(resources), device));
@@ -366,7 +366,7 @@ class DynamicDispatchTransform : public TransformBase {
   absl::Span<const api::TypeInfo> InputTypes() const override;
   absl::Span<const api::TypeInfo> OutputTypes() const override;
 
-  std::vector<std::shared_ptr<neptune::data::Resource>> GetAllResources()
+  std::vector<std::shared_ptr<xla_serving::data::Resource>> GetAllResources()
       const override {
     return resources_;
   }
@@ -380,7 +380,7 @@ class DynamicDispatchTransform : public TransformBase {
  private:
   explicit DynamicDispatchTransform(
       std::string op_name, std::vector<api::Value> args,
-      std::vector<std::shared_ptr<neptune::data::Resource>> resources,
+      std::vector<std::shared_ptr<xla_serving::data::Resource>> resources,
       Device device)
       : op_name_(std::move(op_name)),
         args_(std::move(args)),
@@ -389,7 +389,7 @@ class DynamicDispatchTransform : public TransformBase {
 
   explicit DynamicDispatchTransform(
       TransformConfig config,
-      std::vector<std::shared_ptr<neptune::data::Resource>> resources,
+      std::vector<std::shared_ptr<xla_serving::data::Resource>> resources,
       Device device)
       : op_name_(config.op_name()),
         config_(std::move(config)),
@@ -433,7 +433,7 @@ class DynamicDispatchTransform : public TransformBase {
   std::string op_name_;
   std::vector<api::Value> args_;
   std::optional<TransformConfig> config_;
-  std::vector<std::shared_ptr<neptune::data::Resource>> resources_;
+  std::vector<std::shared_ptr<xla_serving::data::Resource>> resources_;
   Device device_ = Device::kCpu;
   mutable absl::Mutex active_kernel_mu_;
   mutable std::unique_ptr<TransformBase> active_kernel_
@@ -574,6 +574,6 @@ class TransformRegistrar {
 
 }  // namespace core
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_PROCESSOR_CC_CORE_TRANSFORM_REGISTRY_H_

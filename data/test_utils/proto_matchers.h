@@ -23,7 +23,7 @@
 #include "google/protobuf/text_format.h"
 #include "google/protobuf/util/message_differencer.h"
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace test_utils {
 
 template <typename ProtoType, typename T>
@@ -60,6 +60,6 @@ MATCHER_P(EqualsProtoIgnoringRepeatedFieldOrdering, expected, "") {
 }
 
 }  // namespace test_utils
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_TEST_UTILS_PROTO_MATCHERS_H_

@@ -21,7 +21,7 @@
 #include "data/processor/cc/api/value.h"  // from @xla_serving
 #include "data/test_utils/status_macros.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace api {
 namespace {
@@ -63,4 +63,4 @@ TEST(TypedTransformTest, ErrorTransform) {
 }  // namespace
 }  // namespace api
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

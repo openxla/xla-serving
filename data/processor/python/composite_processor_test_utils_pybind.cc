@@ -27,7 +27,7 @@
 #include "pybind11_abseil/status_casters.h"  // from @pybind11_abseil
 #include "pybind11_protobuf/native_proto_caster.h"  // from @pybind11_protobuf
 
-namespace neptune::data::composite {
+namespace xla_serving::data::composite {
 namespace {
 
 namespace py = pybind11;
@@ -84,4 +84,4 @@ PYBIND11_MODULE(composite_processor_test_utils_pybind, m) {
 }
 
 }  // namespace
-}  // namespace neptune::data::composite
+}  // namespace xla_serving::data::composite

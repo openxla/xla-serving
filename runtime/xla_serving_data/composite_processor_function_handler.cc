@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/neptune_data/composite_processor_function_handler.h"  // from @xla_serving
+#include "runtime/xla_serving_data/composite_processor_function_handler.h"  // from @xla_serving
 
 #include <memory>
 #include <string>
@@ -29,7 +29,7 @@
 #include "runtime/interpreter/manifest_utils.h"  // from @xla_serving
 #include "runtime/interpreter/optional_function_handler_factory.h"  // from @xla_serving
 #include "runtime/kernel/kernel.h"  // from @xla_serving
-#include "runtime/neptune_data/composite_processor_op.h"  // from @xla_serving
+#include "runtime/xla_serving_data/composite_processor_op.h"  // from @xla_serving
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
@@ -68,7 +68,7 @@ CompositeProcessorFunctionHandler::HandleFunction(
   TF_RETURN_IF_ERROR(tsl::ReadFileToString(
       tsl::Env::Default(), absolute_config_path, &serialized_processor_config));
 
-  neptune::data::composite::CompositeProcessorConfig config;
+  xla_serving::data::composite::CompositeProcessorConfig config;
   if (!config.ParseFromString(serialized_processor_config)) {
     return absl::InvalidArgumentError(
         "Failed to parse CompositeProcessorConfig");
@@ -94,11 +94,11 @@ CompositeProcessorFunctionHandler::HandleFunction(
     }
   }
   TF_ASSIGN_OR_RETURN(
-      neptune::data::composite::core::CompositeProcessor processor,
-      neptune::data::composite::core::CompositeProcessor::FromProto(config));
+      xla_serving::data::composite::core::CompositeProcessor processor,
+      xla_serving::data::composite::core::CompositeProcessor::FromProto(config));
 
   return std::make_unique<CompositeProcessorOp>(
-      std::make_unique<neptune::data::composite::core::CompositeProcessor>(
+      std::make_unique<xla_serving::data::composite::core::CompositeProcessor>(
           std::move(processor)));
 }
 

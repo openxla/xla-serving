@@ -18,9 +18,9 @@
 #include "data/processor/cc/core/transform_registry.h"  // from @xla_serving  // IWYU pragma: keep
 
 #define ND_REGISTER_TRANSFORM_INTERNAL_IMPL(Type, Name, Id)         \
-  static ::neptune::data::composite::core::TransformRegistrar<Type> \
+  static ::xla_serving::data::composite::core::TransformRegistrar<Type> \
       Transform_Registered_##Id =                                   \
-          ::neptune::data::composite::core::TransformRegistrar<Type>(Name)
+          ::xla_serving::data::composite::core::TransformRegistrar<Type>(Name)
 
 #define ND_REGISTER_TRANSFORM_INTERNAL(Type, Name, Id) \
   ND_REGISTER_TRANSFORM_INTERNAL_IMPL(Type, Name, Id)

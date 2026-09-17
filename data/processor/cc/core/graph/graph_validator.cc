@@ -21,7 +21,7 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "data/processor/cc/core/graph/execution_graph.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace core {
 
@@ -104,4 +104,4 @@ absl::Status GraphValidator::ValidateGraphOutputs(const ExecutionGraph& graph) {
 
 }  // namespace core
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

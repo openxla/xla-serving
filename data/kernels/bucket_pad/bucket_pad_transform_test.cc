@@ -1,4 +1,4 @@
-// Copyright 2024 The Neptune Authors.
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
-namespace neptune::data::composite::transforms {
+namespace xla_serving::data::composite::transforms {
 namespace {
 
 using ::absl_testing::StatusIs;
@@ -292,7 +292,7 @@ TEST(BucketPadTransformTest, ExecuteContextSuccessAndErrorHandling) {
 }
 
 TEST(BucketPadTransformTest, ConfigUnpackError) {
-  ::neptune::data::composite::TransformConfig invalid_config;
+  ::xla_serving::data::composite::TransformConfig invalid_config;
   invalid_config.set_op_name("BucketPadTransform");
   EXPECT_THAT(BucketPadTransform::CreateFromTransformConfig(invalid_config,
                                                             /*resources=*/{}),
@@ -419,4 +419,4 @@ TEST(BucketPadTransformTest, BoolPredSupport) {
 }
 
 }  // namespace
-}  // namespace neptune::data::composite::transforms
+}  // namespace xla_serving::data::composite::transforms

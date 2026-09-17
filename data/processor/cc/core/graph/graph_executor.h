@@ -19,7 +19,7 @@
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/core/graph/execution_graph.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace core {
 
@@ -42,6 +42,6 @@ class SingleThreadedSynchronousGraphExecutor : public GraphExecutor {
 
 }  // namespace core
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_PROCESSOR_CC_CORE_GRAPH_GRAPH_EXECUTOR_H_

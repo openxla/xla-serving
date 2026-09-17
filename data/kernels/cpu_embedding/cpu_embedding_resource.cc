@@ -38,7 +38,7 @@
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
 #include "xla/tsl/platform/env.h"  // from @xla
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 namespace {
@@ -226,4 +226,4 @@ absl::StatusOr<int32_t> CpuEmbeddingEngineResource::GetEmbeddingDim(
 ND_REGISTER_RESOURCE(CpuEmbeddingEngineResource, "CpuEmbeddingEngineResource");
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

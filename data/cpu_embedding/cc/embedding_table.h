@@ -25,7 +25,7 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "unsupported/Eigen/CXX11/Tensor"
 
-namespace neptune::data::cpu_embedding {
+namespace xla_serving::data::cpu_embedding {
 
 // Define the CustomCombinerFn signature matching C-ABI
 typedef void (*CustomCombinerFn)(const int64_t* ids, int64_t ids_size,
@@ -95,6 +95,6 @@ class EmbeddingTable {
   int64_t embedding_dim_;
 };
 
-}  // namespace neptune::data::cpu_embedding
+}  // namespace xla_serving::data::cpu_embedding
 
 #endif  // XLA_SERVING_DATA_CPU_EMBEDDING_CC_EMBEDDING_TABLE_H_

@@ -35,7 +35,7 @@
 #include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @xla_serving
 #include "data/cpu_embedding/cc/feature_spec.h"  // from @xla_serving
 
-namespace neptune::data::cpu_embedding {
+namespace xla_serving::data::cpu_embedding {
 
 class CpuEmbeddingEngine final {
  public:
@@ -83,6 +83,6 @@ class CpuEmbeddingEngine final {
   mutable std::unique_ptr<Eigen::ThreadPoolInterface> thread_pool_;
 };
 
-}  // namespace neptune::data::cpu_embedding
+}  // namespace xla_serving::data::cpu_embedding
 
 #endif  // XLA_SERVING_DATA_CPU_EMBEDDING_CC_CPU_EMBEDDING_ENGINE_H_

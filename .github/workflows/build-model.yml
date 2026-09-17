@@ -58,11 +58,11 @@ jobs:
         run: |
           uv pip install build setuptools wheel grpcio-tools
 
-      - name: Build neptune_data and neptune_data_test wheels
+      - name: Build xla_serving_data and xla_serving_data_test wheels
         env:
           CACHE_CONFIG: ${{ github.ref == 'refs/heads/main' && 'remote_cache_readwrite' || 'remote_cache_readonly' }}
         run: |
-          bazel build -c opt //data:neptune_data //data:neptune_data_test \
+          bazel build -c opt //data:xla_serving_data //data:xla_serving_data_test \
             --@rules_python//python/config_settings:python_version=${{ matrix.python-version }} \
             --config=${CACHE_CONFIG} \
             --output_filter=DONT_MATCH_ANYTHING \
@@ -70,9 +70,9 @@ jobs:
             --show_progress_rate_limit=30 \
             --curses=no
 
-      - name: Install neptune_data and neptune_data_test wheels
+      - name: Install xla_serving_data and xla_serving_data_test wheels
         run: |
-          uv pip install bazel-bin/data/neptune_data*.whl
+          uv pip install bazel-bin/data/xla_serving_data*.whl
 
       - name: Build the XLA SavedModel Wheel
         run: |
@@ -105,7 +105,7 @@ jobs:
         with:
           name: xla-saved-model-wheels
           path: |
-            bazel-bin/data/neptune_data*.whl
+            bazel-bin/data/xla_serving_data*.whl
             dist/*.whl
           retention-days: 1
 

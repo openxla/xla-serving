@@ -3,7 +3,7 @@ load("@pybind11_bazel//:build_defs.bzl", "pybind_extension", "pybind_library")
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
 package(default_visibility = [
-    "@xla_serving//data:neptune_data_internal",
+    "@xla_serving//data:xla_serving_data_internal",
 ])
 
 pybind_library(
@@ -21,7 +21,7 @@ pybind_library(
 pybind_extension(
     name = "resource_manager_pybind",
     srcs = ["resource_manager_pybind.cc"],
-    dynamic_deps = ["@xla_serving//data:neptune_data_core"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_core"],
     linkopts = ["-Wl,-rpath,$$ORIGIN/../.."],
     deps = [
         ":resource_pybind_lib",

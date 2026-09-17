@@ -1,4 +1,4 @@
-// Copyright 2024 The Neptune Authors.
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 
 edition = "2024";
 
-package neptune.data.composite.transforms;
+package xla_serving.data.composite.transforms;
 
 import "data/processor/cc/utils/default_value.proto";
 
@@ -30,5 +30,5 @@ message BucketPadArgs {
   int32 axis = 2;
 
   // Fill value for padding. If not set, defaults to 0.
-  neptune.data.composite.utils.DefaultValue pad_value = 3;
+  xla_serving.data.composite.utils.DefaultValue pad_value = 3;
 }

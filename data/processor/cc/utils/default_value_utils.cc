@@ -25,7 +25,7 @@
 #include "google/protobuf/descriptor.h"
 #include "tsl/platform/tstring.h"  // from @tsl
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace utils {
 
@@ -108,4 +108,4 @@ absl::StatusOr<tsl::tstring> UnpackDefaultValue<tsl::tstring>(
 
 }  // namespace utils
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

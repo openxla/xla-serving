@@ -83,6 +83,18 @@ common --define=tsl_link_protobuf=true
 
 common --repository_cache=~/.bazel_repository_cache
 
+# Make action keys independent of the client environment (e.g. $PATH) so that
+# the remote cache in `gs://xse-bazel-cache` is shared across CI runs and
+# developer machines instead of being re-populated on every build.
+build --incompatible_strict_action_env
+
+# Always compile PIC code. In opt mode, Bazel by default builds both PIC (.pic.o)
+# and non-PIC (.o) object files for shared libraries vs binaries/tests, which
+# compiles shared C++ dependencies (XLA, LLVM, MLIR, TensorFlow, TensorStore)
+# twice and prevents cc_test targets from reusing remote cache entries produced
+# by Python shared library builds.
+build --force_pic
+
 # Required by Abseil and Tensorstore to prevent compilation errors
 # (e.g. InstantiateRawHashMap not found) and ensure correct ABI compatibility.
 build --cxxopt=-std=c++20
@@ -92,8 +104,8 @@ build --copt=-D_LIBCPP_ENABLE_CXX20_REMOVED_FEATURES=1
 build --host_copt=-D_LIBCPP_ENABLE_CXX20_REMOVED_TYPE_TRAITS=1
 build --host_copt=-D_LIBCPP_ENABLE_CXX20_REMOVED_FEATURES=1
 
-# Neptune Data.
-build --copt=-DPYBIND11_ABSEIL_STATUS_MODULE_PATH=neptune_data.pybind11_abseil.status
+# XLA Serving Data.
+build --copt=-DPYBIND11_ABSEIL_STATUS_MODULE_PATH=xla_serving_data.pybind11_abseil.status
 
 # GCS Remote Cache configs (xse-bazel-cache)
 common:remote_cache --remote_cache="https://storage.googleapis.com/xse-bazel-cache/"

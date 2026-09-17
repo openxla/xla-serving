@@ -31,7 +31,7 @@
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 
-namespace neptune {
+namespace xla_serving {
 namespace data {
 namespace composite {
 namespace transforms {
@@ -77,11 +77,11 @@ absl::Status PackHostBufferVectorTransform::PropagateSignatureImpl(
   return absl::OkStatus();
 }
 
-absl::StatusOr<::neptune::data::composite::TransformConfig>
+absl::StatusOr<::xla_serving::data::composite::TransformConfig>
 PackHostBufferVectorTransform::ToProto() const {
-  ::neptune::data::composite::TransformConfig config;
+  ::xla_serving::data::composite::TransformConfig config;
   config.set_op_name("PackHostBufferVectorTransform");
-  ::neptune::data::composite::transforms::cpu_embedding::
+  ::xla_serving::data::composite::transforms::cpu_embedding::
       PackHostBufferVectorArgs args;
 
   args.set_input_count(input_count_);
@@ -95,9 +95,9 @@ std::string PackHostBufferVectorTransform::DebugName() const {
 
 absl::StatusOr<std::unique_ptr<PackHostBufferVectorTransform>>
 PackHostBufferVectorTransform::CreateFromTransformConfig(
-    const ::neptune::data::composite::TransformConfig& config,
-    absl::Span<const std::shared_ptr<neptune::data::Resource>> resources) {
-  ::neptune::data::composite::transforms::cpu_embedding::
+    const ::xla_serving::data::composite::TransformConfig& config,
+    absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources) {
+  ::xla_serving::data::composite::transforms::cpu_embedding::
       PackHostBufferVectorArgs args;
 
   if (!config.detail().UnpackTo(&args)) {
@@ -114,4 +114,4 @@ ND_REGISTER_TRANSFORM(PackHostBufferVectorTransform,
 }  // namespace transforms
 }  // namespace composite
 }  // namespace data
-}  // namespace neptune
+}  // namespace xla_serving

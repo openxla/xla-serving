@@ -43,7 +43,7 @@
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace core {
 
@@ -108,7 +108,7 @@ TransformRegistry::CreateTransform(absl::string_view name,
 absl::StatusOr<std::unique_ptr<TransformBase>>
 TransformRegistry::DeserializeTransform(
     const TransformConfig& config,
-    absl::Span<const std::shared_ptr<neptune::data::Resource>> resources) {
+    absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources) {
   TransformFactoryHolder* holder = nullptr;
   {
     absl::MutexLock lock(transform_registry_mu_);
@@ -123,7 +123,7 @@ TransformRegistry::DeserializeTransform(
     }
     // Multiple holders: wrap in DynamicDispatchTransform
     if (it->second.size() > 1) {
-      std::vector<std::shared_ptr<neptune::data::Resource>> res_vec(
+      std::vector<std::shared_ptr<xla_serving::data::Resource>> res_vec(
           resources.begin(), resources.end());
       Device device = FromDeviceProto(config.device());
       return DynamicDispatchTransform::Create(config, std::move(res_vec),
@@ -511,4 +511,4 @@ absl::Span<const api::TypeInfo> DynamicDispatchTransform::OutputTypes() const {
 
 }  // namespace core
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

@@ -35,8 +35,8 @@ PYBIND11_MODULE(cpu_embedding_serializer_pybind, m) {
     }
   }
 
-  m.def("serialize", &::neptune::data::composite::SerializeCpuEmbedding);
+  m.def("serialize", &::xla_serving::data::composite::SerializeCpuEmbedding);
   m.attr("MANIFEST_ASSET_NAME") =
-      py::cast(::neptune::data::composite::CpuEmbeddingEngineResource::
+      py::cast(::xla_serving::data::composite::CpuEmbeddingEngineResource::
                    kManifestAssetName);
 }

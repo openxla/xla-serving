@@ -32,11 +32,11 @@
 #include "data/test_utils/status_macros.h"  // from @xla_serving
 #include "google/protobuf/text_format.h"
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace {
 
 using ::absl_testing::StatusIs;
-using ::neptune::data::test_utils::EqualsProtoIgnoringRepeatedFieldOrdering;
+using ::xla_serving::data::test_utils::EqualsProtoIgnoringRepeatedFieldOrdering;
 using ::testing::UnorderedElementsAre;
 class FakeResource : public Resource {
  public:
@@ -329,4 +329,4 @@ TEST(ResourceManagersViewTest, GetResource) {
 }
 
 }  // namespace
-}  // namespace neptune::data
+}  // namespace xla_serving::data

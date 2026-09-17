@@ -29,14 +29,14 @@ namespace neptune_examples {
 namespace composite {
 
 class AddIntFromResourceTransform
-    : public neptune::data::composite::TransformBase {
+    : public xla_serving::data::composite::TransformBase {
  public:
   static absl::StatusOr<std::unique_ptr<AddIntFromResourceTransform>> Create(
       std::shared_ptr<const IntResource> resource);
   absl::StatusOr<xla_serving::HostBuffer> operator()(xla_serving::HostBuffer in_buffer);
-  absl::StatusOr<neptune::data::composite::TransformConfig> ToProto()
+  absl::StatusOr<xla_serving::data::composite::TransformConfig> ToProto()
       const override;
-  std::vector<std::shared_ptr<neptune::data::Resource>> GetAllResources()
+  std::vector<std::shared_ptr<xla_serving::data::Resource>> GetAllResources()
       const override;
 
  private:

@@ -23,7 +23,7 @@
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 class AddHostBufferTransform : public TransformBase {
@@ -49,6 +49,6 @@ class AddHostBufferVectorTransform : public TransformBase {
 };
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_PROCESSOR_PYTHON_EXAMPLES_ADD_HOST_BUFFER_TRANSFORM_H_

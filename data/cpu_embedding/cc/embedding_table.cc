@@ -28,7 +28,7 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "Eigen/Core"
 
-namespace neptune::data::cpu_embedding {
+namespace xla_serving::data::cpu_embedding {
 namespace {
 
 template <typename T>
@@ -93,4 +93,4 @@ EmbeddingTable::EmbeddingTable(absl::string_view name, Array data,
   embedding_dim_ = data_.GetShape().dims[1];
 }
 
-}  // namespace neptune::data::cpu_embedding
+}  // namespace xla_serving::data::cpu_embedding

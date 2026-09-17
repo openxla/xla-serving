@@ -21,7 +21,7 @@
 namespace testing_namespace {
 
 // Concrete C++ resource for factory registration.
-class AnotherConcreteResource : public neptune::data::Resource {
+class AnotherConcreteResource : public xla_serving::data::Resource {
  public:
   using Resource::Resource;
   absl::Status LoadImpl() override;

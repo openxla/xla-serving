@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-package neptune.data.composite.transforms.cpu_embedding;
+package xla_serving.data.composite.transforms.cpu_embedding;
 
 // Configuration arguments for DenseCpuEmbeddingLookupTransform.
 message DenseCpuEmbeddingLookupArgs {

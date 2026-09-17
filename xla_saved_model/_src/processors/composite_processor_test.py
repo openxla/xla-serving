@@ -20,13 +20,13 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from neptune_data.ops import cpu_embedding
-from neptune_data.processor.proto import transform_config_pb2
-from neptune_data.processor.python import composite_processor_pybind
-from neptune_data_test.processor.python.examples import add_from_resource_transform_pybind
-from neptune_data_test.processor.python.examples import add_int_transform_pybind
-from neptune_data_test.processor.python.examples import int_resource_pybind
-from neptune_data.resource_manager.python import resource_manager
+from xla_serving_data.ops import cpu_embedding
+from xla_serving_data.processor.proto import transform_config_pb2
+from xla_serving_data.processor.python import composite_processor_pybind
+from xla_serving_data_test.processor.python.examples import add_from_resource_transform_pybind
+from xla_serving_data_test.processor.python.examples import add_int_transform_pybind
+from xla_serving_data_test.processor.python.examples import int_resource_pybind
+from xla_serving_data.resource_manager.python import resource_manager
 from xla_saved_model._src.core import shlo_type
 from xla_saved_model._src.processors import composite_processor
 

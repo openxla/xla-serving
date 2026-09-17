@@ -23,7 +23,7 @@
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "tsl/platform/path.h"  // from @tsl
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace {
 
 using ::absl_testing::StatusIs;
@@ -42,4 +42,4 @@ TEST(AssetTest, LoadContentNotFound) {
 }
 
 }  // namespace
-}  // namespace neptune::data
+}  // namespace xla_serving::data

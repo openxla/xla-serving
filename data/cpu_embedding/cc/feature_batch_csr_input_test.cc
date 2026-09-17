@@ -23,7 +23,7 @@
 #include "absl/status/status_matchers.h"  // from @abseil-cpp
 #include "data/test_utils/status_macros.h"  // from @xla_serving
 
-namespace neptune::data::cpu_embedding {
+namespace xla_serving::data::cpu_embedding {
 namespace {
 
 using ::absl_testing::StatusIs;
@@ -93,4 +93,4 @@ TEST(FeatureBatchCsrInputTest, MismatchedWeightsSize) {
 }
 
 }  // namespace
-}  // namespace neptune::data::cpu_embedding
+}  // namespace xla_serving::data::cpu_embedding

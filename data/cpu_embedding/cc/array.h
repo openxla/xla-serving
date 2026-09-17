@@ -31,7 +31,7 @@
 #include "Eigen/Core"
 #include "unsupported/Eigen/CXX11/Tensor"
 
-namespace neptune::data::cpu_embedding {
+namespace xla_serving::data::cpu_embedding {
 
 enum class DType {
   kUnknown = 0,
@@ -209,6 +209,6 @@ class Array {
   absl::Span<char> buffer_;
 };
 
-}  // namespace neptune::data::cpu_embedding
+}  // namespace xla_serving::data::cpu_embedding
 
 #endif  // XLA_SERVING_DATA_CPU_EMBEDDING_CC_ARRAY_H_

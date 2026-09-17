@@ -26,7 +26,7 @@
 #include "data/cpu_embedding/cc/cpu_embedding_engine.h"  // from @xla_serving
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 class CpuEmbeddingEngineResource : public Resource {
@@ -55,6 +55,6 @@ class CpuEmbeddingEngineResource : public Resource {
 };
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #endif  // XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_RESOURCE_H_

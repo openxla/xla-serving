@@ -23,8 +23,8 @@ import jax
 import jaxtyping
 import numpy as np
 
-from neptune_data.processor.proto import transform_config_pb2
-from neptune_data.processor.python import composite_processor_pybind
+from xla_serving_data.processor.proto import transform_config_pb2
+from xla_serving_data.processor.python import composite_processor_pybind
 from xla_saved_model.protos import manifest_pb2
 from xla_saved_model._src import assets2xsm
 from xla_saved_model._src.core import persistence_lib
@@ -126,9 +126,9 @@ def _propagate_pybind_signature(
   return jax.tree_util.tree_unflatten(output_treedef, flat_outputs)
 
 
-# //neptune/runtime/neptune_data/composite_processor_function_handler.h
+# //neptune/runtime/xla_serving_data/composite_processor_function_handler.h
 COMPOSITE_PROCESSOR_MIME_TYPE = (
-    "application/protobuf; type=neptune.data.composite.CompositeProcessorConfig"
+    "application/protobuf; type=xla_serving.data.composite.CompositeProcessorConfig"
 )
 COMPOSITE_PROCESSOR_VERSION = "0.0.1"
 SERVING_DEFAULT_KEY = "serving_default"

@@ -25,8 +25,8 @@ cc_library(
     name = "optional_function_handler",
     hdrs = ["optional_function_handler.h"],
     visibility = [
-        "@xla_serving//runtime/neptune_data:__subpackages__",
         "@xla_serving//runtime/tensorflow:__subpackages__",
+        "@xla_serving//runtime/xla_serving_data:__subpackages__",
     ],
     deps = [
         ":interpreter_create_options",
@@ -44,8 +44,8 @@ cc_library(
     srcs = ["optional_function_handler_factory.cc"],
     hdrs = ["optional_function_handler_factory.h"],
     visibility = [
-        "@xla_serving//runtime/neptune_data:__subpackages__",
         "@xla_serving//runtime/tensorflow:__subpackages__",
+        "@xla_serving//runtime/xla_serving_data:__subpackages__",
     ],
     deps = [
         ":optional_function_handler",
@@ -83,8 +83,8 @@ cc_library(
         "@xla_serving//runtime/core:__subpackages__",
         "@xla_serving//runtime/data_loader:__subpackages__",
         "@xla_serving//runtime/kernel:__subpackages__",
-        "@xla_serving//runtime/neptune_data:__subpackages__",
         "@xla_serving//runtime/tensorflow:__subpackages__",
+        "@xla_serving//runtime/xla_serving_data:__subpackages__",
     ],
     deps = [
         ":orbax_type_utils",
@@ -293,7 +293,7 @@ cc_library(
     visibility = [
         ":internal",
         ":interpreter_users",
-        "@xla_serving//runtime/neptune_data:__subpackages__",
+        "@xla_serving//runtime/xla_serving_data:__subpackages__",
     ],
     deps = [
         "@abseil-cpp//absl/base:nullability",
