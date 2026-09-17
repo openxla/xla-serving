@@ -19,6 +19,7 @@ from collections.abc import Iterable, Sequence
 import dataclasses
 from typing import Any, TypeVar
 
+from absl import logging
 import jax
 
 # Somehow JAX requires this import to make `jax.export` available.
@@ -37,11 +38,11 @@ from xla_saved_model.protos.jax_supplemental_pb2 import DTypeRefinement
 from xla_saved_model.protos.jax_supplemental_pb2 import ShapeDTypeRefinement
 from xla_saved_model.protos.jax_supplemental_pb2 import ShapeDTypeRefinements
 from xla_saved_model.protos.jax_supplemental_pb2 import ShapeRefinement
-from xla_saved_model._src.core import constants as npt_constants
 from xla_saved_model._src.core import shlo_function
 from xla_saved_model._src.core import shlo_type
 from xla_saved_model._src.core import unstructured_data
 from xla_saved_model._src.jax2xsm import constants
+from xla_saved_model._src.jax2xsm import pytree_proto
 from xla_saved_model.protos.xla import xla_data_pb2
 
 T1 = TypeVar("T1")
@@ -245,6 +246,43 @@ CURRENT_JAX_SUPPLEMENTAL_VERSION: str = (
 )
 
 
+def _to_pytree_def_proto(
+    treedef: jax.tree_util.PyTreeDef | None,
+    what: str,
+) -> jax_supplemental_pb2.PyTreeDef | None:
+  """Serializes a `PyTreeDef`, or returns None if it need not be recorded.
+
+  The manifest already describes tuples, lists, dicts and `None` exactly, so a
+  structure built only from those is not recorded: doing so would add bytes to
+  every artifact to restate what the manifest says. A structure that does
+  contain a custom node is recorded if every such node is registered for
+  serialization, and skipped with a warning otherwise, which leaves the artifact
+  exactly as it would have been before this field existed.
+
+  Args:
+    treedef: The structure to serialize, or None if unknown.
+    what: Human readable description of `treedef`, used in the warning.
+
+  Returns:
+    The proto representation, or None if the structure is either already
+    implied by the manifest or not serializable.
+  """
+  if treedef is None or not pytree_proto.contains_custom_node(treedef):
+    return None
+  try:
+    return pytree_proto.to_proto(treedef)
+  except pytree_proto.UnsupportedPyTreeDefError as e:
+    logging.warning(
+        "Not recording the PyTree structure of %s (%s) in the JAX"
+        " supplemental: %s. Callers that rebuild the calling convention from"
+        " the saved model will see the custom nodes flattened into lists.",
+        what,
+        treedef,
+        e,
+    )
+    return None
+
+
 @dataclasses.dataclass
 class JaxSpecificInfo(shlo_function.ShloFunctionSupplementalInfo):
   """JAX-specific information.
@@ -258,6 +296,11 @@ class JaxSpecificInfo(shlo_function.ShloFunctionSupplementalInfo):
     unordered_effects: unordered effects.
     disabled_safety_checks: disabled safety checks.
     uses_shape_polymorphism: bool indicating if shape polymorphism is used.
+    in_tree: the PyTree structure of the function's inputs, recorded so that
+      custom nodes, which the manifest cannot represent, survive a round trip.
+      Only recorded when the manifest is not already exact; see
+      `_to_pytree_def_proto`.
+    out_tree: the PyTree structure of the function's outputs. See `in_tree`.
   """
 
   name: str
@@ -270,6 +313,9 @@ class JaxSpecificInfo(shlo_function.ShloFunctionSupplementalInfo):
   disabled_safety_checks: Sequence[jax.export.DisabledSafetyCheck]
 
   uses_shape_polymorphism: bool
+
+  in_tree: jax.tree_util.PyTreeDef | None = None
+  out_tree: jax.tree_util.PyTreeDef | None = None
 
   def serializable_to_proto(
       self,
@@ -290,6 +336,12 @@ class JaxSpecificInfo(shlo_function.ShloFunctionSupplementalInfo):
             _serialize_disabled_safety_check, self.disabled_safety_checks
         ),
         uses_shape_polymorphism=self.uses_shape_polymorphism,
+        input_tree=_to_pytree_def_proto(
+            self.in_tree, f"the inputs of `{self.name}`"
+        ),
+        output_tree=_to_pytree_def_proto(
+            self.out_tree, f"the outputs of `{self.name}`"
+        ),
     )
     return unstructured_data.UnstructuredDataWithExtName(
         proto=manifest_pb2.UnstructuredData(

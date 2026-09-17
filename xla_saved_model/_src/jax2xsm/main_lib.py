@@ -161,6 +161,8 @@ def jax_exported_to_shlo_fn(
       unordered_effects=exported.unordered_effects,
       disabled_safety_checks=tuple(exported.disabled_safety_checks),
       uses_shape_polymorphism=exported.uses_global_constants,
+      in_tree=exported.in_tree,
+      out_tree=exported.out_tree,
   )
   supplemental_info_[constants.JAX_SPECIFIC_INFO] = jax_specific_info_
 

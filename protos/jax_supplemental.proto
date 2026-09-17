@@ -41,6 +41,68 @@ message Function {
 
   // The name of the original JAX function.
   string name = 8;
+
+  // The PyTree structure of the function's inputs and outputs.
+  //
+  // `manifest.pb` describes these structures with a framework-neutral `Type`,
+  // which can express tuples, lists, dicts and `None`, but has no
+  // representation for a custom PyTree node (for example a
+  // `flax.struct.dataclass`). Such a node is written to `manifest.pb` as a
+  // plain list of its leaves, which loses the node's identity. A caller that
+  // reconstructs the calling convention from `manifest.pb` alone therefore
+  // builds a `list` where the original function expects the custom node, and
+  // the call is rejected even though every leaf matches.
+  //
+  // These fields record the original structure so it can be restored. Like the
+  // refinements above, they refine `manifest.pb` and must not contradict it:
+  // the leaves, in order, are exactly the tensors described there.
+  //
+  // Absence means the structure in `manifest.pb` is already exact. That is the
+  // case for any signature without custom nodes, for artifacts written before
+  // these fields existed, and for signatures whose custom nodes were not
+  // registered for serialization at export time.
+  optional PyTreeDef input_tree = 9;
+  optional PyTreeDef output_tree = 10;
+}
+
+// A serialized `jax.tree_util.PyTreeDef`.
+//
+// This mirrors the representation JAX itself uses to serialize the `in_tree`
+// and `out_tree` of a `jax.export.Exported` (see the `PyTreeDef` table in
+// `jax/_src/export/serialization.py`), so that the two stay aligned.
+message PyTreeDef {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    LEAF = 1;
+    NONE = 2;
+    TUPLE = 3;
+    LIST = 4;
+    DICT = 5;
+    CUSTOM = 6;
+  }
+
+  Kind kind = 1;
+
+  // The node's children, in flattening order. Empty for LEAF and NONE.
+  repeated PyTreeDef children = 2;
+
+  // DICT only. The key of each child, in the same order as `children`. JAX
+  // sorts dictionary keys when flattening, so these are sorted.
+  repeated string children_names = 3;
+
+  // CUSTOM only. The name the node type was registered under via
+  // `pytree_proto.register_pytree_node_serialization`. Deserialization
+  // resolves the type by looking up this name in the reading process's
+  // registry. It is deliberately not a Python import path: an artifact must
+  // not be able to cause an arbitrary module to be imported, and a registered
+  // name stays stable when code moves.
+  string custom_name = 4;
+
+  // CUSTOM only. The node's auxiliary data, produced by the `serialize_auxdata`
+  // callback supplied at registration and consumed by the matching
+  // `deserialize_auxdata`. Opaque to this proto, so auxiliary data that has no
+  // natural textual form (a dtype, say) is representable.
+  bytes custom_auxdata = 5;
 }
 
 message ShapeDTypeRefinements {
