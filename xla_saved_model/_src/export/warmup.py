@@ -27,7 +27,7 @@ from xla_saved_model._src.core import file_utils
 from xla_saved_model.protos.xla.python.ifrt import dtype_pb2
 
 ASSETS_EXTRA_DIR = "assets.extra"
-WARMUP_REQUESTS_FILENAME = "neptune_serving_warmup_requests"
+WARMUP_REQUESTS_FILENAME = "xla_serving_warmup_requests"
 
 
 def _to_host_buffer_proto(val: Any) -> host_buffer_pb2.HostBufferProto:

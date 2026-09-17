@@ -141,7 +141,8 @@ absl::Status ValidateStableHlo(
       return absl::InvalidArgumentError(
           "Function body must have `StableHloFunctionBody`");
     }
-    // TODO b/401364010: Verify all have the same number of inputs and outputs.
+    // TODO: Verify all have the same number of inputs and
+    // outputs.
   }
   return absl::OkStatus();
 }
@@ -722,7 +723,7 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateStableHloRunnerOp(
   TF_RETURN_IF_ERROR(
       builder.SetConfig(kStablehloOptimizer, create_options.optimizer.get()));
 
-  // TODO b/401364010: It is fine to use the first function to infer the
+  // TODO: It is fine to use the first function to infer the
   // assigned devices. We will rely on the `manifest` to get the assigned
   // devices, rather than using `func` to infer the assigned devices. Remove
   // `func` from the input argument list once assigned devices are available in
@@ -755,7 +756,6 @@ NamedSignature GetNamedSignatureOfComponent(
   return {};
 }
 
-// LINT.IfChange(InterpreterCreateOptionsValidation)
 absl::Status ValidateInterpreterCreateOptions(
     const InterpreterCreateOptions& create_options) {
   if (create_options.model_path.empty()) {
@@ -775,7 +775,6 @@ absl::Status ValidateInterpreterCreateOptions(
   }
   return absl::OkStatus();
 }
-// LINT.ThenChange(//depot//third_party/neptune/runtime/interpreter/interpreter_create_options.h:InterpreterCreateOptions)
 
 // Modular execution bucket loader
 absl::StatusOr<BucketAotData> LoadAotExecutableForBucket(
@@ -1014,7 +1013,7 @@ absl::Status Interpreter::LoadGraphs() {
   LOG(INFO) << "Loading graphs from pipelines";
   if (parallel_loading) {
     static absl::NoDestructor<tsl::thread::ThreadPool> shared_loading_pool(
-        tsl::Env::Default(), "JsvGraphLoaderPool", 8);
+        tsl::Env::Default(), "XlaServingGraphLoaderPool", 8);
     tsl::BlockingCounter counter(graph_bundles_.size());
     for (auto& [pipeline_name, graph_bundle] : graph_bundles_) {
       LOG(INFO) << "Scheduling graph load from pipeline: " << pipeline_name;

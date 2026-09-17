@@ -17,9 +17,8 @@
 
 #include <cstdint>
 
-#include "Eigen/Core"  // IWYU pragma: keep, b/376693552
+#include "Eigen/Core"  // IWYU pragma: keep
 
-// go/lsc-fix-eigen-includes
 // IWYU pragma: no_include "Eigen/src/Core/util/ConfigureVectorization.h"
 
 namespace xla_serving::data::composite::utils {

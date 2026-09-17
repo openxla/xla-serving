@@ -175,7 +175,7 @@ class Interpreter {
   absl::Status Load();
 
  private:
-  // TODO: Remove this peer class once JSV fully supports
+  // TODO: Remove this peer class once XLA Serving fully supports
   // graph-based orchestration and tests can use the public API.
   friend class InterpreterPeer;
 
@@ -241,14 +241,15 @@ class Interpreter {
 
   // Loads a StableHloRunnerOp kernel based on the model function name and
   // weights name.
-  // TODO: Remove the `platform_name` parameter once JSV supports
-  // running processors on TPU. Currently, when models are exported using older
-  // binaries without specifying a platform name, existing models still assume
-  // lowering to CPU. However, JSV can execute this StableHLO on TPU even when
-  // targeting the CPU platform. If a customer intends to run on TPU,
-  // `StableHloRunnerOp` is called directly with an IFRT client that supports
-  // TPU. Without the `platform_name` parameter, the new `host_ifrt_client`
-  // would incorrectly route execution to CPU, which fails for TPU workloads.
+  // TODO: Remove the `platform_name` parameter once XLA Serving
+  // supports running processors on TPU. Currently, when models are exported
+  // using older binaries without specifying a platform name, existing models
+  // still assume lowering to CPU. However, XLA Serving can execute this
+  // StableHLO on TPU even when targeting the CPU platform. If a customer
+  // intends to run on TPU, `StableHloRunnerOp` is called directly with an IFRT
+  // client that supports TPU. Without the `platform_name` parameter, the new
+  // `host_ifrt_client` would incorrectly route execution to CPU, which fails
+  // for TPU workloads.
   absl::StatusOr<std::unique_ptr<Kernel>> LoadStableHloRunnerOp(
       absl::string_view model_function_name, absl::string_view weights_name,
       const xla_saved_model_orchestration::NamedTensorTypeList* named_inputs =

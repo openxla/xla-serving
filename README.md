@@ -1,15 +1,15 @@
-# Neptune Serving Engine
+# XLA Serving Engine
 
-[Neptune Serving Engine (NSE)](https://docs.cloud.google.com/tpu/docs/jax-ai-stack#jax_serving_orbax_serialization_and_neptune_serving_engine)
+[XLA Serving Engine (XSE)](https://docs.cloud.google.com/tpu/docs/jax-ai-stack#jax_serving_orbax_serialization_and_neptune_serving_engine)
 is a general-purpose inference runtime for the XLA-based (TPU) software
 ecosystem. It is designed to be a modular infrastructure component that can be
 plugged into a variety of higher abstraction serving solutions.
 
-NSE is a generic serving solution for a diversity of deep learning models,
+XSE is a generic serving solution for a diversity of deep learning models,
 including computer vision, NLP, transformers, recommenders, etc.
 It is not meant for high-throughput LLM serving.
 
-**Why use NSE?**
+**Why use XSE?**
 
 - Battle-tested by major Google product areas including YouTube, Deepmind,
 Waymo, and Ads. Designed for doing inference on TPUs.
@@ -21,7 +21,7 @@ LRMs, encoder-heavy LLMs.
 ## Python Development
 
 A `xla_saved_model` Python library provides an API for exporting models that can
-run on NSE.
+run on XSE.
 
 ### Prerequisites
 
@@ -71,27 +71,27 @@ ModelRunner allows quickly testing inference on an exported model from Python.
 
 ```bash
 # Python 3.11
-bazel build //runtime/python:neptune_model_runner --@rules_python//python/config_settings:python_version=3.11
+bazel build //runtime/python:xla_saved_model_runner --@rules_python//python/config_settings:python_version=3.11
 
 # Python 3.12+
-bazel build //runtime/python:neptune_model_runner --@rules_python//python/config_settings:python_version=3.12
+bazel build //runtime/python:xla_saved_model_runner --@rules_python//python/config_settings:python_version=3.12
 ```
 
 Nanobind supports limited Python ABI for 3.12+, so you can use
-`neptune_model_runner` built with 3.12 for any Python 3.12+.
+`xla_saved_model_runner` built with 3.12 for any Python 3.12+.
 
 Install it with:
 
 ```bash
 # Replace *.whl with an actual version under your bazel-bin/.
-pip install bazel-bin/runtime/python/neptune_model_runner-0.0.1-cp311-cp311-manylinux_2_28_x86_64.whl
+pip install bazel-bin/runtime/python/xla_saved_model_runner-0.0.1-cp311-cp311-manylinux_2_28_x86_64.whl
 ```
 
 Test the model:
 
 ```python
 import numpy as np
-from neptune_model_runner import model_runner
+from xla_saved_model_runner import model_runner
 
 runner = model_runner.ModelRunner(model_path='/your/model')
 
@@ -107,8 +107,8 @@ outputs = runner.signature('serving_default').run_with_dict_return(**inputs)
 
 ## Ahead-Of-Time (AOT) Model Recompilation
 
-Neptune supports Ahead-Of-Time precompilation to eliminate online JIT latency
-and protect host container memory. See the
+XLA Serving supports Ahead-Of-Time precompilation to eliminate online JIT
+latency and protect host container memory. See the
 [AOT User Guide](docs/aot_user_guide.md) and
 [AOT Benchmark](examples/aot_benchmark/README.md) for full details.
 
@@ -249,7 +249,7 @@ The server can optionally run warmup requests on startup to trigger XLA compilat
 Running warmup requests avoids "cold start" latency spikes for the first few client requests by pre-compiling the XLA graphs, ensuring the server is ready to serve with predictable latency immediately after it starts reporting healthy.
 
 #### Prerequisites
-The model directory must contain a pre-generated warmup file at `assets.extra/neptune_serving_warmup_requests`.
+The model directory must contain a pre-generated warmup file at `assets.extra/xla_serving_warmup_requests`.
 
 This file can be generated during model export by passing warmup examples to `xla_saved_model.save(..., warmup_examples=...)`.
 

@@ -12,11 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for Neptune export of NNX model."""
+"""Tests for XLA SavedModel export of NNX model."""
 
 import os
 
-from absl import logging
 from absl.testing import absltest
 import tensorflow as tf
 
@@ -24,12 +23,9 @@ from examples.nnx_tf_ragged import export
 
 
 def _model_runner(model_path: str):
-  try:
-    from neptune_model_runner import model_runner  # pylint: disable=g-import-not-at-top
+  from xla_saved_model_runner import model_runner  # pylint: disable=g-import-not-at-top
 
-    return model_runner.ModelRunner(model_path=model_path)
-  except ImportError:
-    return None
+  return model_runner.ModelRunner(model_path=model_path)
 
 
 class ExportTest(absltest.TestCase):
@@ -44,11 +40,6 @@ class ExportTest(absltest.TestCase):
     )
 
     runner = _model_runner(export_path)
-    if runner is None:
-      logging.warning(
-          'ModelRunner not found, skipping running the exported model'
-      )
-      return
 
     ragged = tf.ragged.constant([[1, 2], [3, 4, 5]], dtype=tf.int32)
     sparse = tf.sparse.SparseTensor(

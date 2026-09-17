@@ -27,7 +27,7 @@ namespace xla_serving {
 
 using SchedulingParams = tsl::thread::ThreadPool::SchedulingParams;
 
-// This is an interface for thread pools in JSV which allows different
+// This is an interface for thread pools in XLA Serving which allows different
 // implementations of thread pools, like TFRT and tsl thread pools.
 class ThreadPoolInterface {
  public:

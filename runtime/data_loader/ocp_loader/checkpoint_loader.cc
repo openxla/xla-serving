@@ -50,7 +50,7 @@
 #include "xla/xla_data.pb.h"  // from @xla
 #include "tsl/platform/path.h"  // from @tsl
 
-// TODO(qidichen): add test for this file.
+// TODO: add test for this file.
 namespace xla_serving {
 
 const char _OCDBT_MANIFEST_FILE[] = "manifest.ocdbt";

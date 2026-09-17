@@ -33,9 +33,10 @@ IFRT_EXECUTABLE_MIME_TYPE = 'application/x-ifrt-executable'
 ################################################################################
 
 # The filename of the model version metadata file relative to the save
-# directory.
-MODEL_VERSION_FILENAME = 'neptune_model_version.txt'
-MODEL_VERSION_LEGACY_FILENAME = 'orbax_model_version.txt'
+# directory. The name is historical, but it is the one every reader in the
+# ecosystem recognizes, so it is kept rather than tracking the project's
+# renames.
+MODEL_VERSION_FILENAME = 'orbax_model_version.txt'
 
 # The file path of the manifest proto file relative to the save directory.
 MANIFEST_FILE_PATH = 'manifest.pb'
@@ -47,11 +48,12 @@ HISTORY_FILENAME = 'history.txtpb'
 # The version of the manifest.
 MANIFEST_VERSION = '0.0.1'
 
-# The mime type of the manifest proto file.
+# The mime type of the manifest proto file. This names the on-disk format,
+# which has not changed across the project's renames, so it deliberately does
+# not track them. It is also the only spelling that appears in models already
+# exported, and (unlike the proto package) it is not rewritten by Copybara, so
+# it is identical internally and in OSS.
 MANIFEST_MIME_TYPE = (
-    'application/protobuf; type=xla_saved_model_manifest.Manifest'
-)
-MANIFEST_LEGACY_MIME_TYPE = (
     'application/protobuf; type=orbax_model_manifest.Manifest'
 )
 

@@ -223,6 +223,33 @@ class Tf2XsmConverterTest(
     with self.assertRaises(AttributeError):
       f.get_concrete_function()
 
+  def test_output_signature_preserves_tracked_dict_structure(self):
+    class _Scaler(tf.Module):
+
+      def __init__(self):
+        super().__init__()
+        # TF replaces dicts assigned to a trackable with `_DictWrapper`, and
+        # functions built from them return `_DictWrapper` too.
+        self.scales = {'a': 2.0, 'b': 3.0}
+
+      @tf.function(autograph=False)
+      def __call__(self, x):
+        return tf.nest.map_structure(lambda scale: x * scale, self.scales)
+
+    # `tf.function` holds only a weak reference to the bound instance, so the
+    # module has to outlive tracing.
+    scaler = _Scaler()
+    cf = scaler.__call__.get_concrete_function(
+        tf.TensorSpec(shape=(None, 1), dtype=tf.float32)
+    )
+
+    output_signature = converter.get_output_signature(cf)
+
+    self.assertEqual(
+        jax.tree_util.tree_structure(output_signature),
+        jax.tree_util.tree_structure({'a': 0, 'b': 0}),
+    )
+
   @parameterized.named_parameters(
       dict(
           testcase_name='_allows_mixed_types',

@@ -184,13 +184,11 @@ message FileSystemLocation {
   optional uint64 size_in_byte = 4;
 }
 
-// copybara:strip_begin(internal code)
 // A map of platform to compilation options. This is used in the XLA compiler to
 // determine the compilation options for a given platform.
 message CompileOptionsProtoMap {
   map<string, xla.CompileOptionsProto> map = 1;
 }
-// copybara:strip_end
 
 enum Platform {
   PLATFORM_UNSPECIFIED = 0;

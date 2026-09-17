@@ -33,9 +33,9 @@
 namespace xla_serving {
 
 // In this file, we use the term "linear graph" to refer to a graph of kernels
-// that are executed sequentially, aka, each node corresponds to one jsv kernel.
-// Each kernel executes a function such as a StableHlo computation or a TF
-// function.
+// that are executed sequentially, aka, each node corresponds to one XLA Serving
+// kernel. Each kernel executes a function such as a StableHlo computation or a
+// TF function.
 
 // Executes the linear graph with the given inputs synchronously.
 // This may block the current thread.

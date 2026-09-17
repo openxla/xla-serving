@@ -124,10 +124,8 @@ absl::StatusOr<xla::DeviceAssignment> GetRuntimeXlaDeviceAssignment(
   return da;
 }
 
-
-
 auto* input_transfer_counter =
-    ::tsl::monitoring::Counter<1>::New("/jsv/input_transfer/dispatched",
+    ::tsl::monitoring::Counter<1>::New("/xla_serving/input_transfer/dispatched",
                                        "Tracks how many transfers were routed "
                                        "to the Arena vs. Default IFRT path.",
                                        "transfer_path");
@@ -708,7 +706,7 @@ StableHloRunner::LookUpOrCreateExecutable(
           "Got new input shapes requiring a new executable, but "
           "can't create it after full initialization. Please warm "
           "up the model with all the input shapes that are possible during "
-          "serving. (See go/tf-model-warmup for more details.)"));
+          "serving."));
       return future;
     }
 

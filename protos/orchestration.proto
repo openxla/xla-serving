@@ -70,7 +70,7 @@ message Pipeline {
   // model functions determines the order of execution. The output of the nth
   // model function serves as the input to the (n+1)th model function.
   // Currently, we ONLY support AT MOST ONE model function (thus, having no
-  // model functions is allowed). See b/421976850.
+  // model functions is allowed).
   repeated BoundModelFunction model_functions = 4 [deprecated = true];
 
   // The names (in manifest) of the post-processor functions. For multi-stage
@@ -106,9 +106,9 @@ message Component {
   Role role = 2;
   // The named_signature of the first and last components is used to derive the
   // pipeline's named signature. For intermediate components, the named input
-  // signature is used by JSV to filter out unwanted named signatures for each
-  // kernel. The named output signature will be used to update the available
-  // tensor map of the ExecuteContext.
+  // signature is used by XLA Serving to filter out unwanted named signatures
+  // for each kernel. The named output signature will be used to update the
+  // available tensor map of the ExecuteContext.
   optional NamedSignature named_signature = 4;
   // If set, specifies the name of the weights to be bound to this function.
   // This field is primarily used for model functions and is typically omitted
@@ -136,8 +136,8 @@ message NamedTensorTypeList {
 message NamedTensorType {
   string name = 1;
   xla_saved_model_type.TensorType tensor_type = 2;
-  // Number of downstream consumers of this tensor. This value is computed
-  // by OEX during export and used by JSV to manage tensor cache eviction.
+  // Number of downstream consumers of this tensor. This value is computed by
+  // OEX during export and used by XLA Serving to manage tensor cache eviction.
   optional int32 consumer_count = 3;
 }
 

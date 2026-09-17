@@ -22,7 +22,7 @@
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 
-namespace neptune_examples {
+namespace xla_serving_examples {
 namespace composite {
 
 class AddTwoInputBuffersTransform
@@ -36,6 +36,6 @@ class AddTwoInputBuffersTransform
 };
 
 }  // namespace composite
-}  // namespace neptune_examples
+}  // namespace xla_serving_examples
 
 #endif  // XLA_SERVING_EXAMPLES_COMPOSITE_PROCESSOR_ADD_TWO_INPUT_BUFFERS_TRANSFORM_H_

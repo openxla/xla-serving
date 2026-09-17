@@ -1,11 +1,11 @@
-# Neptune LLM Example: Qwen3-0.6B Beam Search
+# XSE LLM Example: Qwen3-0.6B Beam Search
 
-Note: Full documentation for Neptune LLM can be found at
+Note: Full documentation for XSE LLM can be found at
 `xla_saved_model/_src/llm/README.md`.
 
 This example demonstrates how to export, serve, and benchmark an open-source
 Large Language Model (**[Qwen/Qwen3-0.6B](https://huggingface.co/Qwen/Qwen3-0.6B)**)
-with **Beam Search sampling** (`beam_width = 30`) using Neptune on Google Cloud
+with **Beam Search sampling** (`beam_width = 30`) using XSE on Google Cloud
 TPU.
 
 ---
@@ -27,10 +27,10 @@ install the LLM export dependencies:
 
 ```bash
 # Create and activate a Python virtual environment
-python3.12 -m venv neptune-venv
-source neptune-venv/bin/activate
+python3.12 -m venv xse-venv
+source xse-venv/bin/activate
 
-# Install Neptune with LLM dependencies
+# Install XSE with LLM dependencies
 pip install -e ".[llm]"
 
 # Set environment variables for TPU runtime and protobuf
@@ -42,7 +42,7 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 
 ## 2. Exporting the Model via CLI (`export_llm`)
 
-Export the model directly using Neptune's LLM export CLI:
+Export the model directly using XSE's LLM export CLI:
 
 ```bash
 python3 -m xla_saved_model._src.llm.export_llm \
@@ -127,24 +127,24 @@ Prompt: The most unexpected thing happened when I opened the door,
 ## 5. Using the C++ Model Runner Python Bindings
 
 You can also run the exported bundle locally in Python without the gRPC server
-using Neptune's `neptune_model_runner` Python bindings.
+using XSE's `xla_saved_model_runner` Python bindings.
 
-You can install `neptune_model_runner-*.whl` directly from
-**[Neptune GitHub Releases](https://github.com/AI-Hypercomputer/neptune/releases)**,
+You can install `xla_saved_model_runner-*.whl` directly from
+**[XSE GitHub Releases](https://github.com/AI-Hypercomputer/neptune/releases)**,
 or build the wheel from source with Bazel:
 
 ```bash
 # Build the wheel from source:
-bazel build -c opt //runtime/python:neptune_model_runner --@rules_python//python/config_settings:python_version=3.12
+bazel build -c opt //runtime/python:xla_saved_model_runner --@rules_python//python/config_settings:python_version=3.12
 
 # Install the wheel:
-pip install bazel-bin/runtime/python/neptune_model_runner-*.whl
+pip install bazel-bin/runtime/python/xla_saved_model_runner-*.whl
 ```
 
 Run inference directly in Python:
 
 ```python
-from neptune_model_runner import model_runner
+from xla_saved_model_runner import model_runner
 import numpy as np
 
 # Load exported bundle on TPU

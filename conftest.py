@@ -12,10 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""pytest configuration for neptune."""
+"""pytest configuration for XLA Serving."""
 
+import os
 from typing import Any
 from absl import flags
+
+os.environ.setdefault("KERAS_BACKEND", "jax")
 
 
 def pytest_configure(config: Any) -> None:

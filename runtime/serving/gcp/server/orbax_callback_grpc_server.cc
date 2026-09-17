@@ -76,7 +76,7 @@ namespace {
 
 static constexpr char kDefaultServingSignatureDefKey[] = "serving_default";
 static constexpr char kWarmupRequestsRelativePath[] =
-    "assets.extra/neptune_serving_warmup_requests";
+    "assets.extra/xla_serving_warmup_requests";
 
 inline constexpr std::initializer_list<double> kRequestLatencyBuckets = {
     0,       0.1,     0.2,     0.3,     0.4,     0.5,     0.55,    0.61,
@@ -96,12 +96,12 @@ inline constexpr std::initializer_list<double> kRequestLatencyBuckets = {
     1100000, 1300000, 1550000, 1800000, 2160000, 2600000, 3100000, 3800000};
 
 auto* const request_count_metric = tsl::monitoring::Counter<3>::New(
-    "/neptune/external/serving/request_count",
+    "/xla_serving/external/request_count",
     "Counts requests broken down by model_name, rpc_method, and status.",
     "model_name", "rpc_method", "status");
 
 auto* const request_latency_metric = tsl::monitoring::Sampler<3>::New(
-    {"/neptune/external/serving/request_latencies",
+    {"/xla_serving/external/request_latencies",
      "Request latencies for processed requests in milliseconds.", "model_name",
      "rpc_method", "status"},
     tsl::monitoring::Buckets::Explicit(kRequestLatencyBuckets));

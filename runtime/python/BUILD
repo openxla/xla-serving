@@ -73,37 +73,37 @@ config_setting(
 )
 
 genrule(
-    name = "stage_neptune_model_runner_pkg",
+    name = "stage_xla_saved_model_runner_pkg",
     srcs = [
         "__init__.py",
         ":model_runner.so",
     ],
     outs = [
-        "neptune_model_runner/__init__.py",
-        "neptune_model_runner/model_runner.so",
+        "xla_saved_model_runner/__init__.py",
+        "xla_saved_model_runner/model_runner.so",
     ],
     cmd = """
-  mkdir -p $(@D)/neptune_model_runner
-  cp $(location __init__.py) $(@D)/neptune_model_runner/__init__.py
-  cp $(location model_runner.so) $(@D)/neptune_model_runner/model_runner.so
+  mkdir -p $(@D)/xla_saved_model_runner
+  cp $(location __init__.py) $(@D)/xla_saved_model_runner/__init__.py
+  cp $(location model_runner.so) $(@D)/xla_saved_model_runner/model_runner.so
   """,
 )
 
 py_library(
-    name = "neptune_model_runner_pkg",
+    name = "xla_saved_model_runner_pkg",
     srcs = [
-        "neptune_model_runner/__init__.py",
+        "xla_saved_model_runner/__init__.py",
     ],
-    data = ["neptune_model_runner/model_runner.so"],
+    data = ["xla_saved_model_runner/model_runner.so"],
 )
 
 py_wheel(
-    name = "neptune_model_runner",
+    name = "xla_saved_model_runner",
     abi = select({
         "@rules_python//python/config_settings:is_python_3.11": "cp311",
         "@rules_python//python/config_settings:is_python_3.12": "abi3",
     }),
-    distribution = "neptune_model_runner",
+    distribution = "xla_saved_model_runner",
     platform = select({
         ":linux_x86_64": "manylinux_2_28_x86_64",
         ":linux_aarch64": "manylinux_2_28_aarch64",
@@ -115,8 +115,8 @@ py_wheel(
     strip_path_prefixes = ["runtime/python"],
     version = VERSION,
     deps = [
-        ":neptune_model_runner_pkg",
-        ":stage_neptune_model_runner_pkg",
+        ":stage_xla_saved_model_runner_pkg",
+        ":xla_saved_model_runner_pkg",
     ],
 )
 
@@ -124,7 +124,7 @@ cc_library(
     name = "numpy_utils",
     srcs = ["numpy_utils.cc"],
     hdrs = ["numpy_utils.h"],
-    copts = ["-fexceptions"],  # go/cpp-3p-exceptions
+    copts = ["-fexceptions"],
     features = ["-use_header_modules"],  # Required for -fexceptions.
     deps = [
         "@abseil-cpp//absl/log",

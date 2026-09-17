@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Script to run Neptune export for NNX model with TF embeddings."""
+"""Script to run XLA SavedModel export for NNX model with TF embeddings."""
 
 from absl import app
 from absl import flags

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Neptune export for NNX recommender model with TPUEmbeddingForServing layer."""
+"""XLA SavedModel export for NNX recommender with TPUEmbeddingForServing."""
 
 import os
 import tempfile
@@ -23,6 +23,7 @@ import orbax.checkpoint as ocp
 import tensorflow as tf
 
 from examples.nnx_with_tf_embeddings import model as model_lib
+from xla_saved_model.protos import orchestration_pb2
 from xla_saved_model._src.export import jax_model
 from xla_saved_model._src.export import main_lib
 from xla_saved_model._src.export import serving_config
@@ -39,7 +40,7 @@ flags.DEFINE_integer(
 
 
 def export_model(export_path: str):
-  """Exports the NNX recommender model using Neptune."""
+  """Exports the NNX recommender model using XLA SavedModel."""
 
   rngs = nnx.Rngs(0)
   embedding_layer, model = model_lib.build_model(
@@ -109,9 +110,12 @@ def export_model(export_path: str):
                       serving_config.ModelCall(
                           model_name='tf_model',
                           method_key='preprocessing',
+                          role=orchestration_pb2.ROLE_PREPROCESSOR,
                       ),
                       serving_config.ModelCall(
-                          model_name='jax_model', method_key='serving_default'
+                          model_name='jax_model',
+                          method_key='serving_default',
+                          role=orchestration_pb2.ROLE_MODEL,
                       ),
                   ]
               ),

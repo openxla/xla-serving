@@ -50,7 +50,7 @@
 #include "tsl/platform/context.h"  // from @tsl
 #include "tsl/platform/thread_annotations.h"  // from @tsl
 
-ABSL_DECLARE_FLAG(bool, jsv_support_batching_for_ragged_inputs);
+ABSL_DECLARE_FLAG(bool, xla_serving_support_batching_for_ragged_inputs);
 
 namespace xla_serving {
 
@@ -316,7 +316,7 @@ class BatchResourceBase : public ResourceBase {
       std::function<void(const absl::Status&)> done) const = 0;
 
  private:
-  friend class TestJsvBatchResource;
+  friend class TestXlaServingBatchResource;
   friend class TestBatchResourceBase;
 
   virtual absl::StatusOr<absl::Span<const Value>> GetInputsToBatch(

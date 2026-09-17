@@ -39,7 +39,7 @@ struct InPlaceStorageT {
   // Many tensor implementations like tensorflow::Tensor requires multiple
   // words, and we'd like to keep these values inplace.
   //
-  // TODO(chky): Consider a better size for inplace storage.
+  // TODO: Consider a better size for inplace storage.
   alignas(8) char data[56];
 };
 

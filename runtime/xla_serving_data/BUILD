@@ -57,12 +57,10 @@ cc_library(
     alwayslink = True,
 )
 
-# Include this library in the `deps` of the `cc_binary` together with `//third_party/neptune/runtime/interpreter` to enable JAX Data-based preprocessing and postprocessing.
 cc_library(
     name = "interpreter_composite_processor_support",
     visibility = [
         ":composite_processor_function_internal_users",
-        "//third_party/py/orbax/export:__subpackages__",
         "@xla_serving//:__subpackages__",
     ],
     deps = [

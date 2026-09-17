@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Script to run Neptune export for the ViT image classifier."""
+"""Script to run XLA SavedModel export for the ViT image classifier."""
 
 from absl import app
 from absl import flags

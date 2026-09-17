@@ -52,7 +52,7 @@ class DefaultDataLoader : public DataLoader {
 
   absl_nonnull std::shared_ptr<xla::ifrt::Client> ifrt_client_;
   // Thread pool for loading checkpoints in the background. Not owned.
-  // TODO(b406294940): remove this once implemented: NOLINTNEXTLINE
+  // TODO: remove this once implemented: NOLINTNEXTLINE
   tsl::thread::ThreadPool* absl_nullable checkpoint_loader_thread_pool_;
 };
 

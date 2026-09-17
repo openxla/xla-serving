@@ -69,7 +69,7 @@ ABSL_FLAG(int64_t, cost_threshold, 10000, "Cost threshold");
 ABSL_FLAG(int, xprof_port, 8888, "Port for the XProf server to listen on.");
 ABSL_FLAG(bool, warmup_server, false,
           "Warmup server on startup. This requires the warmup requests file "
-          "('assets.extra/neptune_serving_warmup_requests') to be present in "
+          "('assets.extra/xla_serving_warmup_requests') to be present in "
           "the model directory. The file must contain size-prefixed records "
           "(varint32 length prefix followed by serialized proto bytes) of "
           "xla_serving::serving::PredictionLog containing PredictRequests. This file "

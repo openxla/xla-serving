@@ -1,7 +1,6 @@
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
-load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("@xla_serving//data/processor/python:build_defs.bzl", "transform_pybind_library")
 load("@xla_serving//data/resource_manager/python:build_defs.bzl", "resource_pybind_library")
 
@@ -104,46 +103,6 @@ cc_library(
     visibility = ["@xla_serving//:__subpackages__"],
     deps = [":example_transforms_and_resources"],
     alwayslink = True,
-)
-
-py_library(
-    name = "export",
-    testonly = 1,
-    srcs = ["export.py"],
-    deps = [
-        ":add_int_from_resource_transform_pybind",
-        ":add_two_input_buffers_transform_pybind",
-        ":int_resource_pybind",
-        "@xla_serving//data/resource_manager/python:resource_manager",
-        "@xla_serving//protos:orchestration_py_pb2",
-        "@xla_serving//xla_saved_model/_src/core:typing",
-        "@xla_serving//xla_saved_model/_src/export:jax_model",
-        "@xla_serving//xla_saved_model/_src/export:main_lib",
-        "@xla_serving//xla_saved_model/_src/export:serving_config",
-        "@xla_serving_pypi//jax",
-    ],
-)
-
-py_test(
-    name = "export_test",
-    srcs = ["export_test.py"],
-    deps = [
-        ":export",
-        "@absl_py//absl/logging",
-        "@absl_py//absl/testing:absltest",
-        "@xla_serving//runtime/python:model_runner",  # buildcleaner: keep
-        "@xla_serving_pypi//numpy",
-    ],
-)
-
-py_binary(
-    name = "run_export",
-    srcs = ["run_export.py"],
-    deps = [
-        ":export",
-        "//third_party/py/absl:app",
-        "@absl_py//absl/flags",
-    ],
 )
 
 cc_test(

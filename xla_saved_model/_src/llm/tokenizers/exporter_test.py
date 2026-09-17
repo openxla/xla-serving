@@ -30,7 +30,7 @@ from xla_saved_model._src.llm.tokenizers import config as tokenizer_config
 from xla_saved_model._src.llm.tokenizers import exporter
 
 
-# TODO(armandouv): Consider adding an integration test that exports a real LLM
+# TODO: Consider adding an integration test that exports a real LLM
 # model architecture (e.g. from _src/models/ or examples/) with checked-in
 # tokenizer assets, rather than relying solely on MockModel for pipeline
 # verification.

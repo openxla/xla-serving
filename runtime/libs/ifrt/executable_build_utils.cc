@@ -82,7 +82,7 @@ absl::StatusOr<xla::ifrt::LoadedExecutableRef> BuildIfrtExecutable(
 // Some CompilationEnvironment protos used by libtpu are not compiled into the
 // binary, so we need to clear them when compiling on GCE.
 // TODO: Support compilation environment protos on GCE.
-#ifdef JSV_ON_GCE
+#ifdef XLA_SERVING_ON_GCE
     if (options.compile_options->has_executable_build_options() &&
         options.compile_options->executable_build_options().has_comp_envs()) {
       options.compile_options->mutable_executable_build_options()

@@ -312,4 +312,4 @@ cc_library(
 # The TF-compatible interpreter can run models with or without TensorFlow preprocessing.
 
 # TODO: add a dependency check test to make sure that the interpreter does not depend
-# on any TensorFlow library. Currently this is blocked. See cl/704297184 for more details.
+# on any TensorFlow library. Currently this is blocked.

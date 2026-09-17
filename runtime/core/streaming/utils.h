@@ -26,8 +26,8 @@ inline constexpr absl::string_view kStreamedResultBatchedStepIdName =
     "__streamed_result_batched_step_id";
 
 // Injects a dynamic step_id (or request_ids) dynamic-sized tensor
-// through the MLIR entry function and passes it down to all `neptune_stream`
-// custom calls.
+// through the MLIR entry function and passes it down to all
+// `xla_serving_stream` custom calls.
 // Returns an error if the propagation fails.
 // This function assumes that the shape refinements have already been performed.
 absl::Status PropagateStreamingStepId(mlir::ModuleOp module,

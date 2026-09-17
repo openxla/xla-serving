@@ -14,7 +14,7 @@
 
 """Scalable End-to-End AOT vs JIT Benchmark.
 
-Demonstrates the physical benefits of Neptune AOT Recompilation:
+Demonstrates the physical benefits of XLA Serving AOT recompilation:
 1. Slashing first-call cold-start compilation latency from seconds to
    milliseconds.
 2. Preventing host memory out-of-memory evictions by bypassing transient
@@ -36,8 +36,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from .third_party.neptune import xla_saved_model
-from .third_party.neptune.runtime.python import orbax_model_runner as model_runner
+import xla_saved_model
+from xla_saved_model_runner import model_runner
 from xla_saved_model._src.core import aot_recompiler
 from xla_saved_model._src.core import offline_compiler
 
@@ -192,7 +192,8 @@ def main(argv: Sequence[str]) -> None:
 
   print("=" * 80)
   print(
-      f" Neptune AOT Recompilation E2E Benchmark (Platform: {platform.upper()})"
+      " XLA Serving AOT recompilation E2E Benchmark (Platform:"
+      f" {platform.upper()})"
   )
   print(f" Model: Parameterized MLP ({layers} layers, {hidden_dim} dim)")
   print("=" * 80)

@@ -46,7 +46,6 @@
 #include "xla/tsl/platform/types.h"  // from @xla
 #include "tsl/platform/tstring.h"  // from @tsl
 
-// go/lsc-fix-eigen-includes
 // IWYU pragma: no_include "Eigen/src/Core/util/ConfigureVectorization.h"
 
 namespace xla_serving {

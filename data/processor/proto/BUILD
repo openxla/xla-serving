@@ -17,7 +17,6 @@ proto_library(
 py_proto_library(
     name = "transform_config_py_pb2",
     visibility = [
-        "//third_party/py/orbax/export:__subpackages__",
         "@xla_serving//data:xla_serving_data_internal",
     ],
     deps = [":transform_config_proto"],

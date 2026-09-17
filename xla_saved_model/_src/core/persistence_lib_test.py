@@ -90,11 +90,6 @@ class PersistenceLibTest(test_utils.XsmTestCase, parameterized.TestCase):
     )
     self.assertTrue(os.path.exists(model_version_path))
 
-    legacy_model_version_path = os.path.join(
-        target_dir, constants.MODEL_VERSION_LEGACY_FILENAME
-    )
-    self.assertTrue(os.path.exists(legacy_model_version_path))
-
     history_path = os.path.join(target_dir, constants.HISTORY_FILENAME)
     self.assertTrue(os.path.exists(history_path))
     history_proto = history_pb2.ModelHistory()
@@ -437,13 +432,13 @@ class PersistenceLibTest(test_utils.XsmTestCase, parameterized.TestCase):
   def test_load_fails_version_file_missing(self):
     target_dir: str = self.create_tempdir().full_path
 
-    with self.assertRaisesRegex(Exception, 'neptune_model_version.txt'):
+    with self.assertRaisesRegex(Exception, constants.MODEL_VERSION_FILENAME):
       persistence_lib.load(target_dir)
 
   def test_load_fails_with_unsupported_version(self):
     target_dir: str = self.create_tempdir().full_path
 
-    path = os.path.join(target_dir, 'neptune_model_version.txt')
+    path = os.path.join(target_dir, constants.MODEL_VERSION_FILENAME)
     file_content = """
     version: "42"
     manifest_file_path: "test/path"
@@ -460,7 +455,7 @@ class PersistenceLibTest(test_utils.XsmTestCase, parameterized.TestCase):
   def test_load_fails_with_unsupported_mime_type(self):
     target_dir: str = self.create_tempdir().full_path
 
-    path = os.path.join(target_dir, 'neptune_model_version.txt')
+    path = os.path.join(target_dir, constants.MODEL_VERSION_FILENAME)
     file_content = """
     version: "0.0.1"
     mime_type: "text/plain"
@@ -477,7 +472,7 @@ class PersistenceLibTest(test_utils.XsmTestCase, parameterized.TestCase):
   def test_load_fails_with_absolute_manifest_path(self):
     target_dir: str = self.create_tempdir().full_path
 
-    path = os.path.join(target_dir, 'neptune_model_version.txt')
+    path = os.path.join(target_dir, constants.MODEL_VERSION_FILENAME)
     file_content = f"""
     version: "{constants.MANIFEST_VERSION}"
     mime_type: "{constants.MANIFEST_MIME_TYPE}"
@@ -517,51 +512,6 @@ class PersistenceLibTest(test_utils.XsmTestCase, parameterized.TestCase):
         },
     )
 
-  def test_load_with_legacy_version_file(self):
-    target_dir: str = self.create_tempdir().full_path
-    expected_manifest = self._save_minimal_model(target_dir)
-
-    # Remove the current version file.
-    current_version_path = os.path.join(
-        target_dir, constants.MODEL_VERSION_FILENAME
-    )
-    if os.path.exists(current_version_path):
-      os.remove(current_version_path)
-
-    # Create the legacy version file instead.
-    legacy_version_path = os.path.join(
-        target_dir, constants.MODEL_VERSION_LEGACY_FILENAME
-    )
-    file_content = f"""
-    version: "{constants.MANIFEST_VERSION}"
-    mime_type: "{constants.MANIFEST_LEGACY_MIME_TYPE}"
-    manifest_file_path: "{constants.MANIFEST_FILE_PATH}"
-    """
-    with file_utils.open_file(legacy_version_path, 'w') as f:
-      f.write(file_content)
-
-    # Load from the directory, which should resolve the legacy path.
-    actual_manifest = persistence_lib.load(target_dir)
-    self.assertProtosEqual(expected_manifest, actual_manifest)
-
-  def test_load_prefers_current_version_file_over_legacy(self):
-    target_dir: str = self.create_tempdir().full_path
-    expected_manifest = self._save_minimal_model(target_dir)
-
-    # Create an invalid legacy version file.
-    legacy_version_path = os.path.join(
-        target_dir, constants.MODEL_VERSION_LEGACY_FILENAME
-    )
-    file_content = """
-    version: "99"
-    mime_type: "invalid_mime_type"
-    manifest_file_path: "invalid/path"
-    """
-    with file_utils.open_file(legacy_version_path, 'w') as f:
-      f.write(file_content)
-
-    actual_manifest = persistence_lib.load(target_dir)
-    self.assertProtosEqual(expected_manifest, actual_manifest)
 
 
 class TestShloFunctionSupplementalInfo(

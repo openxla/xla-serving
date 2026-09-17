@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Neptune export for DLRM recommender model with TPUEmbeddingForServing."""
+"""XLA SavedModel export for DLRM recommender with TPUEmbeddingForServing."""
 
 import os
 import tempfile
@@ -84,7 +84,7 @@ def get_synthetic_batch(batch_size, valency=None, vocab_sizes=None):
 
 
 def export_model(export_path: str, embedding_size: int = 128):
-  """Exports the DLRM recommender model using Neptune."""
+  """Exports the DLRM recommender model using XLA SavedModel."""
 
   embedding_layer, model = model_lib.build_model(embedding_size)
   synthetic_batch_1 = get_synthetic_batch(
@@ -127,7 +127,7 @@ def export_model(export_path: str, embedding_size: int = 128):
   # for f, tensor in sparse_features.items():
   #   sparse_features[f] = tf.sparse.from_dense(tensor)
   logging.info('sparse_features: %s', sparse_features)
-  tf_sparse_embeddings = embedding_layer(sparse_features)
+  tf_sparse_embeddings = dict(embedding_layer(sparse_features))
   logging.info('tf_sparse_embeddings: %s', tf_sparse_embeddings)
   # This reduction is not needed when inputs are sparse tensors, TPU Embedding
   # for serving layer automatically combines the embeddings for the multi-valent

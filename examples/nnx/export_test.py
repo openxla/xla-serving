@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for Neptune export of NNX model."""
+"""Tests for XLA SavedModel export of NNX model."""
 
 import os
-from absl import logging
 from absl.testing import absltest
 from absl.testing import parameterized
 import jax.numpy as jnp
@@ -24,12 +23,9 @@ from examples.nnx import export
 
 
 def _model_runner(model_path: str):
-  try:
-    from neptune_model_runner import model_runner  # pylint: disable=g-import-not-at-top
+  from xla_saved_model_runner import model_runner  # pylint: disable=g-import-not-at-top
 
-    return model_runner.ModelRunner(model_path=model_path)
-  except ImportError:
-    return None
+  return model_runner.ModelRunner(model_path=model_path)
 
 
 class ExportTest(parameterized.TestCase):
@@ -47,11 +43,6 @@ class ExportTest(parameterized.TestCase):
         os.path.isfile(os.path.join(export_path, 'orchestration.pb'))
     )
     runner = _model_runner(export_path)
-    if runner is None:
-      logging.warning(
-          'ModelRunner not found, skipping running the exported model'
-      )
-      return
 
     inputs = {
         'feature_1': np.zeros((2, 1), dtype=np.int32),

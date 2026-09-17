@@ -1,6 +1,6 @@
 module(name = "xla_serving")
 
-# go/keep-sorted start
+# keep-sorted start
 bazel_dep(name = "abseil-cpp", version = "20260526.0")
 bazel_dep(name = "abseil-py", version = "2.1.0", repo_name = "absl_py")
 bazel_dep(name = "aspect_bazel_lib", version = "2.11.0")
@@ -30,7 +30,7 @@ bazel_dep(name = "rules_python", version = "1.8.5")
 bazel_dep(name = "snappy", version = "1.2.2.bcr.3")
 bazel_dep(name = "zlib", version = "1.3.2")
 bazel_dep(name = "zstd", version = "1.5.7.bcr.1")
-# go/keep-sorted end
+# keep-sorted end
 
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
@@ -120,7 +120,6 @@ archive_override(
 tf_third_party = use_extension("@org_tensorflow//third_party/extensions:third_party.bzl", "third_party_ext")
 use_repo(tf_third_party, "tf_runtime")
 
-# TODO: upstreaming in cl/822016400 copybara:strip
 single_version_override(
     module_name = "grpc",
     patch_strip = 1,

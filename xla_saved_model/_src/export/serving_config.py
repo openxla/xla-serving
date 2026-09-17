@@ -196,7 +196,7 @@ class ServingConfig:
   orchestration: Orchestration | None = None
 
   def __post_init__(self):
-    # TODO (b/534785167): Update batch config validation logic.
+    # TODO: Update batch config validation logic.
     """Validates the batch options and orchestration."""
     if self.orchestration is not None and self.orchestration.graph_based:
       if (

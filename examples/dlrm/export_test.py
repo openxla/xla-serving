@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for Neptune export of DLRM model."""
+"""Tests for XLA SavedModel export of DLRM model."""
 
 import os
 
 from absl.testing import absltest
+import numpy as np
 
 from examples.dlrm import export
 from examples.dlrm import model as model_lib
+from xla_saved_model_runner import model_runner
 
 
 class ExportTest(absltest.TestCase):
@@ -31,6 +33,25 @@ class ExportTest(absltest.TestCase):
     self.assertTrue(
         os.path.isfile(os.path.join(export_path, 'orchestration.pb'))
     )
+
+    runner = model_runner.ModelRunner(model_path=export_path)
+
+    batch = export.get_synthetic_batch(
+        batch_size=1,
+        valency=model_lib.VALENCY,
+        vocab_sizes=model_lib.VOCAB_SIZES,
+    )
+    runner_inputs = {'dense_features': batch['dense_features']}
+    for name, values in batch['sparse_features'].items():
+      # The serving signature declares the sparse features as int32, while the
+      # synthetic batch is generated with numpy's default integer width.
+      runner_inputs[name] = values.astype(np.int32)
+
+    outputs = runner.signature('serving_default').run_with_dict_return(
+        **runner_inputs
+    )
+    self.assertIn('predictions', outputs)
+    self.assertEqual(outputs['predictions'].shape, (1,))
 
   def test_export_model_custom_embedding_size(self):
     export_path = self.create_tempdir().full_path

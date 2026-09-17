@@ -32,7 +32,7 @@
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
-namespace neptune_examples {
+namespace xla_serving_examples {
 namespace composite {
 namespace {
 
@@ -174,4 +174,4 @@ TEST(AddIntFromResourceTransformTest, ExecuteWithWrongDtypeFails) {
 
 }  // namespace
 }  // namespace composite
-}  // namespace neptune_examples
+}  // namespace xla_serving_examples

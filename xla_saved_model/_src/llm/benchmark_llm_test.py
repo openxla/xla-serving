@@ -297,7 +297,7 @@ class BenchmarkLlmTest(absltest.TestCase):
 
     mock_channel_fn.assert_called_once_with("localhost:8500")
     mock_channel.unary_unary.assert_called_once_with(
-        "/neptune.serving.PredictionService/Predict",
+        f"/{predict_pb2.DESCRIPTOR.package}.PredictionService/Predict",
         request_serializer=predict_pb2.PredictRequest.SerializeToString,
         response_deserializer=predict_pb2.PredictResponse.FromString,
     )

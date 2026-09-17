@@ -1,7 +1,7 @@
-# Neptune AOT Recompilation End-to-End Benchmark
+# XLA Serving AOT recompilation End-to-End Benchmark
 
 This example demonstrates how to evaluate and quantify the empirical benefits
-of Ahead-Of-Time (AOT) recompilation in Neptune serving compared to standard
+of Ahead-Of-Time (AOT) recompilation in XLA Serving compared to standard
 Just-In-Time (JIT) compilation.
 
 ## Key Benefits Demonstrated

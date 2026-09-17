@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Neptune export example with CompositeProcessor."""
+"""XLA SavedModel export example with CompositeProcessor."""
 
 import os
 import tempfile

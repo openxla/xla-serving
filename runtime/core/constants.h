@@ -17,25 +17,27 @@
 
 namespace xla_serving {
 
-// Orbax manifest version file name and known keys. The file is a text file
-// named 'orbax_model_version.txt' with the following format:
+// Model version file name and known keys. The file is a text file named
+// 'orbax_model_version.txt' with the following format:
 //
 // version: "0.0.1"
-// mime_type: "application/protobuf; type=xla_saved_model_manifest.Manifest"
+// mime_type: "application/protobuf; type=orbax_model_manifest.Manifest"
 // manifest_file_path: "path/to/manifest.pb"
 //
-inline constexpr char kOrbaxModelManifestVersionTxt[] =
-    "orbax_model_version.txt";
-inline constexpr char kNeptuneModelManifestVersionTxt[] =
-    "neptune_model_version.txt";
-inline constexpr char kOrbaxModelManifestVersionKey[] = "version";
-inline constexpr char kOrbaxModelManifestMimeTypeKey[] = "mime_type";
-inline constexpr char kOrbaxModelManifestManifestFilePathKey[] =
-    "manifest_file_path";
-inline constexpr char kOrbaxModelManifestVersion[] = "0.0.1";
-inline constexpr char kOrbaxModelManifestMimeType[] =
-    "application/protobuf; type=xla_saved_model_manifest.Manifest";
-inline constexpr char kOrbaxModelManifestMimeTypeLegacy[] =
+// The name is historical, but it is the one every reader in the ecosystem
+// recognizes, so it is kept rather than tracking the project's renames.
+inline constexpr char kModelVersionTxt[] = "orbax_model_version.txt";
+
+inline constexpr char kModelManifestVersionKey[] = "version";
+inline constexpr char kModelManifestMimeTypeKey[] = "mime_type";
+inline constexpr char kModelManifestFilePathKey[] = "manifest_file_path";
+inline constexpr char kModelManifestVersion[] = "0.0.1";
+// The mime type of the manifest proto file. This names the on-disk format,
+// which has not changed across the project's renames, so it deliberately does
+// not track them. It is also the only spelling that appears in models already
+// exported, and (unlike the proto package) it is not rewritten by Copybara, so
+// it is identical internally and in OSS.
+inline constexpr char kModelManifestMimeType[] =
     "application/protobuf; type=orbax_model_manifest.Manifest";
 
 // The supplemental_info key for Orbax orchestration pipeline.

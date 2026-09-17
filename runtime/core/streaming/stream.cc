@@ -66,7 +66,7 @@ namespace xla_serving {
 namespace {
 
 constexpr int64_t kInvalidStepId = -1;
-constexpr absl::string_view kNeptuneStreamOpName = "neptune_stream";
+constexpr absl::string_view kXlaServingStreamOpName = "xla_serving_stream";
 constexpr absl::string_view kBackendConfigAttr = "mhlo.backend_config";
 constexpr absl::string_view kControllerAddressAttr = "controller_address";
 constexpr absl::string_view kCallbackIdAttr = "callback_id";
@@ -95,7 +95,7 @@ SliceBuffersByRequestId(absl::Span<const int32_t> step_ids,
   int64_t start_idx = 0;
   while (start_idx < batch_size) {
     int64_t current_request_id = step_ids[start_idx];
-    // TODO (b/492320525): Make kInvalidStepId a global constant so that we can
+    // TODO: Make kInvalidStepId a global constant so that we can
     // reuse the same constant at step ID creation and batching padding.
     if (current_request_id == kInvalidStepId) {
       break;
@@ -134,7 +134,7 @@ absl::StatusOr<std::optional<int64_t>> SetStreamCallbackId(
 
   std::vector<mlir::stablehlo::CustomCallOp> ops;
   module->walk([&](mlir::stablehlo::CustomCallOp op) {
-    if (op.getCallTargetName().str() != kNeptuneStreamOpName) {
+    if (op.getCallTargetName().str() != kXlaServingStreamOpName) {
       return;
     }
     ops.push_back(op);
@@ -485,14 +485,14 @@ XLA_FFI_DEFINE_HANDLER(kStream, Stream,
                            .RemainingRets()
                            .Ctx<xla::ffi::State<StreamState>>());
 
-XLA_FFI_REGISTER_HANDLER(ffi::GetXlaFfiApi(), kNeptuneStreamOpName, "Host",
+XLA_FFI_REGISTER_HANDLER(ffi::GetXlaFfiApi(), kXlaServingStreamOpName, "Host",
                          {
                              /*instantiate=*/kInstantiateStream,
                              /*prepare=*/nullptr,
                              /*initialize=*/nullptr,
                              /*execute=*/kStream,
                          });
-XLA_FFI_REGISTER_HANDLER(ffi::GetXlaFfiApi(), kNeptuneStreamOpName, "CUDA",
+XLA_FFI_REGISTER_HANDLER(ffi::GetXlaFfiApi(), kXlaServingStreamOpName, "CUDA",
                          {
                              /*instantiate=*/kInstantiateStream,
                              /*prepare=*/nullptr,

@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-package neptune_model_history;
+package xla_saved_model_history;
 
 // A single configuration change entry.
 message Change {

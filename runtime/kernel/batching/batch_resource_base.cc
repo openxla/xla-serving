@@ -78,7 +78,7 @@
 #include "tsl/platform/context.h"  // from @tsl
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
-ABSL_FLAG(bool, jsv_support_batching_for_ragged_inputs, false,
+ABSL_FLAG(bool, xla_serving_support_batching_for_ragged_inputs, false,
           "Whether to support composite types in batching.");
 
 namespace xla_serving {
@@ -346,11 +346,11 @@ absl::Status BatchResourceBase::RegisterInput(
 
   // Only used to support batching for ragged inputs.
   // Takes effect when
-  // `FLAGS_jsv_support_batching_for_ragged_inputs` is true.
+  // `FLAGS_xla_serving_support_batching_for_ragged_inputs` is true.
   int64_t batch_size = -1;
   std::vector<InputClassification> input_classifications;
   input_classifications.reserve(inputs_for_batch.size());
-  if (absl::GetFlag(FLAGS_jsv_support_batching_for_ragged_inputs)) {
+  if (absl::GetFlag(FLAGS_xla_serving_support_batching_for_ragged_inputs)) {
     for (int i = 0; i < inputs_for_batch.size(); ++i) {
       InputClassification classification = ClassifyInput(i, ragged_inputs_);
       input_classifications.push_back(classification);
@@ -386,7 +386,7 @@ absl::Status BatchResourceBase::RegisterInput(
                        i, " has no dimensions."));
     }
 
-    if (absl::GetFlag(FLAGS_jsv_support_batching_for_ragged_inputs)) {
+    if (absl::GetFlag(FLAGS_xla_serving_support_batching_for_ragged_inputs)) {
       InputClassification classification = input_classifications[i];
       if (classification.type == kRaggedRowSplits) {
         if (batch_size != -1 &&
@@ -420,7 +420,7 @@ absl::Status BatchResourceBase::RegisterInput(
     }
     batch_components->inputs.push_back(host_buffer);
   }
-  if (absl::GetFlag(FLAGS_jsv_support_batching_for_ragged_inputs)) {
+  if (absl::GetFlag(FLAGS_xla_serving_support_batching_for_ragged_inputs)) {
     // For ragged inputs, we cannot determine the batch size based on the first
     // dimension of the input buffers similar to Dense inputs. Thus, we use the
     // inferred batch size above based on row splits size.
@@ -471,13 +471,13 @@ absl::Status BatchResourceBase::RegisterInput(
       std::string(context->metadata.model_name),
       context->metadata.model_version));
   // Sequentialize warmup batches scheduling.
-  // TODO: b/405168505: Maybe move the sequentialization logic to the
+  // TODO: Maybe move the sequentialization logic to the
   // `WarmupStateRegistry` for centralized control, safer and clearer
   // synchronization, and code sharing.
-  // TODO: b/405168505: Checking model name existence is copied form TF, and is
+  // TODO: Checking model name existence is copied form TF, and is
   // kept for compatibility. Maybe remove it.
   if (!context->metadata.model_name.empty()) {
-    // TODO: Update the serving path to use the JSV warmup
+    // TODO: Update the serving path to use the XLA Serving warmup
     // registry in case of Orbax models.
     WarmupStateRegistry::Key key(std::string(context->metadata.model_name),
                                  context->metadata.model_version);
@@ -488,7 +488,7 @@ absl::Status BatchResourceBase::RegisterInput(
                                    },
                                    &outstanding_batch_total_size_});
     }
-    // TODO: b/405168505: Inheriting the TF behavior, but maybe only touch
+    // TODO: Inheriting the TF behavior, but maybe only touch
     // `outstanding_batch_total_size_` during warmup phase.
     outstanding_batch_total_size_ += batch_components->size();
   }
@@ -642,7 +642,7 @@ absl::Status BatchResourceBase::ConcatInputBuffers(
   // `just_for_warmup` is true, the real data is not added. Otherwise, the real
   // data is added to the front of each `concatenated_buffer`.
   for (int i = 0; i < num_inputs; ++i) {
-    if (absl::GetFlag(FLAGS_jsv_support_batching_for_ragged_inputs)) {
+    if (absl::GetFlag(FLAGS_xla_serving_support_batching_for_ragged_inputs)) {
       auto classification = ClassifyInput(i, ragged_inputs_);
       if (classification.type == kRaggedRowSplits) {
         if (just_for_warmup) {
@@ -1087,7 +1087,7 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
        num_output = input_task->num_outputs,
        thread_pool = thread_pool, allocator = allocator]() mutable {
         // TODO: Add input_task status check once the eviction is
-        // supported. A similar check is in cl/876314593.
+        // supported.
         if (!input_task->status->status().ok()) {
           input_task->FinishTask(input_task->status->status());
           return;
@@ -1102,7 +1102,7 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
           to_concatenate.reserve(split_task_output->size());
           for (int j = 0; j < split_task_output->size(); ++j) {
             // TODO: Add defensive validation once the eviction
-            // is supported. A similar validation is in cl/877442161.
+            // is supported.
             to_concatenate.push_back(std::move((*split_task_output)[j][i]));
           }
           absl::StatusOr<HostBuffer> output_buffer =
@@ -1157,7 +1157,7 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
   // initializes input of `output_tasks` with split results.
   for (int i = 0; i < num_input_buffers; ++i) {
     InputClassification classification;
-    if (absl::GetFlag(FLAGS_jsv_support_batching_for_ragged_inputs)) {
+    if (absl::GetFlag(FLAGS_xla_serving_support_batching_for_ragged_inputs)) {
       classification = ClassifyInput(i, ragged_inputs);
     } else {
       classification = {kDense};

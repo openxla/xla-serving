@@ -35,7 +35,7 @@ cc_binary(
     srcs = ["main.cc"],
     linkopts = ["-Wl,--allow-multiple-definition"],
     deps = [
-        ":jsv_callback_grpc_server_cpu",
+        ":xla_serving_callback_grpc_server_cpu",
     ] + XLA_SERVING_MAIN_COMMON_DEPS,
 )
 
@@ -45,7 +45,7 @@ cc_binary(
     linkopts = ["-Wl,--allow-multiple-definition"],
     tags = ["manual"],
     deps = [
-        ":jsv_callback_grpc_server_gpu",
+        ":xla_serving_callback_grpc_server_gpu",
     ] + XLA_SERVING_MAIN_COMMON_DEPS,
 )
 
@@ -55,7 +55,7 @@ cc_binary(
     linkopts = ["-Wl,--allow-multiple-definition"],
     tags = ["manual"],
     deps = [
-        ":jsv_callback_grpc_server_tpu",
+        ":xla_serving_callback_grpc_server_tpu",
     ] + XLA_SERVING_MAIN_COMMON_DEPS,
 )
 
@@ -144,7 +144,7 @@ cc_library(
     ],
 )
 
-JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS = [
+XLA_SERVING_CALLBACK_GRPC_SERVER_COMMON_DEPS = [
     ":flags",
     ":grpc_status_utils",
     "@abseil-cpp//absl/cleanup",
@@ -252,14 +252,14 @@ cc_library(
 )
 
 cc_library(
-    name = "jsv_callback_grpc_server_cpu",
+    name = "xla_serving_callback_grpc_server_cpu",
     srcs = ["orbax_callback_grpc_server.cc"],
     hdrs = ["orbax_callback_grpc_server.h"],
     defines = ["PLATFORM_CPU"] + select({
         ":enable_tf": ["ENABLE_TF=1"],
         "//conditions:default": [],
     }),
-    deps = JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS + [
+    deps = XLA_SERVING_CALLBACK_GRPC_SERVER_COMMON_DEPS + [
         ":ifrt_client_creator_cpu",
         ":ifrt_client_creator_hdr",
         "@abseil-cpp//absl/types:span",
@@ -269,7 +269,7 @@ cc_library(
 )
 
 cc_library(
-    name = "jsv_callback_grpc_server_gpu",
+    name = "xla_serving_callback_grpc_server_gpu",
     srcs = ["orbax_callback_grpc_server.cc"],
     hdrs = ["orbax_callback_grpc_server.h"],
     defines = ["PLATFORM_CUDA"] + select({
@@ -277,7 +277,7 @@ cc_library(
         "//conditions:default": [],
     }),
     tags = ["manual"],
-    deps = JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS + [
+    deps = XLA_SERVING_CALLBACK_GRPC_SERVER_COMMON_DEPS + [
         ":ifrt_client_creator_gpu",
         ":ifrt_client_creator_hdr",
         "@abseil-cpp//absl/types:span",
@@ -290,7 +290,7 @@ cc_library(
 )
 
 cc_library(
-    name = "jsv_callback_grpc_server_tpu",
+    name = "xla_serving_callback_grpc_server_tpu",
     srcs = ["orbax_callback_grpc_server.cc"],
     hdrs = ["orbax_callback_grpc_server.h"],
     defines = ["PLATFORM_CLOUD_TPU"] + select({
@@ -298,7 +298,7 @@ cc_library(
         "//conditions:default": [],
     }),
     tags = ["manual"],
-    deps = JSV_CALLBACK_GRPC_SERVER_COMMON_DEPS + [
+    deps = XLA_SERVING_CALLBACK_GRPC_SERVER_COMMON_DEPS + [
         ":ifrt_client_creator_hdr",
         ":ifrt_client_creator_tpu",
         "@abseil-cpp//absl/types:span",

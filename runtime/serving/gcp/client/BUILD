@@ -2,7 +2,7 @@ load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 
 cc_binary(
-    name = "jsv_client_main",
+    name = "xla_serving_client_main",
     srcs = ["client_main.cc"],
     deps = [
         "@abseil-cpp//absl/flags:flag",
@@ -22,6 +22,6 @@ cc_binary(
         "@xla_serving//protos/grpc:prediction_service_cc_grpc_proto",
         "@xla_serving//runtime/core:host_buffer",
         "@xla_serving//runtime/serving/gcp/auth:utils",
-        "@xla_serving//runtime/tensorflow/utils:tf_to_jsv_proto",
+        "@xla_serving//runtime/tensorflow/utils:tf_to_host_buffer_proto",
     ],
 )

@@ -61,7 +61,7 @@ namespace {
 struct TfConcreteFunctionHandle {
  public:
   static TfConcreteFunctionHandle FromProto(
-      const third_party_neptune_protos::TfConcreteFunctionHandle& proto) {
+      const xla_saved_model_protos::TfConcreteFunctionHandle& proto) {
     return TfConcreteFunctionHandle{
         .fn_name = std::string(proto.fn_name()),
         .input_names = {proto.input_names().begin(), proto.input_names().end()},
@@ -86,7 +86,7 @@ absl::StatusOr<TfConcreteFunctionHandle> GetTfConcreteFunctionHandle(
       std::string full_path,
       GetAbsoluteFileSystemPath(model_path, tf_body.file_system_location()));
 
-  third_party_neptune_protos::TfConcreteFunctionHandle handle_proto;
+  xla_saved_model_protos::TfConcreteFunctionHandle handle_proto;
   VLOG(4) << "Reading TF concrete function handle from: " << full_path;
   TF_RETURN_IF_ERROR(
       tsl::ReadBinaryProto(tsl::Env::Default(), full_path, &handle_proto));

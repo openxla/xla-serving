@@ -26,7 +26,7 @@
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 
-namespace neptune_examples {
+namespace xla_serving_examples {
 namespace composite {
 
 absl::StatusOr<std::unique_ptr<AddTwoInputBuffersTransform>>
@@ -74,4 +74,4 @@ ND_REGISTER_TRANSFORM(AddTwoInputBuffersTransform,
         });
 
 }  // namespace composite
-}  // namespace neptune_examples
+}  // namespace xla_serving_examples

@@ -26,9 +26,9 @@ from xla_saved_model._src.core import offline_compiler
 from xla_saved_model._src.core import test_utils
 
 try:
-  from neptune.runtime.python import optimizer as neptune_optimizer  # pylint: disable=g-import-not-at-top
+  from neptune.runtime.python import optimizer as optimizer_ext  # pylint: disable=g-import-not-at-top
 except ImportError:
-  neptune_optimizer = None
+  optimizer_ext = None
 
 
 class OfflineCompilerTest(parameterized.TestCase):
@@ -247,13 +247,13 @@ class OfflineCompilerTest(parameterized.TestCase):
 
   def test_offline_compilation_with_stablehlo_optimizer(self):
     """Verifies compilation with generic StablehloOptimizer instance."""
-    if neptune_optimizer is None:
-      self.skipTest("neptune_optimizer C++ extension not available in OSS.")
+    if optimizer_ext is None:
+      self.skipTest("StableHLO optimizer C++ extension not available in OSS.")
     stablehlo_mlir = test_utils.get_stablehlo_mlir()
     config = offline_compiler.TargetConfig(
         target_topology_label="cpu_opt",
         platform="cpu",
-        optimizer=neptune_optimizer.StablehloOptimizer(),
+        optimizer=optimizer_ext.StablehloOptimizer(),
     )
     hook = offline_compiler.create_offline_compiler_hook([config])
     artifacts = list(hook(stablehlo_mlir, [0], 0))
@@ -263,8 +263,8 @@ class OfflineCompilerTest(parameterized.TestCase):
 
   def test_offline_compilation_with_stablehlo_tpu_optimizer(self):
     """Verifies compilation with StablehloTpuOptimizer instance on TPU."""
-    if neptune_optimizer is None:
-      self.skipTest("neptune_optimizer C++ extension not available in OSS.")
+    if optimizer_ext is None:
+      self.skipTest("StableHLO optimizer C++ extension not available in OSS.")
     test_utils.get_topology_desc("df:2x2", platform="tpu")
 
     stablehlo_mlir = test_utils.get_stablehlo_mlir()
@@ -272,7 +272,7 @@ class OfflineCompilerTest(parameterized.TestCase):
         target_topology_label="tpu_opt",
         platform="tpu",
         target_topology="df:2x2",
-        optimizer=neptune_optimizer.StablehloTpuOptimizer(),
+        optimizer=optimizer_ext.StablehloTpuOptimizer(),
     )
     hook = offline_compiler.create_offline_compiler_hook([config])
     artifacts = list(hook(stablehlo_mlir, [0], 0))

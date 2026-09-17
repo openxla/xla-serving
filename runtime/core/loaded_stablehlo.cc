@@ -153,7 +153,7 @@ bool HasStreaming(mlir::ModuleOp module) {
     if (op->getName().getStringRef() == "stablehlo.custom_call") {
       if (auto target_attr =
               op->getAttrOfType<mlir::StringAttr>("call_target_name")) {
-        if (target_attr.getValue() == "neptune_stream") {
+        if (target_attr.getValue() == "xla_serving_stream") {
           found = true;
         }
       }
@@ -430,9 +430,9 @@ LoadedStableHlo::CloneModuleBundle(
                        ". Allowed input shapes: ", allowed_input_shapes_str));
     }
 
-    // TODO b/401364010: Consider adding a check to make sure the input DTypes
-    // are compatible with the MLIR module. May not be feasible as this code
-    // runs in the critical path of serving.
+    // TODO: Consider adding a check to make sure the input
+    // DTypes are compatible with the MLIR module. May not be feasible as this
+    // code runs in the critical path of serving.
     return std::make_unique<LoadedStableHlo::ModuleBundle>(
         it->second->bundle.Clone());
   }
