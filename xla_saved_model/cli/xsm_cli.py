@@ -28,10 +28,12 @@ import typer
 from xla_saved_model.cli import constants
 from xla_saved_model.cli import recompile
 from xla_saved_model.cli import show
+from xla_saved_model.cli import update
 
 cli = typer.Typer(pretty_exceptions_enable=False)
 cli.command(name='show')(show.show)
 cli.command(name='recompile')(recompile.recompile)
+cli.command(name='update')(update.update)
 
 
 @cli.command()

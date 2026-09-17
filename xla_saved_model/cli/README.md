@@ -60,11 +60,21 @@ configured for a function:
 xsm-cli show /path/to/model --details serving_default --xla_compile_options
 ```
 
-### 5. Check CLI Version
+### 5. Update Pipeline Configurations
+
+Update configuration options (such as maximum batch size) in an exported model's
+orchestration pipelines:
 
 ```bash
-xsm-cli version
+# Update maximum batch size in-place (creates .orig and .bak backups)
+xsm-cli update /path/to/model --max_batch_size 32
+
+# Clone and update to a new directory (leaves original model untouched)
+xsm-cli update /path/to/model --max_batch_size 64 --output_dir /path/to/updated_model
 ```
+
+Updates are performed atomically with backup files (`.orig` and `.bak`) and
+appended to the model's `history.txtpb` modification log.
 
 ### 6. Recompile Models Ahead-Of-Time (AOT)
 
@@ -82,3 +92,10 @@ xsm-cli recompile \
 
 See the [AOT User Guide](../../docs/aot_user_guide.md) for full details on
 multi-platform recompilation, Docker serving, and autotune databases.
+
+### 7. Check CLI Version
+
+```bash
+xsm-cli version
+```
+

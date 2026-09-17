@@ -15,6 +15,8 @@
 """Constants for the XLA SavedModel CLI."""
 
 CLI_VERSION = '0.0.1'
+HISTORY_FILENAME = 'history.txtpb'
+
 
 MIME_TYPE_MLIR_STABLEHLO = 'application/x.mlir-stablehlo'
 MIME_TYPE_ORBAX_CHECKPOINT = 'application/x.orbax-checkpoint'
