@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import types
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -84,7 +85,7 @@ class HostBuffer:
       max_version: Optional[object] = None,
       dl_device: Optional[object] = None,
       copy: Optional[object] = None,
-  ) -> object: ...
+  ) -> types.CapsuleType: ...
 
 class Value:
   @overload
