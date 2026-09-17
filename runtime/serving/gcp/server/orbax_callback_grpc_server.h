@@ -48,6 +48,10 @@ struct OrbaxCallbackGrpcServerOptions {
   int64_t cost_threshold = 10000;
   bool warmup_server = false;
   int thread_pool_num_threads = 0;
+  // Threads for building Predict responses and finishing their RPCs.
+  // 0 = host parallelism; -1 = no pool, finish inline on the completing
+  // thread.
+  int response_threads = 0;
 };
 
 class OrbaxCallbackGrpcServer final
@@ -66,13 +70,15 @@ class OrbaxCallbackGrpcServer final
       std::shared_ptr<xla::ifrt::Client> client,
       std::unique_ptr<tsl::thread::ThreadPool> execute_worker_thread_pool,
       std::unique_ptr<tsl::thread::ThreadPool> computation_thread_pool,
-      std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool)
+      std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool,
+      std::unique_ptr<tsl::thread::ThreadPool> response_thread_pool)
       : model_name_(model_name),
         client_(client),
         execute_worker_thread_pool_(std::move(execute_worker_thread_pool)),
         computation_thread_pool_(std::move(computation_thread_pool)),
         checkpoint_loader_thread_pool_(
             std::move(checkpoint_loader_thread_pool)),
+        response_thread_pool_(std::move(response_thread_pool)),
         interpreter_(std::move(interpreter)) {}
 
   static absl::StatusOr<std::unique_ptr<OrbaxCallbackGrpcServer>> Create(
@@ -100,6 +106,9 @@ class OrbaxCallbackGrpcServer final
   std::unique_ptr<tsl::thread::ThreadPool> execute_worker_thread_pool_;
   std::unique_ptr<tsl::thread::ThreadPool> computation_thread_pool_;
   std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool_;
+  // Builds responses and finishes Predict RPCs off the interpreter threads.
+  // nullptr if response_threads is -1 (finish inline).
+  std::unique_ptr<tsl::thread::ThreadPool> response_thread_pool_;
   std::unique_ptr<neptune::Interpreter> interpreter_;
 
   absl::Status Warmup(absl::string_view model_path);

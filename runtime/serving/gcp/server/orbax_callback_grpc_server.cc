@@ -223,6 +223,13 @@ OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
       std::make_unique<tsl::thread::ThreadPool>(
           tsl::Env::Default(), tsl::ThreadOptions(),
           "OrbaxCheckpointLoaderThreadPool", kThreadPoolNumThreads);
+  std::unique_ptr<tsl::thread::ThreadPool> response_thread_pool;
+  if (options.response_threads >= 0) {
+    response_thread_pool = std::make_unique<tsl::thread::ThreadPool>(
+        tsl::Env::Default(), tsl::ThreadOptions(), "OrbaxResponseThreadPool",
+        options.response_threads == 0 ? tsl::port::MaxParallelism()
+                                      : options.response_threads);
+  }
   #if ENABLE_TF == 1
     auto create_options =
         std::make_unique<neptune::TfCompatibleInterpreterCreateOptions>();
@@ -248,7 +255,8 @@ OrbaxCallbackGrpcServer::Create(absl::string_view model_name,
         model_name, std::move(interpreter), client,
         std::move(execute_worker_thread_pool),
         std::move(computation_thread_pool),
-        std::move(checkpoint_loader_thread_pool));
+        std::move(checkpoint_loader_thread_pool),
+        std::move(response_thread_pool));
     if (options.warmup_server) {
       TF_RETURN_IF_ERROR(server->Warmup(model_path));
     }
@@ -313,22 +321,36 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
           pipeline_name, /*positional_inputs=*/{}, std::move(*input_with_names),
           run_options);
 
+  // Build the response on the response pool so the completing interpreter
+  // thread doesn't block on it.
   future.OnReady(
       [this, reactor, response, record_metrics, output_is_tensor,
        pipeline_name = std::string(pipeline_name)](
           absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>>
-              output_with_names) {
-        if (!output_with_names.ok()) {
-          record_metrics(output_with_names.status());
-          reactor->Finish(ToGrpcStatus(output_with_names.status()));
+              output_with_names) mutable {
+        auto build_response_and_finish =
+            [this, reactor, response,
+             record_metrics = std::move(record_metrics), output_is_tensor,
+             pipeline_name = std::move(pipeline_name),
+             output_with_names = std::move(output_with_names)]() mutable {
+              if (!output_with_names.ok()) {
+                record_metrics(output_with_names.status());
+                reactor->Finish(ToGrpcStatus(output_with_names.status()));
+                return;
+              }
+
+              absl::Status conversion_status = ConvertOutputsToResponse(
+                  std::move(*output_with_names), output_is_tensor,
+                  pipeline_name, model_name_, response);
+              record_metrics(conversion_status);
+              reactor->Finish(ToGrpcStatus(conversion_status));
+            };
+        if (response_thread_pool_ == nullptr) {
+          // --response_threads=-1: finish inline on the completing thread.
+          build_response_and_finish();
           return;
         }
-
-        absl::Status conversion_status = ConvertOutputsToResponse(
-            std::move(*output_with_names), output_is_tensor, pipeline_name,
-            model_name_, response);
-        record_metrics(conversion_status);
-        reactor->Finish(ToGrpcStatus(conversion_status));
+        response_thread_pool_->Schedule(std::move(build_response_and_finish));
       });
 
   return reactor;
