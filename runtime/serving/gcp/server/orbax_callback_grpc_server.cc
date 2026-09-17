@@ -222,6 +222,11 @@ OrbaxCallbackGrpcServer::Create(const ModelServerConfig& config,
     return absl::InvalidArgumentError(
         "ModelServerConfig must contain a non-empty model_config_list.");
   }
+  if (options.response_threads < -1) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Invalid value for response_threads: ", options.response_threads,
+        ". Must be >= -1."));
+  }
 
   std::string orbax_platform = absl::GetFlag(FLAGS_orbax_grpc_server_platform);
   LOG(INFO) << "Creating Orbax Server for Orbax platform: " << orbax_platform;
