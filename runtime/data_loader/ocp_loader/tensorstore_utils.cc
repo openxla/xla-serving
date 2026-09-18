@@ -29,6 +29,7 @@
 #include "absl/strings/match.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_format.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "nlohmann/json.hpp"  // from @nlohmann_json
 #include "nlohmann/json_fwd.hpp"  // from @nlohmann_json
@@ -40,6 +41,7 @@
 #include "xla/python/ifrt/memory.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "tensorstore/data_type.h"  // from @tensorstore
 
