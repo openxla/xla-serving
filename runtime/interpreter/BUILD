@@ -149,22 +149,17 @@ cc_library(
 # To run models with TensorFlow preprocessing and postprocessing, link the
 # "tensorflow:interpreter_tensorflow_support" target.
 cc_library(
-    name = "interpreter",
+    name = "interpreter_core",
     srcs = [
         "bundle_interpreter.cc",
-        "interpreter.cc",
-    ],
-    hdrs = [
         "bundle_interpreter.h",
+        "interpreter.cc",
         "interpreter.h",
     ],
-    visibility = [
-        ":internal",
-        ":interpreter_users",
-    ],
+    hdrs = [],
+    visibility = ["//visibility:private"],
     deps = [
         ":context",
-        ":init_lib",  # buildcleaner: keep
         ":interpreter_create_options",
         ":linear_graph_execute",
         ":manifest_utils",
@@ -216,7 +211,6 @@ cc_library(
         "@xla_serving//runtime/core/batching:batch_scheduler",
         "@xla_serving//runtime/core/streaming",
         "@xla_serving//runtime/data_loader",
-        "@xla_serving//runtime/data_loader:default_data_loader_registration",  # buildcleaner: keep
         "@xla_serving//runtime/kernel",
         "@xla_serving//runtime/kernel:kernel_builder_context",
         "@xla_serving//runtime/kernel:kernel_io_data_type",
@@ -224,6 +218,80 @@ cc_library(
         "@xla_serving//runtime/kernel/batching:batch_resource_base",
         "@xla_serving//runtime/kernel/batching:batch_runner_op",
         "@xla_serving//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",  # buildcleaner: keep
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "checkpoint_weight_loading",
+    visibility = [
+        ":internal",
+        ":interpreter_users",
+    ],
+    deps = [
+        "@xla_serving//runtime/data_loader:default_data_loader_registration",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "jit_compilation",
+    visibility = [
+        ":internal",
+        ":interpreter_users",
+    ],
+    deps = [
+        ":init_lib",
+    ],
+    alwayslink = 1,
+)
+
+# This is the interpreter that can run JAX-only models. This target is TF-free.
+# To run models with TensorFlow preprocessing and postprocessing, link the
+# "tensorflow:interpreter_tensorflow_support" target.
+cc_library(
+    name = "interpreter",
+    hdrs = [
+        "bundle_interpreter.h",
+        "interpreter.h",
+    ],
+    visibility = [
+        ":internal",
+        ":interpreter_users",
+    ],
+    deps = [
+        ":checkpoint_weight_loading",
+        ":context",
+        ":interpreter_core",
+        ":interpreter_create_options",
+        ":jit_compilation",
+        ":manifest_utils",
+        ":optional_function_handler_factory",
+        ":run_options",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/types:span",
+        "@com_google_protobuf//:protobuf_lite",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/tsl/concurrency:future",
+        "@xla//xla/tsl/platform:env",
+        "@xla_serving//protos:bundle_orchestration_cc_proto",
+        "@xla_serving//protos:manifest_cc_proto",
+        "@xla_serving//protos:orchestration_cc_proto",
+        "@xla_serving//protos:type_cc_proto",
+        "@xla_serving//runtime/core:flat_signature",
+        "@xla_serving//runtime/core:ifrt_loaded_variable_registry",
+        "@xla_serving//runtime/core:stablehlo",
+        "@xla_serving//runtime/core:value",
+        "@xla_serving//runtime/data_loader",
+        "@xla_serving//runtime/kernel",
+        "@xla_serving//runtime/kernel:kernel_io_data_type",
     ],
 )
 
@@ -278,7 +346,7 @@ cc_library(
 cc_library(
     name = "init_lib",
     srcs = ["init_lib.cc"],
-    visibility = [":interpreter_users"],
+    visibility = [":internal"],
     deps = [
         "@abseil-cpp//absl/log:check",
         "@xla_serving//runtime/kernel",
