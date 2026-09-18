@@ -162,6 +162,10 @@ jobs:
         env:
           VLLM_TARGET_DEVICE: tpu
         run: |
+          # TODO: Remove once flax > 0.12.9 is released. flax <= 0.12.9 imports
+          # `hijax.HiPrimitive`, which jax 0.11.2 renamed to `HiPrim`.
+          uv pip install "jax<0.11.2"
+
           uv pip install --pre ".[test]"
           uv pip uninstall triton 2>/dev/null || true
           pytest -v -s -n auto xla_saved_model/_src/llm/
