@@ -23,7 +23,7 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
 
-namespace neptune_examples {
+namespace xla_serving_examples {
 namespace composite {
 
 absl::Status IntResource::LoadImpl() {
@@ -53,4 +53,4 @@ absl::Status IntResource::LoadImpl() {
 ND_REGISTER_RESOURCE(IntResource, "ExamplesIntResource");
 
 }  // namespace composite
-}  // namespace neptune_examples
+}  // namespace xla_serving_examples

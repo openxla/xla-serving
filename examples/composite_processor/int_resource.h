@@ -18,7 +18,7 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
 
-namespace neptune_examples {
+namespace xla_serving_examples {
 namespace composite {
 
 class IntResource : public xla_serving::data::Resource {
@@ -32,6 +32,6 @@ class IntResource : public xla_serving::data::Resource {
 };
 
 }  // namespace composite
-}  // namespace neptune_examples
+}  // namespace xla_serving_examples
 
 #endif  // XLA_SERVING_EXAMPLES_COMPOSITE_PROCESSOR_INT_RESOURCE_H_

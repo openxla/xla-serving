@@ -25,7 +25,7 @@
 #include "examples/composite_processor/int_resource.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 
-namespace neptune_examples {
+namespace xla_serving_examples {
 namespace composite {
 
 class AddIntFromResourceTransform
@@ -46,6 +46,6 @@ class AddIntFromResourceTransform
 };
 
 }  // namespace composite
-}  // namespace neptune_examples
+}  // namespace xla_serving_examples
 
 #endif  // XLA_SERVING_EXAMPLES_COMPOSITE_PROCESSOR_ADD_INT_FROM_RESOURCE_TRANSFORM_H_

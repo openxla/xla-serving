@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-package third_party_neptune_protos;
+package xla_saved_model_protos;
 
 // A handle (i.e. "pointer") to a TF concrete function stored in a TF
 // SavedModel.
