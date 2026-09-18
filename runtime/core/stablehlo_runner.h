@@ -145,6 +145,12 @@ class StableHloRunner {
       return ExecuteOptions{
           .placements = std::vector<Placement>(num_outputs, Placement::kHost)};
     }
+
+    // Caller-provided arrays to hold the execution's outputs via input
+    // donation. When set, the runner compiles an executable with extra aliased
+    // inputs (`tf.aliasing_output`) and donates these arrays during `Execute`,
+    // writing results directly into their device memory.
+    std::vector<xla::ifrt::ArrayRef> output_arrays;
   };
 
   bool has_streaming() const { return loaded_stablehlo_->has_streaming(); }
@@ -357,44 +363,55 @@ class StableHloRunner {
 
   // In memory cache key that owns the input shapes.
   struct Key {
-    explicit Key(absl::Span<const xla::ifrt::Shape> input_shapes)
-        : input_shapes(input_shapes.begin(), input_shapes.end()) {}
+    explicit Key(absl::Span<const xla::ifrt::Shape> input_shapes,
+                 bool donate_outputs = false)
+        : input_shapes(input_shapes.begin(), input_shapes.end()),
+          donate_outputs(donate_outputs) {}
 
     template <typename H>
     friend H AbslHashValue(H h, const Key& key) {
-      return AbslHashValue(std::move(h), KeyView(key.input_shapes));
+      return AbslHashValue(std::move(h),
+                           KeyView(key.input_shapes, key.donate_outputs));
     }
 
     friend bool operator==(const Key& x, const Key& y) {
-      return KeyView(x.input_shapes) == KeyView(y.input_shapes);
+      return KeyView(x.input_shapes, x.donate_outputs) ==
+             KeyView(y.input_shapes, y.donate_outputs);
     }
 
     std::string DebugString() const {
-      return "Key: " + absl::StrJoin(input_shapes, ", ");
+      return absl::StrCat("Key: ", absl::StrJoin(input_shapes, ", "),
+                          ", donate_outputs: ", donate_outputs);
     }
 
     std::vector<xla::ifrt::Shape> input_shapes;
+    bool donate_outputs = false;
   };
 
   // In memory cache key that doesn't own the input shapes.
   struct KeyView {
-    KeyView(const Key& key) : input_shapes(key.input_shapes) {}  // NOLINT
-    explicit KeyView(absl::Span<const xla::ifrt::Shape> input_shapes)
-        : input_shapes(input_shapes) {}
+    KeyView(const Key& key)  // NOLINT
+        : input_shapes(key.input_shapes),
+          donate_outputs(key.donate_outputs) {}
+    explicit KeyView(absl::Span<const xla::ifrt::Shape> input_shapes,
+                     bool donate_outputs = false)
+        : input_shapes(input_shapes), donate_outputs(donate_outputs) {}
 
     template <typename H>
     friend H AbslHashValue(H h, const KeyView& key) {
       for (const auto& shape : key.input_shapes) {
         h = H::combine(std::move(h), shape.dims());
       }
-      return h;
+      return H::combine(std::move(h), key.donate_outputs);
     }
 
     friend bool operator==(const KeyView& x, const KeyView& y) {
-      return x.input_shapes == y.input_shapes;
+      return x.input_shapes == y.input_shapes &&
+             x.donate_outputs == y.donate_outputs;
     }
 
     absl::Span<const xla::ifrt::Shape> input_shapes;
+    bool donate_outputs = false;
   };
 
   // Key hash for heterogeneous lookups by key in absl containers.
@@ -439,7 +456,14 @@ class StableHloRunner {
   // module "main" function.
   virtual tsl::Future<SharedCachedExecutableBundle> LookUpOrCreateExecutable(
       absl::Span<const xla::ifrt::Shape> input_shapes,
-      absl::Span<const xla::ifrt::DType> input_dtypes);
+      absl::Span<const xla::ifrt::DType> input_dtypes) {
+    return LookUpOrCreateExecutable(input_shapes, input_dtypes,
+                                    /*donate_outputs=*/false);
+  }
+
+  virtual tsl::Future<SharedCachedExecutableBundle> LookUpOrCreateExecutable(
+      absl::Span<const xla::ifrt::Shape> input_shapes,
+      absl::Span<const xla::ifrt::DType> input_dtypes, bool donate_outputs);
 
   // Creates a new executable bundle synchronously.
   // `input_shapes` and `input_dtypes` are the shapes and dtypes of the inputs
@@ -450,7 +474,8 @@ class StableHloRunner {
       absl::Span<const xla::ifrt::Shape> input_shapes,
       absl::Span<const xla::ifrt::DType> input_dtypes,
       std::unique_ptr<LoadedStableHlo::ModuleBundle> module_bundle,
-      const StablehloOptimizer::Args& args, bool is_streaming = false);
+      const StablehloOptimizer::Args& args, bool is_streaming = false,
+      bool donate_outputs = false);
 
   // Initializes the runner. This is called right after the constructor.
   absl::Status Init(tsl::thread::ThreadPool* absl_nonnull thread_pool);

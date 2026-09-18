@@ -80,6 +80,7 @@
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/executable.h"  // from @xla
 #include "xla/python/ifrt/host_callback.h"  // from @xla
+#include "xla/python/ifrt/ir/constants.h"  // from @xla
 #include "xla/python/ifrt/memory.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
@@ -192,6 +193,69 @@ absl::Status ValidateOutputArray(const xla::ifrt::Array& array_for_copy,
         expected_ifrt_shape, ", but got ", array_for_copy.shape()));
   }
   return absl::OkStatus();
+}
+
+absl::Status AddOutputDonationArgs(mlir::ModuleOp module,
+                                   const StableHloIOSpec& io_spec) {
+  mlir::func::FuncOp main_func =
+      module.lookupSymbol<mlir::func::FuncOp>("main");
+  if (!main_func) {
+    return absl::InvalidArgumentError("No main function found in the module");
+  }
+  const int num_outputs = main_func.getNumResults();
+  if (num_outputs != io_spec.outputs.size()) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Mismatch between main function result count (", num_outputs,
+        ") and io_spec outputs count (", io_spec.outputs.size(), ")"));
+  }
+  mlir::OpBuilder builder(module.getContext());
+  for (int i = 0; i < num_outputs; ++i) {
+    mlir::Type result_type = main_func.getFunctionType().getResult(i);
+    std::vector<mlir::NamedAttribute> arg_attrs;
+    if (mlir::DictionaryAttr dict = main_func.getResultAttrDict(i)) {
+      for (const mlir::NamedAttribute& attr : dict) {
+        if (attr.getName() != "jax.result_info") {
+          arg_attrs.push_back(attr);
+        }
+      }
+    }
+    arg_attrs.push_back(builder.getNamedAttr(
+        xla::ifrt::kAliasingOutputAttrName, builder.getI32IntegerAttr(i)));
+    if (!main_func.getResultAttr(i, "mhlo.sharding") &&
+        !main_func.getResultAttr(i, "sdy.sharding") &&
+        io_spec.outputs[i].sharding.IsTiled()) {
+      arg_attrs.push_back(builder.getNamedAttr(
+          "mhlo.sharding",
+          builder.getStringAttr(io_spec.outputs[i].sharding.ToString())));
+    }
+    if (main_func
+            .insertArgument(main_func.getNumArguments(), result_type,
+                            builder.getDictionaryAttr(arg_attrs),
+                            main_func.getLoc())
+            .failed()) {
+      return absl::InternalError(
+          absl::StrCat("Failed to insert output donation argument ", i));
+    }
+  }
+  return absl::OkStatus();
+}
+
+bool HasSameShardPlacement(const xla::ifrt::Sharding& actual,
+                           const xla::ifrt::Sharding& expected,
+                           const xla::ifrt::Shape& shape) {
+  if (actual == expected) {
+    return true;
+  }
+  if (actual.memory_kind() != expected.memory_kind() ||
+      actual.devices()->devices() != expected.devices()->devices()) {
+    return false;
+  }
+  auto actual_domains = actual.IndexDomains(
+      shape, xla::ifrt::SingleDeviceShardSemantics::kAddressableShards);
+  auto expected_domains = expected.IndexDomains(
+      shape, xla::ifrt::SingleDeviceShardSemantics::kAddressableShards);
+  return actual_domains.ok() && expected_domains.ok() &&
+         *actual_domains == *expected_domains;
 }
 
 }  // namespace
@@ -549,7 +613,8 @@ StableHloRunner::CreateExecutableSynchronously(
     absl::Span<const xla::ifrt::Shape> input_shapes,
     absl::Span<const xla::ifrt::DType> input_dtypes,
     std::unique_ptr<LoadedStableHlo::ModuleBundle> module_bundle,
-    const StablehloOptimizer::Args& args, bool is_streaming) {
+    const StablehloOptimizer::Args& args, bool is_streaming,
+    bool donate_outputs) {
   // Refine the dynamic shapes in the module.
   TF_RETURN_WITH_CONTEXT_IF_ERROR(
       RefineShapesIfNeeded(
@@ -632,6 +697,10 @@ StableHloRunner::CreateExecutableSynchronously(
     }
   }
 
+  if (donate_outputs) {
+    TF_RETURN_IF_ERROR(AddOutputDonationArgs(*module_bundle->module, io_spec));
+  }
+
   BuildIfrtExecutableOptions options;
 
   if (compile_options_.has_value()) {
@@ -685,7 +754,7 @@ StableHloRunner::CreateExecutableSynchronously(
 tsl::Future<StableHloRunner::SharedCachedExecutableBundle>
 StableHloRunner::LookUpOrCreateExecutable(
     absl::Span<const xla::ifrt::Shape> input_shapes,
-    absl::Span<const xla::ifrt::DType> input_dtypes) {
+    absl::Span<const xla::ifrt::DType> input_dtypes, bool donate_outputs) {
   tsl::Promise<SharedCachedExecutableBundle> promise;
   tsl::Future<SharedCachedExecutableBundle> future;
   std::unique_ptr<LoadedStableHlo::ModuleBundle> module_bundle;
@@ -694,7 +763,8 @@ StableHloRunner::LookUpOrCreateExecutable(
     absl::MutexLock lock(mutex_);
 
     // Cache hit.
-    const auto it = executable_bundles_.find(KeyView(input_shapes));
+    const auto it =
+        executable_bundles_.find(KeyView(input_shapes, donate_outputs));
     if (ABSL_PREDICT_TRUE(it != executable_bundles_.end())) {
       return it->second;
     }
@@ -712,7 +782,7 @@ StableHloRunner::LookUpOrCreateExecutable(
       return future;
     }
 
-    executable_bundles_.emplace(Key(input_shapes), future);
+    executable_bundles_.emplace(Key(input_shapes, donate_outputs), future);
 
     // Look up the MLIR module bundle for the given input shapes, since
     // there might be multiple MLIR modules with different input shapes as
@@ -742,7 +812,7 @@ StableHloRunner::LookUpOrCreateExecutable(
   absl::StatusOr<SharedCachedExecutableBundle> executable_bundle =
       CreateExecutableSynchronously(input_shapes, input_dtypes,
                                     std::move(module_bundle), args,
-                                    has_streaming());
+                                    has_streaming(), donate_outputs);
   if (!executable_bundle.ok()) {
     LOG(ERROR) << "Failed to create executable: "
                << executable_bundle.status().message();
@@ -944,9 +1014,20 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunner::Execute(
     input_dtypes.push_back(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32));
   }
 
+  const bool donate_outputs = !options.output_arrays.empty();
+  if (donate_outputs && IsPortableExecutable()) {
+    return absl::InvalidArgumentError(
+        "Caller-provided output arrays are not supported for portable "
+        "executables.");
+  }
+
   TF_ASSIGN_OR_RETURN(
       SharedCachedExecutableBundle executable_bundle,
-      LookUpOrCreateExecutable(input_shapes, input_dtypes).Await());
+      (donate_outputs
+           ? LookUpOrCreateExecutable(input_shapes, input_dtypes,
+                                      /*donate_outputs=*/true)
+           : LookUpOrCreateExecutable(input_shapes, input_dtypes))
+          .Await());
 
   // Find the resources per the device(s) to use. If the executable is portable,
   // use the core selector to reserve a device first.
@@ -971,6 +1052,44 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunner::Execute(
   TF_ASSIGN_OR_RETURN(const auto& weights_array,
                       resources_it->second->weight_arrays);
   DataConverter* data_converter = resources_it->second->data_converter.get();
+
+  if (donate_outputs) {
+    if (options.output_arrays.size() !=
+        executable_bundle->io_spec.outputs.size()) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Expected ", executable_bundle->io_spec.outputs.size(),
+          " output arrays, but got ", options.output_arrays.size()));
+    }
+    TF_ASSIGN_OR_RETURN(
+        absl::Span<const xla::ifrt::ShardingRef> expected_output_shardings,
+        executable_bundle->GetOutputShardings(
+            device_list->devices()[0]->Id()));
+    for (size_t i = 0; i < options.output_arrays.size(); ++i) {
+      const xla::ifrt::ArrayRef& out_arr = options.output_arrays[i];
+      if (out_arr == nullptr) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("Output array #", i, " is null."));
+      }
+      const ArgSpec& out_spec = executable_bundle->io_spec.outputs[i];
+      if (out_arr->dtype() != out_spec.dtype) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Output array #", i, " expected dtype ", out_spec.dtype,
+            ", but got ", out_arr->dtype()));
+      }
+      if (out_arr->shape() != out_spec.GetIfrtShape()) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Output array #", i, " expected shape ", out_spec.GetIfrtShape(),
+            ", but got ", out_arr->shape()));
+      }
+      if (!HasSameShardPlacement(out_arr->sharding(),
+                                 *expected_output_shardings[i],
+                                 out_arr->shape())) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Output array #", i, " sharding does not match expected output "
+            "sharding."));
+      }
+    }
+  }
 
   std::vector<xla_serving::Value> unpacked_inputs(inputs.begin(), inputs.end());
 
@@ -1047,7 +1166,8 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunner::Execute(
 
   std::vector<xla::ifrt::ArrayRef> inputs_with_weights;
   inputs_with_weights.reserve(
-      executable_bundle->module_kept_var_indices.size());
+      executable_bundle->module_kept_var_indices.size() +
+      options.output_arrays.size());
   for (int idx : executable_bundle->module_kept_var_indices) {
     if (idx < weights_array.size()) {
       const auto& weight_array = weights_array[idx];
@@ -1065,6 +1185,9 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunner::Execute(
   // at the end of the list.
   for (auto& arr : final_used_inputs) {
     inputs_with_weights.push_back(std::move(*arr));
+  }
+  for (const auto& out_arr : options.output_arrays) {
+    inputs_with_weights.push_back(out_arr);
   }
 
   TF_ASSIGN_OR_RETURN(
