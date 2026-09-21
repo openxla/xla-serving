@@ -425,32 +425,22 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
           pipeline_name, /*positional_inputs=*/{}, std::move(*input_with_names),
           run_options);
 
-  // Build the response on the execute worker pool so the completing
-  // interpreter thread doesn't block on it.
   future.OnReady(
-      [this, reactor, response, record_metrics, output_is_tensor, model_name,
+      [reactor, response, record_metrics, output_is_tensor, model_name,
        pipeline_name = std::string(pipeline_name)](
           absl::StatusOr<absl::flat_hash_map<std::string, xla_serving::Value>>
-              output_with_names) mutable {
-        auto build_response_and_finish =
-            [reactor, response, record_metrics = std::move(record_metrics),
-             output_is_tensor, model_name = std::move(model_name),
-             pipeline_name = std::move(pipeline_name),
-             output_with_names = std::move(output_with_names)]() mutable {
-              if (!output_with_names.ok()) {
-                record_metrics(output_with_names.status());
-                reactor->Finish(ToGrpcStatus(output_with_names.status()));
-                return;
-              }
+              output_with_names) {
+        if (!output_with_names.ok()) {
+          record_metrics(output_with_names.status());
+          reactor->Finish(ToGrpcStatus(output_with_names.status()));
+          return;
+        }
 
-              absl::Status conversion_status = ConvertOutputsToResponse(
-                  std::move(*output_with_names), output_is_tensor,
-                  pipeline_name, model_name, response);
-              record_metrics(conversion_status);
-              reactor->Finish(ToGrpcStatus(conversion_status));
-            };
-        execute_worker_thread_pool_->Schedule(
-            std::move(build_response_and_finish));
+        absl::Status conversion_status = ConvertOutputsToResponse(
+            std::move(*output_with_names), output_is_tensor, pipeline_name,
+            model_name, response);
+        record_metrics(conversion_status);
+        reactor->Finish(ToGrpcStatus(conversion_status));
       });
 
   return reactor;

@@ -34,7 +34,7 @@ on:
         default: false
 
 concurrency:
-  group: release-neptune
+  group: release-xla-serving
   cancel-in-progress: false
 
 permissions:
@@ -284,7 +284,7 @@ jobs:
           gh release create "${TAG_NAME}" \
             wheels/*.whl \
             --target "${TARGET_COMMIT}" \
-            --title "Neptune ${TAG_NAME}" \
+            --title "XLA Serving ${TAG_NAME}" \
             --generate-notes \
             "${FLAGS[@]}"
 
