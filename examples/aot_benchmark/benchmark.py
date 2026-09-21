@@ -14,18 +14,24 @@
 
 """Scalable End-to-End AOT vs JIT Benchmark.
 
-Demonstrates the physical benefits of Neptune AOT Recompilation:
+Demonstrates the physical benefits of XLA Serving Engine AOT Recompilation:
 1. Slashing first-call cold-start compilation latency from seconds to
    milliseconds.
 2. Preventing host memory out-of-memory evictions by bypassing transient
    XLA compiler peak allocations.
-3. Enabling deterministic, zero-jitter steady-state inference with verified
-   numerical parity.
+3. Eliminating runtime compilation jitter with verified numerical parity.
 """
 
 from collections.abc import Sequence
+import contextlib
+import gc
+import json
+import os
 import pathlib
 import resource
+import shutil
+import subprocess
+import sys
 import tempfile
 import time
 from typing import Any
@@ -45,9 +51,14 @@ from xla_saved_model._src.core import offline_compiler
 _PLATFORM = flags.DEFINE_enum(
     "platform", "cpu", ["cpu", "cuda", "tpu"], "Target hardware platform."
 )
-_LAYERS = flags.DEFINE_integer("layers", 16, "Number of layers in MLP.")
-_HIDDEN_DIM = flags.DEFINE_integer("hidden_dim", 256, "Hidden dimension.")
-_ITERATIONS = flags.DEFINE_integer("iterations", 50, "Steady state iterations.")
+_LAYERS = flags.DEFINE_integer("layers", 8, "Number of layers in MLP.")
+_HIDDEN_DIM = flags.DEFINE_integer("hidden_dim", 512, "Hidden dimension.")
+_REPEATS = flags.DEFINE_integer(
+    "repeats",
+    5,
+    "Independent subprocess samples per arm. Cold-start is a once-per-process "
+    "event, so each sample requires a fresh process.",
+)
 _TARGET_TOPOLOGY = flags.DEFINE_string(
     "target_topology",
     None,
@@ -69,13 +80,66 @@ _COMPILE_PORTABLE = flags.DEFINE_boolean(
     False,
     "Compile single-device portable executable.",
 )
+_PHASE = flags.DEFINE_enum(
+    "phase",
+    "orchestrate",
+    ["orchestrate", "build", "aot", "jit"],
+    "Execution phase.",
+)
+_WORK_DIR = flags.DEFINE_string(
+    "work_dir",
+    None,
+    "Shared directory holding exported base and AOT models.",
+)
+
+_METRICS_SENTINEL = "__BENCHMARK_METRICS_JSON__"
+_CALL1_CACHE_BOUND_MS = 5.0
+
+
+def _read_status_kb(field: str) -> float:
+  """Reads a kB-valued field from /proc/self/status."""
+  prefix = f"{field}:"
+  try:
+    with open("/proc/self/status", "rt") as f:
+      for line in f:
+        if line.startswith(prefix):
+          return float(line.split()[1])
+  except OSError:
+    pass
+  return 0.0
 
 
 def get_peak_memory_mb() -> float:
-  """Returns peak resident set size (RSS) in megabytes for current process."""
-  # On Linux, ru_maxrss is reported in kilobytes.
-  usage_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-  return float(usage_kb) / 1024.0
+  """Returns the resettable peak RSS (VmHWM) in megabytes, with fallback."""
+  kb = _read_status_kb("VmHWM")
+  if kb > 0.0:
+    return kb / 1024.0
+  # Fallback for non-Linux or /proc unavailable.
+  try:
+    usage = resource.getrusage(resource.RUSAGE_SELF)
+    if sys.platform == "darwin":
+      return float(usage.ru_maxrss) / (1024.0 * 1024.0)
+    return float(usage.ru_maxrss) / 1024.0
+  except (OSError, ValueError):
+    return 0.0
+
+
+def get_current_memory_mb() -> float:
+  """Returns current resident set size (VmRSS) in megabytes."""
+  kb = _read_status_kb("VmRSS")
+  return kb / 1024.0
+
+
+def reset_peak_memory() -> bool:
+  """Resets VmHWM to current RSS via /proc/self/clear_refs."""
+  try:
+    with open("/proc/self/clear_refs", "wt") as f:
+      f.write("5")
+    hwm_kb = _read_status_kb("VmHWM")
+    rss_kb = _read_status_kb("VmRSS")
+    return hwm_kb > 0.0 and (hwm_kb - rss_kb) <= 4096.0
+  except OSError:
+    return False
 
 
 def create_benchmark_model(
@@ -97,11 +161,17 @@ def create_benchmark_model(
     return {"out": h}
 
   params = {}
+  rng = np.random.default_rng(0)
   for i in range(num_layers):
     in_dim = 64 if i == 0 else hidden_dim
     out_dim = 10 if i == num_layers - 1 else hidden_dim
-    params[f"w_{i}"] = jnp.ones((in_dim, out_dim), dtype=jnp.float32) * 0.01
-    params[f"b_{i}"] = jnp.zeros((out_dim,), dtype=jnp.float32)
+    scale = np.float32(1.0 / np.sqrt(in_dim))
+    params[f"w_{i}"] = jnp.asarray(
+        rng.standard_normal((in_dim, out_dim), dtype=np.float32) * scale
+    )
+    params[f"b_{i}"] = jnp.asarray(
+        rng.standard_normal((out_dim,), dtype=np.float32) * np.float32(0.01)
+    )
 
   spec = jax.ShapeDtypeStruct((1, 64), jnp.float32)
 
@@ -130,91 +200,188 @@ def run_benchmark(
     model_path: str,
     platform: str,
     target_topology: str,
-    num_iterations: int,
+    phase: str = "jit",
 ) -> tuple[dict[str, Any], np.ndarray]:
-  """Runs model loading, cold-start inference, and steady-state iterations."""
-  mem_start = get_peak_memory_mb()
-  t0 = time.perf_counter()
-
-  # 1. Load Model
+  """Runs model loading, cold-start inference, and second-call latency."""
+  kwargs = {
+      "model_name": "bench_model",
+      "model_path": model_path,
+      "platform": platform,
+      "allow_jit_fallback_for_aot": False,
+  }
   if target_topology:
-    runner = model_runner.ModelRunner(
-        model_name="bench_model",
-        model_path=model_path,
-        platform=platform,
-        target_topology_label=target_topology,
-        allow_jit_fallback_for_aot=False,
-    )
-  else:
-    runner = model_runner.ModelRunner(
-        model_name="bench_model",
-        model_path=model_path,
-        platform=platform,
-    )
+    kwargs["target_topology_label"] = target_topology
+
+  # 0. Pre-warm hardware driver (libtpu.so singleton / CUDA primary context).
+  # Destroying warmup_runner releases its BFCAllocator memory pool on GPU while
+  # preserving process-wide driver initialization so t_load measures pure model
+  # deserialization without +-1000ms cloud driver spin-up jitter.
+  warmup_runner = model_runner.ModelRunner(**kwargs)
+  del warmup_runner
+  gc.collect()
+
+  sample_input = np.random.default_rng(1).standard_normal(
+      (1, 64), dtype=np.float32
+  )
+
+  reset_warmup_ok = reset_peak_memory()
+  mem_runtime_baseline = get_peak_memory_mb()
+  t0 = time.perf_counter()
+  runner = model_runner.ModelRunner(**kwargs)
 
   t_load = (time.perf_counter() - t0) * 1000.0  # ms
+  mem_after_load = get_peak_memory_mb()
   sig = runner.signature("serving_default")
-  sample_input = np.ones((1, 64), dtype=np.float32)
 
-  # 2. First-Call Latency (Includes XLA JIT Compilation if JIT)
+  # 1. Call 0: Cold-Start First-Call Latency (XLA JIT Compile + Lazy Thunk Init)
+  reset_load_ok = reset_peak_memory()
+  reset_ok = reset_warmup_ok and reset_load_ok
+  mem_before_first_call = get_peak_memory_mb()
+  rss_before_first_call = get_current_memory_mb()
+
   t1 = time.perf_counter()
   first_output = sig.run(x=sample_input)[0]
   t_cold_start = (time.perf_counter() - t1) * 1000.0  # ms
+  mem_after_first_call = get_peak_memory_mb()
+  rss_after_first_call = get_current_memory_mb()
+  if reset_load_ok:
+    first_call_delta_mb = max(
+        0.0, mem_after_first_call - mem_before_first_call
+    )
+  else:
+    first_call_delta_mb = max(
+        0.0, rss_after_first_call - rss_before_first_call
+    )
 
-  # 3. Steady-State Iterations
-  latencies = []
-  for _ in range(num_iterations):
-    ts = time.perf_counter()
-    _ = sig.run(x=sample_input)
-    latencies.append((time.perf_counter() - ts) * 1000.0)
+  # 2. Call 1: Second-Call Latency (Kernel cache warm; isolates lazy thunk init)
+  t2 = time.perf_counter()
+  _ = sig.run(x=sample_input)
+  t_second_call = (time.perf_counter() - t2) * 1000.0  # ms
 
-  mem_peak = get_peak_memory_mb()
-  mem_delta = max(0.0, mem_peak - mem_start)
+  load_delta_mb = max(0.0, mem_after_load - mem_runtime_baseline)
+  process_peak_mb = max(
+      mem_runtime_baseline,
+      mem_after_load,
+      mem_after_first_call,
+      get_peak_memory_mb(),
+  )
 
   metrics = {
+      "phase": phase,
       "load_ms": t_load,
       "cold_start_ms": t_cold_start,
-      "steady_state_p50_ms": float(np.median(latencies)),
-      "steady_state_p99_ms": float(np.percentile(latencies, 99)),
-      "peak_rss_mb": mem_peak,
-      "transient_alloc_mb": mem_delta,
+      "second_call_ms": t_second_call,
+      "runtime_baseline_mb": mem_runtime_baseline,
+      "load_peak_mb": mem_after_load,
+      "load_delta_mb": load_delta_mb,
+      "first_call_delta_mb": first_call_delta_mb,
+      "process_peak_mb": process_peak_mb,
+      "clear_refs_ok": reset_ok,
+      "first_output": [float(x) for x in np.asarray(first_output).flat],
   }
-  return metrics, first_output
+  return metrics, np.asarray(first_output)
+
+
+def _get_subprocess_base_cmd() -> list[str]:
+  argv0 = sys.argv[0]
+  resolved = shutil.which(argv0) or os.path.abspath(argv0)
+  if resolved.endswith(".py") and sys.executable:
+    return [sys.executable, "-u", resolved]
+  return [resolved]
+
+
+def _spawn_phase(phase: str, work_dir: str) -> dict[str, Any]:
+  """Re-executes this binary in a clean process and returns its JSON result."""
+  cmd = _get_subprocess_base_cmd() + [
+      f"--phase={phase}",
+      f"--work_dir={work_dir}",
+      f"--platform={_PLATFORM.value}",
+      f"--layers={_LAYERS.value}",
+      f"--hidden_dim={_HIDDEN_DIM.value}",
+  ]
+  if _TARGET_TOPOLOGY.value:
+    cmd.append(f"--target_topology={_TARGET_TOPOLOGY.value}")
+  if _TARGET_TOPOLOGY_LABEL.value:
+    cmd.append(f"--target_topology_label={_TARGET_TOPOLOGY_LABEL.value}")
+  if _AUTOTUNE_DATABASE_PATH.value:
+    cmd.append(f"--autotune_database_path={_AUTOTUNE_DATABASE_PATH.value}")
+  if _COMPILE_PORTABLE.value:
+    cmd.append("--compile_portable_executable")
+
+  proc = subprocess.run(
+      cmd,
+      stdout=subprocess.PIPE,
+      stderr=subprocess.PIPE,
+      text=True,
+      check=False,
+  )
+  if proc.returncode != 0:
+    raise RuntimeError(
+        f"Phase '{phase}' failed with exit code {proc.returncode}:\n"
+        f"--- STDOUT ---\n{proc.stdout}\n"
+        f"--- STDERR ---\n{proc.stderr}"
+    )
+  for line in reversed(proc.stdout.splitlines()):
+    if line.startswith(_METRICS_SENTINEL):
+      payload = line[len(_METRICS_SENTINEL):].strip()
+      return json.loads(payload)
+  raise RuntimeError(
+      f"Phase '{phase}' did not emit valid JSON on stdout.\n"
+      f"--- STDOUT ---\n{proc.stdout}\n"
+      f"--- STDERR ---\n{proc.stderr}"
+  )
+
+
+def _aggregate(samples: list[dict[str, Any]], key: str) -> dict[str, float]:
+  """Returns median, min, and max of `key` across independent samples."""
+  values = sorted(s[key] for s in samples)
+  return {
+      "median": values[len(values) // 2],
+      "min": values[0],
+      "max": values[-1],
+  }
+
+
+def _spawn_phase_repeated(
+    phase: str, work_dir: str, repeats: int
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+  """Spawns `repeats` independent cold-start samples for one arm."""
+  samples = [_spawn_phase(phase, work_dir) for _ in range(repeats)]
+  merged = dict(samples[-1])
+  for key in (
+      "cold_start_ms",
+      "load_ms",
+      "second_call_ms",
+      "first_call_delta_mb",
+      "process_peak_mb",
+  ):
+    stats = _aggregate(samples, key)
+    merged[key] = stats["median"]
+    merged[f"{key}_min"] = stats["min"]
+    merged[f"{key}_max"] = stats["max"]
+  return merged, samples
 
 
 def main(argv: Sequence[str]) -> None:
   del argv  # Unused.
 
-  platform = _PLATFORM.value
-  layers = _LAYERS.value
-  hidden_dim = _HIDDEN_DIM.value
-  iterations = _ITERATIONS.value
+  phase = _PHASE.value
+  work_dir = _WORK_DIR.value
 
-  print("=" * 80)
-  print(
-      f" Neptune AOT Recompilation E2E Benchmark (Platform: {platform.upper()})"
-  )
-  print(f" Model: Parameterized MLP ({layers} layers, {hidden_dim} dim)")
-  print("=" * 80)
-
-  with tempfile.TemporaryDirectory() as tmp_dir:
-    base_path = pathlib.Path(tmp_dir) / "base_model"
-    aot_path = pathlib.Path(tmp_dir) / "aot_model"
-
-    print("\n[Step 1/3] Exporting base JAX model...")
+  if phase == "build":
+    if not work_dir:
+      raise ValueError("--work_dir is required for build phase.")
+    base_path = pathlib.Path(work_dir) / "base_model"
+    aot_path = pathlib.Path(work_dir) / "aot_model"
     create_benchmark_model(
         export_path=str(base_path),
-        num_layers=layers,
-        hidden_dim=hidden_dim,
-        platform=platform,
+        num_layers=_LAYERS.value,
+        hidden_dim=_HIDDEN_DIM.value,
+        platform=_PLATFORM.value,
     )
-    print(f"  Exported base model to: {base_path}")
-
-    print("\n[Step 2/3] Recompiling model Ahead-Of-Time (AOT)...")
-    t_recompile_start = time.perf_counter()
-    topology_label = _TARGET_TOPOLOGY_LABEL.value or platform
+    topology_label = _TARGET_TOPOLOGY_LABEL.value or _PLATFORM.value
     target_config = offline_compiler.TargetConfig(
-        platform=platform,
+        platform=_PLATFORM.value,
         target_topology_label=topology_label,
         target_topology=_TARGET_TOPOLOGY.value,
         autotune_database_path=_AUTOTUNE_DATABASE_PATH.value,
@@ -227,97 +394,197 @@ def main(argv: Sequence[str]) -> None:
         include_stablehlo=False,
         auto_timestamp=False,
     )
-    t_recompile_sec = time.perf_counter() - t_recompile_start
-    print(
-        f"  Recompiled successfully in {t_recompile_sec:.2f}s (StableHLO"
-        " stripped)"
-    )
+    print(f"{_METRICS_SENTINEL}{json.dumps({'status': 'ok'})}")
+    sys.stdout.flush()
+    return
 
-    print("\n[Step 3/3] Running benchmarks...")
-    # Benchmark AOT first to capture its memory profile before JIT compilation.
-    print("  Measuring AOT Recompiled executable...")
-    aot_metrics, aot_output = run_benchmark(
+  if phase == "aot":
+    if not work_dir:
+      raise ValueError("--work_dir is required for aot phase.")
+    aot_path = pathlib.Path(work_dir) / "aot_model"
+    topology_label = _TARGET_TOPOLOGY_LABEL.value or _PLATFORM.value
+    metrics, _ = run_benchmark(
         model_path=str(aot_path),
-        platform=platform,
+        platform=_PLATFORM.value,
         target_topology=topology_label,
-        num_iterations=iterations,
+        phase="aot",
     )
+    print(f"{_METRICS_SENTINEL}{json.dumps(metrics)}")
+    sys.stdout.flush()
+    return
 
-    print("  Measuring No-AOT (JIT baseline)...")
-    jit_metrics, jit_output = run_benchmark(
+  if phase == "jit":
+    if not work_dir:
+      raise ValueError("--work_dir is required for jit phase.")
+    base_path = pathlib.Path(work_dir) / "base_model"
+    metrics, _ = run_benchmark(
         model_path=str(base_path),
-        platform=platform,
+        platform=_PLATFORM.value,
         target_topology="",
-        num_iterations=iterations,
+        phase="jit",
+    )
+    print(f"{_METRICS_SENTINEL}{json.dumps(metrics)}")
+    sys.stdout.flush()
+    return
+
+  if phase != "orchestrate":
+    raise ValueError(f"Unknown phase: {phase}")
+
+  platform = _PLATFORM.value
+  layers = _LAYERS.value
+  hidden_dim = _HIDDEN_DIM.value
+
+  print("=" * 80)
+  print(
+      " XLA Serving Engine AOT Recompilation E2E Benchmark"
+      f" (Platform: {platform.upper()})"
+  )
+  print(f" Model: Parameterized MLP ({layers} layers, {hidden_dim} dim)")
+  print("=" * 80)
+
+  ctx = (
+      contextlib.nullcontext(work_dir)
+      if work_dir
+      else tempfile.TemporaryDirectory()
+  )
+  with ctx as actual_work_dir:
+    print("\n[Step 1/3] Building models in isolated subprocess...")
+    t_build_start = time.perf_counter()
+    _spawn_phase("build", actual_work_dir)
+    t_build_sec = time.perf_counter() - t_build_start
+    print(f"  Exported base model and AOT recompiled in {t_build_sec:.2f}s.")
+
+    print(
+        "\n[Step 2/3] Measuring AOT Recompiled executable in isolated"
+        " subprocess..."
+    )
+    aot_metrics, _ = _spawn_phase_repeated(
+        "aot", actual_work_dir, _REPEATS.value
+    )
+    print(
+        "  AOT arm completed (Cold-Start Call 0:"
+        f" {aot_metrics['cold_start_ms']:.2f} ms)."
     )
 
-    # Verify golden numerical parity
-    np.testing.assert_allclose(aot_output, jit_output, rtol=1e-5, atol=1e-5)
+    print(
+        "\n[Step 3/3] Measuring No-AOT (JIT baseline) in isolated"
+        " subprocess..."
+    )
+    jit_metrics, _ = _spawn_phase_repeated(
+        "jit", actual_work_dir, _REPEATS.value
+    )
+    print(
+        "  JIT arm completed (Cold-Start Call 0:"
+        f" {jit_metrics['cold_start_ms']:.2f} ms)."
+    )
 
-    cold_start_speedup = jit_metrics["cold_start_ms"] / max(
-        0.001, aot_metrics["cold_start_ms"]
-    )
-    memory_reduction_mb = (
-        jit_metrics["peak_rss_mb"] - aot_metrics["peak_rss_mb"]
-    )
-    rss_pct_saved = (
-        (memory_reduction_mb / jit_metrics["peak_rss_mb"]) * 100.0
-        if jit_metrics["peak_rss_mb"] > 0
-        else 0.0
-    )
-    compiler_spike_mb = max(0.0, memory_reduction_mb)
+  # Verify golden numerical parity
+  aot_output = np.array(aot_metrics["first_output"])
+  jit_output = np.array(jit_metrics["first_output"])
+  np.testing.assert_allclose(aot_output, jit_output, rtol=1e-5, atol=1e-5)
 
-    print("\n" + "=" * 80)
-    print(" EMPIRICAL VERIFICATION RESULTS")
-    print("=" * 80)
-    print(
-        f"{'Metric':<30} | {'No-AOT (JIT)':<18} | "
-        f"{'AOT (Recompiled)':<18} | {'Delta / Benefit'}"
+  def _delta_pct(aot: float, jit: float) -> float:
+    return ((aot - jit) / jit) * 100.0 if jit > 0 else 0.0
+
+  load_delta_ms = aot_metrics["load_ms"] - jit_metrics["load_ms"]
+  cold_delta_ms = aot_metrics["cold_start_ms"] - jit_metrics["cold_start_ms"]
+  peak_delta_mb = (
+      aot_metrics["process_peak_mb"] - jit_metrics["process_peak_mb"]
+  )
+  peak_delta_pct = _delta_pct(
+      aot_metrics["process_peak_mb"], jit_metrics["process_peak_mb"]
+  )
+  first_call_diff_mb = (
+      aot_metrics["first_call_delta_mb"] - jit_metrics["first_call_delta_mb"]
+  )
+  attributed_jit_spike_mb = max(
+      0.0,
+      jit_metrics["first_call_delta_mb"] - aot_metrics["first_call_delta_mb"],
+  )
+
+  # Regression gates
+  if aot_metrics["cold_start_ms"] >= jit_metrics["cold_start_ms"]:
+    raise AssertionError(
+        "AOT cold-start did not beat JIT: "
+        f"AOT {aot_metrics['cold_start_ms']:.1f} ms vs "
+        f"JIT {jit_metrics['cold_start_ms']:.1f} ms (median of "
+        f"{_REPEATS.value}). AOT executable may not be selected at load."
     )
-    print("-" * 80)
-    print(
-        f"{'Model Load Latency (ms)':<30} |"
-        f" {jit_metrics['load_ms']:<18.2f} |"
-        f" {aot_metrics['load_ms']:<18.2f} |"
-        f" {aot_metrics['load_ms'] - jit_metrics['load_ms']:+.2f} ms"
+  if attributed_jit_spike_mb <= 0.0:
+    raise AssertionError(
+        "No XLA compiler memory spike attributed to the JIT arm. Either "
+        "/proc/self/clear_refs reset failed or the JIT arm did not compile."
     )
-    print(
-        f"{'Cold-Start First-Call (ms)':<30} |"
-        f" {jit_metrics['cold_start_ms']:<18.2f} |"
-        f" {aot_metrics['cold_start_ms']:<18.2f} |"
-        f" {cold_start_speedup:.1f}x Faster"
+  for arm, m in (("AOT", aot_metrics), ("JIT", jit_metrics)):
+    if m["second_call_ms"] >= _CALL1_CACHE_BOUND_MS:
+      raise AssertionError(
+          f"{arm} Call 1 took {m['second_call_ms']:.3f} ms, above the "
+          f"{_CALL1_CACHE_BOUND_MS} ms kernel-cache bound. Device modules "
+          "were not cached after Call 0."
+      )
+  if not (aot_metrics["clear_refs_ok"] and jit_metrics["clear_refs_ok"]):
+    raise AssertionError(
+        "VmHWM reset via /proc/self/clear_refs failed; memory deltas in this "
+        "run are not trustworthy. Re-run with CAP_SYS_PTRACE."
     )
-    p50_delta_ms = (
-        aot_metrics["steady_state_p50_ms"] - jit_metrics["steady_state_p50_ms"]
-    )
-    print(
-        f"{'Steady-State P50 (ms)':<30} |"
-        f" {jit_metrics['steady_state_p50_ms']:<18.3f} |"
-        f" {aot_metrics['steady_state_p50_ms']:<18.3f} |"
-        f" {p50_delta_ms:+.3f} ms"
-    )
-    print(
-        f"{'Steady-State P99 (ms)':<30} |"
-        f" {jit_metrics['steady_state_p99_ms']:<18.3f} |"
-        f" {aot_metrics['steady_state_p99_ms']:<18.3f} | Zero Jitter"
-    )
-    print(
-        f"{'Peak Process RSS (MB)':<30} |"
-        f" {jit_metrics['peak_rss_mb']:<18.1f} |"
-        f" {aot_metrics['peak_rss_mb']:<18.1f} |"
-        f" -{rss_pct_saved:.1f}% ({memory_reduction_mb:+.1f} MB)"
-    )
-    print(
-        f"{'Compiler Memory Spike (MB)':<30} |"
-        f" {compiler_spike_mb:<18.1f} |"
-        f" {'0.0':<18} |"
-        " 100% Eliminated (No OOM)"
-    )
-    print("=" * 80)
-    print(
-        "INVARIANT VERIFICATION: ALL GATES SATISFIED "
-        "(Numerical Parity Confirmed)"
-    )
+
+  print("\n" + "=" * 80)
+  print(" EMPIRICAL VERIFICATION RESULTS")
+  print("=" * 80)
+  print(
+      f"{'Metric':<30} | {'No-AOT (JIT)':<18} | "
+      f"{'AOT (Recompiled)':<18} | {'Delta (AOT - JIT)'}"
+  )
+  print("-" * 80)
+  print(
+      f"{'Model Load, Warm Driver (ms)':<30} |"
+      f" {jit_metrics['load_ms']:<18.2f} |"
+      f" {aot_metrics['load_ms']:<18.2f} |"
+      f" {load_delta_ms:+.2f} ms"
+  )
+  print(
+      f"{'Cold-Start Call 0 (ms, median)':<30} |"
+      f" {jit_metrics['cold_start_ms']:<18.2f} |"
+      f" {aot_metrics['cold_start_ms']:<18.2f} |"
+      f" {cold_delta_ms:+.2f} ms"
+  )
+  print(
+      f"{'  ^ spread [min, max]':<30} |"
+      f" [{jit_metrics['cold_start_ms_min']:.1f}, "
+      f"{jit_metrics['cold_start_ms_max']:.1f}]".ljust(19) + "|"
+      f" [{aot_metrics['cold_start_ms_min']:.1f}, "
+      f"{aot_metrics['cold_start_ms_max']:.1f}]".ljust(19) + "|"
+      f" n={_REPEATS.value} samples"
+  )
+  print(
+      f"{'Call 1 kernel cache (<5 ms)':<30} |"
+      f" {jit_metrics['second_call_ms']:<18.3f} |"
+      f" {aot_metrics['second_call_ms']:<18.3f} |"
+      f" PASS (both cached)"
+  )
+  print(
+      f"{'Peak VmHWM (MB)':<30} |"
+      f" {jit_metrics['process_peak_mb']:<18.1f} |"
+      f" {aot_metrics['process_peak_mb']:<18.1f} |"
+      f" {peak_delta_mb:+.1f} MB ({peak_delta_pct:+.1f}%)"
+  )
+  print(
+      f"{'First-Call Host Delta (MB)':<30} |"
+      f" {jit_metrics['first_call_delta_mb']:<18.1f} |"
+      f" {aot_metrics['first_call_delta_mb']:<18.1f} |"
+      f" {first_call_diff_mb:+.1f} MB"
+  )
+  print(
+      f"{'Attributed Compiler Spike (MB)':<30} |"
+      f" {attributed_jit_spike_mb:<18.1f} |"
+      f" {'0.0 (baseline)':<18} |"
+      f" {-attributed_jit_spike_mb:+.1f} MB"
+  )
+  print("=" * 80)
+  print(
+      f"Numerical parity verified across arms (rtol=1e-5, atol=1e-5) over"
+      f" {len(aot_output)} output elements."
+  )
 
 
 if __name__ == "__main__":
