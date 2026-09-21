@@ -249,7 +249,7 @@ The server can optionally run warmup requests on startup to trigger XLA compilat
 Running warmup requests avoids "cold start" latency spikes for the first few client requests by pre-compiling the XLA graphs, ensuring the server is ready to serve with predictable latency immediately after it starts reporting healthy.
 
 #### Prerequisites
-The model directory must contain a pre-generated warmup file at `assets.extra/neptune_serving_warmup_requests`.
+The model directory must contain a pre-generated warmup file at `assets.extra/xla_serving_warmup_requests`.
 
 This file can be generated during model export by passing warmup examples to `xla_saved_model.save(..., warmup_examples=...)`.
 

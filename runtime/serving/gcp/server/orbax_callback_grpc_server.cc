@@ -76,7 +76,7 @@ namespace {
 
 static constexpr char kDefaultServingSignatureDefKey[] = "serving_default";
 static constexpr char kWarmupRequestsRelativePath[] =
-    "assets.extra/neptune_serving_warmup_requests";
+    "assets.extra/xla_serving_warmup_requests";
 
 inline constexpr std::initializer_list<double> kRequestLatencyBuckets = {
     0,       0.1,     0.2,     0.3,     0.4,     0.5,     0.55,    0.61,
