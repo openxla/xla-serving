@@ -23,6 +23,7 @@ import numpy as np
 
 from xla_saved_model.protos import jax_supplemental_pb2
 from xla_saved_model._src import core as xsm
+from xla_saved_model._src.jax2xsm import pytree_proto
 from xla_saved_model._src.jax2xsm import typing as xsm_typing
 
 ApplyFn = xsm_typing.ApplyFn
@@ -244,6 +245,7 @@ def _restore_spec(
     signature_field: str,
     supplemental: jax_supplemental_pb2.Function,
     supplemental_field: str,
+    tree_field: str,
 ) -> Tuple[
     jax.tree_util.PyTreeDef,
     List[_JaxShapeDtype],
@@ -258,13 +260,16 @@ def _restore_spec(
     supplemental: a JAX-supplemental `Function` proto.
     supplemental_field: the name of a field in the above proto. This should be
       either `"input_spec_refinements"` or `"output_spec_refinements"`.
+    tree_field: the name of the field in `supplemental` holding the recorded
+      PyTree structure. This should be either `"input_tree"` or `"output_tree"`.
 
   Returns:
     A tuple containing the tree definition, array specs, and shardings of the
     restored JAX input or output signature.
 
   Raises:
-    ValueError: if the field is not set in the manifest signature.
+    ValueError: if the field is not set in the manifest signature, or if the
+      recorded structure disagrees with the manifest about the number of leaves.
   """
   if not manifest_signature.HasField(signature_field):
     raise ValueError(
@@ -283,6 +288,24 @@ def _restore_spec(
       getattr(manifest_signature, signature_field)
   )
   shlo_tensor_spec_list, treedef = jax.tree.flatten(shlo_tensor_spec_pytree)
+
+  # The manifest cannot express a custom PyTree node, so a producer that had
+  # one records the real structure alongside. Prefer it: the manifest's view of
+  # such a node is a plain list, and calling the function with that shape is
+  # rejected even though every leaf matches.
+  if supplemental.HasField(tree_field):
+    recorded_treedef = pytree_proto.from_proto(
+        getattr(supplemental, tree_field)
+    )
+    if recorded_treedef.num_leaves != len(shlo_tensor_spec_list):
+      raise ValueError(
+          f"The `{tree_field}` recorded in the JAX supplemental has"
+          f" {recorded_treedef.num_leaves} leaves, but the `{signature_field}`"
+          f" signature in the manifest has {len(shlo_tensor_spec_list)}. The"
+          " recorded structure must describe the same tensors as the manifest."
+      )
+    treedef = recorded_treedef
+
   if not supplemental.HasField(supplemental_field):
     refinements = None
   else:
@@ -417,12 +440,14 @@ def xsm_fn_to_apply_fn(
       "input",
       jax_supplemental_function,
       "input_spec_refinements",
+      "input_tree",
   )
   out_treedef, out_avals, out_shardings_hlo = _restore_spec(
       manifest_function.signature,
       "output",
       jax_supplemental_function,
       "output_spec_refinements",
+      "output_tree",
   )
 
   # Uses the same symbolic-shape scope setup as in `jax.export.deserialize`.

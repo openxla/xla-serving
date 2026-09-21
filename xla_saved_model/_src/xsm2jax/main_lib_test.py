@@ -4,7 +4,8 @@ import os
 
 os.environ['XLA_FLAGS'] = '--xla_force_host_platform_device_count=8'
 
-from typing import Sequence
+import dataclasses
+from typing import Any, Sequence
 
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -20,11 +21,33 @@ from xla_saved_model.protos import jax_supplemental_pb2
 from xla_saved_model._src import core as xsm
 from xla_saved_model._src.jax2xsm import constants
 from xla_saved_model._src.jax2xsm import main_lib
+from xla_saved_model._src.jax2xsm import pytree_proto
 from xla_saved_model._src.test_utils import jax_mnist
 from xla_saved_model._src.xsm2jax import main_lib as xsm_to_jax
 
 F0 = jax_supplemental_pb2.DTypeRefinement.f0
 DType = xsm.ShloDType
+
+
+# A custom PyTree node with a static field, standing in for a type like
+# `qwix.QArray` that appears in the parameters of a real exported model. The
+# manifest cannot represent it, so it exercises the structure recorded in the
+# JAX supplemental.
+@jax.tree_util.register_dataclass
+@dataclasses.dataclass(frozen=True)
+class _Params:
+  weight: Any
+  bias: Any
+  name: str = dataclasses.field(metadata=dict(static=True), default='')
+
+
+pytree_proto.register_pytree_node_serialization(
+    _Params,
+    serialized_name='neptune.xsm2jax.test._Params',
+    # The auxiliary data is the tuple of static fields, here `(name,)`.
+    serialize_auxdata=lambda aux: aux[0].encode('utf-8'),
+    deserialize_auxdata=lambda b: (b.decode('utf-8'),),
+)
 
 
 def _to_shape_dtype_struct(x):
@@ -331,6 +354,68 @@ class XsmToJaxTest(parameterized.TestCase):
     self.assertIsInstance(
         deserialized_apply_function.exported, jax.export.Exported
     )
+
+  def test_xsm_fn_to_apply_fn_preserves_custom_pytree_node(self):
+    # The manifest has no way to express a custom PyTree node, so it records
+    # one as a plain list of its leaves. Unless the real structure is carried
+    # in the JAX supplemental, the restored function expects that list and
+    # rejects a call made with the node itself, even though every leaf matches.
+    def jax_model_fn(params, x):
+      return params.weight * x + params.bias
+
+    jax_params = _Params(
+        weight=jnp.array(2.5), bias=jnp.array(1.0), name='my_layer'
+    )
+    test_input = jnp.array(7.0)
+
+    xsm_shlo_fn = main_lib.convert(
+        jax.jit(jax_model_fn),
+        (
+            _get_shape_dtype_struct(jax_params),
+            _to_shape_dtype_struct(test_input),
+        ),
+        {},
+        platforms=[xsm.manifest_pb2.Platform.CPU],
+    )
+
+    model_function_name = 'my_model_fn'
+    xsm_module = {model_function_name: xsm_shlo_fn}
+    save_dir_path = os.path.join(self.create_tempdir())
+    xsm.save(xsm_module, save_dir_path, xsm.SaveOptions(version=2))
+
+    manifest_proto = xsm.load(save_dir_path)
+    loaded_npt_function = manifest_proto.objects[model_function_name].function
+    jax_supplemental_filename = (
+        loaded_npt_function.body.stable_hlo_body.supplemental_info[
+            xsm.JAX_SPECIFIC_INFO
+        ].file_system_location.string_path
+    )
+    jax_supplemental_proto = jax_supplemental_pb2.Function()
+    with open(
+        os.path.join(save_dir_path, jax_supplemental_filename), 'rb'
+    ) as f:
+      jax_supplemental_proto.ParseFromString(f.read())
+
+    deserialized_apply_function = xsm_to_jax.xsm_fn_to_apply_fn(
+        loaded_npt_function,
+        jax_supplemental_proto,
+    )
+
+    # The restored calling convention still expects a `_Params`, so the call
+    # below goes through. Without the structure it would expect a two element
+    # list and raise.
+    self.assertEqual(
+        deserialized_apply_function.exported.in_tree,
+        jax.tree_util.tree_structure(((jax_params, test_input), {})),
+    )
+    self.assertEqual(
+        deserialized_apply_function(jax_params, test_input),
+        jax_model_fn(jax_params, test_input),
+    )
+
+    # And that could only have come from the supplemental: the manifest has no
+    # way to express it.
+    self.assertTrue(jax_supplemental_proto.HasField('input_tree'))
 
   def test_xsm_fn_to_apply_fn_mnist(self):
     os.environ['XLA_FLAGS'] = '--xla_force_host_platform_device_count=8'
