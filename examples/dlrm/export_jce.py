@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Neptune export for DLRM recommender model with TPUEmbeddingForServing."""
+"""XLA SavedModel export for DLRM recommender with TPUEmbeddingForServing."""
 
 import os
 import tempfile
@@ -104,7 +104,7 @@ def export_model(
     global_batch_size: int = 2,
     num_dense_features: int = 13,
 ):
-  """Exports the DLRM recommender model using Neptune."""
+  """Exports the DLRM recommender model using XLA SavedModel."""
 
   # Initialize synthetic weights and JCE resource for serving lookups
   if use_capped_vocab:

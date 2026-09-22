@@ -12,7 +12,7 @@ description = "XLA SavedModel"
 readme = 'README.md'
 license = {file = 'LICENSE'}
 requires-python = '>=3.10'
-authors = [{name = 'Neptune Authors', email='obm-jsv-team@google.com'}]
+authors = [{name = 'XLA Serving Authors', email='obm-jsv-team@google.com'}]
 classifiers=[
     'Development Status :: 4 - Beta',
     'Intended Audience :: Developers',

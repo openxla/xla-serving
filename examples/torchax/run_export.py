@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Script to run Neptune export for PyTorch model."""
+"""Script to run XLA SavedModel export for PyTorch model."""
 
 from absl import app
 from absl import flags

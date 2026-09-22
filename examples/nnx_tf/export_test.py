@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for Neptune export of NNX model."""
+"""Tests for XLA SavedModel export of NNX model."""
 
 import os
 from absl import logging

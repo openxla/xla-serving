@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Standalone Python client to query a running Neptune LLM server."""
+"""Standalone Python client to query a running XLA Serving LLM server."""
 
 from collections.abc import Sequence
 
@@ -26,7 +26,9 @@ from xla_saved_model.protos.grpc import predict_pb2
 from xla_saved_model.protos.xla.python.ifrt import dtype_pb2  # pylint: disable=g-direct-tensorflow-import
 
 _SERVER_ADDRESS = flags.DEFINE_string(
-    "server_address", "localhost:8500", "gRPC address of the Neptune server."
+    "server_address",
+    "localhost:8500",
+    "gRPC address of the XLA Serving server.",
 )
 _MODEL_NAME = flags.DEFINE_string(
     "model_name", "qwen3", "Model name registered on the server."

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// A simple client for the Neptune gRPC server serving a ViT model.
+// A simple client for the XLA Serving gRPC server serving a ViT model.
 #include <algorithm>
 #include <cmath>
 #include <cstddef>

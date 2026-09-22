@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Neptune export for an NNX recommender model."""
+"""XLA SavedModel export for an NNX recommender model."""
 
 import os
 import tempfile
@@ -37,7 +37,7 @@ def simple_postprocessor(inputs: dict[str, tf.Tensor]) -> dict[str, tf.Tensor]:
 
 
 def export_model(export_path: str):
-  """Exports the NNX recommender model using Neptune."""
+  """Exports the NNX recommender model using XLA SavedModel."""
 
   rngs = nnx.Rngs(0)
   embedding_layer, model = nnx_tf_model.build_model(rngs)

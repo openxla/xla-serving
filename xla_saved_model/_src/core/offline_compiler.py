@@ -31,13 +31,13 @@ from xla_saved_model._src.core import file_utils
 from xla_saved_model._src.core import manifest_utils
 
 try:
-  from neptune.runtime.python import optimizer as neptune_optimizer  # pylint: disable=g-import-not-at-top
+  from .third_party.neptune.runtime.python import optimizer as optimizer_ext  # pylint: disable=g-import-not-at-top
 except ImportError:
-  neptune_optimizer = None
+  optimizer_ext = None
 
-if neptune_optimizer is not None:
+if optimizer_ext is not None:
   OptimizerType = (
-      neptune_optimizer.StablehloOptimizer
+      optimizer_ext.StablehloOptimizer
       | Callable[[bytes, Sequence[int]], bytes]
   )
 else:
@@ -198,8 +198,8 @@ def _apply_optimizer(
         "Expected an optimizer instance or callable, but got class "
         f"'{optimizer.__name__}'. Did you forget to instantiate it?"
     )
-  if neptune_optimizer is not None and isinstance(
-      optimizer, neptune_optimizer.StablehloOptimizer
+  if optimizer_ext is not None and isinstance(
+      optimizer, optimizer_ext.StablehloOptimizer
   ):
     result = optimizer.optimize(mlir_module_serialized, weight_indices)
     if not isinstance(result, bytes):

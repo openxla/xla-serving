@@ -1,15 +1,15 @@
-# Neptune Serving Engine
+# XLA Serving Engine
 
-[Neptune Serving Engine (NSE)](https://docs.cloud.google.com/tpu/docs/jax-ai-stack#jax_serving_orbax_serialization_and_neptune_serving_engine)
+[XLA Serving Engine (XSE)](https://docs.cloud.google.com/tpu/docs/jax-ai-stack#jax_serving_orbax_serialization_and_neptune_serving_engine)
 is a general-purpose inference runtime for the XLA-based (TPU) software
 ecosystem. It is designed to be a modular infrastructure component that can be
 plugged into a variety of higher abstraction serving solutions.
 
-NSE is a generic serving solution for a diversity of deep learning models,
+XSE is a generic serving solution for a diversity of deep learning models,
 including computer vision, NLP, transformers, recommenders, etc.
 It is not meant for high-throughput LLM serving.
 
-**Why use NSE?**
+**Why use XSE?**
 
 - Battle-tested by major Google product areas including YouTube, Deepmind,
 Waymo, and Ads. Designed for doing inference on TPUs.
@@ -21,7 +21,7 @@ LRMs, encoder-heavy LLMs.
 ## Python Development
 
 A `xla_saved_model` Python library provides an API for exporting models that can
-run on NSE.
+run on XSE.
 
 ### Prerequisites
 
