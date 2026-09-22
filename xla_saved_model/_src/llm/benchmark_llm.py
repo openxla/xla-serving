@@ -77,6 +77,11 @@ except ImportError as import_error:
   _TPU_INFERENCE_IMPORT_ERROR = import_error
 # pylint: enable=g-import-not-at-top
 
+# PredictionService is declared in prediction_service.proto, which shares its
+# package with predict.proto. Deriving the method path from the descriptor keeps
+# it correct if that package is ever renamed.
+_PREDICT_METHOD = f"/{predict_pb2.DESCRIPTOR.package}.PredictionService/Predict"
+
 
 def _require_tpu_inference() -> None:
   if not _TPU_INFERENCE_AVAILABLE:
@@ -377,7 +382,7 @@ def _run_grpc_client_benchmark(args: argparse.Namespace) -> None:
   print(f"=== Running Mode: grpc_client (Server={args.server_address}) ===")
   channel = grpc.insecure_channel(args.server_address)
   predict_method = channel.unary_unary(
-      "/neptune.serving.PredictionService/Predict",
+      _PREDICT_METHOD,
       request_serializer=predict_pb2.PredictRequest.SerializeToString,
       response_deserializer=predict_pb2.PredictResponse.FromString,
   )

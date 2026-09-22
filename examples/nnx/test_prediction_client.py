@@ -42,7 +42,7 @@ def run_prediction_test(
   print(f"Connecting to XLA Serving server at {server_address}...")
   channel = grpc.insecure_channel(server_address)
   predict_fn = channel.unary_unary(
-      "/neptune.serving.PredictionService/Predict",
+      f"/{predict_pb2.DESCRIPTOR.package}.PredictionService/Predict",
       request_serializer=predict_pb2.PredictRequest.SerializeToString,
       response_deserializer=predict_pb2.PredictResponse.FromString,
   )

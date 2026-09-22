@@ -52,7 +52,7 @@ def query_server(
   """Sends a single prompt to the server and returns all generated beams."""
   channel = grpc.insecure_channel(server_address)
   predict_fn = channel.unary_unary(
-      "/neptune.serving.PredictionService/Predict",
+      f"/{predict_pb2.DESCRIPTOR.package}.PredictionService/Predict",
       request_serializer=predict_pb2.PredictRequest.SerializeToString,
       response_deserializer=predict_pb2.PredictResponse.FromString,
   )

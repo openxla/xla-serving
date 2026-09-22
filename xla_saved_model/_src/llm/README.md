@@ -174,20 +174,21 @@ python3 -m xla_saved_model._src.llm.benchmark_llm \
 
 ## 4. Querying the Server via gRPC
 
-XSE exposes standard gRPC endpoints over `neptune.serving.PredictionService`
+XSE exposes standard gRPC endpoints over `xla_serving.serving.PredictionService`
 (RPC method `Predict`). Clients can query the server directly in Python, C++, or
 any gRPC-supported language.
 
 ### A. API Specifications
 
-- **Service**: `neptune.serving.PredictionService`
-- **RPC Method**: `Predict` (URI: `/neptune.serving.PredictionService/Predict`)
-- **Request Message**: `neptune.serving.PredictRequest`
+- **Service**: `xla_serving.serving.PredictionService`
+- **RPC Method**: `Predict`
+  - URI: `/xla_serving.serving.PredictionService/Predict`
+- **Request Message**: `xla_serving.serving.PredictRequest`
   - `model_spec.name`: Model name matching server (`--model_name`, e.g. `"qwen3"`).
   - `model_spec.signature_name`: Serving signature (defaults to `"serving_default"`).
-  - `inputs`: `map<string, neptune.HostBufferProto>`.
-- **Response Message**: `neptune.serving.PredictResponse`
-  - `outputs`: `map<string, neptune.HostBufferProto>`.
+  - `inputs`: `map<string, xla_serving.HostBufferProto>`.
+- **Response Message**: `xla_serving.serving.PredictResponse`
+  - `outputs`: `map<string, xla_serving.HostBufferProto>`.
 
 #### Expected Tensor I/O Signatures
 
@@ -209,7 +210,7 @@ from xla_saved_model.protos.xla.python.ifrt import dtype_pb2
 
 channel = grpc.insecure_channel("localhost:8500")
 predict_fn = channel.unary_unary(
-    "/neptune.serving.PredictionService/Predict",
+    "/xla_serving.serving.PredictionService/Predict",
     request_serializer=predict_pb2.PredictRequest.SerializeToString,
     response_deserializer=predict_pb2.PredictResponse.FromString,
 )
@@ -300,8 +301,8 @@ def score_candidates(
 #include "xla/python/ifrt/dtype.pb.h"
 
 // --- 1. Text Generation ---
-void QueryTextGeneration(neptune::serving::PredictionService::Stub* stub) {
-  neptune::serving::PredictRequest request;
+void QueryTextGeneration(xla_serving::serving::PredictionService::Stub* stub) {
+  xla_serving::serving::PredictRequest request;
   request.mutable_model_spec()->set_name("qwen3");
   request.mutable_model_spec()->set_signature_name("serving_default");
 
@@ -312,7 +313,7 @@ void QueryTextGeneration(neptune::serving::PredictionService::Stub* stub) {
       "The most unexpected thing happened when I opened the door,");
 
   grpc::ClientContext context;
-  neptune::serving::PredictResponse response;
+  xla_serving::serving::PredictResponse response;
   if (stub->Predict(&context, request, &response).ok()) {
     const auto& out = response.outputs().at("text_output");
     for (const auto& elem : out.string_data().elements()) {
@@ -322,8 +323,9 @@ void QueryTextGeneration(neptune::serving::PredictionService::Stub* stub) {
 }
 
 // --- 2. Candidate Scoring ---
-void QueryCandidateScoring(neptune::serving::PredictionService::Stub* stub) {
-  neptune::serving::PredictRequest request;
+void QueryCandidateScoring(
+    xla_serving::serving::PredictionService::Stub* stub) {
+  xla_serving::serving::PredictRequest request;
   request.mutable_model_spec()->set_name("qwen3");
   request.mutable_model_spec()->set_signature_name("serving_default");
 
@@ -342,7 +344,7 @@ void QueryCandidateScoring(neptune::serving::PredictionService::Stub* stub) {
   cands_in->mutable_string_data()->add_elements(" candidate two");
 
   grpc::ClientContext context;
-  neptune::serving::PredictResponse response;
+  xla_serving::serving::PredictResponse response;
   if (stub->Predict(&context, request, &response).ok()) {
     const auto& scores = response.outputs().at("scores");
     const float* score_data =
@@ -355,7 +357,7 @@ void QueryCandidateScoring(neptune::serving::PredictionService::Stub* stub) {
 int main() {
   auto channel = grpc::CreateChannel("localhost:8500",
                                      grpc::InsecureChannelCredentials());
-  auto stub = neptune::serving::PredictionService::NewStub(channel);
+  auto stub = xla_serving::serving::PredictionService::NewStub(channel);
   QueryTextGeneration(stub.get());
   QueryCandidateScoring(stub.get());
   return 0;
