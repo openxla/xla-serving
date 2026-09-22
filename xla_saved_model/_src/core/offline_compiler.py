@@ -31,7 +31,7 @@ from xla_saved_model._src.core import file_utils
 from xla_saved_model._src.core import manifest_utils
 
 try:
-  from .third_party.neptune.runtime.python import optimizer as optimizer_ext  # pylint: disable=g-import-not-at-top
+  from neptune.runtime.python import optimizer as optimizer_ext  # pylint: disable=g-import-not-at-top
 except ImportError:
   optimizer_ext = None
 

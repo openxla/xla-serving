@@ -1012,7 +1012,7 @@ absl::Status Interpreter::LoadGraphs() {
   LOG(INFO) << "Loading graphs from pipelines";
   if (parallel_loading) {
     static absl::NoDestructor<tsl::thread::ThreadPool> shared_loading_pool(
-        tsl::Env::Default(), "JsvGraphLoaderPool", 8);
+        tsl::Env::Default(), "XlaServingGraphLoaderPool", 8);
     tsl::BlockingCounter counter(graph_bundles_.size());
     for (auto& [pipeline_name, graph_bundle] : graph_bundles_) {
       LOG(INFO) << "Scheduling graph load from pipeline: " << pipeline_name;

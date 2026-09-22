@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// A simple client for the JSV gRPC server which reads a provided TFRecord file.
+// A simple client for the XLA Serving gRPC server which reads a provided
+// TFRecord file.
 #include <memory>
 #include <string>
 
@@ -35,7 +36,6 @@
 #include "protos/grpc/prediction_service.grpc.pb.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "runtime/serving/gcp/auth/utils.h"  // from @xla_serving
-#include "runtime/tensorflow/utils/tf_to_jsv_proto.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.pb.h"  // from @xla
 #include "xla/python/ifrt/shape.pb.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
@@ -110,17 +110,8 @@ absl::StatusOr<xla_serving::serving::PredictResponse> RunPredict(
   }
   xla_serving::serving::PredictRequest request =
       prediction_log.predict_log().request();
-  // LOG(INFO) << "Successfully loaded PredictRequest from "
-  //           << warmup_requests_path;
-  // absl::StatusOr<xla_serving::serving::PredictRequest> request =
-  //     xla_serving::FromTfPredictRequest(tf_request);
-  // if (!request.ok()) {
-  //   return absl::InvalidArgumentError(
-  //       absl::StrCat("Failed to convert PredictRequest to JSV proto: ",
-  //                    request.status().message()));
-  // }
   request.mutable_model_spec()->set_name(model_name);
-  LOG(INFO) << "Successfully converted PredictRequest to JSV proto.";
+  LOG(INFO) << "Successfully converted PredictRequest to XLA Serving proto.";
   TF_ASSIGN_OR_RETURN(
       std::shared_ptr<grpc::ChannelCredentials> creds,
       xla_serving::serving::CreateChannelCredentials(server_cert_chain_path,

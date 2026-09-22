@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/tensorflow/utils/tf_to_jsv_proto.h"  // from @xla_serving
+#include "runtime/tensorflow/utils/tf_to_host_buffer_proto.h"  // from @xla_serving
 
 #include <string>
 #include <utility>
@@ -35,12 +35,12 @@ namespace xla_serving {
 
 absl::StatusOr<xla_serving::HostBufferProto> FromTfTensorProto(
     const tensorflow::TensorProto& tf_tensor_proto) {
-  xla_serving::HostBufferProto jsv_proto;
+  xla_serving::HostBufferProto host_buffer_proto;
 
-  *jsv_proto.mutable_shape() =
+  *host_buffer_proto.mutable_shape() =
       xla_serving::ToIfrtShape(tf_tensor_proto.tensor_shape()).ToProto();
   TF_ASSIGN_OR_RETURN(auto dtype, xla_serving::ToIfrtDType(tf_tensor_proto.dtype()));
-  *jsv_proto.mutable_dtype() = dtype.ToProto();
+  *host_buffer_proto.mutable_dtype() = dtype.ToProto();
 
   // Tensors may either be stored in the tensor_content field (raw bytes) or in
   // the type-specific *_val fields (e.g., float_val, int_val). To avoid
@@ -55,12 +55,13 @@ absl::StatusOr<xla_serving::HostBufferProto> FromTfTensorProto(
   if (tf_tensor_proto.dtype() == tensorflow::DT_STRING) {
     auto tstrings = tensor.unaligned_flat<tsl::tstring>();
     for (int i = 0; i < tensor.NumElements(); ++i) {
-      jsv_proto.mutable_string_data()->add_elements(std::string(tstrings(i)));
+      host_buffer_proto.mutable_string_data()->add_elements(
+          std::string(tstrings(i)));
     }
   } else {
-    jsv_proto.set_raw_data(tensor.tensor_data());
+    host_buffer_proto.set_raw_data(tensor.tensor_data());
   }
-  return std::move(jsv_proto);
+  return std::move(host_buffer_proto);
 }
 
 }  // namespace xla_serving

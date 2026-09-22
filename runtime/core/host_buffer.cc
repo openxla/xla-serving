@@ -48,7 +48,7 @@
 // go/lsc-fix-eigen-includes
 // IWYU pragma: no_include "Eigen/src/Core/util/ConfigureVectorization.h"
 
-ABSL_FLAG(int64_t, jsv_host_buffer_max_elements, int64_t{1} << 32,
+ABSL_FLAG(int64_t, xla_serving_host_buffer_max_elements, int64_t{1} << 32,
           "Maximum number of elements allowed in a HostBuffer to prevent "
           "OOM/DoS.");
 
@@ -114,7 +114,8 @@ absl::Status ValidateHostBufferShape(xla::ifrt::DType dtype,
   }
 
   // Limit check to prevent OOM/DoS.
-  int64_t max_elements = absl::GetFlag(FLAGS_jsv_host_buffer_max_elements);
+  int64_t max_elements =
+      absl::GetFlag(FLAGS_xla_serving_host_buffer_max_elements);
   if (num_elements > max_elements) {
     return absl::InvalidArgumentError(
         absl::StrFormat("HostBuffer shape too large: %d elements (max %d)",

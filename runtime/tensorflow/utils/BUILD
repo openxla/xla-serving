@@ -74,9 +74,9 @@ cc_library(
 )
 
 cc_library(
-    name = "tf_to_jsv_proto",
-    srcs = ["tf_to_jsv_proto.cc"],
-    hdrs = ["tf_to_jsv_proto.h"],
+    name = "tf_to_host_buffer_proto",
+    srcs = ["tf_to_host_buffer_proto.cc"],
+    hdrs = ["tf_to_host_buffer_proto.h"],
     deps = [
         ":ifrt_tensor_utils",
         "@abseil-cpp//absl/status",

@@ -67,11 +67,11 @@ struct BatchRunnerOpOptions {
   std::vector<RaggedInputSpec> ragged_inputs;
 };
 
-// A batch implementation in JSV that take a list of kernels and run them in a
-// batch mode.
-class JsvBatchResource : public BatchResourceBase {
+// A batch implementation in XLA Serving that take a list of kernels and run
+// them in a batch mode.
+class XlaServingBatchResource : public BatchResourceBase {
  public:
-  JsvBatchResource(
+  XlaServingBatchResource(
       std::vector<std::unique_ptr<Kernel>> batched_graph,
       std::shared_ptr<SharedBatchScheduler<BatchResourceBase::BatchTask>>
           batcher,
@@ -123,7 +123,7 @@ class BatchRunnerOp : public CancellableAsyncKernel {
 
   // TODO: Make it to private and use `CreateBatchRunnerOp`.
   explicit BatchRunnerOp(
-      tsl::core::RefCountPtr<JsvBatchResource> batch_resource,
+      tsl::core::RefCountPtr<XlaServingBatchResource> batch_resource,
       std::unique_ptr<FlatSignature> input_signature = nullptr,
       std::unique_ptr<FlatSignature> output_signature = nullptr)
       : CancellableAsyncKernel(std::move(input_signature),
@@ -140,7 +140,7 @@ class BatchRunnerOp : public CancellableAsyncKernel {
  private:
   tsl::Future<> RunAsyncInternal(ExecuteContext& context) override;
 
-  tsl::core::RefCountPtr<JsvBatchResource> batch_resource_;
+  tsl::core::RefCountPtr<XlaServingBatchResource> batch_resource_;
 };
 
 // The `thread_pool` will be used for non-blocking tasks such as concat and

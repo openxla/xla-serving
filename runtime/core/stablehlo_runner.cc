@@ -124,10 +124,8 @@ absl::StatusOr<xla::DeviceAssignment> GetRuntimeXlaDeviceAssignment(
   return da;
 }
 
-
-
 auto* input_transfer_counter =
-    ::tsl::monitoring::Counter<1>::New("/jsv/input_transfer/dispatched",
+    ::tsl::monitoring::Counter<1>::New("/xla_serving/input_transfer/dispatched",
                                        "Tracks how many transfers were routed "
                                        "to the Arena vs. Default IFRT path.",
                                        "transfer_path");

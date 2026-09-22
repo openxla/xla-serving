@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// A simple client for the JSV gRPC nnx model server.
+// A simple client for the XLA Serving gRPC nnx model server.
 #include <cstdint>
 #include <memory>
 #include <string>

@@ -1,4 +1,4 @@
-# proto-file: third_party/neptune/protos/manifest.proto
+# proto-file: protos/manifest.proto
 # proto-message: Manifest
 objects {
   key: "serving_default_jax_model_serving_default"

@@ -1,4 +1,4 @@
-# proto-file: third_party/neptune/protos/manifest.proto
+# proto-file: protos/manifest.proto
 # proto-message: Manifest
 objects {
   key: "pre"

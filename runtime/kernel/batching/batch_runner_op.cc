@@ -53,10 +53,9 @@
 
 namespace xla_serving {
 
-void JsvBatchResource::ProcessFuncBatchImpl(
+void XlaServingBatchResource::ProcessFuncBatchImpl(
     const BatchResourceBase::BatchTask& propagated_task,
-    std::vector<int32_t> batch_request_ids,
-    absl::Span<const HostBuffer> inputs,
+    std::vector<int32_t> batch_request_ids, absl::Span<const HostBuffer> inputs,
     std::vector<HostBuffer>* combined_outputs,
     std::function<void(const absl::Status&)> done) const {
   Kernel::ExecuteContext context;
@@ -107,7 +106,8 @@ void JsvBatchResource::ProcessFuncBatchImpl(
   }
 }
 
-absl::StatusOr<absl::Span<const Value>> JsvBatchResource::GetInputsToBatch(
+absl::StatusOr<absl::Span<const Value>>
+XlaServingBatchResource::GetInputsToBatch(
     Kernel::ExecuteContext* context) const {
   absl::Span<const Value> positional_inputs = context->inputs;
   if (positional_inputs.empty()) {
@@ -191,7 +191,7 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateBatchRunnerOp(
   TF_RETURN_IF_ERROR(SharedBatchScheduler<BatchResourceBase::BatchTask>::Create(
       scheduler_options, &batcher));
   BatchResourceBase::QueueOptions queue_options =
-      JsvBatchResource::GetBatcherQueueOptions(
+      XlaServingBatchResource::GetBatcherQueueOptions(
           scheduler_options.num_batch_threads, options.max_batch_size,
           options.batch_timeout_micros, options.max_enqueued_batches,
           options.allowed_batch_sizes, options.enable_large_batch_splitting,
@@ -205,9 +205,10 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateBatchRunnerOp(
           options.priority_aware_batching_options, thread_pool,
           options.allocator, options.ragged_inputs);
 
-  tsl::core::RefCountPtr<JsvBatchResource> batch_resource(new JsvBatchResource(
-      std::move(kernels), batcher, queue_options, options.allowed_batch_sizes,
-      thread_pool, options.ragged_inputs));
+  tsl::core::RefCountPtr<XlaServingBatchResource> batch_resource(
+      new XlaServingBatchResource(std::move(kernels), batcher, queue_options,
+                                  options.allowed_batch_sizes, thread_pool,
+                                  options.ragged_inputs));
   std::unique_ptr<FlatSignature> input_signature;
 
   if (!options.input_signature.empty()) {

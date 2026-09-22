@@ -42,8 +42,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from .third_party.neptune import xla_saved_model
-from .third_party.neptune.runtime.python import orbax_model_runner as model_runner
+import xla_saved_model
+from xla_saved_model_runner import model_runner
 from xla_saved_model._src.core import aot_recompiler
 from xla_saved_model._src.core import offline_compiler
 

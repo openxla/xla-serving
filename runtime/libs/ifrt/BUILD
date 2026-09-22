@@ -38,7 +38,7 @@ cc_library(
     name = "executable_build_utils",
     srcs = ["executable_build_utils.cc"],
     hdrs = ["executable_build_utils.h"],
-    defines = ["JSV_ON_GCE"],
+    defines = ["XLA_SERVING_ON_GCE"],
     deps = [
         "@abseil-cpp//absl/base:nullability",
         "@abseil-cpp//absl/log",
@@ -65,7 +65,7 @@ cc_library(
     name = "executable_build_utils_gce",
     srcs = ["executable_build_utils.cc"],
     hdrs = ["executable_build_utils.h"],
-    defines = ["JSV_ON_GCE"],
+    defines = ["XLA_SERVING_ON_GCE"],
     visibility = [
         "//visibility:private",
     ],

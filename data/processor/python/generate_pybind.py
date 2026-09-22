@@ -71,14 +71,22 @@ CPP_TO_PY_TYPE = {
     'bool': 'bool',
     'string': 'str',
     'std::string': 'str',
-    'jsv::HostBuffer': 'composite_processor_pybind.HostBuffer',
     'HostBuffer': 'composite_processor_pybind.HostBuffer',
 }
 
 
+def unqualified(t: str) -> str:
+  """Returns `t` with any leading C++ namespace qualifier removed."""
+  return t.rsplit('::', 1)[-1]
+
+
 def map_primitive(t: str) -> str:
   t = t.strip()
-  return CPP_TO_PY_TYPE.get(t, 'Any')
+  if t in CPP_TO_PY_TYPE:
+    return CPP_TO_PY_TYPE[t]
+  # The runtime's namespace differs between builds, so fall back to the
+  # unqualified name.
+  return CPP_TO_PY_TYPE.get(unqualified(t), 'Any')
 
 
 def handle_vector(args: list[str]) -> str:
@@ -183,7 +191,7 @@ def parse_signature(params_str):
 
     type_keywords = set(CPP_TO_PY_TYPE.keys())
 
-    if last_token in type_keywords or not parts[:-1]:
+    if unqualified(last_token) in type_keywords or not parts[:-1]:
       param_name = f'arg{i}'
       cpp_type = p
     else:

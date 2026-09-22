@@ -1,6 +1,6 @@
 # Ahead-Of-Time (AOT) Model Recompilation & Serving Guide
 
-This guide walks through precompiling and serving exported Neptune models
+This guide walks through precompiling and serving exported XLA Serving models
 Ahead-Of-Time (AOT) to eliminate Just-In-Time (JIT) compilation latency and
 stabilize host container memory in production.
 
@@ -127,7 +127,7 @@ without requiring attached hardware.
 
 * **`--input-model-path`, `-i`**:
   * *Type*: String | *Default*: *(Required)*
-  * *Possible Values*: Any valid directory path to an exported Neptune
+  * *Possible Values*: Any valid directory path to an exported XLA Serving
     model bundle directory (containing `manifest.jsonpb` or `manifest.pb`).
   * *Description*: Source model bundle to be recompiled Ahead-Of-Time.
 * **`--output-model-path`, `-o`**:
@@ -200,17 +200,17 @@ without requiring attached hardware.
 | `allow_jit_fallback_for_aot` | Bool | `False` | Fallback to JIT on mismatch. |
 | `platform` | String | `""` | Target device platform. |
 
-### C. Supplying Serving Runtime Options to Neptune Runtime
+### C. Supplying Serving Runtime Options to the XLA Serving Runtime
 
 To load and execute AOT precompiled models, supply `target_topology_label` and
 `allow_jit_fallback_for_aot` to your chosen runtime interface:
 
 #### 1. Python API (`ModelRunner`)
 In Python environments (e.g. notebooks, offline evaluation, or services),
-use `ModelRunner` from the `neptune_model_runner` package:
+use `ModelRunner` from the `xla_saved_model_runner` package:
 
 ```python
-from neptune_model_runner import model_runner
+from xla_saved_model_runner import model_runner
 
 runner = model_runner.ModelRunner(
     model_name="my_model",
@@ -229,22 +229,22 @@ pass the target topology label and fallback policy to
 `InterpreterCreateOptions`:
 
 ```cpp
-#include "third_party/neptune/runtime/interpreter/interpreter.h"
-#include "third_party/neptune/runtime/interpreter/interpreter_create_options.h"
+#include "runtime/interpreter/interpreter.h"  // from @xla_serving
+#include "runtime/interpreter/interpreter_create_options.h"  // from @xla_serving
 
-auto options = std::make_unique<jsv::InterpreterCreateOptions>();
+auto options = std::make_unique<xla_serving::InterpreterCreateOptions>();
 options->model_path = "/path/to/aot_model";
 options->model_name = "my_model";
 options->platform_name = "cuda";
 options->target_topology_label = "cuda_target";
 options->allow_jit_fallback_for_aot = false;
 
-TF_ASSIGN_OR_RETURN(std::unique_ptr<jsv::Interpreter> interpreter,
-                    jsv::Interpreter::Create(std::move(options)));
+TF_ASSIGN_OR_RETURN(std::unique_ptr<xla_serving::Interpreter> interpreter,
+                    xla_serving::Interpreter::Create(std::move(options)));
 ```
 
 #### 3. Containerized gRPC Serving (Docker)
-For standalone microservice deployments, launch the Neptune Serving Engine
+For standalone microservice deployments, launch the XLA Serving Engine
 Docker container on gRPC port 8500:
 
 ```bash
