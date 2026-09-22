@@ -401,35 +401,18 @@ def _flat_input_signature(
   return (input_names[: len(leaves)], leaves)
 
 
-def _unwrap_tf_containers(tree: Any) -> Any:
-  """Replaces TF trackable containers with their builtin equivalents.
-
-  TF wraps containers owned by a trackable (e.g. `_DictWrapper` for a dict
-  attribute of a `tf.Module`), and functions built from them return the
-  wrappers rather than plain containers. JAX dispatches on the exact container
-  type, so a wrapper is treated as an opaque leaf and the tree structure is
-  lost.
-
-  Sequence types are preserved rather than normalized to lists. JAX keys a
-  named tuple's children by field name and a list's by index, and TF names the
-  corresponding SavedModel outputs the same way, so collapsing one into the
-  other would rename them.
-
-  Args:
-    tree: A PyTree that may contain TF trackable containers.
-
-  Returns:
-    The same tree with trackable containers replaced by builtin ones.
-  """
-  if isinstance(tree, Mapping):
-    return {k: _unwrap_tf_containers(v) for k, v in tree.items()}
-  if isinstance(tree, Sequence) and not isinstance(tree, (str, bytes)):
-    values = [_unwrap_tf_containers(v) for v in tree]
-    if hasattr(tree, '_fields'):  # A named tuple.
-      named_tuple_type: Any = type(tree)
-      return named_tuple_type(*values)
-    return tuple(values) if isinstance(tree, tuple) else values
-  return tree
+def _unwrap_tf_trackables(
+    tf_trackable: Any,
+) -> Any:
+  """Unwraps TF trackables from the given PyTree."""
+  if isinstance(tf_trackable, Mapping):
+    return {k: _unwrap_tf_trackables(v) for k, v in tf_trackable.items()}
+  elif isinstance(tf_trackable, Sequence) and not isinstance(
+      tf_trackable, (str, bytes)
+  ):
+    return [_unwrap_tf_trackables(v) for v in tf_trackable]
+  else:
+    return tf_trackable
 
 
 def _output_name_for_key(key: Any) -> str:
@@ -453,7 +436,7 @@ def _output_names(
     fn: tf.types.experimental.ConcreteFunction,
 ) -> Sequence[str]:
   """Returns the flattened output signature of the given function."""
-  unwrapped_outputs = _unwrap_tf_containers(fn.structured_outputs)
+  unwrapped_outputs = _unwrap_tf_trackables(fn.structured_outputs)
   leaves_with_path = jax.tree.leaves_with_path(unwrapped_outputs)
   if not leaves_with_path:
     return []
@@ -491,11 +474,7 @@ def get_output_signature(
     )
     return flat_specs[0] if len(flat_specs) == 1 else flat_specs
 
-  # `structured_outputs` may contain TF trackable containers (e.g.
-  # `_DictWrapper`). JAX dispatches on the exact container type, so those would
-  # be treated as opaque leaves and the output structure would collapse into a
-  # flat tuple.
-  return jax.tree.map(_map_leaf, _unwrap_tf_containers(fn.structured_outputs))
+  return jax.tree.map(_map_leaf, fn.structured_outputs)
 
 
 def _to_keyword_only_fn(
