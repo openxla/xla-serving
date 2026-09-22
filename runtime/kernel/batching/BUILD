@@ -162,3 +162,25 @@ cc_library(
         "@xla_serving//runtime/core:host_buffer",
     ],
 )
+
+cc_library(
+    name = "pad_utils",
+    srcs = ["pad_utils.cc"],
+    hdrs = ["pad_utils.h"],
+    visibility = [
+        "@xla_serving//runtime/kernel:__subpackages__",
+    ],
+    deps = [
+        "@abseil-cpp//absl/container:inlined_vector",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/types:span",
+        "@tsl//tsl/platform:tstring",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/core:allocator",
+        "@xla_serving//runtime/core:default_allocator",
+        "@xla_serving//runtime/core:host_buffer",
+    ],
+)
