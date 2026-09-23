@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/kernels/cpu_embedding/unpack_host_buffer_vector_transform.h"  // from @neptune
+#include "data/kernels/cpu_embedding/unpack_host_buffer_vector_transform.h"  // from @xla_serving
 
 #include <memory>
 #include <string>
@@ -23,15 +23,15 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/kernels/cpu_embedding/cpu_embedding.pb.h"  // from @neptune
-#include "data/processor/cc/api/registry.h"  // from @neptune
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/api/type_info.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "data/kernels/cpu_embedding/cpu_embedding.pb.h"  // from @xla_serving
+#include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/api/type_info.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 
-namespace neptune {
+namespace xla_serving {
 namespace data {
 namespace composite {
 namespace transforms {
@@ -47,14 +47,14 @@ UnpackHostBufferVectorTransform::Create(int output_count) {
 UnpackHostBufferVectorTransform::UnpackHostBufferVectorTransform(
     int output_count)
     : output_count_(output_count) {
-  input_types_.push_back(api::CreateTypeInfo<std::vector<neptune::HostBuffer>>());
-  output_types_.resize(output_count_, api::CreateTypeInfo<neptune::HostBuffer>());
+  input_types_.push_back(api::CreateTypeInfo<std::vector<xla_serving::HostBuffer>>());
+  output_types_.resize(output_count_, api::CreateTypeInfo<xla_serving::HostBuffer>());
 }
 
 absl::Status UnpackHostBufferVectorTransform::Execute(
     api::ExecuteContext& context) {
-  const std::vector<neptune::HostBuffer>& packed =
-      context.inputs[0].Get<std::vector<neptune::HostBuffer>>();
+  const std::vector<xla_serving::HostBuffer>& packed =
+      context.inputs[0].Get<std::vector<xla_serving::HostBuffer>>();
 
   if (packed.size() != output_count_) {
     return absl::InternalError(absl::StrCat(
@@ -81,11 +81,11 @@ absl::Status UnpackHostBufferVectorTransform::PropagateSignatureImpl(
   return absl::OkStatus();
 }
 
-absl::StatusOr<::neptune::data::composite::TransformConfig>
+absl::StatusOr<::xla_serving::data::composite::TransformConfig>
 UnpackHostBufferVectorTransform::ToProto() const {
-  ::neptune::data::composite::TransformConfig config;
+  ::xla_serving::data::composite::TransformConfig config;
   config.set_op_name("UnpackHostBufferVectorTransform");
-  ::neptune::data::composite::transforms::cpu_embedding::
+  ::xla_serving::data::composite::transforms::cpu_embedding::
       UnpackHostBufferVectorArgs args;
 
   args.set_output_count(output_count_);
@@ -99,9 +99,9 @@ std::string UnpackHostBufferVectorTransform::DebugName() const {
 
 absl::StatusOr<std::unique_ptr<UnpackHostBufferVectorTransform>>
 UnpackHostBufferVectorTransform::CreateFromTransformConfig(
-    const ::neptune::data::composite::TransformConfig& config,
-    absl::Span<const std::shared_ptr<neptune::data::Resource>> resources) {
-  ::neptune::data::composite::transforms::cpu_embedding::
+    const ::xla_serving::data::composite::TransformConfig& config,
+    absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources) {
+  ::xla_serving::data::composite::transforms::cpu_embedding::
       UnpackHostBufferVectorArgs args;
 
   if (!config.detail().UnpackTo(&args)) {
@@ -119,4 +119,4 @@ ND_REGISTER_TRANSFORM(UnpackHostBufferVectorTransform,
 }  // namespace transforms
 }  // namespace composite
 }  // namespace data
-}  // namespace neptune
+}  // namespace xla_serving

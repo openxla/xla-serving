@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Abstract base class for Neptune ExportableTransform modules."""
+"""Abstract base class for ExportableTransform modules."""
 
 import abc
 from typing import Any

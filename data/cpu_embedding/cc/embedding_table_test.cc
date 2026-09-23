@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/cpu_embedding/cc/embedding_table.h"  // from @neptune
+#include "data/cpu_embedding/cc/embedding_table.h"  // from @xla_serving
 
 #include <cstdint>
 #include <utility>
@@ -23,10 +23,10 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_matchers.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/cpu_embedding/cc/array.h"  // from @neptune
-#include "data/test_utils/status_macros.h"  // from @neptune
+#include "data/cpu_embedding/cc/array.h"  // from @xla_serving
+#include "data/test_utils/status_macros.h"  // from @xla_serving
 
-namespace neptune::data::cpu_embedding {
+namespace xla_serving::data::cpu_embedding {
 namespace {
 
 using ::absl_testing::StatusIs;
@@ -92,4 +92,4 @@ TEST(EmbeddingTableTest, LookupUnsupportedDType) {
 }
 
 }  // namespace
-}  // namespace neptune::data::cpu_embedding
+}  // namespace xla_serving::data::cpu_embedding

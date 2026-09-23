@@ -23,12 +23,12 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/strings/match.h"  // from @abseil-cpp
 #include "absl/strings/str_split.h"  // from @abseil-cpp
-#include "runtime/kernel/kernel.h"  // from @neptune
-#include "runtime/tensorflow/kernel/builtin_tensorflow_kernel.h"  // from @neptune
+#include "runtime/kernel/kernel.h"  // from @xla_serving
+#include "runtime/tensorflow/kernel/builtin_tensorflow_kernel.h"  // from @xla_serving
 #include "tensorflow/core/platform/env.h"  // from @org_tensorflow
 #include "tensorflow/core/platform/path.h"  // from @org_tensorflow
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 void LoadSingleSo(const std::string& so_path) {
@@ -104,4 +104,4 @@ static const bool kUnused = []() {
 }();
 
 }  // namespace
-}  // namespace neptune
+}  // namespace xla_serving

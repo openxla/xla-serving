@@ -2,7 +2,7 @@ load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_python//python:py_library.bzl", "py_library")
 
-package(default_visibility = ["@neptune//data:neptune_data_internal"])
+package(default_visibility = ["@xla_serving//data:xla_serving_data_internal"])
 
 cc_library(
     name = "proto_matchers",

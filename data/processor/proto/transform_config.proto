@@ -14,7 +14,7 @@
 
 edition = "2024";
 
-package neptune.data.composite;
+package xla_serving.data.composite;
 
 import "google/protobuf/any.proto";
 import "data/resource_manager/proto/resource_manager.proto";
@@ -86,7 +86,7 @@ message CompositeProcessorMetadata {
 
 message CompositeProcessorConfig {
   repeated TransformConfig transforms = 1;
-  repeated neptune.data.ResourceProto resources = 2;
+  repeated xla_serving.data.ResourceProto resources = 2;
   string custom_asset_path = 3;
   repeated EdgeProto output_edges = 4;
   CompositeProcessorMetadata metadata = 5;

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/data_loader/ocp_loader/checkpoint_loader.h"  // from @neptune
+#include "runtime/data_loader/ocp_loader/checkpoint_loader.h"  // from @xla_serving
 
 #include <cstddef>
 #include <cstdint>
@@ -30,9 +30,9 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "nlohmann/json.hpp"  // from @nlohmann_json
-#include "runtime/data_loader/ocp_loader/common_types.h"  // from @neptune
-#include "runtime/data_loader/ocp_loader/tensorstore_loader.h"  // from @neptune
-#include "runtime/data_loader/ocp_loader/tensorstore_utils.h"  // from @neptune
+#include "runtime/data_loader/ocp_loader/common_types.h"  // from @xla_serving
+#include "runtime/data_loader/ocp_loader/tensorstore_loader.h"  // from @xla_serving
+#include "runtime/data_loader/ocp_loader/tensorstore_utils.h"  // from @xla_serving
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
@@ -51,7 +51,7 @@
 #include "tsl/platform/path.h"  // from @tsl
 
 // TODO(qidichen): add test for this file.
-namespace neptune {
+namespace xla_serving {
 
 const char _OCDBT_MANIFEST_FILE[] = "manifest.ocdbt";
 
@@ -206,4 +206,4 @@ LoadCheckpointFromOrbax(absl::string_view checkpoint_path,
   return named_weights;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

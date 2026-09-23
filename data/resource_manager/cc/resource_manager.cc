@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/resource_manager/cc/resource_manager.h"  // from @neptune
+#include "data/resource_manager/cc/resource_manager.h"  // from @xla_serving
 
 #include <cstddef>
 #include <cstdint>
@@ -26,12 +26,12 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
-#include "data/resource_manager/cc/asset.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
-#include "data/resource_manager/cc/resource_internal.h"  // from @neptune
-#include "data/resource_manager/proto/resource_manager.pb.h"  // from @neptune
+#include "data/resource_manager/cc/asset.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource_internal.h"  // from @xla_serving
+#include "data/resource_manager/proto/resource_manager.pb.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 
 namespace {
 
@@ -169,4 +169,4 @@ ResourceManagerProto ResourceManager::ToProto() const {
   return proto;
 }
 
-}  // namespace neptune::data
+}  // namespace xla_serving::data

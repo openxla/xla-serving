@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/serving/gcp/server/grpc_status_utils.h"  // from @neptune
+#include "runtime/serving/gcp/server/grpc_status_utils.h"  // from @xla_serving
 
 #include <string>
 
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "include/grpcpp/support/status.h"  // from @grpc
 
-namespace neptune {
+namespace xla_serving {
 namespace serving {
 
 grpc::Status ToGrpcStatus(const absl::Status& status) {
@@ -87,4 +87,4 @@ grpc::Status ToGrpcStatus(const absl::Status& status) {
 }
 
 }  // namespace serving
-}  // namespace neptune
+}  // namespace xla_serving

@@ -24,12 +24,12 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/cpu_embedding/cc/array.h"  // from @neptune
-#include "data/cpu_embedding/cc/cpu_embedding_engine.h"  // from @neptune
-#include "data/cpu_embedding/cc/embedding_table.h"  // from @neptune
-#include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @neptune
-#include "data/cpu_embedding/cc/feature_spec.h"  // from @neptune
-#include "data/cpu_embedding/python/array_caster.h"  // from @neptune
+#include "data/cpu_embedding/cc/array.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/cpu_embedding_engine.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/embedding_table.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/feature_spec.h"  // from @xla_serving
+#include "data/cpu_embedding/python/array_caster.h"  // from @xla_serving
 #include "include/pybind11/numpy.h"  // from @pybind11_bazel
 #include "include/pybind11/pybind11.h"  // from @pybind11_bazel
 #include "include/pybind11/stl.h"  // from @pybind11_bazel
@@ -37,7 +37,7 @@
 #include "pybind11_abseil/status_casters.h"  // from @pybind11_abseil
 
 namespace py = pybind11;
-namespace cpu_embedding = ::neptune::data::cpu_embedding;
+namespace cpu_embedding = ::xla_serving::data::cpu_embedding;
 
 PYBIND11_MODULE(cpu_embedding_engine_pybind, m) {
   m.doc() = "Python extension module to access CPU embedding engine.";

@@ -1,0 +1,234 @@
+# proto-file: protos/manifest.proto
+# proto-message: Manifest
+objects {
+  key: "serving_default_jax_model_serving_default"
+  value {
+    function {
+      signature {
+        input {
+          tuple {
+            elements {
+              tuple {
+                elements {
+                  dict {
+                    string_to_type {
+                      key: "w"
+                      value {
+                        leaf {
+                          tensor_type {
+                            shape {
+                              shape_with_known_rank {
+                              }
+                            }
+                            dtype: f32
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                elements {
+                  leaf {
+                    tensor_type {
+                      shape {
+                        shape_with_known_rank {
+                          dimension_sizes {
+                          }
+                        }
+                      }
+                      dtype: f32
+                    }
+                  }
+                }
+              }
+            }
+            elements {
+              dict {
+              }
+            }
+          }
+        }
+        output {
+          leaf {
+            tensor_type {
+              shape {
+                shape_with_known_rank {
+                  dimension_sizes {
+                  }
+                }
+              }
+              dtype: f32
+            }
+          }
+        }
+      }
+      body {
+        stable_hlo_body {
+          stable_hlo {
+            inlined_bytes: ""
+            mime_type: "application/x.mlir-stablehlo"
+            version: "1.0"
+          }
+          calling_convention_version: 10
+          lowering_platforms: "cpu"
+          module_kept_var_idx: 0
+          module_kept_var_idx: 1
+        }
+      }
+      data_names: "w"
+      visibility: PUBLIC
+    }
+  }
+}
+objects {
+  key: "jax_model_weights"
+  value {
+    value {
+      external {
+        data {
+          file_system_location {
+            string_path: "checkpoint/jax_model"
+          }
+          mime_type: "application/x.orbax-checkpoint"
+        }
+      }
+    }
+  }
+}
+objects {
+  key: "serving_default_tf_model_postprocessing"
+  value {
+    function {
+      signature {
+        input {
+          tuple {
+            elements {
+              tuple {
+                elements {
+                  leaf {
+                    tensor_type {
+                      shape {
+                        shape_with_known_rank {
+                          dimension_sizes {
+                          }
+                        }
+                      }
+                      dtype: f32
+                    }
+                  }
+                }
+              }
+            }
+            elements {
+              dict {
+              }
+            }
+          }
+        }
+        output {
+          leaf {
+            tensor_type {
+              shape {
+                shape_with_known_rank {
+                  dimension_sizes {
+                  }
+                }
+              }
+              dtype: f32
+            }
+          }
+        }
+      }
+      body {
+        other {
+          file_system_location {
+            string_path: "serving_default_tf_model_postprocessing.pb"
+          }
+          mime_type: "application/protobuf; type=neptune_model_tf_concrete_function_handle.TfConcreteFunctionHandle"
+          version: "0.0.1"
+        }
+      }
+      visibility: PUBLIC
+    }
+  }
+}
+objects {
+  key: "serving_default_tf_model_preprocessing"
+  value {
+    function {
+      signature {
+        input {
+          tuple {
+            elements {
+              tuple {
+                elements {
+                  leaf {
+                    tensor_type {
+                      shape {
+                        shape_with_known_rank {
+                          dimension_sizes {
+                            size: 4
+                          }
+                        }
+                      }
+                      dtype: f32
+                    }
+                  }
+                }
+              }
+            }
+            elements {
+              dict {
+              }
+            }
+          }
+        }
+        output {
+          leaf {
+            tensor_type {
+              shape {
+                shape_with_known_rank {
+                  dimension_sizes {
+                    size: 4
+                  }
+                }
+              }
+              dtype: f32
+            }
+          }
+        }
+      }
+      body {
+        other {
+          file_system_location {
+            string_path: "serving_default_tf_model_preprocessing.pb"
+          }
+          mime_type: "application/protobuf; type=neptune_model_tf_concrete_function_handle.TfConcreteFunctionHandle"
+          version: "0.0.1"
+        }
+      }
+      visibility: PUBLIC
+    }
+  }
+}
+supplemental_info {
+
+  key: "orchestration"
+  value {
+    file_system_location {
+      string_path: "orchestration.pb"
+    }
+    mime_type: "application/protobuf; type=neptune_orchestration.Pipelines"
+    version: "0.0.1"
+  }
+}
+supplemental_info {
+  key: "tensorflow_saved_model"
+  value {
+    file_system_location {
+      string_path: "tf_saved_model/"
+    }
+    mime_type: "application/x.tensorflow-saved-model"
+    version: "1.0"
+  }
+}

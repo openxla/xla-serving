@@ -9,12 +9,12 @@ py_library(
     srcs = ["cpu_embedding.py"],
     visibility = ["//visibility:public"],
     deps = [
-        "@neptune//data/kernels/cpu_embedding:cpu_embedding_lookup_transform_pybind",
-        "@neptune//data/kernels/cpu_embedding:cpu_embedding_module",
-        "@neptune//data/kernels/cpu_embedding:dense_cpu_embedding_lookup_transform_pybind",
-        "@neptune//data/processor/python:composite_processor_pybind",
-        "@neptune//data/processor/python:transform",
-        "@neptune_pypi//jax",
+        "@xla_serving//data/kernels/cpu_embedding:cpu_embedding_lookup_transform_pybind",
+        "@xla_serving//data/kernels/cpu_embedding:cpu_embedding_module",
+        "@xla_serving//data/kernels/cpu_embedding:dense_cpu_embedding_lookup_transform_pybind",
+        "@xla_serving//data/processor/python:composite_processor_pybind",
+        "@xla_serving//data/processor/python:transform",
+        "@xla_serving_pypi//jax",
     ],
 )
 
@@ -24,11 +24,11 @@ py_test(
     deps = [
         ":cpu_embedding",
         "@absl_py//absl/testing:absltest",
-        "@neptune//data/kernels/cpu_embedding:cpu_embedding_serializer_pybind",
-        "@neptune//data/kernels/cpu_embedding:unpack_host_buffer_vector_module",
-        "@neptune//data/processor/python:composite_processor_pybind",
-        "@neptune_pypi//jax",
-        "@neptune_pypi//numpy",
+        "@xla_serving//data/kernels/cpu_embedding:cpu_embedding_serializer_pybind",
+        "@xla_serving//data/kernels/cpu_embedding:unpack_host_buffer_vector_module",
+        "@xla_serving//data/processor/python:composite_processor_pybind",
+        "@xla_serving_pypi//jax",
+        "@xla_serving_pypi//numpy",
     ],
 )
 
@@ -37,8 +37,8 @@ py_library(
     srcs = ["packing.py"],
     visibility = ["//visibility:public"],
     deps = [
-        "@neptune//data/kernels/cpu_embedding:pack_host_buffer_vector_module",
-        "@neptune//data/kernels/cpu_embedding:unpack_host_buffer_vector_module",
+        "@xla_serving//data/kernels/cpu_embedding:pack_host_buffer_vector_module",
+        "@xla_serving//data/kernels/cpu_embedding:unpack_host_buffer_vector_module",
     ],
 )
 
@@ -47,9 +47,9 @@ py_library(
     srcs = ["bucket_pad.py"],
     visibility = ["//visibility:public"],
     deps = [
-        "@neptune//data/kernels/bucket_pad:bucket_pad_transform_pybind",
-        "@neptune//data/processor/cc/utils:default_value_py_pb2",
-        "@neptune//data/processor/python:transform",
+        "@xla_serving//data/kernels/bucket_pad:bucket_pad_transform_pybind",
+        "@xla_serving//data/processor/cc/utils:default_value_py_pb2",
+        "@xla_serving//data/processor/python:transform",
     ],
 )
 
@@ -59,7 +59,7 @@ py_test(
     deps = [
         ":bucket_pad",
         "@absl_py//absl/testing:absltest",
-        "@neptune//data/processor/python:composite_processor_pybind",
-        "@neptune_pypi//numpy",
+        "@xla_serving//data/processor/python:composite_processor_pybind",
+        "@xla_serving_pypi//numpy",
     ],
 )

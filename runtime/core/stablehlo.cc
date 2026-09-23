@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/stablehlo.h"  // from @neptune
+#include "runtime/core/stablehlo.h"  // from @xla_serving
 
 #include <memory>
 #include <utility>
@@ -25,19 +25,19 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
-#include "runtime/core/stablehlo_utils.h"  // from @neptune
-#include "runtime/interpreter/manifest_utils.h"  // from @neptune
+#include "protos/manifest.pb.h"  // from @xla_serving
+#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
+#include "runtime/interpreter/manifest_utils.h"  // from @xla_serving
 #include "google/protobuf/message.h"
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 namespace {
 
 absl::StatusOr<StableHlo::Spec> BuildSpec(
-    const neptune_model_manifest::Function& func) {
+    const xla_saved_model_manifest::Function& func) {
   TF_ASSIGN_OR_RETURN(std::vector<ArgSpec> input_spec, GetInputSpec(func));
   TF_ASSIGN_OR_RETURN(std::vector<ArgSpec> output_spec, GetOutputSpec(func));
 
@@ -47,7 +47,7 @@ absl::StatusOr<StableHlo::Spec> BuildSpec(
                      func.DebugString()));
   }
 
-  const neptune_model_manifest::StableHloFunctionBody& stable_hlo_body =
+  const xla_saved_model_manifest::StableHloFunctionBody& stable_hlo_body =
       func.body().stable_hlo_body();
 
   return StableHlo::Spec{
@@ -66,7 +66,7 @@ absl::StatusOr<StableHlo::Spec> BuildSpec(
 }  // namespace
 
 absl::StatusOr<std::unique_ptr<StableHlo>> StableHlo::Create(
-    absl::Span<const neptune_model_manifest::Function* const> funcs) {
+    absl::Span<const xla_saved_model_manifest::Function* const> funcs) {
   if (funcs.empty()) {
     return absl::InvalidArgumentError(
         "`funcs` should have at least one element");
@@ -89,4 +89,4 @@ absl::StatusOr<std::unique_ptr<StableHlo>> StableHlo::Create(
   return absl::WrapUnique(new StableHlo(std::move(specs)));
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

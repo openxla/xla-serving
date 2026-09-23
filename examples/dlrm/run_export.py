@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Script to run Neptune export for DLRM model."""
+"""Script to run XLA SavedModel export for DLRM model."""
 
 from absl import app
 from absl import flags

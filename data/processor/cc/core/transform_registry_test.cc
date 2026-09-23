@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/processor/cc/core/transform_registry.h"  // from @neptune
+#include "data/processor/cc/core/transform_registry.h"  // from @xla_serving
 
 #include <cstdint>
 #include <memory>
@@ -32,19 +32,19 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/processor/cc/api/registry.h"  // from @neptune
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/api/type_info.h"  // from @neptune
-#include "data/processor/cc/api/value.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
-#include "data/test_utils/status_macros.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/api/type_info.h"  // from @xla_serving
+#include "data/processor/cc/api/value.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
+#include "data/test_utils/status_macros.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace core {
 namespace {
@@ -171,7 +171,7 @@ ND_REGISTER_TRANSFORM(MacroRegisteredTransform<1>,
                       "MacroRegisteredWithDeserializerTransform")
     .SetDeserializer(
         [](const TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           return std::make_unique<MacroRegisteredTransform<1>>();
         });
@@ -298,7 +298,7 @@ class ConstrainedDummyTransform : public TransformBase {
   static absl::StatusOr<std::unique_ptr<TransformBase>> Create() {
     return std::make_unique<ConstrainedDummyTransform>();
   }
-  absl::StatusOr<neptune::HostBuffer> operator()(neptune::HostBuffer a) { return a; }
+  absl::StatusOr<xla_serving::HostBuffer> operator()(xla_serving::HostBuffer a) { return a; }
   absl::StatusOr<TransformConfig> ToProto() const override {
     TransformConfig config;
     config.set_op_name("ConstrainedDummyTransform");
@@ -323,7 +323,7 @@ class ConstrainedDummyTransform : public TransformBase {
 ND_REGISTER_TRANSFORM(ConstrainedDummyTransform, "ConstrainedDummyTransform")
     .SetDeserializer(
         [](const TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           return ConstrainedDummyTransform::Create();
         })
@@ -343,7 +343,7 @@ TEST(TransformBaseTest, InputConstraintsValidation) {
   // Test with valid input (S32)
   {
     api::ExecuteContext context;
-    neptune::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+    xla_serving::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                        xla::ifrt::Shape({1}));
     std::vector<api::Value> inputs = {api::Value(hb)};
     context.inputs = inputs;
@@ -354,7 +354,7 @@ TEST(TransformBaseTest, InputConstraintsValidation) {
   // Test with invalid input (F32)
   {
     api::ExecuteContext context;
-    neptune::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+    xla_serving::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                        xla::ifrt::Shape({1}));
     std::vector<api::Value> inputs = {api::Value(hb)};
     context.inputs = inputs;
@@ -371,7 +371,7 @@ class DummyTransformWithoutShapeInference : public TransformBase {
     return std::make_unique<DummyTransformWithoutShapeInference>();
   }
 
-  absl::StatusOr<neptune::HostBuffer> operator()(neptune::HostBuffer) {
+  absl::StatusOr<xla_serving::HostBuffer> operator()(xla_serving::HostBuffer) {
     return absl::UnimplementedError("Execution not supported by dummy");
   }
 
@@ -390,7 +390,7 @@ ND_REGISTER_TRANSFORM(DummyTransformWithoutShapeInference,
                       "DummyTransformWithoutShapeInference")
     .SetDeserializer(
         [](const TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           return DummyTransformWithoutShapeInference::Create();
         });
@@ -471,7 +471,7 @@ class MultiKernelTransform : public TransformBase {
     return std::make_unique<MultiKernelTransform<T>>();
   }
 
-  absl::StatusOr<neptune::HostBuffer> operator()(neptune::HostBuffer a) { return a; }
+  absl::StatusOr<xla_serving::HostBuffer> operator()(xla_serving::HostBuffer a) { return a; }
 
   absl::StatusOr<TransformConfig> ToProto() const override {
     TransformConfig config;
@@ -499,7 +499,7 @@ ND_REGISTER_TRANSFORM(MultiKernelTransform<float>, "MultiKernelTransform")
 TEST(MultiKernelTest, MultiKernelConstraintRegistration) {
   // Test finding S32 holder
   {
-    neptune::HostBuffer hb_s32(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+    xla_serving::HostBuffer hb_s32(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                            xla::ifrt::Shape({2, 2}));
     std::vector<api::Value> inputs = {api::Value(hb_s32)};
     auto holder = TransformRegistry::Instance().FindMatchingHolder(
@@ -510,7 +510,7 @@ TEST(MultiKernelTest, MultiKernelConstraintRegistration) {
 
   // Test finding F32 holder
   {
-    neptune::HostBuffer hb_f32(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+    xla_serving::HostBuffer hb_f32(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                            xla::ifrt::Shape({2, 2}));
     std::vector<api::Value> inputs = {api::Value(hb_f32)};
     auto holder = TransformRegistry::Instance().FindMatchingHolder(
@@ -521,7 +521,7 @@ TEST(MultiKernelTest, MultiKernelConstraintRegistration) {
 
   // Test with unsupported dtype
   {
-    neptune::HostBuffer hb_u32(xla::ifrt::DType(xla::ifrt::DType::Kind::kU32),
+    xla_serving::HostBuffer hb_u32(xla::ifrt::DType(xla::ifrt::DType::Kind::kU32),
                            xla::ifrt::Shape({2, 2}));
     std::vector<api::Value> inputs = {api::Value(hb_u32)};
     auto holder = TransformRegistry::Instance().FindMatchingHolder(
@@ -543,7 +543,7 @@ class CpuDeviceTransform : public TransformBase {
   static absl::StatusOr<std::unique_ptr<CpuDeviceTransform>> Create() {
     return std::make_unique<CpuDeviceTransform>();
   }
-  absl::StatusOr<neptune::HostBuffer> operator()(neptune::HostBuffer a) { return a; }
+  absl::StatusOr<xla_serving::HostBuffer> operator()(xla_serving::HostBuffer a) { return a; }
   absl::StatusOr<TransformConfig> ToProto() const override {
     TransformConfig config;
     config.set_op_name("DeviceTransform");
@@ -556,7 +556,7 @@ class GpuDeviceTransform : public TransformBase {
   static absl::StatusOr<std::unique_ptr<GpuDeviceTransform>> Create() {
     return std::make_unique<GpuDeviceTransform>();
   }
-  absl::StatusOr<neptune::HostBuffer> operator()(neptune::HostBuffer a) { return a; }
+  absl::StatusOr<xla_serving::HostBuffer> operator()(xla_serving::HostBuffer a) { return a; }
   absl::StatusOr<TransformConfig> ToProto() const override {
     TransformConfig config;
     config.set_op_name("DeviceTransform");
@@ -569,7 +569,7 @@ class GpuDeviceTransform2 : public TransformBase {
   static absl::StatusOr<std::unique_ptr<GpuDeviceTransform2>> Create() {
     return std::make_unique<GpuDeviceTransform2>();
   }
-  absl::StatusOr<neptune::HostBuffer> operator()(neptune::HostBuffer a) { return a; }
+  absl::StatusOr<xla_serving::HostBuffer> operator()(xla_serving::HostBuffer a) { return a; }
   absl::StatusOr<TransformConfig> ToProto() const override {
     TransformConfig config;
     config.set_op_name("DeviceTransform");
@@ -587,7 +587,7 @@ ND_REGISTER_TRANSFORM(GpuDeviceTransform, "DeviceTransform")
     .SetInputConstraints({{.allowed_dtypes = {xla::ifrt::DType::kS32}}});
 
 TEST(DeviceRegistryTest, MultiDeviceKernelRegistrationAndDispatch) {
-  neptune::HostBuffer hb_s32(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+  xla_serving::HostBuffer hb_s32(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                          xla::ifrt::Shape({2, 2}));
   std::vector<api::Value> inputs = {api::Value(hb_s32)};
 
@@ -626,7 +626,7 @@ TEST(DynamicDispatchTransformTest, DebugString) {
     ASSERT_OK_AND_ASSIGN(auto transform, DynamicDispatchTransform::Create(
                                              "MultiKernelTransform"));
     api::ExecuteContext context;
-    neptune::HostBuffer hb_s32(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+    xla_serving::HostBuffer hb_s32(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                            xla::ifrt::Shape({2, 2}));
     std::vector<api::Value> inputs = {api::Value(hb_s32)};
     context.inputs = inputs;
@@ -639,7 +639,7 @@ TEST(DynamicDispatchTransformTest, DebugString) {
     ASSERT_OK_AND_ASSIGN(auto transform, DynamicDispatchTransform::Create(
                                              "MultiKernelTransform"));
     api::ExecuteContext context;
-    neptune::HostBuffer hb_f32(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+    xla_serving::HostBuffer hb_f32(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                            xla::ifrt::Shape({2, 2}));
     std::vector<api::Value> inputs = {api::Value(hb_f32)};
     context.inputs = inputs;
@@ -661,7 +661,7 @@ TEST(DynamicDispatchTransformTest, ConcurrentAccessAndInitialization) {
     threads.emplace_back([&transform]() {
       for (int iter = 0; iter < kIterations; ++iter) {
         api::ExecuteContext context;
-        neptune::HostBuffer hb_s32(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+        xla_serving::HostBuffer hb_s32(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                                xla::ifrt::Shape({2, 2}));
         std::vector<api::Value> inputs = {api::Value(hb_s32)};
         context.inputs = inputs;
@@ -682,4 +682,4 @@ TEST(DynamicDispatchTransformTest, ConcurrentAccessAndInitialization) {
 }  // namespace
 }  // namespace core
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

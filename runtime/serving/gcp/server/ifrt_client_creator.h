@@ -12,21 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_IFRT_CLIENT_CREATOR_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_IFRT_CLIENT_CREATOR_H_
+#ifndef XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_IFRT_CLIENT_CREATOR_H_
+#define XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_IFRT_CLIENT_CREATOR_H_
 
 #include <memory>
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "xla/python/ifrt/client.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 namespace serving {
 
 absl::StatusOr<std::shared_ptr<xla::ifrt::Client>> GetIfrtClient(
     absl::string_view pjrt_platform);
 
 }  // namespace serving
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_SERVER_IFRT_CLIENT_CREATOR_H_
+#endif  // XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_IFRT_CLIENT_CREATOR_H_

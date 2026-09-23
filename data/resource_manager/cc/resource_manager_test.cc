@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/resource_manager/cc/resource_manager.h"  // from @neptune
+#include "data/resource_manager/cc/resource_manager.h"  // from @xla_serving
 
 #include <algorithm>
 #include <memory>
@@ -25,18 +25,18 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_matchers.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "data/resource_manager/cc/asset.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
-#include "data/resource_manager/proto/resource_manager.pb.h"  // from @neptune
-#include "data/test_utils/proto_matchers.h"  // from @neptune
-#include "data/test_utils/status_macros.h"  // from @neptune
+#include "data/resource_manager/cc/asset.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
+#include "data/resource_manager/proto/resource_manager.pb.h"  // from @xla_serving
+#include "data/test_utils/proto_matchers.h"  // from @xla_serving
+#include "data/test_utils/status_macros.h"  // from @xla_serving
 #include "google/protobuf/text_format.h"
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace {
 
 using ::absl_testing::StatusIs;
-using ::neptune::data::test_utils::EqualsProtoIgnoringRepeatedFieldOrdering;
+using ::xla_serving::data::test_utils::EqualsProtoIgnoringRepeatedFieldOrdering;
 using ::testing::UnorderedElementsAre;
 class FakeResource : public Resource {
  public:
@@ -329,4 +329,4 @@ TEST(ResourceManagersViewTest, GetResource) {
 }
 
 }  // namespace
-}  // namespace neptune::data
+}  // namespace xla_serving::data

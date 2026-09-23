@@ -25,7 +25,7 @@ pybind_extension(
         ":ifrt_client_factory",
         ":numpy_utils",
         "//examples/composite_processor:composite_processor_example_support",
-        "//runtime/neptune_data:interpreter_composite_processor_support",
+        "//runtime/xla_serving_data:interpreter_composite_processor_support",
         "@abseil-cpp//absl/base:nullability",
         "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/flags:flag",
@@ -34,14 +34,6 @@ pybind_extension(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/strings:string_view",
         "@nanobind_bazel//:nanobind",
-        "@neptune//runtime/core:device_buffer",
-        "@neptune//runtime/core:host_buffer",
-        "@neptune//runtime/core:value",
-        "@neptune//runtime/interpreter",
-        "@neptune//runtime/interpreter:run_options",
-        "@neptune//runtime/kernel:kernel_io_data_type",
-        "@neptune//runtime/tensorflow:interpreter_tensorflow_support",  # buildcleaner: keep
-        "@neptune//runtime/tensorflow:tf_compatible_interpreter_create_options",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
         "@xla//xla:xla_data_proto_cc",
@@ -53,6 +45,14 @@ pybind_extension(
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:statusor",
         "@xla//xla/tsl/python/lib/core:numpy",
+        "@xla_serving//runtime/core:device_buffer",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/core:value",
+        "@xla_serving//runtime/interpreter",
+        "@xla_serving//runtime/interpreter:run_options",
+        "@xla_serving//runtime/kernel:kernel_io_data_type",
+        "@xla_serving//runtime/tensorflow:interpreter_tensorflow_support",  # buildcleaner: keep
+        "@xla_serving//runtime/tensorflow:tf_compatible_interpreter_create_options",
     ],
 )
 
@@ -73,37 +73,37 @@ config_setting(
 )
 
 genrule(
-    name = "stage_neptune_model_runner_pkg",
+    name = "stage_xla_saved_model_runner_pkg",
     srcs = [
         "__init__.py",
         ":model_runner.so",
     ],
     outs = [
-        "neptune_model_runner/__init__.py",
-        "neptune_model_runner/model_runner.so",
+        "xla_saved_model_runner/__init__.py",
+        "xla_saved_model_runner/model_runner.so",
     ],
     cmd = """
-  mkdir -p $(@D)/neptune_model_runner
-  cp $(location __init__.py) $(@D)/neptune_model_runner/__init__.py
-  cp $(location model_runner.so) $(@D)/neptune_model_runner/model_runner.so
+  mkdir -p $(@D)/xla_saved_model_runner
+  cp $(location __init__.py) $(@D)/xla_saved_model_runner/__init__.py
+  cp $(location model_runner.so) $(@D)/xla_saved_model_runner/model_runner.so
   """,
 )
 
 py_library(
-    name = "neptune_model_runner_pkg",
+    name = "xla_saved_model_runner_pkg",
     srcs = [
-        "neptune_model_runner/__init__.py",
+        "xla_saved_model_runner/__init__.py",
     ],
-    data = ["neptune_model_runner/model_runner.so"],
+    data = ["xla_saved_model_runner/model_runner.so"],
 )
 
 py_wheel(
-    name = "neptune_model_runner",
+    name = "xla_saved_model_runner",
     abi = select({
         "@rules_python//python/config_settings:is_python_3.11": "cp311",
         "@rules_python//python/config_settings:is_python_3.12": "abi3",
     }),
-    distribution = "neptune_model_runner",
+    distribution = "xla_saved_model_runner",
     platform = select({
         ":linux_x86_64": "manylinux_2_28_x86_64",
         ":linux_aarch64": "manylinux_2_28_aarch64",
@@ -116,8 +116,8 @@ py_wheel(
     tags = ["manual"],
     version = VERSION,
     deps = [
-        ":neptune_model_runner_pkg",
-        ":stage_neptune_model_runner_pkg",
+        ":stage_xla_saved_model_runner_pkg",
+        ":xla_saved_model_runner_pkg",
     ],
 )
 
@@ -136,10 +136,6 @@ cc_library(
         "@abseil-cpp//absl/strings:str_format",
         "@abseil-cpp//absl/types:span",
         "@nanobind_bazel//:nanobind",
-        "@neptune//runtime/core:allocator",
-        "@neptune//runtime/core:default_allocator",
-        "@neptune//runtime/core:host_buffer",
-        "@neptune//runtime/tensorflow/utils:ifrt_tensor_utils",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
         "@org_tensorflow//third_party/py/numpy:headers",
@@ -152,6 +148,10 @@ cc_library(
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",
         "@xla//xla/tsl/python/lib/core:numpy",
+        "@xla_serving//runtime/core:allocator",
+        "@xla_serving//runtime/core:default_allocator",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/tensorflow/utils:ifrt_tensor_utils",
     ],
 )
 

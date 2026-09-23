@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_INTERPRETER_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_INTERPRETER_H_
+#ifndef XLA_SERVING_RUNTIME_INTERPRETER_INTERPRETER_H_
+#define XLA_SERVING_RUNTIME_INTERPRETER_INTERPRETER_H_
 
 #include <atomic>
 #include <cstdint>
@@ -32,26 +32,26 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
-#include "protos/orchestration.pb.h"  // from @neptune
-#include "runtime/core/flat_signature.h"  // from @neptune
-#include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune
-#include "runtime/core/stablehlo.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/data_loader/data_loader.h"  // from @neptune
-#include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
-#include "runtime/interpreter/manifest_utils.h"  // from @neptune
-#include "runtime/interpreter/optional_function_handler_factory.h"  // from @neptune
-#include "runtime/interpreter/run_options.h"  // from @neptune
-#include "runtime/kernel/kernel.h"  // from @neptune
-#include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
+#include "protos/manifest.pb.h"  // from @xla_serving
+#include "protos/orchestration.pb.h"  // from @xla_serving
+#include "runtime/core/flat_signature.h"  // from @xla_serving
+#include "runtime/core/ifrt_loaded_variable_registry.h"  // from @xla_serving
+#include "runtime/core/stablehlo.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/data_loader/data_loader.h"  // from @xla_serving
+#include "runtime/interpreter/interpreter_create_options.h"  // from @xla_serving
+#include "runtime/interpreter/manifest_utils.h"  // from @xla_serving
+#include "runtime/interpreter/optional_function_handler_factory.h"  // from @xla_serving
+#include "runtime/interpreter/run_options.h"  // from @xla_serving
+#include "runtime/kernel/kernel.h"  // from @xla_serving
+#include "runtime/kernel/kernel_io_data_type.h"  // from @xla_serving
 #include "google/protobuf/repeated_ptr_field.h"
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/executable.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/file_system.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 using KernelGraph = std::vector<std::unique_ptr<Kernel>>;
 
@@ -81,7 +81,7 @@ class Interpreter {
       absl::string_view pipeline_name) const;
 
   // Returns the pipeline proto for the given pipeline name.
-  virtual absl::StatusOr<neptune_model_orchestration::Pipeline>
+  virtual absl::StatusOr<xla_saved_model_orchestration::Pipeline>
   GetPipelineProto(absl::string_view pipeline_name) const;
 
   // Runs a pipeline in the model with the given inputs. `pipeline_name` is the
@@ -175,7 +175,7 @@ class Interpreter {
   absl::Status Load();
 
  private:
-  // TODO: Remove this peer class once JSV fully supports
+  // TODO: Remove this peer class once XLA Serving fully supports
   // graph-based orchestration and tests can use the public API.
   friend class InterpreterPeer;
 
@@ -183,9 +183,9 @@ class Interpreter {
   absl::Status LoadGraphs();
 
   struct GraphBundle {
-    // TODO: Remove this constructor once we upgrate oss neptune to
+    // TODO: Remove this constructor once we upgrade oss to
     // C++ 20.
-    GraphBundle(std::string name, neptune_model_orchestration::Pipeline p,
+    GraphBundle(std::string name, xla_saved_model_orchestration::Pipeline p,
                 FunctionFlatSignature sig)
         : pipeline_name(std::move(name)),
           pipeline(std::move(p)),
@@ -193,7 +193,7 @@ class Interpreter {
 
     // For logging and debugging.
     std::string pipeline_name;
-    neptune_model_orchestration::Pipeline pipeline;
+    xla_saved_model_orchestration::Pipeline pipeline;
     FunctionFlatSignature signature;
     mutable absl::Mutex graph_mutex;
     // nullopt if the graph is not loaded yet.
@@ -225,35 +225,36 @@ class Interpreter {
 
   // Loads the graph from the given pipeline.
   absl::StatusOr<KernelGraph> LoadGraph(
-      const neptune_model_orchestration::Pipeline& pipeline);
+      const xla_saved_model_orchestration::Pipeline& pipeline);
 
 
   // Loads host function (preprocessors, postprocessors, CPU SHLOs) and
   // returns the loaded kernel runner op.
   absl::StatusOr<std::unique_ptr<Kernel>> LoadOnHostFunction(
-      const neptune_model_orchestration::Component& component,
+      const xla_saved_model_orchestration::Component& component,
       int component_index, int total_components, bool keyword_arguments_based);
 
   // Loads the graph from the given pipeline using the components from the
   // pipeline proto.
   absl::StatusOr<KernelGraph> LoadGraphFromComponentProto(
-      const neptune_model_orchestration::Pipeline& pipeline);
+      const xla_saved_model_orchestration::Pipeline& pipeline);
 
   // Loads a StableHloRunnerOp kernel based on the model function name and
   // weights name.
-  // TODO: Remove the `platform_name` parameter once JSV supports
-  // running processors on TPU. Currently, when models are exported using older
-  // binaries without specifying a platform name, existing models still assume
-  // lowering to CPU. However, JSV can execute this StableHLO on TPU even when
-  // targeting the CPU platform. If a customer intends to run on TPU,
-  // `StableHloRunnerOp` is called directly with an IFRT client that supports
-  // TPU. Without the `platform_name` parameter, the new `host_ifrt_client`
-  // would incorrectly route execution to CPU, which fails for TPU workloads.
+  // TODO: Remove the `platform_name` parameter once XLA Serving
+  // supports running processors on TPU. Currently, when models are exported
+  // using older binaries without specifying a platform name, existing models
+  // still assume lowering to CPU. However, XLA Serving can execute this
+  // StableHLO on TPU even when targeting the CPU platform. If a customer
+  // intends to run on TPU, `StableHloRunnerOp` is called directly with an IFRT
+  // client that supports TPU. Without the `platform_name` parameter, the new
+  // `host_ifrt_client` would incorrectly route execution to CPU, which fails
+  // for TPU workloads.
   absl::StatusOr<std::unique_ptr<Kernel>> LoadStableHloRunnerOp(
       absl::string_view model_function_name, absl::string_view weights_name,
-      const neptune_model_orchestration::NamedTensorTypeList* named_inputs =
+      const xla_saved_model_orchestration::NamedTensorTypeList* named_inputs =
           nullptr,
-      const neptune_model_orchestration::NamedTensorTypeList* named_outputs =
+      const xla_saved_model_orchestration::NamedTensorTypeList* named_outputs =
           nullptr,
       const std::string& platform_name = "");
 
@@ -264,7 +265,7 @@ class Interpreter {
   // - assigned_devices: the assigned devices for the weights.
   absl::StatusOr<DataLoader::LoadResult> LoadWeights(
       absl::string_view weight_set_name,
-      absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs,
+      absl::Span<const xla_saved_model_manifest::Function* const> stablehlo_funcs,
       const AssignedDevices& assigned_devices,
       std::shared_ptr<xla::ifrt::Client> ifrt_client);
 
@@ -289,33 +290,33 @@ class Interpreter {
   // Loads the model runner kernel for a component, attempting AOT loading first
   // and falling back to JIT compilation if configured.
   absl::StatusOr<std::unique_ptr<Kernel>> LoadModelRunnerOp(
-      const neptune_model_orchestration::Component& component,
-      const neptune_model_orchestration::NamedTensorTypeList* named_inputs =
+      const xla_saved_model_orchestration::Component& component,
+      const xla_saved_model_orchestration::NamedTensorTypeList* named_inputs =
           nullptr,
-      const neptune_model_orchestration::NamedTensorTypeList* named_outputs =
+      const xla_saved_model_orchestration::NamedTensorTypeList* named_outputs =
           nullptr);
 
   // Loads an AOT compiled executable for the given component and StableHLO
   // functions.
   absl::StatusOr<AotLoadResult> LoadAotExecutable(
-      const neptune_model_orchestration::Component& component,
-      absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs,
+      const xla_saved_model_orchestration::Component& component,
+      absl::Span<const xla_saved_model_manifest::Function* const> stablehlo_funcs,
       absl::string_view target_topology_label);
 
   // Creates a StableHloRunnerOp kernel from an AOT load result and named
   // signature tensors.
   absl::StatusOr<std::unique_ptr<Kernel>> LoadAotRunnerOp(
       AotLoadResult aot_result,
-      const neptune_model_orchestration::NamedTensorTypeList* named_inputs =
+      const xla_saved_model_orchestration::NamedTensorTypeList* named_inputs =
           nullptr,
-      const neptune_model_orchestration::NamedTensorTypeList* named_outputs =
+      const xla_saved_model_orchestration::NamedTensorTypeList* named_outputs =
           nullptr);
 
   // Loads weights for the given functions or registers and returns the loaded
   // weight names.
   absl::StatusOr<std::vector<std::string>> GetOrLoadWeightNames(
       absl::string_view weights_name,
-      absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs,
+      absl::Span<const xla_saved_model_manifest::Function* const> stablehlo_funcs,
       const AssignedDevices& assigned_devices,
       std::shared_ptr<xla::ifrt::Client> ifrt_client);
 
@@ -326,9 +327,9 @@ class Interpreter {
       absl::Span<const Value> positional_inputs,
       const absl::flat_hash_map<std::string, Value>& keyword_inputs);
 
-  neptune_model_manifest::Manifest manifest_;
+  xla_saved_model_manifest::Manifest manifest_;
   absl::flat_hash_map<std::string,
-                      const neptune_model_manifest::TopLevelObject*>
+                      const xla_saved_model_manifest::TopLevelObject*>
       manifest_objects_;
   // Routes optional functions to the correct handler based on function
   // type. OptionalFunctionHandlers for each key are unique per
@@ -363,6 +364,6 @@ class Interpreter {
   std::optional<int64_t> callback_id_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_INTERPRETER_H_
+#endif  // XLA_SERVING_RUNTIME_INTERPRETER_INTERPRETER_H_

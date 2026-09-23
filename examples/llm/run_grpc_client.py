@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Standalone Python client to query a running Neptune LLM server."""
+"""Standalone Python client to query a running XLA Serving LLM server."""
 
 from collections.abc import Sequence
 
@@ -21,12 +21,14 @@ from absl import flags
 import grpc
 import numpy as np
 
-from neptune_model.protos.grpc import host_buffer_pb2
-from neptune_model.protos.grpc import predict_pb2
-from neptune_model.protos.xla.python.ifrt import dtype_pb2  # pylint: disable=g-direct-tensorflow-import
+from xla_saved_model.protos.grpc import host_buffer_pb2
+from xla_saved_model.protos.grpc import predict_pb2
+from xla_saved_model.protos.xla.python.ifrt import dtype_pb2  # pylint: disable=g-direct-tensorflow-import
 
 _SERVER_ADDRESS = flags.DEFINE_string(
-    "server_address", "localhost:8500", "gRPC address of the Neptune server."
+    "server_address",
+    "localhost:8500",
+    "gRPC address of the XLA Serving server.",
 )
 _MODEL_NAME = flags.DEFINE_string(
     "model_name", "qwen3", "Model name registered on the server."
@@ -50,7 +52,7 @@ def query_server(
   """Sends a single prompt to the server and returns all generated beams."""
   channel = grpc.insecure_channel(server_address)
   predict_fn = channel.unary_unary(
-      "/neptune.serving.PredictionService/Predict",
+      f"/{predict_pb2.DESCRIPTOR.package}.PredictionService/Predict",
       request_serializer=predict_pb2.PredictRequest.SerializeToString,
       response_deserializer=predict_pb2.PredictResponse.FromString,
   )

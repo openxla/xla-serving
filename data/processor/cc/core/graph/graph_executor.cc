@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/processor/cc/core/graph/graph_executor.h"  // from @neptune
+#include "data/processor/cc/core/graph/graph_executor.h"  // from @xla_serving
 
 #include <cstddef>
 #include <utility>
@@ -25,12 +25,12 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/api/value.h"  // from @neptune
-#include "data/processor/cc/core/graph/execution_graph.h"  // from @neptune
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/api/value.h"  // from @xla_serving
+#include "data/processor/cc/core/graph/execution_graph.h"  // from @xla_serving
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace core {
 namespace {
@@ -162,4 +162,4 @@ absl::Status SingleThreadedSynchronousGraphExecutor::Execute(
 
 }  // namespace core
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

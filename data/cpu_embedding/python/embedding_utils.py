@@ -23,8 +23,7 @@ from data.kernels.cpu_embedding import cpu_embedding_module
 from data.ops import packing
 from data.processor.proto import transform_config_pb2
 from data.processor.python import composite_processor_pybind
-from data.processor.python import processor
-from neptune_model._src.processors import composite_processor
+from xla_saved_model._src.processors import composite_processor
 
 
 def build_embedding_lookup(
@@ -195,10 +194,10 @@ def build_embedding_lookup(
 
   io_structure = transform_config_pb2.GraphIOStructureProto()
   io_structure.input_structure.CopyFrom(
-      processor._tree_to_proto(input_signature)
+      composite_processor._tree_to_proto(input_signature)
   )
   io_structure.output_structure.CopyFrom(
-      processor._tree_to_proto(output_signature)
+      composite_processor._tree_to_proto(output_signature)
   )
   graph.io_structure = io_structure
 

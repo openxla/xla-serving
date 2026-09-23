@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_IFRT_DEVICE_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_IFRT_DEVICE_UTILS_H_
+#ifndef XLA_SERVING_RUNTIME_IFRT_DEVICE_UTILS_H_
+#define XLA_SERVING_RUNTIME_IFRT_DEVICE_UTILS_H_
 
 #include <optional>
 #include <vector>
@@ -26,7 +26,7 @@
 #include "xla/python/ifrt/device.h"  // from @xla
 #include "xla/python/ifrt/executable.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // Returns the assigned IFRT devices based on the device assignment attribute.
 //
@@ -47,6 +47,6 @@ absl::StatusOr<std::vector<xla::ifrt::Device*>> GetAssignedIfrtDevices(
     int num_cores_per_replica,
     std::optional<std::vector<int>> device_assignment);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_IFRT_DEVICE_UTILS_H_
+#endif  // XLA_SERVING_RUNTIME_IFRT_DEVICE_UTILS_H_

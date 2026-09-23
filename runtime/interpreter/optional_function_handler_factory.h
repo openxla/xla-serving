@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_OPTIONAL_FUNCTION_HANDLER_FACTORY_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_OPTIONAL_FUNCTION_HANDLER_FACTORY_H_
+#ifndef XLA_SERVING_RUNTIME_INTERPRETER_OPTIONAL_FUNCTION_HANDLER_FACTORY_H_
+#define XLA_SERVING_RUNTIME_INTERPRETER_OPTIONAL_FUNCTION_HANDLER_FACTORY_H_
 
 #include <stdbool.h>
 
 #include <memory>
 #include <string>
 
-#include "runtime/interpreter/optional_function_handler.h"  // from @neptune
+#include "runtime/interpreter/optional_function_handler.h"  // from @xla_serving
 #include "absl/base/no_destructor.h"  // from @abseil-cpp
 #include "absl/base/thread_annotations.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
@@ -28,7 +28,7 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 
 // A factory class interface to create FunctionHandler.
 //
@@ -97,6 +97,6 @@ class OptionalFunctionHandlerRouter {
       handlers_ ABSL_GUARDED_BY(router_mu_);
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_OPTIONAL_FUNCTION_HANDLER_FACTORY_H_
+#endif  // XLA_SERVING_RUNTIME_INTERPRETER_OPTIONAL_FUNCTION_HANDLER_FACTORY_H_

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from typing import List, overload
-from .third_party.neptune.data.resource_manager.proto import resource_manager_pb2
+from data.resource_manager.proto import resource_manager_pb2
 
 class CppAsset:
   name: str

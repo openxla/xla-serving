@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/processor/cc/utils/default_value_utils.h"  // from @neptune
+#include "data/processor/cc/utils/default_value_utils.h"  // from @xla_serving
 
 #include <cstdint>
 #include <string>
@@ -22,10 +22,10 @@
 #include "gtest/gtest.h"
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
-#include "data/processor/cc/utils/default_value.pb.h"  // from @neptune
-#include "data/test_utils/status_macros.h"  // from @neptune
+#include "data/processor/cc/utils/default_value.pb.h"  // from @xla_serving
+#include "data/test_utils/status_macros.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace utils {
 namespace {
@@ -197,4 +197,4 @@ TEST(DefaultValueUtilsTest, PackToAnyUnimplementedFailure) {
 }  // namespace
 }  // namespace utils
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

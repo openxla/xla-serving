@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_KERNELS_CPU_EMBEDDING_SAFE_INT_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_DATA_KERNELS_CPU_EMBEDDING_SAFE_INT_UTILS_H_
+#ifndef XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_SAFE_INT_UTILS_H_
+#define XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_SAFE_INT_UTILS_H_
 
 #include <type_traits>
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace utils {
 
 // Safely multiplies two integers, storing the result in 'result'.
@@ -44,6 +44,6 @@ template <typename T, typename U, typename V>
 }
 
 }  // namespace utils
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_KERNELS_CPU_EMBEDDING_SAFE_INT_UTILS_H_
+#endif  // XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_SAFE_INT_UTILS_H_

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_TRANSFORM_H_
-#define THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_TRANSFORM_H_
+#ifndef XLA_SERVING_DATA_PROCESSOR_CC_CORE_TRANSFORM_H_
+#define XLA_SERVING_DATA_PROCESSOR_CC_CORE_TRANSFORM_H_
 
 #include <memory>
 #include <ostream>
@@ -24,12 +24,12 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/api/type_info.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/api/type_info.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace core {
 
@@ -53,8 +53,7 @@ class DynamicDispatchTransform;
 //
 // 2. A const operator() to execute the transform with typed arguments
 //
-// See third_party/neptune/data/processor/python/examples/ for
-// examples.
+// See data/processor/python/examples/ for examples.
 class TransformBase {
  public:
   virtual ~TransformBase() = default;
@@ -111,7 +110,7 @@ class TransformBase {
   }
 
   // Returns all resources used by this transform.
-  virtual std::vector<std::shared_ptr<neptune::data::Resource>>
+  virtual std::vector<std::shared_ptr<xla_serving::data::Resource>>
   GetAllResources() const {
     return {};
   }
@@ -119,7 +118,7 @@ class TransformBase {
   // Creates a transform from a configuration proto.
   static absl::StatusOr<std::unique_ptr<TransformBase>> FromProto(
       const TransformConfig& config,
-      absl::Span<const std::shared_ptr<neptune::data::Resource>> resources);
+      absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources);
 
  protected:
   virtual absl::Status PropagateSignatureImpl(
@@ -138,6 +137,6 @@ class TransformBase {
 
 }  // namespace composite
 
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_TRANSFORM_H_
+#endif  // XLA_SERVING_DATA_PROCESSOR_CC_CORE_TRANSFORM_H_

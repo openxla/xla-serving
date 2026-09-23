@@ -14,7 +14,7 @@
 
 edition = "2024";
 
-package neptune.serving;
+package xla_serving.serving;
 
 import "protos/grpc/get_model_metadata.proto";
 import "protos/grpc/predict.proto";

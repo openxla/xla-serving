@@ -11,20 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Export utility for PyTorch model to Neptune."""
+"""Export utility for PyTorch model to XLA SavedModel."""
 
 import jax
 import jax.numpy as jnp
 import torch
-from neptune_model._src.export import jax_model
-from neptune_model._src.export import main_lib as npt_export
-from neptune_model._src.export import serving_config
-from neptune_model._src.torch2npt import main_lib as torch2npt
+from xla_saved_model._src.export import jax_model
+from xla_saved_model._src.export import main_lib as xsm_export
+from xla_saved_model._src.export import serving_config
+from xla_saved_model._src.torch2xsm import main_lib as torch2xsm
 
 
 def export_model(pt_model: torch.nn.Module, export_path: str):
-  """Exports the PyTorch model to Neptune format via JAX conversion."""
-  weights, jfunc = torch2npt.convert_to_jax(pt_model)
+  """Exports the PyTorch model to XLA SavedModel format via JAX conversion."""
+  weights, jfunc = torch2xsm.convert_to_jax(pt_model)
 
   def apply_fn(params, inputs):
     output = jfunc(params, (inputs['x'],))
@@ -34,7 +34,7 @@ def export_model(pt_model: torch.nn.Module, export_path: str):
       'x': jax.ShapeDtypeStruct(shape=(1, 10), dtype=jnp.float32),
   }
 
-  npt_export.save(
+  xsm_export.save(
       jax_model.JaxModel(
           apply_fn_bundle=jax_model.ApplyFnBundle(
               apply_fn=apply_fn,

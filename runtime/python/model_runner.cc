@@ -34,15 +34,15 @@
 #include "include/nanobind/stl/string_view.h"  // from @nanobind_bazel  // IWYU pragma: keep
 #include "include/nanobind/stl/unordered_map.h"  // from @nanobind_bazel  // IWYU pragma: keep
 #include "include/nanobind/stl/vector.h"  // from @nanobind_bazel  // IWYU pragma: keep
-#include "runtime/core/device_buffer.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/interpreter/interpreter.h"  // from @neptune
-#include "runtime/interpreter/run_options.h"  // from @neptune
-#include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
-#include "runtime/python/ifrt_client_factory.h"  // from @neptune
-#include "runtime/python/numpy_utils.h"  // from @neptune
-#include "runtime/tensorflow/tf_compatible_interpreter_create_options.h"  // from @neptune
+#include "runtime/core/device_buffer.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/interpreter/interpreter.h"  // from @xla_serving
+#include "runtime/interpreter/run_options.h"  // from @xla_serving
+#include "runtime/kernel/kernel_io_data_type.h"  // from @xla_serving
+#include "runtime/python/ifrt_client_factory.h"  // from @xla_serving
+#include "runtime/python/numpy_utils.h"  // from @xla_serving
+#include "runtime/tensorflow/tf_compatible_interpreter_create_options.h"  // from @xla_serving
 #include "xla/pjrt/plugin/xla_cpu/cpu_client_options.h"  // from @xla
 #include "xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
@@ -69,14 +69,14 @@ void ThrowIfError(const absl::Status& status, absl::string_view msg) {
       absl::StrCat(msg, ". Error: ", status.message()).c_str());
 }
 
-// Converts a `xla::nb_numpy_ndarray` to a `neptune::Value` for input.
-neptune::Value GetValueFromNbArray(const xla::nb_numpy_ndarray& array,
-                               neptune::KernelIODataType data_type) {
+// Converts a `xla::nb_numpy_ndarray` to a `xla_serving::Value` for input.
+xla_serving::Value GetValueFromNbArray(const xla::nb_numpy_ndarray& array,
+                               xla_serving::KernelIODataType data_type) {
   switch (data_type) {
-    case neptune::KernelIODataType::kHostBuffer:
-      return neptune::Value(neptune::ToHostBuffer(array));
-    case neptune::KernelIODataType::kTensor:
-      return neptune::Value(neptune::ToTFTensor(array));
+    case xla_serving::KernelIODataType::kHostBuffer:
+      return xla_serving::Value(xla_serving::ToHostBuffer(array));
+    case xla_serving::KernelIODataType::kTensor:
+      return xla_serving::Value(xla_serving::ToTFTensor(array));
     default:
       throw nb::value_error(
           absl::StrCat("Unsupported data type: ", static_cast<int>(data_type))
@@ -84,26 +84,26 @@ neptune::Value GetValueFromNbArray(const xla::nb_numpy_ndarray& array,
   }
 }
 
-// Converts a `neptune::Value` to a `xla::nb_numpy_ndarray` for output.
-xla::nb_numpy_ndarray GetNbArrayFromValue(const neptune::Value& value,
-                                          neptune::KernelIODataType data_type) {
-  if (value.IsType<neptune::DeviceBuffer>()) {
+// Converts a `xla_serving::Value` to a `xla::nb_numpy_ndarray` for output.
+xla::nb_numpy_ndarray GetNbArrayFromValue(const xla_serving::Value& value,
+                                          xla_serving::KernelIODataType data_type) {
+  if (value.IsType<xla_serving::DeviceBuffer>()) {
     throw nb::value_error(
-        "Received on-device buffer (neptune::DeviceBuffer) in Python layer. "
+        "Received on-device buffer (xla_serving::DeviceBuffer) in Python layer. "
         "Host transfer (D2H) must be requested via Placement::kHost.");
   }
   switch (data_type) {
-    case neptune::KernelIODataType::kHostBuffer:
-      if (!value.IsType<neptune::HostBuffer>()) {
-        throw nb::value_error("Value type mismatch: expected neptune::HostBuffer.");
+    case xla_serving::KernelIODataType::kHostBuffer:
+      if (!value.IsType<xla_serving::HostBuffer>()) {
+        throw nb::value_error("Value type mismatch: expected xla_serving::HostBuffer.");
       }
-      return neptune::ToNbArray(value.Get<neptune::HostBuffer>());
-    case neptune::KernelIODataType::kTensor:
+      return xla_serving::ToNbArray(value.Get<xla_serving::HostBuffer>());
+    case xla_serving::KernelIODataType::kTensor:
       if (!value.IsType<tensorflow::Tensor>()) {
         throw nb::value_error(
             "Value type mismatch: expected tensorflow::Tensor.");
       }
-      return neptune::ToNbArray(value.Get<tensorflow::Tensor>());
+      return xla_serving::ToNbArray(value.Get<tensorflow::Tensor>());
     default:
       throw nb::value_error(
           absl::StrCat("Unsupported data type: ", static_cast<int>(data_type))
@@ -113,16 +113,16 @@ xla::nb_numpy_ndarray GetNbArrayFromValue(const neptune::Value& value,
 
 // Converts args-kwargs to a list of positional inputs and a map of keyword
 // inputs.
-std::pair<std::vector<neptune::Value>, absl::flat_hash_map<std::string, neptune::Value>>
+std::pair<std::vector<xla_serving::Value>, absl::flat_hash_map<std::string, xla_serving::Value>>
 ConvertArgsKwargsToInputs(nb::args args, nb::kwargs kwargs,
-                          neptune::KernelIODataType data_type) {
-  std::vector<neptune::Value> positional_inputs;
+                          xla_serving::KernelIODataType data_type) {
+  std::vector<xla_serving::Value> positional_inputs;
   for (const auto& arg : args) {
     auto array = xla::nb_numpy_ndarray::ensure(arg);
     positional_inputs.push_back(GetValueFromNbArray(array, data_type));
   }
 
-  absl::flat_hash_map<std::string, neptune::Value> keyword_inputs;
+  absl::flat_hash_map<std::string, xla_serving::Value> keyword_inputs;
   for (const auto& [key, arg] : kwargs) {
     std::string key_str = nb::cast<std::string>(key, true);
     if (key_str == "run_options") {
@@ -134,20 +134,23 @@ ConvertArgsKwargsToInputs(nb::args args, nb::kwargs kwargs,
   return {std::move(positional_inputs), std::move(keyword_inputs)};
 }
 
-// ModelRunner is a wrapper of `neptune::Interpreter` exposed to Python for
+// ModelRunner is a wrapper of `xla_serving::Interpreter` exposed to Python for
 // model loading and inference on the python side.
 // Use `std::enable_shared_from_this` to keep the ModelRunner alive when
 // `Signature` is beingused.
 class ModelRunner : public std::enable_shared_from_this<ModelRunner> {
  public:
-  static std::shared_ptr<ModelRunner> Create(absl::string_view model_name,
-                                             absl::string_view model_path,
-                                             absl::string_view platform = "") {
+  static std::shared_ptr<ModelRunner> Create(
+      absl::string_view model_name, absl::string_view model_path,
+      absl::string_view platform = "",
+      absl::string_view target_topology_label = "",
+      bool allow_jit_fallback_for_aot = false) {
     return std::shared_ptr<ModelRunner>(
-        new ModelRunner(model_name, model_path, platform));
+        new ModelRunner(model_name, model_path, platform, target_topology_label,
+                        allow_jit_fallback_for_aot));
   }
 
-  // Signature is a wrapper of `neptune::Interpreter` exposed to Python for
+  // Signature is a wrapper of `xla_serving::Interpreter` exposed to Python for
   // running a single pipeline in the model. Each signature is associated with
   // a pipeline in the model.
   class Signature {
@@ -165,13 +168,13 @@ class ModelRunner : public std::enable_shared_from_this<ModelRunner> {
     // Use `ModelRunner` as a friend class to access the private constructor.
     // This makes the `Signature` usable only by `ModelRunner`.
     friend class ModelRunner;
-    Signature(std::string pipeline_name, neptune::Interpreter* interpreter,
+    Signature(std::string pipeline_name, xla_serving::Interpreter* interpreter,
               std::shared_ptr<ModelRunner> model_runner)
         : pipeline_name_(std::move(pipeline_name)),
           interpreter_(interpreter),
           model_runner_(std::move(model_runner)) {}
     std::string pipeline_name_;
-    neptune::Interpreter* absl_nonnull interpreter_;  // Not owned.
+    xla_serving::Interpreter* absl_nonnull interpreter_;  // Not owned.
     std::shared_ptr<ModelRunner> model_runner_;  // Keep the model runner alive.
   };
 
@@ -193,16 +196,21 @@ class ModelRunner : public std::enable_shared_from_this<ModelRunner> {
 
  private:
   ModelRunner(absl::string_view model_name, absl::string_view model_path,
-              absl::string_view platform) {
+              absl::string_view platform,
+              absl::string_view target_topology_label,
+              bool allow_jit_fallback_for_aot) {
     LOG(INFO) << "Using ModelRunner to load model '" << model_name
               << "' from: " << model_path;
-    ThrowIfError(Initialize(model_name, model_path, platform),
+    ThrowIfError(Initialize(model_name, model_path, platform,
+                            target_topology_label, allow_jit_fallback_for_aot),
                  "Failed to initialize ModelRunner");
   }
 
   absl::Status Initialize(absl::string_view model_name,
                           absl::string_view model_path,
-                          absl::string_view platform);
+                          absl::string_view platform,
+                          absl::string_view target_topology_label,
+                          bool allow_jit_fallback_for_aot);
   static constexpr int kThreadPoolNumThreads = 16;
   std::unique_ptr<tsl::thread::ThreadPool> execute_worker_thread_pool_;
   std::shared_ptr<xla::ifrt::Client> client_;
@@ -210,17 +218,19 @@ class ModelRunner : public std::enable_shared_from_this<ModelRunner> {
   std::unique_ptr<tsl::thread::ThreadPool> computation_thread_pool_;
   std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool_;
 
-  std::unique_ptr<neptune::Interpreter> interpreter_;
+  std::unique_ptr<xla_serving::Interpreter> interpreter_;
 };
 
 absl::Status ModelRunner::Initialize(absl::string_view model_name,
                                      absl::string_view model_path,
-                                     absl::string_view platform) {
+                                     absl::string_view platform,
+                                     absl::string_view target_topology_label,
+                                     bool allow_jit_fallback_for_aot) {
   std::string platform_str(platform);
   if (platform_str.empty()) {
     platform_str = "cpu";
   }
-  TF_ASSIGN_OR_RETURN(client_, neptune::CreateIfrtClient(platform_str));
+  TF_ASSIGN_OR_RETURN(client_, xla_serving::CreateIfrtClient(platform_str));
   if (platform_str == "cpu") {
     host_ifrt_client_ = client_;
   } else {
@@ -242,7 +252,7 @@ absl::Status ModelRunner::Initialize(absl::string_view model_name,
       "ModelRunnerCheckpointLoaderThreadPool", kThreadPoolNumThreads);
   // Support model version in ModelRunner if we see use cases.
   auto create_options =
-      std::make_unique<neptune::TfCompatibleInterpreterCreateOptions>();
+      std::make_unique<xla_serving::TfCompatibleInterpreterCreateOptions>();
   create_options->checkpoint_loader_thread_pool =
       checkpoint_loader_thread_pool_.get();
   create_options->model_name = model_name;
@@ -254,8 +264,10 @@ absl::Status ModelRunner::Initialize(absl::string_view model_name,
   create_options->host_ifrt_client = host_ifrt_client_;
   create_options->platform_name = platform_str;
   create_options->computation_thread_pool = computation_thread_pool_.get();
+  create_options->target_topology_label = std::string(target_topology_label);
+  create_options->allow_jit_fallback_for_aot = allow_jit_fallback_for_aot;
   TF_ASSIGN_OR_RETURN(interpreter_,
-                      neptune::Interpreter::Create(std::move(create_options)));
+                      xla_serving::Interpreter::Create(std::move(create_options)));
   return absl::OkStatus();
 }
 
@@ -281,19 +293,19 @@ std::vector<xla::nb_numpy_ndarray> ModelRunner::Signature::Run(
         "The interpreter is not initialized. Check if the model is correctly "
         "loaded.");
   }
-  neptune::RunOptions run_options;
+  xla_serving::RunOptions run_options;
   if (kwargs.contains("run_options") && !kwargs["run_options"].is_none()) {
-    run_options = nb::cast<neptune::RunOptions>(kwargs["run_options"]);
+    run_options = nb::cast<xla_serving::RunOptions>(kwargs["run_options"]);
   }
   auto input_type = interpreter_->GetModelInputDataType(pipeline_name_);
   ThrowIfError(input_type.status(), "Failed to get model input data type");
   auto [positional_inputs, keyword_inputs] =
       ConvertArgsKwargsToInputs(args, kwargs, *input_type);
 
-  absl::StatusOr<std::vector<neptune::Value>> outputs = interpreter_->Run(
+  absl::StatusOr<std::vector<xla_serving::Value>> outputs = interpreter_->Run(
       pipeline_name_, positional_inputs, keyword_inputs, run_options);
   ThrowIfError(outputs.status(), "Failed to run the model");
-  std::vector<neptune::Value> output_values = *std::move(outputs);
+  std::vector<xla_serving::Value> output_values = *std::move(outputs);
   auto output_type = interpreter_->GetModelOutputDataType(pipeline_name_);
   ThrowIfError(output_type.status(), "Failed to get model output data type");
   std::vector<xla::nb_numpy_ndarray> output_arrays;
@@ -311,19 +323,19 @@ ModelRunner::Signature::RunWithMapReturn(nb::args args, nb::kwargs kwargs) {
     throw nb::value_error(
         "The interpreter is not initialized. This should never happen.");
   }
-  neptune::RunOptions run_options;
+  xla_serving::RunOptions run_options;
   if (kwargs.contains("run_options") && !kwargs["run_options"].is_none()) {
-    run_options = nb::cast<neptune::RunOptions>(kwargs["run_options"]);
+    run_options = nb::cast<xla_serving::RunOptions>(kwargs["run_options"]);
   }
   auto input_type = interpreter_->GetModelInputDataType(pipeline_name_);
   ThrowIfError(input_type.status(), "Failed to get model input data type");
   auto [positional_inputs, keyword_inputs] =
       ConvertArgsKwargsToInputs(args, kwargs, *input_type);
-  absl::StatusOr<absl::flat_hash_map<std::string, neptune::Value>> outputs =
+  absl::StatusOr<absl::flat_hash_map<std::string, xla_serving::Value>> outputs =
       interpreter_->RunWithMapReturn(pipeline_name_, positional_inputs,
                                      keyword_inputs, run_options);
   ThrowIfError(outputs.status(), "Failed to run the model");
-  absl::flat_hash_map<std::string, neptune::Value> output_values =
+  absl::flat_hash_map<std::string, xla_serving::Value> output_values =
       *std::move(outputs);
   auto output_type = interpreter_->GetModelOutputDataType(pipeline_name_);
   ThrowIfError(output_type.status(), "Failed to get model output data type");
@@ -340,29 +352,30 @@ ModelRunner::Signature::RunWithMapReturn(nb::args args, nb::kwargs kwargs) {
 NB_MODULE(model_runner, m) {
   tsl::ImportNumpy();
 
-  nb::enum_<neptune::Placement>(m, "Placement")
-      .value("HOST", neptune::Placement::kHost)
-      .value("DEVICE", neptune::Placement::kDevice)
+  nb::enum_<xla_serving::Placement>(m, "Placement")
+      .value("HOST", xla_serving::Placement::kHost)
+      .value("DEVICE", xla_serving::Placement::kDevice)
       .export_values();
 
-  nb::class_<neptune::RunOptions>(m, "RunOptions")
+  nb::class_<xla_serving::RunOptions>(m, "RunOptions")
       .def(nb::init<>())
       .def_prop_rw(
           "output_placement_map",
-          [](const neptune::RunOptions& self) {
-            return std::unordered_map<std::string, neptune::Placement>(
+          [](const xla_serving::RunOptions& self) {
+            return std::unordered_map<std::string, xla_serving::Placement>(
                 self.output_placement_map.begin(),
                 self.output_placement_map.end());
           },
-          [](neptune::RunOptions& self,
-             const std::unordered_map<std::string, neptune::Placement>& map) {
+          [](xla_serving::RunOptions& self,
+             const std::unordered_map<std::string, xla_serving::Placement>& map) {
             self.output_placement_map = {map.begin(), map.end()};
           });
 
   nb::class_<ModelRunner>(m, "ModelRunner")
       .def(nb::new_(&ModelRunner::Create),
            nb::arg("model_name") = "called_from_python", nb::arg("model_path"),
-           nb::arg("platform") = "")
+           nb::arg("platform") = "", nb::arg("target_topology_label") = "",
+           nb::arg("allow_jit_fallback_for_aot") = false)
       .def("ifrt_platform_name", &ModelRunner::IfrtPlatformName,
            "Gets the platform name (e.g. 'cpu', 'tpu') of the IFRT client.")
       .def("ifrt_device_count", &ModelRunner::IfrtDeviceCount,

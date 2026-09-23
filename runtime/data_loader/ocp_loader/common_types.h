@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_COMMON_TYPES_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_COMMON_TYPES_H_
+#ifndef XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_COMMON_TYPES_H_
+#define XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_COMMON_TYPES_H_
 
-namespace neptune {
+namespace xla_serving {
 
 enum class CheckpointType {
   // In standard checkpoint mode, each param is stored in its sub directory and
@@ -27,6 +27,6 @@ enum class CheckpointType {
   kOcdbt,
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_DATA_LOADER_OCP_LOADER_COMMON_TYPES_H_
+#endif  // XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_COMMON_TYPES_H_

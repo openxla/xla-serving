@@ -12,36 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_CORE_STREAMING_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_CORE_STREAMING_UTILS_H_
+#ifndef XLA_SERVING_RUNTIME_CORE_STREAMING_UTILS_H_
+#define XLA_SERVING_RUNTIME_CORE_STREAMING_UTILS_H_
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 
-namespace neptune {
+namespace xla_serving {
 
 inline constexpr absl::string_view kStreamedResultBatchedStepIdName =
     "__streamed_result_batched_step_id";
 
 // Injects a dynamic step_id (or request_ids) dynamic-sized tensor
-// through the MLIR entry function and passes it down to all `neptune_stream`
-// custom calls.
+// through the MLIR entry function and passes it down to all
+// `xla_serving_stream` custom calls.
 // Returns an error if the propagation fails.
 // This function assumes that the shape refinements have already been performed.
 absl::Status PropagateStreamingStepId(mlir::ModuleOp module,
                                       bool is_batched = false);
 
 // Creates a HostBuffer containing request_ids for streaming.
-absl::StatusOr<neptune::HostBuffer> CreateRequestIdsBuffer(int64_t batch_size,
+absl::StatusOr<xla_serving::HostBuffer> CreateRequestIdsBuffer(int64_t batch_size,
                                                        int32_t request_id);
 
-absl::StatusOr<neptune::HostBuffer> CreateScalarRequestIdBuffer(int32_t request_id);
+absl::StatusOr<xla_serving::HostBuffer> CreateScalarRequestIdBuffer(int32_t request_id);
 
-absl::StatusOr<neptune::HostBuffer> CreateRequestIdsBuffer(
+absl::StatusOr<xla_serving::HostBuffer> CreateRequestIdsBuffer(
     absl::Span<const int32_t> request_ids);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_STREAMING_UTILS_H_
+#endif  // XLA_SERVING_RUNTIME_CORE_STREAMING_UTILS_H_

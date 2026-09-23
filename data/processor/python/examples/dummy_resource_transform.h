@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_PYTHON_EXAMPLES_DUMMY_RESOURCE_TRANSFORM_H_
-#define THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_PYTHON_EXAMPLES_DUMMY_RESOURCE_TRANSFORM_H_
+#ifndef XLA_SERVING_DATA_PROCESSOR_PYTHON_EXAMPLES_DUMMY_RESOURCE_TRANSFORM_H_
+#define XLA_SERVING_DATA_PROCESSOR_PYTHON_EXAMPLES_DUMMY_RESOURCE_TRANSFORM_H_
 
 #include <memory>
 #include <vector>
@@ -23,11 +23,11 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 class DummyResource : public Resource {
@@ -44,20 +44,20 @@ class DummyResourceTransform : public TransformBase {
  public:
   static absl::StatusOr<std::unique_ptr<DummyResourceTransform>> Create();
   explicit DummyResourceTransform(
-      std::shared_ptr<neptune::data::Resource> resource);
+      std::shared_ptr<xla_serving::data::Resource> resource);
   void operator()();
   absl::StatusOr<TransformConfig> ToProto() const override;
-  std::vector<std::shared_ptr<neptune::data::Resource>> GetAllResources()
+  std::vector<std::shared_ptr<xla_serving::data::Resource>> GetAllResources()
       const override;
   absl::string_view DebugString() const override {
     return "DummyResourceTransform";
   }
 
  private:
-  std::vector<std::shared_ptr<neptune::data::Resource>> resources_;
+  std::vector<std::shared_ptr<xla_serving::data::Resource>> resources_;
 };
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_PYTHON_EXAMPLES_DUMMY_RESOURCE_TRANSFORM_H_
+#endif  // XLA_SERVING_DATA_PROCESSOR_PYTHON_EXAMPLES_DUMMY_RESOURCE_TRANSFORM_H_

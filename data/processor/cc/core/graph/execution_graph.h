@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_GRAPH_EXECUTION_GRAPH_H_
-#define THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_GRAPH_EXECUTION_GRAPH_H_
+#ifndef XLA_SERVING_DATA_PROCESSOR_CC_CORE_GRAPH_EXECUTION_GRAPH_H_
+#define XLA_SERVING_DATA_PROCESSOR_CC_CORE_GRAPH_EXECUTION_GRAPH_H_
 
 #include <algorithm>
 #include <cstddef>
@@ -26,11 +26,11 @@
 #include "xla/tsl/platform/status_macros.h"
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
-#include "data/processor/cc/api/value.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
+#include "data/processor/cc/api/value.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace core {
 
@@ -245,6 +245,6 @@ class ExecutionGraph {
 
 }  // namespace core
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_GRAPH_EXECUTION_GRAPH_H_
+#endif  // XLA_SERVING_DATA_PROCESSOR_CC_CORE_GRAPH_EXECUTION_GRAPH_H_

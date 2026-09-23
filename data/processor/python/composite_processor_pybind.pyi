@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import types
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
 import .google.protobuf.any_pb2 as any_pb2
-from .third_party.neptune.data.processor.proto import transform_config_pb2
+from data.processor.proto import transform_config_pb2
 
 TransformConfig = transform_config_pb2.TransformConfig
 CompositeProcessorConfig = transform_config_pb2.CompositeProcessorConfig
@@ -84,7 +85,7 @@ class HostBuffer:
       max_version: Optional[object] = None,
       dl_device: Optional[object] = None,
       copy: Optional[object] = None,
-  ) -> object: ...
+  ) -> types.CapsuleType: ...
 
 class Value:
   @overload

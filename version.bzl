@@ -12,6 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Single source of truth version for Neptune packages."""
+"""Single source of truth version for XLA Serving packages."""
 
-VERSION = "0.0.10"
+VERSION = "0.0.11"

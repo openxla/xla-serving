@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/data_loader/ocp_loader/tensorstore_loader.h"  // from @neptune
+#include "runtime/data_loader/ocp_loader/tensorstore_loader.h"  // from @xla_serving
 
 #include <cstddef>
 #include <cstdint>
@@ -33,9 +33,9 @@
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "nlohmann/json.hpp"  // from @nlohmann_json
-#include "runtime/data_loader/ocp_loader/common_types.h"  // from @neptune
-#include "runtime/data_loader/ocp_loader/shared.h"  // from @neptune
-#include "runtime/data_loader/ocp_loader/tensorstore_utils.h"  // from @neptune
+#include "runtime/data_loader/ocp_loader/common_types.h"  // from @xla_serving
+#include "runtime/data_loader/ocp_loader/shared.h"  // from @xla_serving
+#include "runtime/data_loader/ocp_loader/tensorstore_utils.h"  // from @xla_serving
 #include "google/protobuf/repeated_ptr_field.h"
 #include "xla/layout.h"  // from @xla
 #include "xla/overflow_util.h"  // from @xla
@@ -68,7 +68,7 @@
 #include "tensorstore/util/element_pointer.h"  // from @tensorstore
 #include "tensorstore/util/result.h"  // from @tensorstore
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 bool IsSubdirectory(absl::string_view parent, absl::string_view child) {
@@ -380,4 +380,4 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> LoadFromTensorstore(
                                         std::move(opts), std::move(context));
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

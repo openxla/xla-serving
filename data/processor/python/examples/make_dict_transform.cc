@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/processor/python/examples/make_dict_transform.h"  // from @neptune
+#include "data/processor/python/examples/make_dict_transform.h"  // from @xla_serving
 
 #include <memory>
 #include <string>
@@ -21,13 +21,13 @@
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/processor/cc/api/registry.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/cc/core/transform_registry.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
+#include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/cc/core/transform_registry.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 absl::StatusOr<std::unique_ptr<MakeDictTransform>> MakeDictTransform::Create() {
@@ -48,10 +48,10 @@ absl::StatusOr<TransformConfig> MakeDictTransform::ToProto() const {
 ND_REGISTER_TRANSFORM(MakeDictTransform, "MakeDictTransform")
     .SetDeserializer(
         [](const TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           return std::make_unique<MakeDictTransform>();
         });
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

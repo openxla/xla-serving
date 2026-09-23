@@ -2,7 +2,7 @@ load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
-package(default_visibility = ["@neptune//data:processor_internal"])
+package(default_visibility = ["@xla_serving//data:processor_internal"])
 
 cc_library(
     name = "execution_graph",
@@ -12,10 +12,10 @@ cc_library(
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
-        "@neptune//data/processor/cc/api:value",
-        "@neptune//data/processor/cc/core:transform",
-        "@neptune//data/processor/proto:transform_config_cc_proto",
         "@xla//xla/tsl/platform:status_macros",
+        "@xla_serving//data/processor/cc/api:value",
+        "@xla_serving//data/processor/cc/core:transform",
+        "@xla_serving//data/processor/proto:transform_config_cc_proto",
     ],
 )
 
@@ -33,11 +33,11 @@ cc_test(
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
         "@googletest//:gtest_main",
-        "@neptune//data/processor/cc/api:transform_context",
-        "@neptune//data/processor/cc/api:type_info",
-        "@neptune//data/processor/cc/core:transform",
-        "@neptune//data/processor/proto:transform_config_cc_proto",
-        "@neptune//data/test_utils:status_macros",
+        "@xla_serving//data/processor/cc/api:transform_context",
+        "@xla_serving//data/processor/cc/api:type_info",
+        "@xla_serving//data/processor/cc/core:transform",
+        "@xla_serving//data/processor/proto:transform_config_cc_proto",
+        "@xla_serving//data/test_utils:status_macros",
     ],
 )
 
@@ -67,10 +67,10 @@ cc_test(
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:status_matchers",
         "@googletest//:gtest_main",
-        "@neptune//data/processor/cc/api:registry",
-        "@neptune//data/processor/cc/core:transform",
-        "@neptune//data/processor/proto:transform_config_cc_proto",
-        "@neptune//data/test_utils:status_macros",
+        "@xla_serving//data/processor/cc/api:registry",
+        "@xla_serving//data/processor/cc/core:transform",
+        "@xla_serving//data/processor/proto:transform_config_cc_proto",
+        "@xla_serving//data/test_utils:status_macros",
     ],
 )
 
@@ -87,9 +87,9 @@ cc_library(
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/types:span",
-        "@neptune//data/processor/cc/api:transform_context",
-        "@neptune//data/processor/cc/api:value",
         "@tsl//tsl/profiler/lib:traceme",
+        "@xla_serving//data/processor/cc/api:transform_context",
+        "@xla_serving//data/processor/cc/api:value",
     ],
 )
 
@@ -109,12 +109,12 @@ cc_test(
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
         "@googletest//:gtest_main",
-        "@neptune//data/processor/cc/api:registry",
-        "@neptune//data/processor/cc/api:transform_context",
-        "@neptune//data/processor/cc/api:type_info",
-        "@neptune//data/processor/cc/api:value",
-        "@neptune//data/processor/cc/core:transform",
-        "@neptune//data/processor/proto:transform_config_cc_proto",
-        "@neptune//data/test_utils:status_macros",
+        "@xla_serving//data/processor/cc/api:registry",
+        "@xla_serving//data/processor/cc/api:transform_context",
+        "@xla_serving//data/processor/cc/api:type_info",
+        "@xla_serving//data/processor/cc/api:value",
+        "@xla_serving//data/processor/cc/core:transform",
+        "@xla_serving//data/processor/proto:transform_config_cc_proto",
+        "@xla_serving//data/test_utils:status_macros",
     ],
 )

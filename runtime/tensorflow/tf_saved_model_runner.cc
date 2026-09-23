@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/tensorflow/tf_saved_model_runner.h"  // from @neptune
+#include "runtime/tensorflow/tf_saved_model_runner.h"  // from @xla_serving
 
 #include <memory>
 #include <optional>
@@ -23,7 +23,6 @@
 
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_set.h"  // from @abseil-cpp
-#include "absl/flags/flag.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
@@ -48,10 +47,7 @@
 #include "tensorflow/core/tfrt/saved_model/saved_model.h"  // from @org_tensorflow
 #include "include/tfrt/host_context/concurrent_work_queue.h"  // from @tf_runtime
 
-ABSL_FLAG(bool, jsv_in_adbrain, false,
-          "If true, enable the support for Orbax model.");
-
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 // Validates that the given `tensor`'s dtype and shape matches the
@@ -101,11 +97,6 @@ absl::StatusOr<std::shared_ptr<TfSavedModelRunner>> TfSavedModelRunner::Create(
   LOG(INFO) << "Using TFRT to load TF SavedModel from directory: "
             << saved_model_dir;
   std::unordered_set<std::string> tags = {tensorflow::kSavedModelTagServe};
-  // TODO: Replace this with propagating the tags from the
-  // client.
-  if (absl::GetFlag(FLAGS_jsv_in_adbrain)) {
-    tags.insert("adbrain_serve");
-  }
   TF_ASSIGN_OR_RETURN(
       std::unique_ptr<tensorflow::tfrt_stub::SavedModel>
           tfrt_loaded_saved_model,
@@ -275,4 +266,4 @@ absl::StatusOr<std::vector<tensorflow::Tensor>> TfSavedModelRunner::Execute(
   return outputs;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

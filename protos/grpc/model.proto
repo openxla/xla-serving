@@ -14,7 +14,7 @@
 
 edition = "2024";
 
-package neptune.serving;
+package xla_serving.serving;
 
 // Metadata for an inference request such as the model name and signature.
 message ModelSpec {

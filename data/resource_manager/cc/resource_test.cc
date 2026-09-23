@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/resource_manager/cc/resource.h"  // from @neptune
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
 
 #include <cstdint>
 #include <memory>
@@ -25,14 +25,14 @@
 #include "gtest/gtest.h"
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_matchers.h"  // from @abseil-cpp
-#include "data/resource_manager/cc/asset.h"  // from @neptune
-#include "data/resource_manager/cc/resource_internal.h"  // from @neptune
-#include "data/test_utils/status_macros.h"  // from @neptune
+#include "data/resource_manager/cc/asset.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource_internal.h"  // from @xla_serving
+#include "data/test_utils/status_macros.h"  // from @xla_serving
 
 namespace test_namespace {
 namespace {
 
-class FakeResource : public neptune::data::Resource {
+class FakeResource : public xla_serving::data::Resource {
  public:
   using Resource::Resource;
 
@@ -45,7 +45,7 @@ class FakeResource : public neptune::data::Resource {
 }  // namespace
 }  // namespace test_namespace
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace {
 
 using ::absl_testing::StatusIs;
@@ -222,4 +222,4 @@ TEST(ResourceTest, LoadImplCalledOnlyOnce) {
 }
 
 }  // namespace
-}  // namespace neptune::data
+}  // namespace xla_serving::data

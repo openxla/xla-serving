@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/serving/gcp/auth/utils.h"  // from @neptune
+#include "runtime/serving/gcp/auth/utils.h"  // from @xla_serving
 
 #include <memory>
 #include <string>
@@ -26,7 +26,7 @@
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 namespace serving {
 
 // Creates gRPC server credentials based on the provided flags.
@@ -102,4 +102,4 @@ CreateChannelCredentials(std::string server_cert_chain_path,
 }
 
 }  // namespace serving
-}  // namespace neptune
+}  // namespace xla_serving

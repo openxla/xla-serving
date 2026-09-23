@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for Neptune export of DLRM model."""
+"""Tests for XLA SavedModel export of DLRM model."""
 
 import os
 
@@ -21,7 +21,7 @@ import numpy as np
 
 from examples.dlrm import export_jce as export
 from examples.dlrm import model_jce as model_lib
-from .third_party.neptune.runtime.python import orbax_model_runner
+from xla_saved_model_runner import model_runner
 
 
 class ExportTest(absltest.TestCase):
@@ -39,7 +39,7 @@ class ExportTest(absltest.TestCase):
     export.export_model(export_path, use_capped_vocab=True)
 
     # Load exported model
-    runner = orbax_model_runner.ModelRunner(model_path=export_path)
+    runner = model_runner.ModelRunner(model_path=export_path)
     self.assertIn('serving_default', runner.signature_names())
     signature = runner.signature('serving_default')
 
@@ -66,7 +66,7 @@ class ExportTest(absltest.TestCase):
     export_path = self.create_tempdir().full_path
     export.export_model(export_path, use_capped_vocab=True)
 
-    runner = orbax_model_runner.ModelRunner(model_path=export_path)
+    runner = model_runner.ModelRunner(model_path=export_path)
     signature = runner.signature('serving_default')
 
     batch_size = 1

@@ -36,14 +36,14 @@ package_group(
 )
 
 package_group(
-    name = "neptune_data_internal",
+    name = "xla_serving_data_internal",
     packages = [
         "//...",
     ],
 )
 
 cc_shared_library(
-    name = "neptune_data_core",
+    name = "xla_serving_data_core",
     exports_filter = [
         "//:__subpackages__",
         "@abseil-cpp//:__subpackages__",
@@ -78,9 +78,9 @@ cc_shared_library(
 )
 
 cc_shared_library(
-    name = "neptune_data_test_core",
+    name = "xla_serving_data_test_core",
     testonly = 1,
-    dynamic_deps = [":neptune_data_core"],
+    dynamic_deps = [":xla_serving_data_core"],
     exports_filter = [
         "//:__subpackages__",
     ],
@@ -104,9 +104,9 @@ cc_shared_library(
 )
 
 genrule(
-    name = "stage_neptune_data_pkg",
+    name = "stage_xla_serving_data_pkg",
     srcs = [
-        ":neptune_data_core",
+        ":xla_serving_data_core",
         "@pybind11_abseil//pybind11_abseil:status.so",
         "//data/ops:bucket_pad.py",
         "//data/ops:cpu_embedding.py",
@@ -131,202 +131,214 @@ genrule(
         "//data/resource_manager/python:resource_manager.py",
         "//data/resource_manager/python:resource_manager_pybind.so",
         "//data/resource_manager/proto:resource_manager_py_pb2",
+        "//data/cpu_embedding/python:embedding_utils.py",
     ],
     outs = [
-        "neptune_data/__init__.py",
-        "neptune_data/libneptune_data_core.so",
-        "neptune_data/ops/__init__.py",
-        "neptune_data/ops/bucket_pad.py",
-        "neptune_data/ops/cpu_embedding.py",
-        "neptune_data/ops/packing.py",
-        "neptune_data/kernels/__init__.py",
-        "neptune_data/kernels/bucket_pad/__init__.py",
-        "neptune_data/kernels/bucket_pad/bucket_pad_transform_pybind.so",
-        "neptune_data/kernels/bucket_pad/bucket_pad_transform_pb2.py",
-        "neptune_data/kernels/cpu_embedding/__init__.py",
-        "neptune_data/kernels/cpu_embedding/cpu_embedding_module.py",
-        "neptune_data/kernels/cpu_embedding/cpu_embedding_lookup_transform_pybind.so",
-        "neptune_data/kernels/cpu_embedding/cpu_embedding_resource_pybind.so",
-        "neptune_data/kernels/cpu_embedding/cpu_embedding_serializer_pybind.so",
-        "neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.py",
-        "neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_transform_pybind.so",
-        "neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py",
-        "neptune_data/kernels/cpu_embedding/pack_host_buffer_vector_module.py",
-        "neptune_data/kernels/cpu_embedding/pack_host_buffer_vector_transform_pybind.so",
-        "neptune_data/kernels/cpu_embedding/unpack_host_buffer_vector_module.py",
-        "neptune_data/kernels/cpu_embedding/unpack_host_buffer_vector_transform_pybind.so",
-        "neptune_data/processor/__init__.py",
-        "neptune_data/processor/python/__init__.py",
-        "neptune_data/processor/python/composite_processor_pybind.so",
-        "neptune_data/processor/python/transform.py",
-        "neptune_data/processor/proto/__init__.py",
-        "neptune_data/processor/proto/transform_config_pb2.py",
-        "neptune_data/processor/cc/__init__.py",
-        "neptune_data/processor/cc/utils/__init__.py",
-        "neptune_data/processor/cc/utils/default_value_pb2.py",
-        "neptune_data/resource_manager/__init__.py",
-        "neptune_data/resource_manager/python/__init__.py",
-        "neptune_data/resource_manager/python/resource_manager.py",
-        "neptune_data/resource_manager/python/resource_manager_pybind.so",
-        "neptune_data/resource_manager/proto/__init__.py",
-        "neptune_data/resource_manager/proto/resource_manager_pb2.py",
-        "neptune_data/pybind11_abseil/__init__.py",
-        "neptune_data/pybind11_abseil/status.so",
+        "xla_serving_data/__init__.py",
+        "xla_serving_data/libxla_serving_data_core.so",
+        "xla_serving_data/cpu_embedding/__init__.py",
+        "xla_serving_data/cpu_embedding/python/__init__.py",
+        "xla_serving_data/cpu_embedding/python/embedding_utils.py",
+        "xla_serving_data/ops/__init__.py",
+        "xla_serving_data/ops/bucket_pad.py",
+        "xla_serving_data/ops/cpu_embedding.py",
+        "xla_serving_data/ops/packing.py",
+        "xla_serving_data/kernels/__init__.py",
+        "xla_serving_data/kernels/bucket_pad/__init__.py",
+        "xla_serving_data/kernels/bucket_pad/bucket_pad_transform_pybind.so",
+        "xla_serving_data/kernels/bucket_pad/bucket_pad_transform_pb2.py",
+        "xla_serving_data/kernels/cpu_embedding/__init__.py",
+        "xla_serving_data/kernels/cpu_embedding/cpu_embedding_module.py",
+        "xla_serving_data/kernels/cpu_embedding/cpu_embedding_lookup_transform_pybind.so",
+        "xla_serving_data/kernels/cpu_embedding/cpu_embedding_resource_pybind.so",
+        "xla_serving_data/kernels/cpu_embedding/cpu_embedding_serializer_pybind.so",
+        "xla_serving_data/kernels/cpu_embedding/cpu_embedding_pb2.py",
+        "xla_serving_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_transform_pybind.so",
+        "xla_serving_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py",
+        "xla_serving_data/kernels/cpu_embedding/pack_host_buffer_vector_module.py",
+        "xla_serving_data/kernels/cpu_embedding/pack_host_buffer_vector_transform_pybind.so",
+        "xla_serving_data/kernels/cpu_embedding/unpack_host_buffer_vector_module.py",
+        "xla_serving_data/kernels/cpu_embedding/unpack_host_buffer_vector_transform_pybind.so",
+        "xla_serving_data/processor/__init__.py",
+        "xla_serving_data/processor/python/__init__.py",
+        "xla_serving_data/processor/python/composite_processor_pybind.so",
+        "xla_serving_data/processor/python/transform.py",
+        "xla_serving_data/processor/proto/__init__.py",
+        "xla_serving_data/processor/proto/transform_config_pb2.py",
+        "xla_serving_data/processor/cc/__init__.py",
+        "xla_serving_data/processor/cc/utils/__init__.py",
+        "xla_serving_data/processor/cc/utils/default_value_pb2.py",
+        "xla_serving_data/resource_manager/__init__.py",
+        "xla_serving_data/resource_manager/python/__init__.py",
+        "xla_serving_data/resource_manager/python/resource_manager.py",
+        "xla_serving_data/resource_manager/python/resource_manager_pybind.so",
+        "xla_serving_data/resource_manager/proto/__init__.py",
+        "xla_serving_data/resource_manager/proto/resource_manager_pb2.py",
+        "xla_serving_data/pybind11_abseil/__init__.py",
+        "xla_serving_data/pybind11_abseil/status.so",
     ],
     cmd = """
-  mkdir -p $(@D)/neptune_data/ops
-  mkdir -p $(@D)/neptune_data/kernels/bucket_pad
-  mkdir -p $(@D)/neptune_data/kernels/cpu_embedding
-  mkdir -p $(@D)/neptune_data/processor/python
-  mkdir -p $(@D)/neptune_data/processor/proto
-  mkdir -p $(@D)/neptune_data/processor/cc/utils
-  mkdir -p $(@D)/neptune_data/resource_manager/python
-  mkdir -p $(@D)/neptune_data/resource_manager/proto
-  mkdir -p $(@D)/neptune_data/pybind11_abseil
+  mkdir -p $(@D)/xla_serving_data/ops
+  mkdir -p $(@D)/xla_serving_data/kernels/bucket_pad
+  mkdir -p $(@D)/xla_serving_data/kernels/cpu_embedding
+  mkdir -p $(@D)/xla_serving_data/processor/python
+  mkdir -p $(@D)/xla_serving_data/processor/proto
+  mkdir -p $(@D)/xla_serving_data/processor/cc/utils
+  mkdir -p $(@D)/xla_serving_data/resource_manager/python
+  mkdir -p $(@D)/xla_serving_data/resource_manager/proto
+  mkdir -p $(@D)/xla_serving_data/pybind11_abseil
 
-  touch $(@D)/neptune_data/__init__.py
-  touch $(@D)/neptune_data/ops/__init__.py
-  touch $(@D)/neptune_data/kernels/__init__.py
-  touch $(@D)/neptune_data/kernels/bucket_pad/__init__.py
-  touch $(@D)/neptune_data/kernels/cpu_embedding/__init__.py
-  touch $(@D)/neptune_data/processor/__init__.py
-  touch $(@D)/neptune_data/processor/python/__init__.py
-  touch $(@D)/neptune_data/processor/proto/__init__.py
-  touch $(@D)/neptune_data/processor/cc/__init__.py
-  touch $(@D)/neptune_data/processor/cc/utils/__init__.py
-  touch $(@D)/neptune_data/resource_manager/__init__.py
-  touch $(@D)/neptune_data/resource_manager/python/__init__.py
-  touch $(@D)/neptune_data/resource_manager/proto/__init__.py
-  touch $(@D)/neptune_data/pybind11_abseil/__init__.py
+  touch $(@D)/xla_serving_data/__init__.py
+  touch $(@D)/xla_serving_data/ops/__init__.py
+  touch $(@D)/xla_serving_data/kernels/__init__.py
+  touch $(@D)/xla_serving_data/kernels/bucket_pad/__init__.py
+  touch $(@D)/xla_serving_data/kernels/cpu_embedding/__init__.py
+  touch $(@D)/xla_serving_data/processor/__init__.py
+  touch $(@D)/xla_serving_data/processor/python/__init__.py
+  touch $(@D)/xla_serving_data/processor/proto/__init__.py
+  touch $(@D)/xla_serving_data/processor/cc/__init__.py
+  touch $(@D)/xla_serving_data/processor/cc/utils/__init__.py
+  touch $(@D)/xla_serving_data/resource_manager/__init__.py
+  touch $(@D)/xla_serving_data/resource_manager/python/__init__.py
+  touch $(@D)/xla_serving_data/resource_manager/proto/__init__.py
+  touch $(@D)/xla_serving_data/pybind11_abseil/__init__.py
 
-  cp $(location :neptune_data_core) $(@D)/neptune_data/libneptune_data_core.so
-  cp $(location //data/ops:bucket_pad.py) $(@D)/neptune_data/ops/bucket_pad.py
-  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/ops/bucket_pad.py
-  cp $(location //data/ops:cpu_embedding.py) $(@D)/neptune_data/ops/cpu_embedding.py
-  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/ops/cpu_embedding.py
-  cp $(location //data/ops:packing.py) $(@D)/neptune_data/ops/packing.py
-  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/ops/packing.py
-  cp $(location //data/kernels/bucket_pad:bucket_pad_transform_pybind.so) $(@D)/neptune_data/kernels/bucket_pad/bucket_pad_transform_pybind.so
+  cp $(location :xla_serving_data_core) $(@D)/xla_serving_data/libxla_serving_data_core.so
+  cp $(location //data/ops:bucket_pad.py) $(@D)/xla_serving_data/ops/bucket_pad.py
+  sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/ops/bucket_pad.py
+  cp $(location //data/ops:cpu_embedding.py) $(@D)/xla_serving_data/ops/cpu_embedding.py
+  sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/ops/cpu_embedding.py
+  cp $(location //data/ops:packing.py) $(@D)/xla_serving_data/ops/packing.py
+  sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/ops/packing.py
+  cp $(location //data/kernels/bucket_pad:bucket_pad_transform_pybind.so) $(@D)/xla_serving_data/kernels/bucket_pad/bucket_pad_transform_pybind.so
   for f in $(locations //data/kernels/bucket_pad:bucket_pad_transform_py_pb2); do
     if [[ $$f == *bucket_pad_transform_pb2.py ]]; then
-      cp $$f $(@D)/neptune_data/kernels/bucket_pad/bucket_pad_transform_pb2.py
-      sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/bucket_pad/bucket_pad_transform_pb2.py
-      sed -i 's/data\\.kernels\\.bucket_pad/neptune_data\\.kernels\\.bucket_pad/g' $(@D)/neptune_data/kernels/bucket_pad/bucket_pad_transform_pb2.py
+      cp $$f $(@D)/xla_serving_data/kernels/bucket_pad/bucket_pad_transform_pb2.py
+      sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/kernels/bucket_pad/bucket_pad_transform_pb2.py
+      sed -i 's/data\\.kernels\\.bucket_pad/xla_serving_data\\.kernels\\.bucket_pad/g' $(@D)/xla_serving_data/kernels/bucket_pad/bucket_pad_transform_pb2.py
     fi
   done
-  cp $(location //data/kernels/cpu_embedding:cpu_embedding_module.py) $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_module.py
-  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_module.py
-  cp $(location //data/kernels/cpu_embedding:cpu_embedding_lookup_transform_pybind.so) $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_lookup_transform_pybind.so
-  cp $(location //data/kernels/cpu_embedding:cpu_embedding_resource_pybind.so) $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_resource_pybind.so
-  cp $(location //data/kernels/cpu_embedding:cpu_embedding_serializer_pybind.so) $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_serializer_pybind.so
+  cp $(location //data/kernels/cpu_embedding:cpu_embedding_module.py) $(@D)/xla_serving_data/kernels/cpu_embedding/cpu_embedding_module.py
+  sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/kernels/cpu_embedding/cpu_embedding_module.py
+  cp $(location //data/kernels/cpu_embedding:cpu_embedding_lookup_transform_pybind.so) $(@D)/xla_serving_data/kernels/cpu_embedding/cpu_embedding_lookup_transform_pybind.so
+  cp $(location //data/kernels/cpu_embedding:cpu_embedding_resource_pybind.so) $(@D)/xla_serving_data/kernels/cpu_embedding/cpu_embedding_resource_pybind.so
+  cp $(location //data/kernels/cpu_embedding:cpu_embedding_serializer_pybind.so) $(@D)/xla_serving_data/kernels/cpu_embedding/cpu_embedding_serializer_pybind.so
   for f in $(locations //data/kernels/cpu_embedding:cpu_embedding_py_pb2); do
     if [[ $$f == *cpu_embedding_pb2.py ]]; then
-      cp $$f $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.py
-      sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.py
-      sed -i 's/data\\.kernels\\.cpu_embedding/neptune_data\\.kernels\\.cpu_embedding/g' $(@D)/neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.py
+      cp $$f $(@D)/xla_serving_data/kernels/cpu_embedding/cpu_embedding_pb2.py
+      sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/kernels/cpu_embedding/cpu_embedding_pb2.py
+      sed -i 's/data\\.kernels\\.cpu_embedding/xla_serving_data\\.kernels\\.cpu_embedding/g' $(@D)/xla_serving_data/kernels/cpu_embedding/cpu_embedding_pb2.py
     fi
   done
-  cp $(location //data/kernels/cpu_embedding:dense_cpu_embedding_lookup_transform_pybind.so) $(@D)/neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_transform_pybind.so
+  cp $(location //data/kernels/cpu_embedding:dense_cpu_embedding_lookup_transform_pybind.so) $(@D)/xla_serving_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_transform_pybind.so
   for f in $(locations //data/kernels/cpu_embedding:dense_cpu_embedding_lookup_py_pb2); do
     if [[ $$f == *dense_cpu_embedding_lookup_pb2.py ]]; then
-      cp $$f $(@D)/neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py
-      sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py
-      sed -i 's/data\\.kernels\\.cpu_embedding/neptune_data\\.kernels\\.cpu_embedding/g' $(@D)/neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py
+      cp $$f $(@D)/xla_serving_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py
+      sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py
+      sed -i 's/data\\.kernels\\.cpu_embedding/xla_serving_data\\.kernels\\.cpu_embedding/g' $(@D)/xla_serving_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py
     fi
   done
-  cp $(location //data/kernels/cpu_embedding:pack_host_buffer_vector_module.py) $(@D)/neptune_data/kernels/cpu_embedding/pack_host_buffer_vector_module.py
-  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/pack_host_buffer_vector_module.py
-  cp $(location //data/kernels/cpu_embedding:pack_host_buffer_vector_transform_pybind.so) $(@D)/neptune_data/kernels/cpu_embedding/pack_host_buffer_vector_transform_pybind.so
-  cp $(location //data/kernels/cpu_embedding:unpack_host_buffer_vector_module.py) $(@D)/neptune_data/kernels/cpu_embedding/unpack_host_buffer_vector_module.py
-  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/kernels/cpu_embedding/unpack_host_buffer_vector_module.py
-  cp $(location //data/kernels/cpu_embedding:unpack_host_buffer_vector_transform_pybind.so) $(@D)/neptune_data/kernels/cpu_embedding/unpack_host_buffer_vector_transform_pybind.so
-  cp $(location //data/processor/python:composite_processor_pybind.so) $(@D)/neptune_data/processor/python/composite_processor_pybind.so
-  cp $(location //data/processor/python:transform.py) $(@D)/neptune_data/processor/python/transform.py
-  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/processor/python/transform.py
+  cp $(location //data/kernels/cpu_embedding:pack_host_buffer_vector_module.py) $(@D)/xla_serving_data/kernels/cpu_embedding/pack_host_buffer_vector_module.py
+  sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/kernels/cpu_embedding/pack_host_buffer_vector_module.py
+  cp $(location //data/kernels/cpu_embedding:pack_host_buffer_vector_transform_pybind.so) $(@D)/xla_serving_data/kernels/cpu_embedding/pack_host_buffer_vector_transform_pybind.so
+  cp $(location //data/kernels/cpu_embedding:unpack_host_buffer_vector_module.py) $(@D)/xla_serving_data/kernels/cpu_embedding/unpack_host_buffer_vector_module.py
+  sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/kernels/cpu_embedding/unpack_host_buffer_vector_module.py
+  cp $(location //data/kernels/cpu_embedding:unpack_host_buffer_vector_transform_pybind.so) $(@D)/xla_serving_data/kernels/cpu_embedding/unpack_host_buffer_vector_transform_pybind.so
+  cp $(location //data/processor/python:composite_processor_pybind.so) $(@D)/xla_serving_data/processor/python/composite_processor_pybind.so
+  cp $(location //data/processor/python:transform.py) $(@D)/xla_serving_data/processor/python/transform.py
+  sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/processor/python/transform.py
   for f in $(locations //data/processor/proto:transform_config_py_pb2); do
     if [[ $$f == *transform_config_pb2.py ]]; then
-      cp $$f $(@D)/neptune_data/processor/proto/transform_config_pb2.py
-      sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/processor/proto/transform_config_pb2.py
-      sed -i 's/data\\.processor\\.proto/neptune_data\\.processor\\.proto/g' $(@D)/neptune_data/processor/proto/transform_config_pb2.py
+      cp $$f $(@D)/xla_serving_data/processor/proto/transform_config_pb2.py
+      sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/processor/proto/transform_config_pb2.py
+      sed -i 's/data\\.processor\\.proto/xla_serving_data\\.processor\\.proto/g' $(@D)/xla_serving_data/processor/proto/transform_config_pb2.py
     fi
   done
   for f in $(locations //data/processor/cc/utils:default_value_py_pb2); do
     if [[ $$f == *default_value_pb2.py ]]; then
-      cp $$f $(@D)/neptune_data/processor/cc/utils/default_value_pb2.py
-      sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/processor/cc/utils/default_value_pb2.py
-      sed -i 's/data\\.processor\\.cc\\.utils/neptune_data\\.processor\\.cc\\.utils/g' $(@D)/neptune_data/processor/cc/utils/default_value_pb2.py
+      cp $$f $(@D)/xla_serving_data/processor/cc/utils/default_value_pb2.py
+      sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/processor/cc/utils/default_value_pb2.py
+      sed -i 's/data\\.processor\\.cc\\.utils/xla_serving_data\\.processor\\.cc\\.utils/g' $(@D)/xla_serving_data/processor/cc/utils/default_value_pb2.py
     fi
   done
-  cp $(location //data/resource_manager/python:resource_manager.py) $(@D)/neptune_data/resource_manager/python/resource_manager.py
-  sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/resource_manager/python/resource_manager.py
-  cp $(location //data/resource_manager/python:resource_manager_pybind.so) $(@D)/neptune_data/resource_manager/python/resource_manager_pybind.so
+  cp $(location //data/resource_manager/python:resource_manager.py) $(@D)/xla_serving_data/resource_manager/python/resource_manager.py
+  sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/resource_manager/python/resource_manager.py
+  cp $(location //data/resource_manager/python:resource_manager_pybind.so) $(@D)/xla_serving_data/resource_manager/python/resource_manager_pybind.so
   for f in $(locations //data/resource_manager/proto:resource_manager_py_pb2); do
     if [[ $$f == *resource_manager_pb2.py ]]; then
-      cp $$f $(@D)/neptune_data/resource_manager/proto/resource_manager_pb2.py
-      sed -i 's/from data\\./from neptune_data\\./g' $(@D)/neptune_data/resource_manager/proto/resource_manager_pb2.py
-      sed -i 's/data\\.resource_manager\\.proto/neptune_data\\.resource_manager\\.proto/g' $(@D)/neptune_data/resource_manager/proto/resource_manager_pb2.py
+      cp $$f $(@D)/xla_serving_data/resource_manager/proto/resource_manager_pb2.py
+      sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/resource_manager/proto/resource_manager_pb2.py
+      sed -i 's/data\\.resource_manager\\.proto/xla_serving_data\\.resource_manager\\.proto/g' $(@D)/xla_serving_data/resource_manager/proto/resource_manager_pb2.py
     fi
   done
-  cp $(location @pybind11_abseil//pybind11_abseil:status.so) $(@D)/neptune_data/pybind11_abseil/status.so
+  cp $(location @pybind11_abseil//pybind11_abseil:status.so) $(@D)/xla_serving_data/pybind11_abseil/status.so
+  mkdir -p $(@D)/xla_serving_data/cpu_embedding/python
+  touch $(@D)/xla_serving_data/cpu_embedding/__init__.py
+  touch $(@D)/xla_serving_data/cpu_embedding/python/__init__.py
+  cp $(location //data/cpu_embedding/python:embedding_utils.py) $(@D)/xla_serving_data/cpu_embedding/python/embedding_utils.py
+  sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/cpu_embedding/python/embedding_utils.py
   """,
 )
 
 py_library(
-    name = "neptune_data_pkg",
+    name = "xla_serving_data_pkg",
     srcs = [
-        "neptune_data/__init__.py",
-        "neptune_data/kernels/__init__.py",
-        "neptune_data/kernels/cpu_embedding/__init__.py",
-        "neptune_data/kernels/cpu_embedding/cpu_embedding_module.py",
-        "neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.py",
-        "neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py",
-        "neptune_data/kernels/cpu_embedding/pack_host_buffer_vector_module.py",
-        "neptune_data/kernels/cpu_embedding/unpack_host_buffer_vector_module.py",
-        "neptune_data/ops/__init__.py",
-        "neptune_data/ops/bucket_pad.py",
-        "neptune_data/ops/cpu_embedding.py",
-        "neptune_data/ops/packing.py",
-        "neptune_data/processor/__init__.py",
-        "neptune_data/processor/cc/__init__.py",
-        "neptune_data/processor/cc/utils/__init__.py",
-        "neptune_data/processor/cc/utils/default_value_pb2.py",
-        "neptune_data/processor/proto/__init__.py",
-        "neptune_data/processor/proto/transform_config_pb2.py",
-        "neptune_data/processor/python/__init__.py",
-        "neptune_data/processor/python/transform.py",
-        "neptune_data/pybind11_abseil/__init__.py",
-        "neptune_data/resource_manager/__init__.py",
-        "neptune_data/resource_manager/proto/__init__.py",
-        "neptune_data/resource_manager/proto/resource_manager_pb2.py",
-        "neptune_data/resource_manager/python/__init__.py",
-        "neptune_data/resource_manager/python/resource_manager.py",
+        "xla_serving_data/__init__.py",
+        "xla_serving_data/cpu_embedding/__init__.py",
+        "xla_serving_data/cpu_embedding/python/__init__.py",
+        "xla_serving_data/cpu_embedding/python/embedding_utils.py",
+        "xla_serving_data/kernels/__init__.py",
+        "xla_serving_data/kernels/cpu_embedding/__init__.py",
+        "xla_serving_data/kernels/cpu_embedding/cpu_embedding_module.py",
+        "xla_serving_data/kernels/cpu_embedding/cpu_embedding_pb2.py",
+        "xla_serving_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py",
+        "xla_serving_data/kernels/cpu_embedding/pack_host_buffer_vector_module.py",
+        "xla_serving_data/kernels/cpu_embedding/unpack_host_buffer_vector_module.py",
+        "xla_serving_data/ops/__init__.py",
+        "xla_serving_data/ops/bucket_pad.py",
+        "xla_serving_data/ops/cpu_embedding.py",
+        "xla_serving_data/ops/packing.py",
+        "xla_serving_data/processor/__init__.py",
+        "xla_serving_data/processor/cc/__init__.py",
+        "xla_serving_data/processor/cc/utils/__init__.py",
+        "xla_serving_data/processor/cc/utils/default_value_pb2.py",
+        "xla_serving_data/processor/proto/__init__.py",
+        "xla_serving_data/processor/proto/transform_config_pb2.py",
+        "xla_serving_data/processor/python/__init__.py",
+        "xla_serving_data/processor/python/transform.py",
+        "xla_serving_data/pybind11_abseil/__init__.py",
+        "xla_serving_data/resource_manager/__init__.py",
+        "xla_serving_data/resource_manager/proto/__init__.py",
+        "xla_serving_data/resource_manager/proto/resource_manager_pb2.py",
+        "xla_serving_data/resource_manager/python/__init__.py",
+        "xla_serving_data/resource_manager/python/resource_manager.py",
     ],
     data = [
-        "neptune_data/kernels/cpu_embedding/cpu_embedding_lookup_transform_pybind.so",
-        "neptune_data/kernels/cpu_embedding/cpu_embedding_pb2.pyi",
-        "neptune_data/kernels/cpu_embedding/cpu_embedding_resource_pybind.so",
-        "neptune_data/kernels/cpu_embedding/cpu_embedding_serializer_pybind.so",
-        "neptune_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_transform_pybind.so",
-        "neptune_data/kernels/cpu_embedding/pack_host_buffer_vector_transform_pybind.so",
-        "neptune_data/kernels/cpu_embedding/unpack_host_buffer_vector_transform_pybind.so",
-        "neptune_data/libneptune_data_core.so",
-        "neptune_data/processor/proto/transform_config_pb2.pyi",
-        "neptune_data/processor/python/composite_processor_pybind.so",
-        "neptune_data/pybind11_abseil/status.so",
-        "neptune_data/resource_manager/proto/resource_manager_pb2.pyi",
-        "neptune_data/resource_manager/python/resource_manager_pybind.so",
+        "xla_serving_data/kernels/cpu_embedding/cpu_embedding_lookup_transform_pybind.so",
+        "xla_serving_data/kernels/cpu_embedding/cpu_embedding_pb2.pyi",
+        "xla_serving_data/kernels/cpu_embedding/cpu_embedding_resource_pybind.so",
+        "xla_serving_data/kernels/cpu_embedding/cpu_embedding_serializer_pybind.so",
+        "xla_serving_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_transform_pybind.so",
+        "xla_serving_data/kernels/cpu_embedding/pack_host_buffer_vector_transform_pybind.so",
+        "xla_serving_data/kernels/cpu_embedding/unpack_host_buffer_vector_transform_pybind.so",
+        "xla_serving_data/libxla_serving_data_core.so",
+        "xla_serving_data/processor/proto/transform_config_pb2.pyi",
+        "xla_serving_data/processor/python/composite_processor_pybind.so",
+        "xla_serving_data/pybind11_abseil/status.so",
+        "xla_serving_data/resource_manager/proto/resource_manager_pb2.pyi",
+        "xla_serving_data/resource_manager/python/resource_manager_pybind.so",
     ],
     tags = ["manual"],
     visibility = ["//visibility:public"],
 )
 
 py_wheel(
-    name = "neptune_data",
+    name = "xla_serving_data",
     abi = select({
         "@rules_python//python/config_settings:is_python_3.11": "cp311",
         "@rules_python//python/config_settings:is_python_3.12": "abi3",
     }),
-    distribution = "neptune_data",
+    distribution = "xla_serving_data",
     platform = select({
         "//runtime/python:linux_x86_64": "manylinux_2_28_x86_64",
         "//runtime/python:linux_aarch64": "manylinux_2_28_aarch64",
@@ -339,16 +351,16 @@ py_wheel(
     tags = ["manual"],
     version = VERSION,
     deps = [
-        ":neptune_data_pkg",
-        ":stage_neptune_data_pkg",
+        ":stage_xla_serving_data_pkg",
+        ":xla_serving_data_pkg",
     ],
 )
 
 genrule(
-    name = "stage_neptune_data_test_pkg",
+    name = "stage_xla_serving_data_test_pkg",
     testonly = 1,
     srcs = [
-        ":neptune_data_test_core",
+        ":xla_serving_data_test_core",
         "//data/processor/python/examples:add_int_transform_pybind.so",
         "//data/processor/python/examples:add_host_buffer_transform_pybind.so",
         "//data/processor/python/examples:add_two_transform_pybind.so",
@@ -363,82 +375,82 @@ genrule(
         "//examples/composite_processor:int_resource_pybind.so",
     ],
     outs = [
-        "neptune_data_test/__init__.py",
-        "neptune_data_test/libneptune_data_test_core.so",
-        "neptune_data_test/processor/__init__.py",
-        "neptune_data_test/processor/python/__init__.py",
-        "neptune_data_test/processor/python/examples/__init__.py",
-        "neptune_data_test/processor/python/examples/add_int_transform_pybind.so",
-        "neptune_data_test/processor/python/examples/add_host_buffer_transform_pybind.so",
-        "neptune_data_test/processor/python/examples/add_two_transform_pybind.so",
-        "neptune_data_test/processor/python/examples/multiply_by_five_transform_pybind.so",
-        "neptune_data_test/processor/python/examples/dummy_resource_transform_pybind.so",
-        "neptune_data_test/processor/python/examples/suffix_transform_pybind.so",
-        "neptune_data_test/processor/python/examples/add_from_resource_transform_pybind.so",
-        "neptune_data_test/processor/python/examples/int_resource_pybind.so",
-        "neptune_data_test/processor/python/examples/make_dict_transform_pybind.so",
-        "neptune_data_test/examples/composite_processor/add_int_from_resource_transform_pybind.so",
-        "neptune_data_test/examples/composite_processor/add_two_input_buffers_transform_pybind.so",
-        "neptune_data_test/examples/composite_processor/int_resource_pybind.so",
+        "xla_serving_data_test/__init__.py",
+        "xla_serving_data_test/libxla_serving_data_test_core.so",
+        "xla_serving_data_test/processor/__init__.py",
+        "xla_serving_data_test/processor/python/__init__.py",
+        "xla_serving_data_test/processor/python/examples/__init__.py",
+        "xla_serving_data_test/processor/python/examples/add_int_transform_pybind.so",
+        "xla_serving_data_test/processor/python/examples/add_host_buffer_transform_pybind.so",
+        "xla_serving_data_test/processor/python/examples/add_two_transform_pybind.so",
+        "xla_serving_data_test/processor/python/examples/multiply_by_five_transform_pybind.so",
+        "xla_serving_data_test/processor/python/examples/dummy_resource_transform_pybind.so",
+        "xla_serving_data_test/processor/python/examples/suffix_transform_pybind.so",
+        "xla_serving_data_test/processor/python/examples/add_from_resource_transform_pybind.so",
+        "xla_serving_data_test/processor/python/examples/int_resource_pybind.so",
+        "xla_serving_data_test/processor/python/examples/make_dict_transform_pybind.so",
+        "xla_serving_data_test/examples/composite_processor/add_int_from_resource_transform_pybind.so",
+        "xla_serving_data_test/examples/composite_processor/add_two_input_buffers_transform_pybind.so",
+        "xla_serving_data_test/examples/composite_processor/int_resource_pybind.so",
     ],
     cmd = """
-  mkdir -p $(@D)/neptune_data_test/processor/python/examples
-  touch $(@D)/neptune_data_test/__init__.py
-  touch $(@D)/neptune_data_test/processor/__init__.py
-  touch $(@D)/neptune_data_test/processor/python/__init__.py
-  touch $(@D)/neptune_data_test/processor/python/examples/__init__.py
-  cp $(location :neptune_data_test_core) $(@D)/neptune_data_test/libneptune_data_test_core.so
-  cp $(location //data/processor/python/examples:add_int_transform_pybind.so) $(@D)/neptune_data_test/processor/python/examples/add_int_transform_pybind.so
-  cp $(location //data/processor/python/examples:add_host_buffer_transform_pybind.so) $(@D)/neptune_data_test/processor/python/examples/add_host_buffer_transform_pybind.so
-  cp $(location //data/processor/python/examples:add_two_transform_pybind.so) $(@D)/neptune_data_test/processor/python/examples/add_two_transform_pybind.so
-  cp $(location //data/processor/python/examples:multiply_by_five_transform_pybind.so) $(@D)/neptune_data_test/processor/python/examples/multiply_by_five_transform_pybind.so
-  cp $(location //data/processor/python/examples:dummy_resource_transform_pybind.so) $(@D)/neptune_data_test/processor/python/examples/dummy_resource_transform_pybind.so
-  cp $(location //data/processor/python/examples:suffix_transform_pybind.so) $(@D)/neptune_data_test/processor/python/examples/suffix_transform_pybind.so
-  cp $(location //data/processor/python/examples:add_from_resource_transform_pybind.so) $(@D)/neptune_data_test/processor/python/examples/add_from_resource_transform_pybind.so
-  cp $(location //data/processor/python/examples:int_resource_pybind.so) $(@D)/neptune_data_test/processor/python/examples/int_resource_pybind.so
-  cp $(location //data/processor/python/examples:make_dict_transform_pybind.so) $(@D)/neptune_data_test/processor/python/examples/make_dict_transform_pybind.so
-  cp $(location //examples/composite_processor:add_int_from_resource_transform_pybind.so) $(@D)/neptune_data_test/examples/composite_processor/add_int_from_resource_transform_pybind.so
-  cp $(location //examples/composite_processor:add_two_input_buffers_transform_pybind.so) $(@D)/neptune_data_test/examples/composite_processor/add_two_input_buffers_transform_pybind.so
-  cp $(location //examples/composite_processor:int_resource_pybind.so) $(@D)/neptune_data_test/examples/composite_processor/int_resource_pybind.so
+  mkdir -p $(@D)/xla_serving_data_test/processor/python/examples
+  touch $(@D)/xla_serving_data_test/__init__.py
+  touch $(@D)/xla_serving_data_test/processor/__init__.py
+  touch $(@D)/xla_serving_data_test/processor/python/__init__.py
+  touch $(@D)/xla_serving_data_test/processor/python/examples/__init__.py
+  cp $(location :xla_serving_data_test_core) $(@D)/xla_serving_data_test/libxla_serving_data_test_core.so
+  cp $(location //data/processor/python/examples:add_int_transform_pybind.so) $(@D)/xla_serving_data_test/processor/python/examples/add_int_transform_pybind.so
+  cp $(location //data/processor/python/examples:add_host_buffer_transform_pybind.so) $(@D)/xla_serving_data_test/processor/python/examples/add_host_buffer_transform_pybind.so
+  cp $(location //data/processor/python/examples:add_two_transform_pybind.so) $(@D)/xla_serving_data_test/processor/python/examples/add_two_transform_pybind.so
+  cp $(location //data/processor/python/examples:multiply_by_five_transform_pybind.so) $(@D)/xla_serving_data_test/processor/python/examples/multiply_by_five_transform_pybind.so
+  cp $(location //data/processor/python/examples:dummy_resource_transform_pybind.so) $(@D)/xla_serving_data_test/processor/python/examples/dummy_resource_transform_pybind.so
+  cp $(location //data/processor/python/examples:suffix_transform_pybind.so) $(@D)/xla_serving_data_test/processor/python/examples/suffix_transform_pybind.so
+  cp $(location //data/processor/python/examples:add_from_resource_transform_pybind.so) $(@D)/xla_serving_data_test/processor/python/examples/add_from_resource_transform_pybind.so
+  cp $(location //data/processor/python/examples:int_resource_pybind.so) $(@D)/xla_serving_data_test/processor/python/examples/int_resource_pybind.so
+  cp $(location //data/processor/python/examples:make_dict_transform_pybind.so) $(@D)/xla_serving_data_test/processor/python/examples/make_dict_transform_pybind.so
+  cp $(location //examples/composite_processor:add_int_from_resource_transform_pybind.so) $(@D)/xla_serving_data_test/examples/composite_processor/add_int_from_resource_transform_pybind.so
+  cp $(location //examples/composite_processor:add_two_input_buffers_transform_pybind.so) $(@D)/xla_serving_data_test/examples/composite_processor/add_two_input_buffers_transform_pybind.so
+  cp $(location //examples/composite_processor:int_resource_pybind.so) $(@D)/xla_serving_data_test/examples/composite_processor/int_resource_pybind.so
   """,
 )
 
 py_library(
-    name = "neptune_data_test_pkg",
+    name = "xla_serving_data_test_pkg",
     testonly = 1,
     srcs = [
-        "neptune_data_test/__init__.py",
-        "neptune_data_test/processor/__init__.py",
-        "neptune_data_test/processor/python/__init__.py",
-        "neptune_data_test/processor/python/examples/__init__.py",
+        "xla_serving_data_test/__init__.py",
+        "xla_serving_data_test/processor/__init__.py",
+        "xla_serving_data_test/processor/python/__init__.py",
+        "xla_serving_data_test/processor/python/examples/__init__.py",
     ],
     data = [
-        "neptune_data_test/examples/composite_processor/add_int_from_resource_transform_pybind.so",
-        "neptune_data_test/examples/composite_processor/add_two_input_buffers_transform_pybind.so",
-        "neptune_data_test/examples/composite_processor/int_resource_pybind.so",
-        "neptune_data_test/libneptune_data_test_core.so",
-        "neptune_data_test/processor/python/examples/add_from_resource_transform_pybind.so",
-        "neptune_data_test/processor/python/examples/add_host_buffer_transform_pybind.so",
-        "neptune_data_test/processor/python/examples/add_int_transform_pybind.so",
-        "neptune_data_test/processor/python/examples/add_two_transform_pybind.so",
-        "neptune_data_test/processor/python/examples/dummy_resource_transform_pybind.so",
-        "neptune_data_test/processor/python/examples/int_resource_pybind.so",
-        "neptune_data_test/processor/python/examples/make_dict_transform_pybind.so",
-        "neptune_data_test/processor/python/examples/multiply_by_five_transform_pybind.so",
-        "neptune_data_test/processor/python/examples/suffix_transform_pybind.so",
+        "xla_serving_data_test/examples/composite_processor/add_int_from_resource_transform_pybind.so",
+        "xla_serving_data_test/examples/composite_processor/add_two_input_buffers_transform_pybind.so",
+        "xla_serving_data_test/examples/composite_processor/int_resource_pybind.so",
+        "xla_serving_data_test/libxla_serving_data_test_core.so",
+        "xla_serving_data_test/processor/python/examples/add_from_resource_transform_pybind.so",
+        "xla_serving_data_test/processor/python/examples/add_host_buffer_transform_pybind.so",
+        "xla_serving_data_test/processor/python/examples/add_int_transform_pybind.so",
+        "xla_serving_data_test/processor/python/examples/add_two_transform_pybind.so",
+        "xla_serving_data_test/processor/python/examples/dummy_resource_transform_pybind.so",
+        "xla_serving_data_test/processor/python/examples/int_resource_pybind.so",
+        "xla_serving_data_test/processor/python/examples/make_dict_transform_pybind.so",
+        "xla_serving_data_test/processor/python/examples/multiply_by_five_transform_pybind.so",
+        "xla_serving_data_test/processor/python/examples/suffix_transform_pybind.so",
     ],
     tags = ["manual"],
     visibility = ["//visibility:public"],
 )
 
 py_wheel(
-    name = "neptune_data_test",
+    name = "xla_serving_data_test",
     testonly = 1,
     abi = select({
         "@rules_python//python/config_settings:is_python_3.11": "cp311",
         "@rules_python//python/config_settings:is_python_3.12": "abi3",
     }),
-    distribution = "neptune_data_test",
+    distribution = "xla_serving_data_test",
     platform = select({
         "//runtime/python:linux_x86_64": "manylinux_2_28_x86_64",
         "//runtime/python:linux_aarch64": "manylinux_2_28_aarch64",
@@ -451,7 +463,7 @@ py_wheel(
     tags = ["manual"],
     version = VERSION,
     deps = [
-        ":neptune_data_test_pkg",
-        ":stage_neptune_data_test_pkg",
+        ":stage_xla_serving_data_test_pkg",
+        ":xla_serving_data_test_pkg",
     ],
 )

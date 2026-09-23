@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_TFRT_THREAD_POOL_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_TFRT_THREAD_POOL_H_
+#ifndef XLA_SERVING_RUNTIME_TENSORFLOW_TFRT_THREAD_POOL_H_
+#define XLA_SERVING_RUNTIME_TENSORFLOW_TFRT_THREAD_POOL_H_
 
 #include <cstdint>
 #include <functional>
@@ -22,11 +22,11 @@
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "unsupported/Eigen/CXX11/ThreadPool"
-#include "runtime/core/thread_pool_interface.h"  // from @neptune
+#include "runtime/core/thread_pool_interface.h"  // from @xla_serving
 #include "tensorflow/core/tfrt/runtime/work_queue_interface.h"  // from @org_tensorflow
 #include "include/tfrt/host_context/task_function.h"  // from @tf_runtime
 
-namespace neptune {
+namespace xla_serving {
 
 using tensorflow::tfrt_stub::WorkQueueInterface;
 
@@ -63,6 +63,6 @@ class TfrtThreadPool : public ThreadPoolInterface {
   tensorflow::tfrt_stub::WorkQueueInterface* underlying_work_queue_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_TFRT_THREAD_POOL_H_
+#endif  // XLA_SERVING_RUNTIME_TENSORFLOW_TFRT_THREAD_POOL_H_

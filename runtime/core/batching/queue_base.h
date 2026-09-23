@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_CORE_BATCHING_QUEUE_BASE_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_CORE_BATCHING_QUEUE_BASE_H_
+#ifndef XLA_SERVING_RUNTIME_CORE_BATCHING_QUEUE_BASE_H_
+#define XLA_SERVING_RUNTIME_CORE_BATCHING_QUEUE_BASE_H_
 
 #include <stddef.h>
 
@@ -30,11 +30,15 @@
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
-#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
-#include "runtime/core/batching/shared_batch_scheduler.h"  // from @neptune
+#include "absl/synchronization/notification.h"  // from @abseil-cpp
+#include "runtime/core/batching/batch_scheduler.h"  // from @xla_serving
+#include "runtime/core/batching/queue_options.h"  // from @xla_serving
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
-namespace neptune {
+#include "tsl/profiler/lib/connected_traceme.h"  // from @tsl
+#include "tsl/profiler/lib/context_types.h"  // from @tsl
+#include "tsl/profiler/lib/traceme.h"  // from @tsl
+namespace xla_serving {
 namespace internal {
 
 // An abstract base class for task queues used by SharedBatchScheduler.
@@ -52,6 +56,8 @@ class QueueBase {
   using ProcessBatchCallback =
       std::function<void(std::unique_ptr<Batch<TaskType>>)>;
 
+  using BatchTaskUniquePtr = std::unique_ptr<Batch<TaskType>>;
+
   using SchedulableBatchCallback = std::function<void()>;
 
   // Orderable key representing the priority of a batch. Higher priority batches
@@ -62,7 +68,7 @@ class QueueBase {
   using BatchPriorityKey = std::pair<int, int64_t>;
 
   QueueBase(
-      const typename SharedBatchScheduler<TaskType>::QueueOptions& options,
+      const QueueOptions<TaskType>& options,
       tsl::Env* env, ProcessBatchCallback process_batch_callback,
       SchedulableBatchCallback schedulable_batch_callback);
 
@@ -96,7 +102,7 @@ class QueueBase {
   // this queue. Either returns a batch that is ready to be processed, or
   // nullptr if the queue declines to schedule a batch at this time. If it
   // returns a batch, the batch is guaranteed to be closed.
-  typename SharedBatchScheduler<TaskType>::BatchTaskUniquePtr ScheduleBatch();
+  BatchTaskUniquePtr ScheduleBatch();
 
   // Without mutating the queue, checks if ScheduleBatch() will return a valid
   // batch and if so will return the priority of that batch.
@@ -140,7 +146,7 @@ class QueueBase {
 
   // Computes the max_execution_batch_size of the queue based on queue options.
   static size_t GetMaxExecutionBatchSize(
-      const typename SharedBatchScheduler<TaskType>::QueueOptions& options) {
+      const QueueOptions<TaskType>& options) {
     // If `enable_large_batch_splitting`, returns `max_execution_batch_size`
     // configured by user options directly; returns `input_batch_size_limit`
     // otherwise.
@@ -154,7 +160,7 @@ class QueueBase {
     }
   }
 
-  const typename SharedBatchScheduler<TaskType>::QueueOptions options_;
+  const QueueOptions<TaskType> options_;
 
   // The environment to use.
   tsl::Env* env_;
@@ -183,13 +189,20 @@ class QueueBase {
   // Incremented in ScheduleBatch() and decremented in ProcessBatch().
   int num_batches_being_processed_ ABSL_GUARDED_BY(mu_) = 0;
 
+  // Used by CloseAndWaitUntilEmpty() to wait until the queue is empty, for
+  // the case in which the queue is not empty when CloseAndWaitUntilEmpty()
+  // starts. When ProcessBatch() dequeues the last batch and makes the queue
+  // empty, if 'empty_notification_' is non-null it calls
+  // 'empty_notification_->Notify()'.
+  absl::Notification* empty_notification_ ABSL_GUARDED_BY(mu_) = nullptr;
+
   QueueBase(const QueueBase&) = delete;
   QueueBase& operator=(const QueueBase&) = delete;
 };
 
 template <typename TaskType>
 QueueBase<TaskType>::QueueBase(
-    const typename SharedBatchScheduler<TaskType>::QueueOptions& options,
+    const QueueOptions<TaskType>& options,
     ::tsl::Env* env, ProcessBatchCallback process_batch_callback,
     SchedulableBatchCallback schedulable_batch_callback)
     : options_(options),
@@ -237,7 +250,7 @@ size_t QueueBase<TaskType>::SchedulingCapacity() const {
 }
 
 template <typename TaskType>
-typename SharedBatchScheduler<TaskType>::BatchTaskUniquePtr
+typename QueueBase<TaskType>::BatchTaskUniquePtr
 QueueBase<TaskType>::ScheduleBatch() {
   // The batch to schedule, which we may populate below. (If left as nullptr,
   // that means we are electing not to schedule a batch at this time.)
@@ -271,6 +284,9 @@ void QueueBase<TaskType>::ProcessBatch(std::unique_ptr<Batch<TaskType>> batch) {
   {
     absl::MutexLock l(mu_);
     --num_batches_being_processed_;
+    if (empty_notification_ != nullptr && IsEmptyInternal()) {
+      empty_notification_->Notify();
+    }
   }
 }
 
@@ -282,12 +298,18 @@ bool QueueBase<TaskType>::IsEmpty() const {
 
 template <typename TaskType>
 void QueueBase<TaskType>::CloseAndWaitUntilEmpty() {
-  absl::MutexLock l(mu_);
-  closed_ = true;
-  auto is_empty = [this]() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_) {
-    return IsEmptyInternal();
-  };
-  mu_.Await(absl::Condition(&is_empty));
+  absl::Notification empty;
+  {
+    absl::MutexLock l(mu_);
+    closed_ = true;
+    if (IsEmptyInternal()) {
+      empty.Notify();
+    } else {
+      // Arrange for ProcessBatch() to notify when the queue becomes empty.
+      empty_notification_ = &empty;
+    }
+  }
+  empty.WaitForNotification();
 }
 
 template <typename TaskType>
@@ -305,6 +327,6 @@ QueueBase<TaskType>::PeekBatchPriority() const {
 }
 
 }  // namespace internal
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_BATCHING_QUEUE_BASE_H_
+#endif  // XLA_SERVING_RUNTIME_CORE_BATCHING_QUEUE_BASE_H_

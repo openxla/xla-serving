@@ -12,20 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_OPTIONAL_FUNCTION_HANDLER_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_OPTIONAL_FUNCTION_HANDLER_H_
+#ifndef XLA_SERVING_RUNTIME_INTERPRETER_OPTIONAL_FUNCTION_HANDLER_H_
+#define XLA_SERVING_RUNTIME_INTERPRETER_OPTIONAL_FUNCTION_HANDLER_H_
 
 #include <memory>
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
-#include "protos/orchestration.pb.h"  // from @neptune
-#include "runtime/interpreter/interpreter_create_options.h"  // from @neptune
-#include "runtime/kernel/kernel.h"  // from @neptune
-#include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
+#include "protos/manifest.pb.h"  // from @xla_serving
+#include "protos/orchestration.pb.h"  // from @xla_serving
+#include "runtime/interpreter/interpreter_create_options.h"  // from @xla_serving
+#include "runtime/kernel/kernel.h"  // from @xla_serving
+#include "runtime/kernel/kernel_io_data_type.h"  // from @xla_serving
 
-namespace neptune {
+namespace xla_serving {
 
 // An interface to handle optional (non-StableHLO) functions.
 class OptionalFunctionHandler {
@@ -38,11 +38,11 @@ class OptionalFunctionHandler {
   // HostBuffer.
   virtual absl::StatusOr<std::unique_ptr<Kernel>> HandleFunction(
       absl::string_view model_path,
-      const neptune_model_manifest::Function& function,
+      const xla_saved_model_manifest::Function& function,
       const InterpreterCreateOptions& create_options, bool pre_data_conversion,
       bool post_data_conversion,
-      const neptune_model_orchestration::NamedTensorTypeList* named_inputs,
-      const neptune_model_orchestration::NamedTensorTypeList*
+      const xla_saved_model_orchestration::NamedTensorTypeList* named_inputs,
+      const xla_saved_model_orchestration::NamedTensorTypeList*
           named_outputs) = 0;
 
   virtual KernelIODataType GetInputDataType(bool pre_data_conversion) const = 0;
@@ -50,6 +50,6 @@ class OptionalFunctionHandler {
       bool post_data_conversion) const = 0;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_OPTIONAL_FUNCTION_HANDLER_H_
+#endif  // XLA_SERVING_RUNTIME_INTERPRETER_OPTIONAL_FUNCTION_HANDLER_H_

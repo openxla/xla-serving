@@ -34,7 +34,7 @@ jobs:
     name: Nightly Serving Test (GPU)
     runs-on: ${{ inputs.runner || 'linux-x86-a2-48-a100-4gpu' }}
     container:
-      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest # zizmor: ignore[unpinned-images]
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:0ad60e35d5870853c4c463f1c23dff6ed2dbfe3b1f708406c25a7606a5cae078
       options: --gpus all --shm-size 2g
     defaults:
       run:
@@ -84,10 +84,10 @@ jobs:
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           echo "Extracting Docker image: ${IMAGE}"
-          mkdir -p /tmp/neptune-serving
-          crane export "${IMAGE}" - | tar -xf - -C /tmp/neptune-serving
+          mkdir -p /tmp/xla-serving
+          crane export "${IMAGE}" - | tar -xf - -C /tmp/xla-serving
           echo "Verifying serving binary..."
-          ls -la /tmp/neptune-serving/runtime/serving/gcp/server/
+          ls -la /tmp/xla-serving/runtime/serving/gcp/server/
 
       - name: Install uv and Set up Python
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
@@ -100,7 +100,7 @@ jobs:
           echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
 
-      - name: Download Neptune Wheels
+      - name: Download Release Wheels
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ inputs.release_tag }}
@@ -119,7 +119,7 @@ jobs:
           fi
           ls -la wheels/
 
-      - name: Install Neptune Wheels and Test Dependencies
+      - name: Install Release Wheels and Test Dependencies
         run: |
           echo "Installing downloaded wheels..."
           uv pip install wheels/*.whl
@@ -140,45 +140,45 @@ jobs:
           python3 -m examples.nnx.run_export --export_path=/tmp/exported_model
           ls -la /tmp/exported_model
 
-      - name: Start Neptune GPU Server and Run End-to-End Prediction Test
+      - name: Start XLA Serving GPU Server and Run End-to-End Prediction Test
         run: |
           # Discover GPU server binary
-          if [ -f /tmp/neptune-serving/runtime/serving/gcp/server/neptune_serving_main_gpu ]; then
-            SERVER_BIN="/tmp/neptune-serving/runtime/serving/gcp/server/neptune_serving_main_gpu"
+          if [ -f /tmp/xla-serving/runtime/serving/gcp/server/xla_serving_main_gpu ]; then
+            SERVER_BIN="/tmp/xla-serving/runtime/serving/gcp/server/xla_serving_main_gpu"
           else
-            SERVER_BIN=$(find /tmp/neptune-serving -name "neptune_serving_main_gpu" -type f -executable 2>/dev/null | head -n 1)
+            SERVER_BIN=$(find /tmp/xla-serving -name "xla_serving_main_gpu" -type f -executable 2>/dev/null | head -n 1)
           fi
 
           if [ -z "${SERVER_BIN}" ] || [ ! -x "${SERVER_BIN}" ]; then
-            echo "Error: No executable Neptune serving GPU binary (neptune_serving_main_gpu) found in extracted image!"
-            find /tmp/neptune-serving -type f -perm -111
+            echo "Error: No executable XLA serving GPU binary (xla_serving_main_gpu) found in extracted image!"
+            find /tmp/xla-serving -type f -perm -111
             exit 1
           fi
 
           # Set up CUDA / dynamic library paths
-          CUDA_LIB_DIRS=$(find /tmp/neptune-serving -type d \( -name "lib64" -o -name "lib" \) 2>/dev/null | tr '\n' ':')
+          CUDA_LIB_DIRS=$(find /tmp/xla-serving -type d \( -name "lib64" -o -name "lib" \) 2>/dev/null | tr '\n' ':')
           NVIDIA_PIP_LIB_DIRS=$(find "${VIRTUAL_ENV}" -type d -path "*/nvidia/*/lib" 2>/dev/null | tr '\n' ':')
           export LD_LIBRARY_PATH="${NVIDIA_PIP_LIB_DIRS}${CUDA_LIB_DIRS}/usr/local/nvidia/lib64:/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}"
           echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}"
 
           PLATFORM_FLAG="--orbax_grpc_server_platform=cuda"
 
-          echo "Starting Neptune Serving GPU binary: ${SERVER_BIN} with ${PLATFORM_FLAG}..."
+          echo "Starting XLA Serving GPU binary: ${SERVER_BIN} with ${PLATFORM_FLAG}..."
           "${SERVER_BIN}" \
             ${PLATFORM_FLAG} \
             --model_name=nnx \
             --model_path=/tmp/exported_model \
             --use_insecure_grpc_credentials=true \
-            --port=8500 > /tmp/neptune-serving.log 2>&1 &
+            --port=8500 > /tmp/xla-serving.log 2>&1 &
           SERVER_PID=$!
           echo "SERVER_PID=${SERVER_PID}" >> $GITHUB_ENV
-          echo "Started Neptune server with PID ${SERVER_PID}"
+          echo "Started XLA Serving server with PID ${SERVER_PID}"
 
-          echo "Waiting for Neptune server to be ready..."
+          echo "Waiting for XLA Serving server to be ready..."
           READY=false
           for i in $(seq 1 45); do
-            if grep -q "JAX Serving listening on" /tmp/neptune-serving.log 2>/dev/null; then
-              echo "Neptune GPU server is ready after ${i}s!"
+            if grep -q "JAX Serving listening on" /tmp/xla-serving.log 2>/dev/null; then
+              echo "XLA Serving GPU server is ready after ${i}s!"
               READY=true
               break
             fi
@@ -186,8 +186,8 @@ jobs:
           done
 
           if [ "${READY}" != "true" ]; then
-            echo "Neptune GPU server failed to start within 45s. Server logs:"
-            cat /tmp/neptune-serving.log || true
+            echo "XLA Serving GPU server failed to start within 45s. Server logs:"
+            cat /tmp/xla-serving.log || true
             exit 1
           fi
 
@@ -202,9 +202,9 @@ jobs:
       - name: Clean up Server
         if: always()
         run: |
-          if [ -f /tmp/neptune-serving.log ]; then
-            echo "=== Neptune Serving Logs ==="
-            cat /tmp/neptune-serving.log
+          if [ -f /tmp/xla-serving.log ]; then
+            echo "=== XLA Serving Logs ==="
+            cat /tmp/xla-serving.log
           fi
           if [ -n "${SERVER_PID}" ]; then
             kill -9 "${SERVER_PID}" 2>/dev/null || true

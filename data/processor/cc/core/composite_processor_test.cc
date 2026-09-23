@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/processor/cc/core/composite_processor.h"  // from @neptune
+#include "data/processor/cc/core/composite_processor.h"  // from @xla_serving
 
 #include <cstddef>
 #include <cstdint>
@@ -31,40 +31,40 @@
 #include "absl/status/status_matchers.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/processor/cc/api/registry.h"  // from @neptune
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/api/type_info.h"  // from @neptune
-#include "data/processor/cc/api/value.h"  // from @neptune
-#include "data/processor/cc/core/graph/execution_graph.h"  // from @neptune
-#include "data/processor/cc/core/graph/graph_executor.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/cc/core/transform_registry.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/processor/python/examples/add_host_buffer_transform.h"  // from @neptune
-#include "data/processor/python/examples/add_int_transform.h"  // from @neptune
-#include "data/processor/python/examples/add_two_transform.h"  // from @neptune
-#include "data/processor/python/examples/dummy_resource_transform.h"  // from @neptune
-#include "data/processor/python/examples/multiply_by_five_transform.h"  // from @neptune
-#include "data/processor/python/examples/suffix_transform.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
-#include "data/resource_manager/cc/resource_manager.h"  // from @neptune
-#include "data/resource_manager/proto/resource_manager.pb.h"  // from @neptune
-#include "data/test_utils/proto_matchers.h"  // from @neptune
-#include "data/test_utils/status_macros.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/host_buffer_matcher.h"  // from @neptune
-#include "runtime/core/host_buffer_test_utils.h"  // from @neptune
+#include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/api/type_info.h"  // from @xla_serving
+#include "data/processor/cc/api/value.h"  // from @xla_serving
+#include "data/processor/cc/core/graph/execution_graph.h"  // from @xla_serving
+#include "data/processor/cc/core/graph/graph_executor.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/cc/core/transform_registry.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/processor/python/examples/add_host_buffer_transform.h"  // from @xla_serving
+#include "data/processor/python/examples/add_int_transform.h"  // from @xla_serving
+#include "data/processor/python/examples/add_two_transform.h"  // from @xla_serving
+#include "data/processor/python/examples/dummy_resource_transform.h"  // from @xla_serving
+#include "data/processor/python/examples/multiply_by_five_transform.h"  // from @xla_serving
+#include "data/processor/python/examples/suffix_transform.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource_manager.h"  // from @xla_serving
+#include "data/resource_manager/proto/resource_manager.pb.h"  // from @xla_serving
+#include "data/test_utils/proto_matchers.h"  // from @xla_serving
+#include "data/test_utils/status_macros.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/host_buffer_matcher.h"  // from @xla_serving
+#include "runtime/core/host_buffer_test_utils.h"  // from @xla_serving
 #include "google/protobuf/text_format.h"
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace core {
 namespace {
 
 using ::absl_testing::StatusIs;
-using ::neptune::data::test_utils::EqualsProto;
+using ::xla_serving::data::test_utils::EqualsProto;
 using ::google::protobuf::TextFormat;
 using ::testing::HasSubstr;
 
@@ -104,7 +104,7 @@ bool RegisterExpectedResourcesTransform(const char* name) {
   };
   auto deserializer =
       [](const TransformConfig& config,
-         absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+         absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
       -> absl::StatusOr<std::unique_ptr<TransformBase>> {
     std::vector<uint64_t> expected = {ExpectedIds...};
     EXPECT_EQ(resources.size(), expected.size());
@@ -151,15 +151,15 @@ class UnpackIntAnyTransform : public TransformBase {
 ND_REGISTER_TRANSFORM(UnpackIntAnyTransform, "UnpackIntAnyTransform")
     .SetDeserializer(
         [](const TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           return UnpackIntAnyTransform::Create();
         });
 
-class TestResource : public neptune::data::Resource {
+class TestResource : public xla_serving::data::Resource {
  public:
   TestResource(uint64_t id, std::string name)
-      : neptune::data::Resource(id, std::move(name), {}, "TestResource") {}
+      : xla_serving::data::Resource(id, std::move(name), {}, "TestResource") {}
 
  protected:
   absl::Status LoadImpl() override { return absl::OkStatus(); }
@@ -188,18 +188,18 @@ class MockDynamicResourcesTransform : public TransformBase {
     return config;
   }
 
-  std::vector<std::shared_ptr<neptune::data::Resource>> GetAllResources()
+  std::vector<std::shared_ptr<xla_serving::data::Resource>> GetAllResources()
       const override {
     return resources_;
   }
 
-  void AddResource(std::shared_ptr<neptune::data::Resource> resource) {
+  void AddResource(std::shared_ptr<xla_serving::data::Resource> resource) {
     resources_.push_back(resource);
   }
 
  private:
   explicit MockDynamicResourcesTransform() = default;
-  std::vector<std::shared_ptr<neptune::data::Resource>> resources_;
+  std::vector<std::shared_ptr<xla_serving::data::Resource>> resources_;
 };
 
 TEST(CompositeProcessorTest,
@@ -287,8 +287,8 @@ TEST(CompositeProcessorTest, AddIntTransformSucceeds) {
   const xla::ifrt::DType dtype(xla::ifrt::DType::Kind::kS32);
   const xla::ifrt::Shape shape({2});
 
-  neptune::HostBuffer hb1 = neptune::AsHostBuffer<int>({1, 2}, shape);
-  neptune::HostBuffer hb2 = neptune::AsHostBuffer<int>({10, 20}, shape);
+  xla_serving::HostBuffer hb1 = xla_serving::AsHostBuffer<int>({1, 2}, shape);
+  xla_serving::HostBuffer hb2 = xla_serving::AsHostBuffer<int>({10, 20}, shape);
 
   api::ExecuteContext context;
   std::vector<api::Value> inputs;
@@ -299,9 +299,9 @@ TEST(CompositeProcessorTest, AddIntTransformSucceeds) {
   EXPECT_OK(processor->Process(context));
 
   ASSERT_EQ(context.outputs.size(), 1);
-  EXPECT_TRUE(context.outputs[0].IsType<neptune::HostBuffer>());
-  neptune::HostBuffer out = context.outputs[0].Get<neptune::HostBuffer>();
-  EXPECT_THAT(out, neptune::HostBufferEq(neptune::AsHostBuffer<int>({11, 22}, shape)));
+  EXPECT_TRUE(context.outputs[0].IsType<xla_serving::HostBuffer>());
+  xla_serving::HostBuffer out = context.outputs[0].Get<xla_serving::HostBuffer>();
+  EXPECT_THAT(out, xla_serving::HostBufferEq(xla_serving::AsHostBuffer<int>({11, 22}, shape)));
 }
 
 TEST(CompositeProcessorTest, Serialize) {
@@ -907,8 +907,8 @@ class MultiKernelMathTransform : public TransformBase {
     return std::make_unique<MultiKernelMathTransform<T>>();
   }
 
-  absl::StatusOr<neptune::HostBuffer> operator()(neptune::HostBuffer in) {
-    neptune::HostBuffer out(in.dtype(), in.shape());
+  absl::StatusOr<xla_serving::HostBuffer> operator()(xla_serving::HostBuffer in) {
+    xla_serving::HostBuffer out(in.dtype(), in.shape());
     const T* in_data = static_cast<const T*>(in.base());
     T* out_data = static_cast<T*>(out.base());
     for (size_t i = 0; i < out.shape().num_elements(); ++i) {
@@ -938,7 +938,7 @@ ND_REGISTER_TRANSFORM(MultiKernelMathTransform<int32_t>,
                       "MultiKernelMathTransform")
     .SetDeserializer(
         [](const TransformConfig&,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>>)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>>)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           return MultiKernelMathTransform<int32_t>::Create();
         })
@@ -948,7 +948,7 @@ ND_REGISTER_TRANSFORM(MultiKernelMathTransform<float>,
                       "MultiKernelMathTransform")
     .SetDeserializer(
         [](const TransformConfig&,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>>)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>>)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           return MultiKernelMathTransform<float>::Create();
         })
@@ -969,7 +969,7 @@ TEST(CompositeProcessorTest, DynamicDispatchDeserializationAndExecution) {
 
   // Verify we can run the graph before serialization.
   {
-    neptune::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+    xla_serving::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                        xla::ifrt::Shape({2}));
     int32_t* data = static_cast<int32_t*>(hb.base());
     data[0] = 1;
@@ -988,7 +988,7 @@ TEST(CompositeProcessorTest, DynamicDispatchDeserializationAndExecution) {
     exec_ctx.inputs = exec_inputs;
     ASSERT_OK(processor.Process(exec_ctx));
     ASSERT_EQ(exec_ctx.outputs.size(), 1);
-    const auto& out_hb = exec_ctx.outputs[0].Get<neptune::HostBuffer>();
+    const auto& out_hb = exec_ctx.outputs[0].Get<xla_serving::HostBuffer>();
     const int32_t* out_data = static_cast<const int32_t*>(out_hb.base());
     EXPECT_EQ(out_data[0], 11);
     EXPECT_EQ(out_data[1], 12);
@@ -1003,7 +1003,7 @@ TEST(CompositeProcessorTest, DynamicDispatchDeserializationAndExecution) {
 
   // Verify dispatch to int32 kernel.
   {
-    neptune::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+    xla_serving::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
                        xla::ifrt::Shape({2}));
     int32_t* data = static_cast<int32_t*>(hb.base());
     data[0] = 1;
@@ -1022,7 +1022,7 @@ TEST(CompositeProcessorTest, DynamicDispatchDeserializationAndExecution) {
     exec_ctx.inputs = exec_inputs;
     ASSERT_OK(deserialized_s32.Process(exec_ctx));
     ASSERT_EQ(exec_ctx.outputs.size(), 1);
-    const auto& out_hb = exec_ctx.outputs[0].Get<neptune::HostBuffer>();
+    const auto& out_hb = exec_ctx.outputs[0].Get<xla_serving::HostBuffer>();
     const int32_t* out_data = static_cast<const int32_t*>(out_hb.base());
     EXPECT_EQ(out_data[0], 11);
     EXPECT_EQ(out_data[1], 12);
@@ -1032,7 +1032,7 @@ TEST(CompositeProcessorTest, DynamicDispatchDeserializationAndExecution) {
   ASSERT_OK_AND_ASSIGN(CompositeProcessor deserialized_f32,
                        CompositeProcessor::FromProto(config));
   {
-    neptune::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+    xla_serving::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                        xla::ifrt::Shape({2}));
     float* data = static_cast<float*>(hb.base());
     data[0] = 1.5f;
@@ -1051,7 +1051,7 @@ TEST(CompositeProcessorTest, DynamicDispatchDeserializationAndExecution) {
     exec_ctx.inputs = exec_inputs;
     ASSERT_OK(deserialized_f32.Process(exec_ctx));
     ASSERT_EQ(exec_ctx.outputs.size(), 1);
-    const auto& out_hb = exec_ctx.outputs[0].Get<neptune::HostBuffer>();
+    const auto& out_hb = exec_ctx.outputs[0].Get<xla_serving::HostBuffer>();
     const float* out_data = static_cast<const float*>(out_hb.base());
     EXPECT_EQ(out_data[0], 11.5f);
     EXPECT_EQ(out_data[1], 12.5f);
@@ -1066,8 +1066,8 @@ class MultiKernelMathGpuTransform : public TransformBase {
     return std::make_unique<MultiKernelMathGpuTransform<T>>();
   }
 
-  absl::StatusOr<neptune::HostBuffer> operator()(neptune::HostBuffer in) {
-    neptune::HostBuffer out(in.dtype(), in.shape());
+  absl::StatusOr<xla_serving::HostBuffer> operator()(xla_serving::HostBuffer in) {
+    xla_serving::HostBuffer out(in.dtype(), in.shape());
     const T* in_data = static_cast<const T*>(in.base());
     T* out_data = static_cast<T*>(out.base());
     for (size_t i = 0; i < out.shape().num_elements(); ++i) {
@@ -1099,7 +1099,7 @@ ND_REGISTER_TRANSFORM(MultiKernelMathGpuTransform<float>,
     .SetDevice(Device::kGpu)
     .SetDeserializer(
         [](const TransformConfig&,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>>)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>>)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           return MultiKernelMathGpuTransform<float>::Create();
         })
@@ -1129,7 +1129,7 @@ TEST(CompositeProcessorTest, GpuDynamicDispatchExecution) {
   ASSERT_OK_AND_ASSIGN(CompositeProcessor processor,
                        CompositeProcessor::Create(std::move(graph)));
 
-  neptune::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+  xla_serving::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                      xla::ifrt::Shape({2}));
   float* data = static_cast<float*>(hb.base());
   data[0] = 1.5f;
@@ -1153,13 +1153,13 @@ TEST(CompositeProcessorTest, GpuDynamicDispatchExecution) {
   ASSERT_EQ(exec_ctx.outputs.size(), 2);
 
   // GPU node output: input + 100
-  const auto& gpu_out_hb = exec_ctx.outputs[0].Get<neptune::HostBuffer>();
+  const auto& gpu_out_hb = exec_ctx.outputs[0].Get<xla_serving::HostBuffer>();
   const float* gpu_out_data = static_cast<const float*>(gpu_out_hb.base());
   EXPECT_EQ(gpu_out_data[0], 101.5f);
   EXPECT_EQ(gpu_out_data[1], 102.5f);
 
   // CPU node output: input + 10
-  const auto& cpu_out_hb = exec_ctx.outputs[1].Get<neptune::HostBuffer>();
+  const auto& cpu_out_hb = exec_ctx.outputs[1].Get<xla_serving::HostBuffer>();
   const float* cpu_out_data = static_cast<const float*>(cpu_out_hb.base());
   EXPECT_EQ(cpu_out_data[0], 11.5f);
   EXPECT_EQ(cpu_out_data[1], 12.5f);
@@ -1193,14 +1193,14 @@ TEST(CompositeProcessorTest, GpuDynamicDispatchExecution) {
   ASSERT_EQ(des_exec_ctx.outputs.size(), 2);
 
   // Verify GPU node output from deserialized processor: input + 100
-  const auto& des_gpu_out_hb = des_exec_ctx.outputs[0].Get<neptune::HostBuffer>();
+  const auto& des_gpu_out_hb = des_exec_ctx.outputs[0].Get<xla_serving::HostBuffer>();
   const float* des_gpu_out_data =
       static_cast<const float*>(des_gpu_out_hb.base());
   EXPECT_EQ(des_gpu_out_data[0], 101.5f);
   EXPECT_EQ(des_gpu_out_data[1], 102.5f);
 
   // Verify CPU node output from deserialized processor: input + 10
-  const auto& des_cpu_out_hb = des_exec_ctx.outputs[1].Get<neptune::HostBuffer>();
+  const auto& des_cpu_out_hb = des_exec_ctx.outputs[1].Get<xla_serving::HostBuffer>();
   const float* des_cpu_out_data =
       static_cast<const float*>(des_cpu_out_hb.base());
   EXPECT_EQ(des_cpu_out_data[0], 11.5f);
@@ -1210,4 +1210,4 @@ TEST(CompositeProcessorTest, GpuDynamicDispatchExecution) {
 }  // namespace
 }  // namespace core
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

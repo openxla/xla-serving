@@ -12,18 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_CORE_BATCHED_H2D_TRANSFER_EXECUTOR_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_CORE_BATCHED_H2D_TRANSFER_EXECUTOR_H_
+#ifndef XLA_SERVING_RUNTIME_CORE_BATCHED_H2D_TRANSFER_EXECUTOR_H_
+#define XLA_SERVING_RUNTIME_CORE_BATCHED_H2D_TRANSFER_EXECUTOR_H_
 
 #include <cstdint>
 #include <memory>
 #include <utility>
 #include <vector>
 
+#include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/core/h2d_transfer_executor.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
@@ -31,7 +32,7 @@
 #include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // Executor that groups and issues batched host-to-device transfers.
 // This implementation groups HostBuffers targeted for the same devices and
@@ -43,7 +44,7 @@ class BatchedH2DTransferExecutor : public H2DTransferExecutor {
   static absl::StatusOr<std::unique_ptr<H2DTransferExecutor>> Create(
       xla::ifrt::Client* client,
       xla::ifrt::DeviceListRef device_list,
-      tsl::thread::ThreadPool* thread_pool, Options options);
+      tsl::thread::ThreadPool* absl_nonnull thread_pool, Options options);
 
   ~BatchedH2DTransferExecutor() override = default;
 
@@ -54,12 +55,12 @@ class BatchedH2DTransferExecutor : public H2DTransferExecutor {
  private:
   BatchedH2DTransferExecutor(xla::ifrt::PjRtCompatibleClient* client,
                              xla::ifrt::DeviceListRef device_list,
-                             tsl::thread::ThreadPool* thread_pool,
+                             tsl::thread::ThreadPool* absl_nonnull thread_pool,
                              Options options);
 
   xla::ifrt::PjRtCompatibleClient* client_;  // Not owned.
   xla::ifrt::DeviceListRef device_list_;
-  tsl::thread::ThreadPool* thread_pool_;  // Not owned.
+  tsl::thread::ThreadPool* absl_nonnull thread_pool_;  // Not owned.
   Options options_;
 };
 
@@ -74,12 +75,12 @@ class BatchedH2DTransferExecutorFactory : public H2DTransferExecutorFactory {
   absl::StatusOr<std::unique_ptr<H2DTransferExecutor>> Create(
       xla::ifrt::Client* client,
       xla::ifrt::DeviceListRef device_list,
-      tsl::thread::ThreadPool* thread_pool) override;
+      tsl::thread::ThreadPool* absl_nonnull thread_pool) override;
 
  private:
   BatchedH2DTransferExecutor::Options options_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_BATCHED_H2D_TRANSFER_EXECUTOR_H_
+#endif  // XLA_SERVING_RUNTIME_CORE_BATCHED_H2D_TRANSFER_EXECUTOR_H_

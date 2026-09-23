@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/flat_signature.h"  // from @neptune
+#include "runtime/core/flat_signature.h"  // from @xla_serving
 
 #include <optional>
 #include <string>
@@ -26,12 +26,12 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "runtime/core/stablehlo_utils.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
+#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 std::string MetaArgSpec::DebugString() const {
   return absl::StrFormat("MetaArgSpec: %s, name: %s, has_default_value: %v, ",
@@ -236,4 +236,4 @@ std::vector<Placement> FlatSignature::ResolvePlacements(
   return resolved;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

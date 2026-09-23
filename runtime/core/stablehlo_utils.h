@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_STABLEHLO_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_STABLEHLO_UTILS_H_
+#ifndef XLA_SERVING_RUNTIME_STABLEHLO_UTILS_H_
+#define XLA_SERVING_RUNTIME_STABLEHLO_UTILS_H_
 
 #include <optional>
 #include <string>
@@ -27,7 +27,7 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
-#include "runtime/libs/mlir/utils.h"  // from @neptune
+#include "runtime/libs/mlir/utils.h"  // from @xla_serving
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/layout.h"  // from @xla
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
@@ -35,7 +35,7 @@
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 enum class Placement { kHost = 0, kDevice = 1 };
 
@@ -173,6 +173,6 @@ absl::Status InputShapeEqual(ArgShape stablehlo_input_shape,
 // function for anything else.
 xla::ifrt::Shape ToIfrtShape(const ArgShape& shape);
 
-};  // namespace neptune
+};  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_STABLEHLO_UTILS_H_
+#endif  // XLA_SERVING_RUNTIME_STABLEHLO_UTILS_H_

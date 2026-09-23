@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/processor/python/examples/add_from_resource_transform.h"  // from @neptune
+#include "data/processor/python/examples/add_from_resource_transform.h"  // from @xla_serving
 
 #include <memory>
 #include <string>
@@ -23,14 +23,14 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/processor/cc/api/registry.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/cc/core/transform_registry.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/processor/python/examples/int_resource.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
+#include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/cc/core/transform_registry.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/processor/python/examples/int_resource.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 AddFromResourceTransform::AddFromResourceTransform(
@@ -42,9 +42,9 @@ AddFromResourceTransform::Create(std::shared_ptr<const IntResource> resource) {
   return absl::WrapUnique(new AddFromResourceTransform(std::move(resource)));
 }
 
-std::vector<std::shared_ptr<neptune::data::Resource>>
+std::vector<std::shared_ptr<xla_serving::data::Resource>>
 AddFromResourceTransform::GetAllResources() const {
-  return {std::static_pointer_cast<neptune::data::Resource>(
+  return {std::static_pointer_cast<xla_serving::data::Resource>(
       std::const_pointer_cast<IntResource>(resource_))};
 }
 
@@ -69,7 +69,7 @@ absl::StatusOr<TransformConfig> AddFromResourceTransform::ToProto() const {
 ND_REGISTER_TRANSFORM(AddFromResourceTransform, "AddFromResourceTransform")
     .SetDeserializer(
         [](const TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           if (resources.empty()) {
             return absl::InternalError(
@@ -94,9 +94,9 @@ AddFromResourceContentTransform::Create(
       new AddFromResourceContentTransform(std::move(resource)));
 }
 
-std::vector<std::shared_ptr<neptune::data::Resource>>
+std::vector<std::shared_ptr<xla_serving::data::Resource>>
 AddFromResourceContentTransform::GetAllResources() const {
-  return {std::static_pointer_cast<neptune::data::Resource>(
+  return {std::static_pointer_cast<xla_serving::data::Resource>(
       std::const_pointer_cast<IntContentResource>(resource_))};
 }
 
@@ -123,7 +123,7 @@ ND_REGISTER_TRANSFORM(AddFromResourceContentTransform,
                       "AddFromResourceContentTransform")
     .SetDeserializer(
         [](const TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           if (resources.empty()) {
             return absl::InternalError(
@@ -139,4 +139,4 @@ ND_REGISTER_TRANSFORM(AddFromResourceContentTransform,
         });
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

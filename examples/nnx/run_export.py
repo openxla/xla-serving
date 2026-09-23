@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Script to run Neptune export for NNX model."""
+"""Script to run XLA SavedModel export for NNX model."""
 
 from absl import app
 from absl import flags
@@ -40,7 +40,7 @@ _DTYPE_MAP = {
 def main(argv):
   if len(argv) > 1:
     raise app.UsageError('Too many command-line arguments.')
-  export.export_model(FLAGS.export_path, dtype=_DTYPE_MAP[FLAGS.dtype])
+  export.export_model(FLAGS.export_path, dtype=_DTYPE_MAP[FLAGS.dtype])  # pyrefly: ignore[bad-argument-type]
 
 
 if __name__ == '__main__':

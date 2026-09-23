@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_THREADSAFE_STATUS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_THREADSAFE_STATUS_H_
+#ifndef XLA_SERVING_RUNTIME_BATCHING_THREADSAFE_STATUS_H_
+#define XLA_SERVING_RUNTIME_BATCHING_THREADSAFE_STATUS_H_
 
 #include "absl/base/thread_annotations.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 // Wrapper class to allow  concurrent updates on a 'status'.
 //
 // Example Usage:
@@ -50,6 +50,6 @@ class ThreadSafeStatus {
   mutable absl::Mutex mutex_;
   absl::Status status_ ABSL_GUARDED_BY(mutex_);
 };
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_THREADSAFE_STATUS_H_
+#endif  // XLA_SERVING_RUNTIME_BATCHING_THREADSAFE_STATUS_H_

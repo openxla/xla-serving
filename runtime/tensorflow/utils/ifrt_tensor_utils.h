@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_UTILS_IFRT_TENSOR_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_UTILS_IFRT_TENSOR_UTILS_H_
+#ifndef XLA_SERVING_RUNTIME_TENSORFLOW_UTILS_IFRT_TENSOR_UTILS_H_
+#define XLA_SERVING_RUNTIME_TENSORFLOW_UTILS_IFRT_TENSOR_UTILS_H_
 
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
@@ -27,7 +27,7 @@
 #include "tensorflow/core/framework/tensor_shape.pb.h"  // from @org_tensorflow
 #include "tensorflow/core/framework/types.pb.h"  // from @org_tensorflow
 
-namespace neptune {
+namespace xla_serving {
 
 // Converts an IFRT DType to a Tensorflow DataType.
 absl::StatusOr<tensorflow::DataType> ToTensorDataType(
@@ -56,6 +56,6 @@ absl::Status MlirTypeToDataType(mlir::Type type, tensorflow::DataType* dtype);
 // Converts a MLIR Type to a Tensorflow PartialTensorShape.
 tensorflow::PartialTensorShape MlirTypeToTensorShape(const mlir::Type& type);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_UTILS_IFRT_TENSOR_UTILS_H_
+#endif  // XLA_SERVING_RUNTIME_TENSORFLOW_UTILS_IFRT_TENSOR_UTILS_H_

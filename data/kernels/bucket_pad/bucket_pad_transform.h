@@ -1,4 +1,4 @@
-// Copyright 2024 The Neptune Authors.
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_KERNELS_BUCKET_PAD_BUCKET_PAD_TRANSFORM_H_
-#define THIRD_PARTY_NEPTUNE_DATA_KERNELS_BUCKET_PAD_BUCKET_PAD_TRANSFORM_H_
+#ifndef XLA_SERVING_DATA_KERNELS_BUCKET_PAD_BUCKET_PAD_TRANSFORM_H_
+#define XLA_SERVING_DATA_KERNELS_BUCKET_PAD_BUCKET_PAD_TRANSFORM_H_
 
 #include <cstdint>
 #include <memory>
@@ -23,16 +23,16 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/kernels/bucket_pad/bucket_pad_transform.pb.h"  // from @neptune
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/api/type_info.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/cc/utils/default_value.pb.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "data/kernels/bucket_pad/bucket_pad_transform.pb.h"  // from @xla_serving
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/api/type_info.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/cc/utils/default_value.pb.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 
-namespace neptune::data::composite::transforms {
+namespace xla_serving::data::composite::transforms {
 
 // A transform that dynamically pads a tensor along a specified axis to the
 // smallest pre-determined bucket dimension D_fixed >= C from target_dimensions.
@@ -47,8 +47,8 @@ class BucketPadTransform : public TransformBase {
 
   static absl::StatusOr<std::unique_ptr<BucketPadTransform>>
   CreateFromTransformConfig(
-      const ::neptune::data::composite::TransformConfig& config,
-      absl::Span<const std::shared_ptr<neptune::data::Resource>> resources);
+      const ::xla_serving::data::composite::TransformConfig& config,
+      absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources);
 
   BucketPadTransform(std::vector<int64_t> target_dimensions, int32_t axis,
                      utils::DefaultValue pad_value);
@@ -66,11 +66,11 @@ class BucketPadTransform : public TransformBase {
     return output_types_;
   }
 
-  absl::StatusOr<::neptune::data::composite::TransformConfig> ToProto()
+  absl::StatusOr<::xla_serving::data::composite::TransformConfig> ToProto()
       const override;
 
-  absl::StatusOr<neptune::HostBuffer> operator()(
-      const neptune::HostBuffer& input) const;
+  absl::StatusOr<xla_serving::HostBuffer> operator()(
+      const xla_serving::HostBuffer& input) const;
 
   std::string DebugName() const override;
 
@@ -88,6 +88,6 @@ class BucketPadTransform : public TransformBase {
   std::vector<api::TypeInfo> output_types_;
 };
 
-}  // namespace neptune::data::composite::transforms
+}  // namespace xla_serving::data::composite::transforms
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_KERNELS_BUCKET_PAD_BUCKET_PAD_TRANSFORM_H_
+#endif  // XLA_SERVING_DATA_KERNELS_BUCKET_PAD_BUCKET_PAD_TRANSFORM_H_

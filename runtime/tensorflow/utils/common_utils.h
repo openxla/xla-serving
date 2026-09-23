@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_UTILS_COMMON_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_UTILS_COMMON_UTILS_H_
+#ifndef XLA_SERVING_RUNTIME_TENSORFLOW_UTILS_COMMON_UTILS_H_
+#define XLA_SERVING_RUNTIME_TENSORFLOW_UTILS_COMMON_UTILS_H_
 
 #include <string>
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 
 // Returns true if the model has a TF SavedModel supplement. This can be used to
 // determine if the model has TF components. Returns an error if the model path
@@ -30,6 +30,6 @@ absl::StatusOr<bool> HasTfSavedModelSupplement(absl::string_view model_path);
 absl::StatusOr<std::string> GetTfSavedModelDirPath(
     absl::string_view model_path);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_UTILS_COMMON_UTILS_H_
+#endif  // XLA_SERVING_RUNTIME_TENSORFLOW_UTILS_COMMON_UTILS_H_

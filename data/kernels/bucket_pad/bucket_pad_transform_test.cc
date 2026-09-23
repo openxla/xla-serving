@@ -1,4 +1,4 @@
-// Copyright 2024 The Neptune Authors.
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/kernels/bucket_pad/bucket_pad_transform.h"  // from @neptune
+#include "data/kernels/bucket_pad/bucket_pad_transform.h"  // from @xla_serving
 
 #include <cstdint>
 #include <memory>
@@ -24,18 +24,18 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_matchers.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/kernels/bucket_pad/bucket_pad_transform.pb.h"  // from @neptune
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/api/value.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/cc/utils/default_value.pb.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/test_utils/status_macros.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "data/kernels/bucket_pad/bucket_pad_transform.pb.h"  // from @xla_serving
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/api/value.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/cc/utils/default_value.pb.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/test_utils/status_macros.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
-namespace neptune::data::composite::transforms {
+namespace xla_serving::data::composite::transforms {
 namespace {
 
 using ::absl_testing::StatusIs;
@@ -46,7 +46,7 @@ TEST(BucketPadTransformTest, Basic2DPadSuccess) {
       auto transform,
       BucketPadTransform::Create(/*target_dimensions=*/{4, 8, 16}, /*axis=*/1));
 
-  neptune::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::kF32),
+  xla_serving::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::kF32),
                         xla::ifrt::Shape({2, 3}));
   float* in_ptr = static_cast<float*>(input.base());
   in_ptr[0] = 1.0f;
@@ -80,7 +80,7 @@ TEST(BucketPadTransformTest, ExactBucketHitNoExtraPadding) {
                        BucketPadTransform::Create(
                            /*target_dimensions=*/{4, 8, 16}, /*axis=*/-1));
 
-  neptune::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::kS32),
+  xla_serving::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::kS32),
                         xla::ifrt::Shape({2, 4}));
   int32_t* in_ptr = static_cast<int32_t*>(input.base());
   for (int i = 0; i < 8; ++i) {
@@ -104,7 +104,7 @@ TEST(BucketPadTransformTest, CustomPadValue) {
                        BucketPadTransform::Create(/*target_dimensions=*/{5},
                                                   /*axis=*/1, pad_val_proto));
 
-  neptune::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::kF32),
+  xla_serving::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::kF32),
                         xla::ifrt::Shape({1, 2}));
   float* in_ptr = static_cast<float*>(input.base());
   in_ptr[0] = 7.0f;
@@ -126,7 +126,7 @@ TEST(BucketPadTransformTest, ExceedsMaxBucketFails) {
       auto transform,
       BucketPadTransform::Create(/*target_dimensions=*/{4, 8}, /*axis=*/1));
 
-  neptune::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::kF32),
+  xla_serving::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::kF32),
                         xla::ifrt::Shape({1, 10}));
 
   EXPECT_THAT((*transform)(input),
@@ -140,7 +140,7 @@ TEST(BucketPadTransformTest, HigherRank3DTensor) {
       auto transform,
       BucketPadTransform::Create(/*target_dimensions=*/{4, 6}, /*axis=*/1));
 
-  neptune::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::kS32),
+  xla_serving::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::kS32),
                         xla::ifrt::Shape({2, 3, 2}));
   int32_t* in_ptr = static_cast<int32_t*>(input.base());
   for (int i = 0; i < 12; ++i) {
@@ -229,7 +229,7 @@ TEST(BucketPadTransformTest, RejectScalarTensor) {
       auto transform,
       BucketPadTransform::Create(/*target_dimensions=*/{4}, /*axis=*/0));
 
-  neptune::HostBuffer scalar_input(xla::ifrt::DType(xla::ifrt::DType::kF32),
+  xla_serving::HostBuffer scalar_input(xla::ifrt::DType(xla::ifrt::DType::kF32),
                                xla::ifrt::Shape({}));
   EXPECT_THAT((*transform)(scalar_input),
               StatusIs(absl::StatusCode::kInvalidArgument));
@@ -243,7 +243,7 @@ TEST(BucketPadTransformTest, RejectOutOfBoundsAxis) {
       auto transform_neg,
       BucketPadTransform::Create(/*target_dimensions=*/{4}, /*axis=*/-4));
 
-  neptune::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::kF32),
+  xla_serving::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::kF32),
                         xla::ifrt::Shape({2, 3}));
   EXPECT_THAT((*transform_pos)(input),
               StatusIs(absl::StatusCode::kInvalidArgument));
@@ -262,9 +262,9 @@ TEST(BucketPadTransformTest, ExecuteContextSuccessAndErrorHandling) {
               StatusIs(absl::StatusCode::kInvalidArgument));
 
   // Invalid: Multiple inputs
-  neptune::HostBuffer input1(xla::ifrt::DType(xla::ifrt::DType::kF32),
+  xla_serving::HostBuffer input1(xla::ifrt::DType(xla::ifrt::DType::kF32),
                          xla::ifrt::Shape({1, 2}));
-  neptune::HostBuffer input2(xla::ifrt::DType(xla::ifrt::DType::kF32),
+  xla_serving::HostBuffer input2(xla::ifrt::DType(xla::ifrt::DType::kF32),
                          xla::ifrt::Shape({1, 2}));
   std::vector<api::Value> multi_inputs;
   multi_inputs.push_back(api::Value(std::move(input1)));
@@ -275,7 +275,7 @@ TEST(BucketPadTransformTest, ExecuteContextSuccessAndErrorHandling) {
               StatusIs(absl::StatusCode::kInvalidArgument));
 
   // Valid: Exactly 1 input
-  neptune::HostBuffer valid_input(xla::ifrt::DType(xla::ifrt::DType::kF32),
+  xla_serving::HostBuffer valid_input(xla::ifrt::DType(xla::ifrt::DType::kF32),
                               xla::ifrt::Shape({1, 2}));
   float* valid_ptr = static_cast<float*>(valid_input.base());
   valid_ptr[0] = 5.0f;
@@ -287,12 +287,12 @@ TEST(BucketPadTransformTest, ExecuteContextSuccessAndErrorHandling) {
   valid_context.inputs = absl::MakeConstSpan(valid_inputs);
   ASSERT_OK(transform->Execute(valid_context));
   ASSERT_EQ(valid_context.outputs.size(), 1);
-  const auto& out_buf = valid_context.outputs[0].Get<neptune::HostBuffer>();
+  const auto& out_buf = valid_context.outputs[0].Get<xla_serving::HostBuffer>();
   EXPECT_EQ(out_buf.shape().dims(), (std::vector<int64_t>{1, 4}));
 }
 
 TEST(BucketPadTransformTest, ConfigUnpackError) {
-  ::neptune::data::composite::TransformConfig invalid_config;
+  ::xla_serving::data::composite::TransformConfig invalid_config;
   invalid_config.set_op_name("BucketPadTransform");
   EXPECT_THAT(BucketPadTransform::CreateFromTransformConfig(invalid_config,
                                                             /*resources=*/{}),
@@ -304,7 +304,7 @@ TEST(BucketPadTransformTest, Float64Support) {
       auto transform,
       BucketPadTransform::Create(/*target_dimensions=*/{4}, /*axis=*/1));
 
-  neptune::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::kF64),
+  xla_serving::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::kF64),
                         xla::ifrt::Shape({1, 2}));
   double* in_ptr = static_cast<double*>(input.base());
   in_ptr[0] = 3.14159;
@@ -324,7 +324,7 @@ TEST(BucketPadTransformTest, Int64Support) {
       auto transform,
       BucketPadTransform::Create(/*target_dimensions=*/{4}, /*axis=*/1));
 
-  neptune::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::kS64),
+  xla_serving::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::kS64),
                         xla::ifrt::Shape({1, 2}));
   int64_t* in_ptr = static_cast<int64_t*>(input.base());
   in_ptr[0] = 100000000000LL;
@@ -345,7 +345,7 @@ TEST(BucketPadTransformTest, UnsignedIntTypesSupport) {
       BucketPadTransform::Create(/*target_dimensions=*/{3}, /*axis=*/1));
 
   // Uint32
-  neptune::HostBuffer input_u32(xla::ifrt::DType(xla::ifrt::DType::kU32),
+  xla_serving::HostBuffer input_u32(xla::ifrt::DType(xla::ifrt::DType::kU32),
                             xla::ifrt::Shape({1, 2}));
   uint32_t* u32_ptr = static_cast<uint32_t*>(input_u32.base());
   u32_ptr[0] = 42;
@@ -357,7 +357,7 @@ TEST(BucketPadTransformTest, UnsignedIntTypesSupport) {
   EXPECT_EQ(out_u32_ptr[2], 0);
 
   // Uint64
-  neptune::HostBuffer input_u64(xla::ifrt::DType(xla::ifrt::DType::kU64),
+  xla_serving::HostBuffer input_u64(xla::ifrt::DType(xla::ifrt::DType::kU64),
                             xla::ifrt::Shape({1, 2}));
   uint64_t* u64_ptr = static_cast<uint64_t*>(input_u64.base());
   u64_ptr[0] = 123456789012345ULL;
@@ -377,7 +377,7 @@ TEST(BucketPadTransformTest, Int8AndUint8Support) {
                                                   /*axis=*/1, pad_val));
 
   // Int8
-  neptune::HostBuffer input_s8(xla::ifrt::DType(xla::ifrt::DType::kS8),
+  xla_serving::HostBuffer input_s8(xla::ifrt::DType(xla::ifrt::DType::kS8),
                            xla::ifrt::Shape({1, 1}));
   int8_t* s8_ptr = static_cast<int8_t*>(input_s8.base());
   s8_ptr[0] = -12;
@@ -388,7 +388,7 @@ TEST(BucketPadTransformTest, Int8AndUint8Support) {
   EXPECT_EQ(out_s8_ptr[2], 7);
 
   // Uint8
-  neptune::HostBuffer input_u8(xla::ifrt::DType(xla::ifrt::DType::kU8),
+  xla_serving::HostBuffer input_u8(xla::ifrt::DType(xla::ifrt::DType::kU8),
                            xla::ifrt::Shape({1, 1}));
   uint8_t* u8_ptr = static_cast<uint8_t*>(input_u8.base());
   u8_ptr[0] = 200;
@@ -406,7 +406,7 @@ TEST(BucketPadTransformTest, BoolPredSupport) {
                        BucketPadTransform::Create(/*target_dimensions=*/{3},
                                                   /*axis=*/1, pad_val));
 
-  neptune::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::kPred),
+  xla_serving::HostBuffer input(xla::ifrt::DType(xla::ifrt::DType::kPred),
                         xla::ifrt::Shape({1, 1}));
   bool* in_ptr = static_cast<bool*>(input.base());
   in_ptr[0] = false;
@@ -419,4 +419,4 @@ TEST(BucketPadTransformTest, BoolPredSupport) {
 }
 
 }  // namespace
-}  // namespace neptune::data::composite::transforms
+}  // namespace xla_serving::data::composite::transforms

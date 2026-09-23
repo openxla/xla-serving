@@ -104,3 +104,18 @@ py_proto_library(
     name = "jax_supplemental_py_pb2",
     deps = [":jax_supplemental_proto"],
 )
+
+proto_library(
+    name = "history_proto",
+    srcs = ["history.proto"],
+)
+
+cc_proto_library(
+    name = "history_cc_proto",
+    deps = [":history_proto"],
+)
+
+py_proto_library(
+    name = "history_py_pb2",
+    deps = [":history_proto"],
+)

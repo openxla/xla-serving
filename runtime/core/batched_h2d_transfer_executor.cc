@@ -12,29 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/batched_h2d_transfer_executor.h"  // from @neptune
+#include "runtime/core/batched_h2d_transfer_executor.h"  // from @xla_serving
 
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
 #include <memory>
-#include <utility>
 #include <optional>
+#include <utility>
 #include <vector>
 
+#include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/memory/memory.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "xla/pjrt/pjrt_layout.h"  // from @xla
-#include "xla/python/ifrt/rtti.h"  // from @xla
-#include "runtime/core/h2d_transfer_executor.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/sharding_utils.h"  // from @neptune
+#include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/host_buffer_utils.h"  // from @xla_serving
+#include "runtime/core/sharding_utils.h"  // from @xla_serving
 #include "xla/literal.h"  // from @xla
 #include "xla/pjrt/pjrt_client.h"  // from @xla
+#include "xla/pjrt/pjrt_layout.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
 #include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/python/ifrt/index.h"  // from @xla
+#include "xla/python/ifrt/index_domain.h"  // from @xla
+#include "xla/python/ifrt/rtti.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_array.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
@@ -47,25 +57,45 @@
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 namespace {
 
 using PjRtBuffers = std::vector<std::shared_ptr<xla::PjRtBuffer>>;
 
+// Represents a target shard destination on a device.
+struct ShardTarget {
+  xla::ifrt::Device* device;
+  xla::Shape shape;
+  HostBuffer source_buffer;
+};
+
 // Encapsulates planning information for an eligible batched input.
 struct BatchPlan {
-  xla::Shape shape;
-  absl::InlinedVector<xla::ifrt::Device*, 4> devices;
+  std::vector<ShardTarget> shard_targets;
+  // Sharding passed to `PjRtArray::Create` (`SingleDeviceSharding` for
+  // single-device `HloSharding` so device count matches `pjrt_buffers.size()`).
+  xla::ifrt::ShardingRef effective_sharding;
 };
+
+// Returns true if `input` has non-default (custom) byte strides.
+bool HasCustomByteStrides(const HostBuffer& input) {
+  if (!input.byte_strides().has_value()) {
+    return false;
+  }
+  std::optional<absl::InlinedVector<int64_t, 4>> default_strides =
+      CreateDefaultStrides(input.shape().dims(), input.storage_dtype());
+  return !default_strides.has_value() ||
+         *input.byte_strides() != *default_strides;
+}
 
 // Represents an entry in a per-device batch, mapping a device buffer slot back
 // to the output slot and the source host buffer.
 struct DeviceBatchEntry {
   // Pointer to the specific slot in `batched_inputs` where this buffer belongs.
   std::shared_ptr<xla::PjRtBuffer>* output_slot;
-  // Pointer to the source host buffer, needed for DMA transfer.
-  const HostBuffer* source_buffer;
+  // Source host buffer, needed for DMA transfer.
+  HostBuffer source_buffer;
 };
 
 // Encapsulates data needed to batch inputs on a target device.
@@ -74,16 +104,155 @@ struct DeviceBatchData {
   absl::InlinedVector<xla::Shape, 4> shapes;
 };
 
+// Inspects partitioned/tiled sharding to determine if it qualifies for batched
+// transfer, disassembles the host buffer, and builds the batch plan.
+absl::StatusOr<BatchPlan> GetShardedBatchPlan(
+    const HostBuffer& input, const xla::ifrt::ShardingRef& sharding,
+    xla::PrimitiveType primitive_type, tsl::thread::ThreadPool& thread_pool) {
+  TF_ASSIGN_OR_RETURN(
+      std::vector<xla::ifrt::IndexDomain> index_domains,
+      sharding->IndexDomains(
+          input.shape(), xla::ifrt::SingleDeviceShardSemantics::kAllShards));
+  if (index_domains.size() <= 1) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Expected multiple index domains for partitioned/tiled sharding, but "
+        "got ",
+        index_domains.size()));
+  }
+
+  // Verify equal rank and shape across all index domains.
+  const xla::ifrt::Shape& first_shard_shape = index_domains[0].shape();
+  if (first_shard_shape.dims().size() != input.shape().dims().size()) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Rank mismatch between host buffer (", input.shape().dims().size(),
+        ") and shard index domain (", first_shard_shape.dims().size(), ")"));
+  }
+  for (size_t k = 1; k < index_domains.size(); ++k) {
+    if (index_domains[k].shape() != first_shard_shape) {
+      return absl::UnimplementedError(absl::StrCat(
+          "Unequal shard shapes across index domains are not supported: ",
+          first_shard_shape, " vs ", index_domains[k].shape()));
+    }
+  }
+
+  // Calculate partitions along each axis and verify even divisibility.
+  std::vector<int32_t> num_partitions_per_axis;
+  int total_num_partitions = 1;
+  num_partitions_per_axis.reserve(input.shape().dims().size());
+  for (int dim = 0; dim < input.shape().dims().size(); ++dim) {
+    int64_t target_size = first_shard_shape.dims()[dim];
+    int64_t dim_size = input.shape().dims()[dim];
+    if (target_size <= 0 || dim_size % target_size != 0) {
+      return absl::FailedPreconditionError(absl::StrCat(
+          "Only support even sharding, but input buffer dimension ", dim,
+          " of size ", dim_size, " is not evenly divisible by shard size ",
+          target_size));
+    }
+    int num_partitions = dim_size / target_size;
+    total_num_partitions *= num_partitions;
+    num_partitions_per_axis.push_back(num_partitions);
+  }
+
+  absl::Span<xla::ifrt::Device* const> sharding_devices =
+      sharding->devices()->devices();
+  if (total_num_partitions <= 0 ||
+      sharding_devices.size() < total_num_partitions ||
+      sharding_devices.size() % total_num_partitions != 0) {
+    return absl::UnimplementedError(absl::StrCat(
+        "Number of devices ", sharding_devices.size(),
+        " not a multiple of number of partitions ", total_num_partitions));
+  }
+  int num_replicas = sharding_devices.size() / total_num_partitions;
+
+  // Pairs each IndexDomain with its corresponding device and tracks its
+  // original shard index so we can sort them lexicographically by origin (from
+  // major to minor dimension) to match the disassembled slice order, while
+  // retaining the ability to map shards back to their logical positions.
+  struct IndexDomainDevice {
+    // Index domain defining the spatial sub-region and origin for this shard.
+    const xla::ifrt::IndexDomain* index_domain;
+    // Target device assigned to receive this shard.
+    xla::ifrt::Device* device;
+    // The index of this `device`/`index_domain` in the
+    // sharding.devices/index_domains.
+    int original_shard_index;
+  };
+  std::vector<IndexDomainDevice> index_domain_devices;
+  index_domain_devices.reserve(index_domains.size());
+  for (int i = 0; i < index_domains.size(); ++i) {
+    index_domain_devices.push_back({&index_domains[i], sharding_devices[i], i});
+  }
+  std::sort(index_domain_devices.begin(), index_domain_devices.end(),
+            [](const IndexDomainDevice& a, const IndexDomainDevice& b) {
+              return std::lexicographical_compare(
+                  a.index_domain->origin().elements().begin(),
+                  a.index_domain->origin().elements().end(),
+                  b.index_domain->origin().elements().begin(),
+                  b.index_domain->origin().elements().end());
+            });
+
+  // Verify each slice has identical origins across its replicas.
+  if (num_replicas > 1) {
+    for (int s = 0; s < total_num_partitions; ++s) {
+      const xla::ifrt::Index& expected_origin =
+          index_domain_devices[s * num_replicas].index_domain->origin();
+      for (int r = 1; r < num_replicas; ++r) {
+        if (index_domain_devices[s * num_replicas + r].index_domain->origin() !=
+            expected_origin) {
+          return absl::FailedPreconditionError(
+              "Replicas of slice do not have identical index domain origins");
+        }
+      }
+    }
+  }
+
+  // Disassemble input buffer into slices.
+  TF_ASSIGN_OR_RETURN(std::vector<HostBuffer> split_buffers,
+                      sharding_internal::DisassembleHostBuffer(
+                          input, num_partitions_per_axis, thread_pool));
+  if (split_buffers.size() != total_num_partitions) {
+    return absl::InternalError(
+        absl::StrCat("Disassembled slices count mismatch: expected ",
+                     total_num_partitions, " but got ", split_buffers.size()));
+  }
+
+  xla::Shape shard_xla_shape =
+      xla::ShapeUtil::MakeShape(primitive_type, first_shard_shape.dims());
+
+  std::vector<ShardTarget> shard_targets(sharding_devices.size());
+
+  for (int slice_idx = 0; slice_idx < total_num_partitions; ++slice_idx) {
+    for (int r = 0; r < num_replicas; ++r) {
+      int sorted_idx = slice_idx * num_replicas + r;
+      const IndexDomainDevice& item = index_domain_devices[sorted_idx];
+      const bool is_last_replica = (r == num_replicas - 1);
+      const bool is_last_shard = (sorted_idx == sharding_devices.size() - 1);
+      shard_targets[item.original_shard_index] = ShardTarget{
+          .device = item.device,
+          .shape = is_last_shard ? std::move(shard_xla_shape) : shard_xla_shape,
+          .source_buffer = is_last_replica ? std::move(split_buffers[slice_idx])
+                                           : split_buffers[slice_idx],
+      };
+    }
+  }
+
+  return BatchPlan{
+      .shard_targets = std::move(shard_targets),
+      .effective_sharding = sharding,
+  };
+}
+
 // Inspects the input buffer and sharding to determine if it qualifies for
-// batched transfer. If eligible, returns the target shape and device list.
+// batched transfer. If eligible, returns the batch plan with shard targets.
 // Returns std::nullopt if the input should route to the fallback path (e.g.
-// partitioned shardings, strings, sub-byte types, custom host byte strides).
+// non-uniform shardings, strings, sub-byte types, custom host byte strides).
 absl::StatusOr<std::optional<BatchPlan>> GetBatchPlanIfEligible(
     const HostBuffer& input, const xla::ifrt::ShardingRef& sharding,
-    xla::ifrt::Client* client) {
-  // Disqualify strings and packed storage (sub-byte types).
+    xla::ifrt::Client* client, tsl::thread::ThreadPool& thread_pool) {
+  // Disqualify strings, packed storage (sub-byte types), and 0-element tensors.
   if (input.dtype().kind() == xla::ifrt::DType::kString ||
-      input.dtype() != input.storage_dtype()) {
+      input.dtype() != input.storage_dtype() ||
+      input.shape().num_elements() == 0) {
     return std::nullopt;
   }
 
@@ -93,12 +262,9 @@ absl::StatusOr<std::optional<BatchPlan>> GetBatchPlanIfEligible(
   // Default MakeShape assumes a dense, major-to-minor layout.
   // If the buffer uses custom byte strides (e.g. view or slice),
   // route it to the fallback path which correctly handles host layouts.
-  if (input.byte_strides().has_value()) {
+  if (HasCustomByteStrides(input)) {
     return std::nullopt;
   }
-
-  xla::Shape xla_shape =
-      xla::ShapeUtil::MakeShape(primitive_type, input.shape().dims());
 
   // Case 1: SingleDeviceSharding (tensor targeted to 1 device)
   if (const auto* single_device_sharding =
@@ -109,9 +275,15 @@ absl::StatusOr<std::optional<BatchPlan>> GetBatchPlanIfEligible(
     if (devices.empty()) {
       return std::nullopt;
     }
+    xla::Shape xla_shape =
+        xla::ShapeUtil::MakeShape(primitive_type, input.shape().dims());
     return BatchPlan{
-        .shape = std::move(xla_shape),
-        .devices = {devices.begin(), devices.end()},
+        .shard_targets = {ShardTarget{
+            .device = devices[0],
+            .shape = std::move(xla_shape),
+            .source_buffer = input,
+        }},
+        .effective_sharding = sharding,
     };
   }
 
@@ -129,9 +301,16 @@ absl::StatusOr<std::optional<BatchPlan>> GetBatchPlanIfEligible(
       if (!target_device) {
         return std::nullopt;
       }
+      xla::Shape xla_shape =
+          xla::ShapeUtil::MakeShape(primitive_type, input.shape().dims());
       return BatchPlan{
-          .shape = std::move(xla_shape),
-          .devices = {target_device},
+          .shard_targets = {ShardTarget{
+              .device = target_device,
+              .shape = std::move(xla_shape),
+              .source_buffer = input,
+          }},
+          .effective_sharding = xla::ifrt::SingleDeviceSharding::Create(
+              target_device, sharding->memory_kind()),
       };
     }
   }
@@ -144,28 +323,47 @@ absl::StatusOr<std::optional<BatchPlan>> GetBatchPlanIfEligible(
     if (devices.empty()) {
       return std::nullopt;
     }
+    xla::Shape xla_shape =
+        xla::ShapeUtil::MakeShape(primitive_type, input.shape().dims());
+    std::vector<ShardTarget> shard_targets;
+    shard_targets.reserve(devices.size());
+    for (int dev_idx = 0; dev_idx < devices.size(); ++dev_idx) {
+      const bool is_last = (dev_idx == devices.size() - 1);
+      shard_targets.push_back(ShardTarget{
+          .device = devices[dev_idx],
+          .shape = is_last ? std::move(xla_shape) : xla_shape,
+          .source_buffer = input,
+      });
+    }
     return BatchPlan{
-        .shape = std::move(xla_shape),
-        .devices = {devices.begin(), devices.end()},
+        .shard_targets = std::move(shard_targets),
+        .effective_sharding = sharding,
     };
   }
 
-  // Partitioned/tiled or unsupported sharding types route to fallback.
-  return std::nullopt;
+  // Case 4: Partitioned / Tiled Sharding (shards sliced and distributed across
+  // devices)
+  TF_ASSIGN_OR_RETURN(
+      BatchPlan plan,
+      GetShardedBatchPlan(input, sharding, primitive_type, thread_pool));
+  return plan;
 }
 
 }  // namespace
 
 absl::StatusOr<std::unique_ptr<H2DTransferExecutor>>
-BatchedH2DTransferExecutor::Create(xla::ifrt::Client* client,
-                                   xla::ifrt::DeviceListRef device_list,
-                                   tsl::thread::ThreadPool* thread_pool,
-                                   Options options) {
+BatchedH2DTransferExecutor::Create(
+    xla::ifrt::Client* client, xla::ifrt::DeviceListRef device_list,
+    tsl::thread::ThreadPool* absl_nonnull thread_pool, Options options) {
   xla::ifrt::PjRtCompatibleClient* pjrt_compatible_client =
       xla::ifrt::dyn_cast_or_null<xla::ifrt::PjRtCompatibleClient>(client);
   if (!pjrt_compatible_client) {
     return absl::InvalidArgumentError(
         "BatchedH2DTransferExecutor requires a PjRtCompatibleClient.");
+  }
+  if (thread_pool == nullptr) {
+    return absl::InvalidArgumentError(
+        "BatchedH2DTransferExecutor requires a non-null thread_pool.");
   }
   return absl::WrapUnique(new BatchedH2DTransferExecutor(
       pjrt_compatible_client, std::move(device_list), thread_pool, options));
@@ -173,8 +371,8 @@ BatchedH2DTransferExecutor::Create(xla::ifrt::Client* client,
 
 BatchedH2DTransferExecutor::BatchedH2DTransferExecutor(
     xla::ifrt::PjRtCompatibleClient* client,
-    xla::ifrt::DeviceListRef device_list, tsl::thread::ThreadPool* thread_pool,
-    Options options)
+    xla::ifrt::DeviceListRef device_list,
+    tsl::thread::ThreadPool* absl_nonnull thread_pool, Options options)
     : client_(client),
       device_list_(std::move(device_list)),
       thread_pool_(thread_pool),
@@ -190,6 +388,7 @@ BatchedH2DTransferExecutor::ExecuteTransfer(
 
   absl::flat_hash_map<xla::ifrt::Device*, DeviceBatchData> batches_by_device;
   std::vector<std::optional<PjRtBuffers>> batched_inputs(inputs.size());
+  std::vector<xla::ifrt::ShardingRef> effective_shardings(inputs.size());
   std::vector<int> fallback_input_indices;
   fallback_input_indices.reserve(inputs.size());
 
@@ -197,34 +396,33 @@ BatchedH2DTransferExecutor::ExecuteTransfer(
 
   // Phase 1: Classify inputs into per-device batches or fallback paths.
   for (int i = 0; i < inputs.size(); ++i) {
-    TF_ASSIGN_OR_RETURN(
-        std::optional<BatchPlan> batch_plan,
-        GetBatchPlanIfEligible(inputs[i], input_shardings[i], client_));
+    TF_ASSIGN_OR_RETURN(std::optional<BatchPlan> batch_plan,
+                        GetBatchPlanIfEligible(inputs[i], input_shardings[i],
+                                               client_, *thread_pool_));
     if (!batch_plan.has_value()) {
       fallback_input_indices.push_back(i);
       continue;
     }
 
+    effective_shardings[i] = std::move(batch_plan->effective_sharding);
     PjRtBuffers& slots =
-        batched_inputs[i].emplace(batch_plan->devices.size());
+        batched_inputs[i].emplace(batch_plan->shard_targets.size());
 
-    for (int dev_idx = 0; dev_idx < batch_plan->devices.size(); ++dev_idx) {
-      xla::ifrt::Device* device = batch_plan->devices[dev_idx];
-      DeviceBatchData& batch = batches_by_device[device];
-      batch.entries.push_back(
-          {.output_slot = &slots[dev_idx], .source_buffer = &inputs[i]});
-      if (dev_idx == batch_plan->devices.size() - 1) {
-        batch.shapes.push_back(std::move(batch_plan->shape));
-      } else {
-        batch.shapes.push_back(batch_plan->shape);
-      }
+    for (int k = 0; k < batch_plan->shard_targets.size(); ++k) {
+      ShardTarget& target = batch_plan->shard_targets[k];
+      DeviceBatchData& batch = batches_by_device[target.device];
+      batch.entries.push_back({
+          .output_slot = &slots[k],
+          .source_buffer = std::move(target.source_buffer),
+      });
+      batch.shapes.push_back(std::move(target.shape));
     }
   }
 
   // Phase 2: Execute per-device batched allocations and async DMA transfers.
   xla::PjRtClient* pjrt_client = client_->pjrt_client();
 
-  for (const auto& [device, batch_data] : batches_by_device) {
+  for (auto& [device, batch_data] : batches_by_device) {
     xla::ifrt::PjRtCompatibleDevice* pjrt_compatible_device =
         xla::ifrt::dyn_cast_or_null<xla::ifrt::PjRtCompatibleDevice>(device);
     if (!pjrt_compatible_device || !pjrt_compatible_device->pjrt_device()) {
@@ -234,7 +432,7 @@ BatchedH2DTransferExecutor::ExecuteTransfer(
         xla::PjRtMemorySpace * memory_space,
         pjrt_compatible_device->pjrt_device()->default_memory_space());
 
-    const std::vector<DeviceBatchEntry>& batched_entries = batch_data.entries;
+    std::vector<DeviceBatchEntry>& batched_entries = batch_data.entries;
     const absl::InlinedVector<xla::Shape, 4>& batched_shapes =
         batch_data.shapes;
 
@@ -255,17 +453,17 @@ BatchedH2DTransferExecutor::ExecuteTransfer(
           transfer_manager->RetrieveBuffer(b);
       if (!buffer) return absl::InternalError("Failed to retrieve PJRT buffer");
 
-      const DeviceBatchEntry& entry = batched_entries[b];
+      DeviceBatchEntry& entry = batched_entries[b];
       *entry.output_slot = std::shared_ptr<xla::PjRtBuffer>(buffer.release());
     }
 
     // 2. Transfer Loop: Start asynchronous DMA transfers for all buffers on
     // this device.
     for (int b = 0; b < num_batched; ++b) {
-      const DeviceBatchEntry& entry = batched_entries[b];
-      const HostBuffer& input = *entry.source_buffer;
+      DeviceBatchEntry& entry = batched_entries[b];
       auto literal = std::make_unique<xla::BorrowingLiteral>(
-          static_cast<const char*>(input.raw_data().data()), batched_shapes[b]);
+          static_cast<const char*>(entry.source_buffer.raw_data().data()),
+          batched_shapes[b]);
       xla::BorrowingLiteral* literal_ptr = literal.get();
 
       // Capture input (kept alive by copy/refcount), literal (safely moved),
@@ -273,7 +471,8 @@ BatchedH2DTransferExecutor::ExecuteTransfer(
       // buffers and backend managers from being destroyed while the transfer is
       // still physically ongoing in the background, and keeps the
       // transfer_manager's internally owned buffer alive until completion.
-      auto on_done = [input, literal = std::move(literal),
+      auto on_done = [input = std::move(entry.source_buffer),
+                      literal = std::move(literal),
                       transfer_manager]() mutable {};
 
       if (absl::Status st = transfer_manager->TransferLiteralToBuffer(
@@ -291,12 +490,12 @@ BatchedH2DTransferExecutor::ExecuteTransfer(
     }
     PjRtBuffers& buffers = *batched_inputs[i];
     xla::ifrt::PjRtArray::PjRtBuffers pjrt_buffers(buffers.begin(),
-                                                  buffers.end());
+                                                   buffers.end());
     TF_ASSIGN_OR_RETURN(
         tsl::RCReference<xla::ifrt::PjRtArray> array,
         xla::ifrt::PjRtArray::Create(
             client_, inputs[i].dtype(), inputs[i].shape(),
-            input_shardings[i], std::move(pjrt_buffers),
+            effective_shardings[i], std::move(pjrt_buffers),
             /*layout=*/std::shared_ptr<const xla::PjRtLayout>()));
     results[i] = tsl::RCReference<xla::ifrt::Array>(std::move(array));
   }
@@ -316,11 +515,10 @@ BatchedH2DTransferExecutor::ExecuteTransfer(
 
 absl::StatusOr<std::unique_ptr<H2DTransferExecutor>>
 BatchedH2DTransferExecutorFactory::Create(
-    xla::ifrt::Client* client,
-    xla::ifrt::DeviceListRef device_list,
-    tsl::thread::ThreadPool* thread_pool) {
+    xla::ifrt::Client* client, xla::ifrt::DeviceListRef device_list,
+    tsl::thread::ThreadPool* absl_nonnull thread_pool) {
   return BatchedH2DTransferExecutor::Create(
       client, std::move(device_list), thread_pool, options_);
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

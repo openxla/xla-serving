@@ -1,9 +1,9 @@
-load("@neptune//data/processor/python:build_defs.bzl", "transform_pybind_library")
-load("@neptune//data/resource_manager/python:build_defs.bzl", "resource_pybind_library")
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@xla_serving//data/processor/python:build_defs.bzl", "transform_pybind_library")
+load("@xla_serving//data/resource_manager/python:build_defs.bzl", "resource_pybind_library")
 
-package(default_visibility = ["@neptune//data:neptune_data_internal"])
+package(default_visibility = ["@xla_serving//data:xla_serving_data_internal"])
 
 cc_library(
     name = "add_int_transform",
@@ -16,12 +16,12 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
-        "@neptune//data/processor/cc/api:registry",
-        "@neptune//data/processor/cc/api:transform_context",
-        "@neptune//data/processor/cc/api:type_info",
-        "@neptune//data/processor/cc/core:transform",
-        "@neptune//data/processor/proto:transform_config_cc_proto",
-        "@neptune//data/resource_manager/cc:resource",
+        "@xla_serving//data/processor/cc/api:registry",
+        "@xla_serving//data/processor/cc/api:transform_context",
+        "@xla_serving//data/processor/cc/api:type_info",
+        "@xla_serving//data/processor/cc/core:transform",
+        "@xla_serving//data/processor/proto:transform_config_cc_proto",
+        "@xla_serving//data/resource_manager/cc:resource",
     ],
     alwayslink = 1,
 )
@@ -31,8 +31,8 @@ transform_pybind_library(
     testonly = 1,
     srcs = ["add_int_transform.cc"],
     hdrs = ["add_int_transform.h"],
-    dynamic_deps = ["@neptune//data:neptune_data_test_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../xla_serving_data_test:$$ORIGIN/../../../../xla_serving_data"],
     deps = [
         ":add_int_transform",
     ],
@@ -49,12 +49,12 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
-        "@neptune//data/processor/cc/api:registry",
-        "@neptune//data/processor/cc/core:transform",
-        "@neptune//data/processor/proto:transform_config_cc_proto",
-        "@neptune//data/resource_manager/cc:resource",
-        "@neptune//runtime/core:host_buffer",
         "@xla//xla/python/ifrt",
+        "@xla_serving//data/processor/cc/api:registry",
+        "@xla_serving//data/processor/cc/core:transform",
+        "@xla_serving//data/processor/proto:transform_config_cc_proto",
+        "@xla_serving//data/resource_manager/cc:resource",
+        "@xla_serving//runtime/core:host_buffer",
     ],
     alwayslink = 1,
 )
@@ -64,8 +64,8 @@ transform_pybind_library(
     testonly = 1,
     srcs = ["add_host_buffer_transform.cc"],
     hdrs = ["add_host_buffer_transform.h"],
-    dynamic_deps = ["@neptune//data:neptune_data_test_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../xla_serving_data_test:$$ORIGIN/../../../../xla_serving_data"],
     deps = [":add_host_buffer_transform"],
 )
 
@@ -80,12 +80,12 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
-        "@neptune//data/processor/cc/api:registry",
-        "@neptune//data/processor/cc/api:transform_context",
-        "@neptune//data/processor/cc/api:type_info",
-        "@neptune//data/processor/cc/core:transform",
-        "@neptune//data/processor/proto:transform_config_cc_proto",
-        "@neptune//data/resource_manager/cc:resource",
+        "@xla_serving//data/processor/cc/api:registry",
+        "@xla_serving//data/processor/cc/api:transform_context",
+        "@xla_serving//data/processor/cc/api:type_info",
+        "@xla_serving//data/processor/cc/core:transform",
+        "@xla_serving//data/processor/proto:transform_config_cc_proto",
+        "@xla_serving//data/resource_manager/cc:resource",
     ],
     alwayslink = 1,
 )
@@ -95,8 +95,8 @@ transform_pybind_library(
     testonly = 1,
     srcs = ["add_two_transform.cc"],
     hdrs = ["add_two_transform.h"],
-    dynamic_deps = ["@neptune//data:neptune_data_test_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../xla_serving_data_test:$$ORIGIN/../../../../xla_serving_data"],
     deps = [":add_two_transform"],
 )
 
@@ -111,12 +111,12 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
-        "@neptune//data/processor/cc/api:registry",
-        "@neptune//data/processor/cc/api:transform_context",
-        "@neptune//data/processor/cc/api:type_info",
-        "@neptune//data/processor/cc/core:transform",
-        "@neptune//data/processor/proto:transform_config_cc_proto",
-        "@neptune//data/resource_manager/cc:resource",
+        "@xla_serving//data/processor/cc/api:registry",
+        "@xla_serving//data/processor/cc/api:transform_context",
+        "@xla_serving//data/processor/cc/api:type_info",
+        "@xla_serving//data/processor/cc/core:transform",
+        "@xla_serving//data/processor/proto:transform_config_cc_proto",
+        "@xla_serving//data/resource_manager/cc:resource",
     ],
     alwayslink = 1,
 )
@@ -126,8 +126,8 @@ transform_pybind_library(
     testonly = 1,
     srcs = ["multiply_by_five_transform.cc"],
     hdrs = ["multiply_by_five_transform.h"],
-    dynamic_deps = ["@neptune//data:neptune_data_test_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../xla_serving_data_test:$$ORIGIN/../../../../xla_serving_data"],
     deps = [":multiply_by_five_transform"],
 )
 
@@ -144,12 +144,12 @@ cc_library(
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/types:span",
-        "@neptune//data/processor/cc/api:registry",
-        "@neptune//data/processor/cc/core:transform",
-        "@neptune//data/processor/proto:transform_config_cc_proto",
-        "@neptune//data/resource_manager/cc:asset",
-        "@neptune//data/resource_manager/cc:resource",
-        "@neptune//data/resource_manager/proto:resource_manager_cc_proto",
+        "@xla_serving//data/processor/cc/api:registry",
+        "@xla_serving//data/processor/cc/core:transform",
+        "@xla_serving//data/processor/proto:transform_config_cc_proto",
+        "@xla_serving//data/resource_manager/cc:asset",
+        "@xla_serving//data/resource_manager/cc:resource",
+        "@xla_serving//data/resource_manager/proto:resource_manager_cc_proto",
     ],
     alwayslink = 1,
 )
@@ -159,8 +159,8 @@ transform_pybind_library(
     testonly = 1,
     srcs = ["dummy_resource_transform.cc"],
     hdrs = ["dummy_resource_transform.h"],
-    dynamic_deps = ["@neptune//data:neptune_data_test_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../xla_serving_data_test:$$ORIGIN/../../../../xla_serving_data"],
     deps = [":dummy_resource_transform"],
 )
 
@@ -176,12 +176,12 @@ cc_library(
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
         "@com_google_protobuf//:wrappers_cc_proto",
-        "@neptune//data/processor/cc/api:registry",
-        "@neptune//data/processor/cc/api:transform_context",
-        "@neptune//data/processor/cc/api:type_info",
-        "@neptune//data/processor/cc/core:transform",
-        "@neptune//data/processor/proto:transform_config_cc_proto",
-        "@neptune//data/resource_manager/cc:resource",
+        "@xla_serving//data/processor/cc/api:registry",
+        "@xla_serving//data/processor/cc/api:transform_context",
+        "@xla_serving//data/processor/cc/api:type_info",
+        "@xla_serving//data/processor/cc/core:transform",
+        "@xla_serving//data/processor/proto:transform_config_cc_proto",
+        "@xla_serving//data/resource_manager/cc:resource",
     ],
     alwayslink = 1,
 )
@@ -191,8 +191,8 @@ transform_pybind_library(
     testonly = 1,
     srcs = ["suffix_transform.cc"],
     hdrs = ["suffix_transform.h"],
-    dynamic_deps = ["@neptune//data:neptune_data_test_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../xla_serving_data_test:$$ORIGIN/../../../../xla_serving_data"],
     deps = [":suffix_transform"],
 )
 
@@ -212,10 +212,10 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
-        "@neptune//data/processor/cc/api:registry",
-        "@neptune//data/processor/cc/core:transform",
-        "@neptune//data/processor/proto:transform_config_cc_proto",
-        "@neptune//data/resource_manager/cc:resource",
+        "@xla_serving//data/processor/cc/api:registry",
+        "@xla_serving//data/processor/cc/core:transform",
+        "@xla_serving//data/processor/proto:transform_config_cc_proto",
+        "@xla_serving//data/resource_manager/cc:resource",
     ],
     alwayslink = 1,
 )
@@ -225,8 +225,8 @@ transform_pybind_library(
     testonly = 1,
     srcs = ["add_from_resource_transform.cc"],
     hdrs = ["add_from_resource_transform.h"],
-    dynamic_deps = ["@neptune//data:neptune_data_test_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../xla_serving_data_test:$$ORIGIN/../../../../xla_serving_data"],
     deps = [":add_from_resource_transform"],
 )
 
@@ -239,7 +239,7 @@ cc_library(
     deps = [
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/strings",
-        "@neptune//data/resource_manager/cc:resource",
+        "@xla_serving//data/resource_manager/cc:resource",
     ],
     alwayslink = 1,
 )
@@ -249,8 +249,8 @@ resource_pybind_library(
     testonly = 1,
     srcs = ["int_resource.cc"],
     hdrs = ["int_resource.h"],
-    dynamic_deps = ["@neptune//data:neptune_data_test_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../xla_serving_data_test:$$ORIGIN/../../../../xla_serving_data"],
     deps = [":int_resource"],
 )
 
@@ -265,12 +265,12 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
-        "@neptune//data/processor/cc/api:registry",
-        "@neptune//data/processor/cc/api:transform_context",
-        "@neptune//data/processor/cc/api:type_info",
-        "@neptune//data/processor/cc/core:transform",
-        "@neptune//data/processor/proto:transform_config_cc_proto",
-        "@neptune//data/resource_manager/cc:resource",
+        "@xla_serving//data/processor/cc/api:registry",
+        "@xla_serving//data/processor/cc/api:transform_context",
+        "@xla_serving//data/processor/cc/api:type_info",
+        "@xla_serving//data/processor/cc/core:transform",
+        "@xla_serving//data/processor/proto:transform_config_cc_proto",
+        "@xla_serving//data/resource_manager/cc:resource",
     ],
     alwayslink = 1,
 )
@@ -280,8 +280,8 @@ transform_pybind_library(
     testonly = 1,
     srcs = ["make_dict_transform.cc"],
     hdrs = ["make_dict_transform.h"],
-    dynamic_deps = ["@neptune//data:neptune_data_test_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../xla_serving_data_test:$$ORIGIN/../../../../xla_serving_data"],
     deps = [":make_dict_transform"],
 )
 
@@ -297,14 +297,14 @@ cc_library(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
-        "@neptune//data/processor/cc/api:registry",
-        "@neptune//data/processor/cc/api:transform_context",
-        "@neptune//data/processor/cc/core:transform",
-        "@neptune//data/processor/proto:transform_config_cc_proto",
-        "@neptune//data/resource_manager/cc:resource",
-        "@neptune//runtime/core:host_buffer",
-        "@neptune//runtime/core:host_buffer_type_utils",
         "@xla//xla/python/ifrt",
+        "@xla_serving//data/processor/cc/api:registry",
+        "@xla_serving//data/processor/cc/api:transform_context",
+        "@xla_serving//data/processor/cc/core:transform",
+        "@xla_serving//data/processor/proto:transform_config_cc_proto",
+        "@xla_serving//data/resource_manager/cc:resource",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/core:host_buffer_type_utils",
     ],
     alwayslink = 1,
 )
@@ -314,7 +314,7 @@ transform_pybind_library(
     testonly = 1,
     srcs = ["multi_kernel_math_transform.cc"],
     hdrs = ["multi_kernel_math_transform.h"],
-    dynamic_deps = ["@neptune//data:neptune_data_test_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../neptune_data_test:$$ORIGIN/../../../../neptune_data"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_test_core"],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../../../../xla_serving_data_test:$$ORIGIN/../../../../xla_serving_data"],
     deps = [":multi_kernel_math_transform"],
 )

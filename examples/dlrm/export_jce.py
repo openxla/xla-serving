@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Neptune export for DLRM recommender model with TPUEmbeddingForServing."""
+"""XLA SavedModel export for DLRM recommender with TPUEmbeddingForServing."""
 
 import os
 import tempfile
@@ -26,20 +26,20 @@ import jaxtyping
 import numpy as np
 import orbax.checkpoint as ocp
 
-from neptune_data.cpu_embedding.python import embedding_utils
-from neptune_data.kernels.cpu_embedding import cpu_embedding_module
-from neptune_data.ops import packing
-from neptune_data.processor.proto import transform_config_pb2
-from neptune_data.processor.python import composite_processor_pybind
-from neptune_data.resource_manager.python import resource_manager_pybind
+from xla_serving_data.cpu_embedding.python import embedding_utils
+from xla_serving_data.kernels.cpu_embedding import cpu_embedding_module
+from xla_serving_data.ops import packing
+from xla_serving_data.processor.proto import transform_config_pb2
+from xla_serving_data.processor.python import composite_processor_pybind
+from xla_serving_data.resource_manager.python import resource_manager_pybind
 from examples.dlrm import model_jce as model_lib
-from neptune_model._src import assets2npt
-from neptune_model._src.core import shlo_type
-from neptune_model._src.export import jax_model
-from neptune_model._src.export import main_lib
-from neptune_model._src.export import serving_config
-from neptune_model._src.processors import processor
-from neptune_model.protos import orchestration_pb2
+from xla_saved_model.protos import orchestration_pb2
+from xla_saved_model._src import assets2xsm
+from xla_saved_model._src.core import shlo_type
+from xla_saved_model._src.export import jax_model
+from xla_saved_model._src.export import main_lib
+from xla_saved_model._src.export import serving_config
+from xla_saved_model._src.processors import processor
 
 
 def get_synthetic_batch(
@@ -104,7 +104,7 @@ def export_model(
     global_batch_size: int = 2,
     num_dense_features: int = 13,
 ):
-  """Exports the DLRM recommender model using Neptune."""
+  """Exports the DLRM recommender model using XLA SavedModel."""
 
   # Initialize synthetic weights and JCE resource for serving lookups
   if use_capped_vocab:

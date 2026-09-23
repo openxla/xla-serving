@@ -14,12 +14,12 @@
 
 edition = "2024";
 
-package neptune;
+package xla_serving;
 
 import "xla/python/ifrt/dtype.proto";
 import "xla/python/ifrt/shape.proto";
 
-// Proto representation of the jsv::HostBuffer.
+// Proto representation of the xla_serving::HostBuffer.
 message HostBufferProto {
   // The data type of the elements in the buffer.
   xla.ifrt.DTypeProto dtype = 1;

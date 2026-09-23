@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_SHARED_BATCH_SCHEDULER_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_SHARED_BATCH_SCHEDULER_H_
+#ifndef XLA_SERVING_RUNTIME_BATCHING_SHARED_BATCH_SCHEDULER_H_
+#define XLA_SERVING_RUNTIME_BATCHING_SHARED_BATCH_SCHEDULER_H_
 
 #include <stddef.h>
 
@@ -32,6 +32,8 @@
 #include <vector>
 
 #include "absl/base/thread_annotations.h"  // from @abseil-cpp
+#include "absl/flags/declare.h"  // from @abseil-cpp
+#include "absl/flags/flag.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
@@ -41,13 +43,12 @@
 #include "absl/synchronization/notification.h"  // from @abseil-cpp
 #include "absl/time/clock.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
-#include "runtime/core/allocator.h"  // from @neptune
-#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
-#include "runtime/core/batching/batch_scheduler_utils.h"  // from @neptune
-#include "runtime/core/batching/batch_stats.h"  // from @neptune
-#include "runtime/core/batching/periodic_function.h"  // from @neptune
-#include "runtime/core/default_allocator.h"  // from @neptune
-#include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
+#include "runtime/core/batching/batch_scheduler.h"  // from @xla_serving
+#include "runtime/core/batching/batch_scheduler_utils.h"  // from @xla_serving
+#include "runtime/core/batching/fifo_queue.h"  // from @xla_serving
+#include "runtime/core/batching/periodic_function.h"  // from @xla_serving
+#include "runtime/core/batching/queue_base.h"  // from @xla_serving
+#include "runtime/core/batching/queue_options.h"  // from @xla_serving
 #include "xla/tsl/platform/criticality.h"  // from @xla
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
@@ -57,14 +58,17 @@
 #include "tsl/profiler/lib/context_types.h"  // from @tsl
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
-namespace neptune {
+// TODO: Remove this flag once the migration is complete.
+ABSL_DECLARE_FLAG(bool, jsv_use_queue_base);
+
+namespace xla_serving {
 namespace internal {
 template <typename TaskType>
 class Queue;
 }  // namespace internal
-}  // namespace neptune
+}  // namespace xla_serving
 
-namespace neptune {
+namespace xla_serving {
 
 using ::tsl::Env;
 
@@ -158,138 +162,21 @@ class SharedBatchScheduler
 
   virtual ~SharedBatchScheduler();
 
+  using QueueOptions = ::xla_serving::QueueOptions<TaskType>;
+
   // Adds a queue to which tasks may be submitted. The returned queue implements
   // the BatchScheduler API. Each queue has its own set of scheduling options,
   // and its own callback to process batches of tasks submitted to the queue.
   //
   // The returned queue's destructor blocks until all tasks submitted to it have
   // been processed.
-  struct QueueOptions {
-    // The size limit of an input batch to the queue.
-    //
-    // If `enable_large_batch_splitting` is True, 'input_batch_size_limit'
-    // should be greater or equal than `max_execution_batch_size`; otherwise
-    // `input_batch_size_limit` should be equal to `max_execution_batch_size`.
-    size_t input_batch_size_limit = 1000;
-
-    // If a task has been enqueued for this amount of time (in microseconds),
-    // and a thread is available, the scheduler will immediately form a batch
-    // from enqueued tasks and assign the batch to the thread for processing,
-    // even if the batch's size is below 'input_batch_size_limit'.
-    //
-    // This parameter offers a way to bound queue latency, so that a task isn't
-    // stuck in the queue indefinitely waiting for enough tasks to arrive to
-    // make a full batch. (The latency bound is given in the class documentation
-    // above.)
-    //
-    // The goal is to smooth out batch sizes under low request rates, and thus
-    // avoid latency spikes.
-    int64_t batch_timeout_micros = 0;
-
-    // The maximum allowable number of enqueued (accepted by Schedule() but
-    // not yet being processed on a batch thread) tasks in terms of batches.
-    // If this limit is reached, Schedule() will return an UNAVAILABLE error.
-    // See the class documentation above for guidelines on how to tune this
-    // parameter.
-    //
-    // Must be positive, or else invalid argument error will be returned at
-    // queue creation time.
-    size_t max_enqueued_batches = 10;
-
-    // If true, queue implementation would split one input batch task into
-    // subtasks (as specified by `split_input_task_func` below) and fit subtasks
-    // into different batches.
-    //
-    // For usage of `split_input_task_func`, please see its comment.
-    bool enable_large_batch_splitting = false;
-
-    // `input_task`: a unit of task to be split.
-    // `first_output_task_size`: task size of first output.
-    // `max_execution_batch_size`: Maximum size of each batch.
-    // `output_tasks`: A list of output tasks after split.
-    //
-    // REQUIRED:
-    // 1) All `output_tasks` should be non-empty tasks.
-    // 2) Sizes of `output_tasks` add up to size of `input_task`.
-    //
-    // NOTE:
-    // Instantiations of `TaskType` may vary, so it's up to caller to define
-    // how (e.g., which members to access) to split input tasks.
-    std::function<absl::Status(
-        std::unique_ptr<TaskType>* input_task, int first_output_task_size,
-        int input_batch_size_limit,
-        std::vector<std::unique_ptr<TaskType>>* output_tasks)>
-        split_input_task_func;
-
-    // The maximum size of each enqueued batch (i.e., in
-    // `high_priority_batches_`).
-    //
-    // The scheduler may form batches of any size between 1 and this number
-    // (inclusive). If there is a need to quantize the batch sizes, i.e. only
-    // submit batches whose size is in a small set of allowed sizes, that can be
-    // done by adding padding in the process-batch callback.
-    size_t max_execution_batch_size = 1000;
-
-    // If non-empty, contains configured batch sizes.
-    std::vector<int32_t> allowed_batch_sizes;
-
-    // If true, the padding will not be appended.
-    bool disable_padding = false;
-
-    // The padding policy to use.
-    //
-    // See the documentation for kPadUpPolicy for details.
-    std::string batch_padding_policy = std::string(kPadUpPolicy);
-
-    // A pointer to a ModelBatchStats instance for this model. To be used for
-    // cost-based padding policy selection.
-    //
-    // If null, some other padding policy will be used if a cost-based one is
-    // requested.
-    ModelBatchStats* model_batch_stats = nullptr;
-
-    // If true, queue implementation would split high priority and low priority
-    // inputs into two sub queues.
-    bool enable_priority_queue = false;
-
-    // A separate set of queue options for different priority inputs.
-    // Use iff `enable_priority_queue` is true.
-    struct PriorityQueueOptions {
-      // See QueueOptions.max_execution_batch_size
-      size_t max_execution_batch_size = 0;
-      // See QueueOptions.batch_timeout_micros
-      int64_t batch_timeout_micros = 0;
-      // See QueueOptions.input_batch_size_limit
-      size_t input_batch_size_limit = 0;
-      // See QueueOptions.max_enqueued_batches
-      size_t max_enqueued_batches = 0;
-      // See QueueOptions.allowed_batch_sizes
-      std::vector<int32_t> allowed_batch_sizes;
-    };
-    // A subset of queue options for high priority input. These options are
-    // currently not being used in favor of the equivalents options at the
-    // QueueOptions level.
-    PriorityQueueOptions high_priority_queue_options;
-    // A subset of queue options for low priority input.
-    PriorityQueueOptions low_priority_queue_options;
-
-    // A policy that determines the mixed priority batching behavior. It is
-    // effective only when enable_priority_queue is true.
-    MixedPriorityBatchingPolicy mixed_priority_batching_policy =
-        MixedPriorityBatchingPolicy::kLowPriorityPaddingWithMaxBatchSize;
-
-    // The allocator for allocating memory for HostBuffer. The default allocator
-    // is DefaultAllocator. It can be overridden with a custom allocator.
-    Allocator* allocator = DefaultAllocator::GetInstance();
-  };
+  //
   // This method is marked virtual for testing purposes only.
   virtual absl::Status AddQueue(
       const QueueOptions& options, ProcessBatchCallback process_batch_callback,
       std::unique_ptr<BatchScheduler<TaskType>>* queue);
 
-  bool use_global_scheduler() const {
-    return options_.use_global_scheduler;
-  }
+  bool use_global_scheduler() const { return options_.use_global_scheduler; }
 
   bool rank_queues() const { return options_.rank_queues; }
 
@@ -297,8 +184,15 @@ class SharedBatchScheduler
   explicit SharedBatchScheduler(const Options& options);
 
  private:
-  void GetNextWorkItem_Locked(internal::Queue<TaskType>** queue_for_batch_out,
-                              BatchTaskUniquePtr* batch_to_process_out)
+  void GetNextWorkItem_Locked(
+      internal::QueueBase<TaskType>** queue_for_batch_out,
+      BatchTaskUniquePtr* batch_to_process_out)
+      TF_EXCLUSIVE_LOCKS_REQUIRED(mu_);
+
+  // TODO: Clean up once the migration to QueueBase is complete.
+  void GetLegacyNextWorkItem_Locked(
+      internal::Queue<TaskType>** queue_for_batch_out,
+      BatchTaskUniquePtr* batch_to_process_out)
       TF_EXCLUSIVE_LOCKS_REQUIRED(mu_);
 
   // The code executed in 'batch_threads_'. Obtains a batch to process from the
@@ -321,7 +215,7 @@ class SharedBatchScheduler
   // A list of queues. (We use std::list instead of std::vector to ensure that
   // iterators are not invalidated by adding/removing elements. It also offers
   // efficient removal of elements from the middle.)
-  using QueueList = std::list<std::unique_ptr<internal::Queue<TaskType>>>;
+  using QueueList = std::list<std::unique_ptr<internal::QueueBase<TaskType>>>;
 
   // All "active" queues, i.e. ones that either:
   //  - have not been removed, or
@@ -331,6 +225,12 @@ class SharedBatchScheduler
   // An iterator over 'queues_', pointing to the queue from which the next
   // available batch thread should grab work.
   typename QueueList::iterator next_queue_to_schedule_ ABSL_GUARDED_BY(mu_);
+
+  // TODO: Clean up once the migration to QueueBase is complete.
+  using LegacyQueueList = std::list<std::unique_ptr<internal::Queue<TaskType>>>;
+  LegacyQueueList legacy_queues_ ABSL_GUARDED_BY(mu_);
+  typename LegacyQueueList::iterator next_legacy_queue_to_schedule_
+      ABSL_GUARDED_BY(mu_);
 
   // Used by idle batch threads to wait for work to enter the system. Notified
   // whenever a batch becomes schedulable.
@@ -391,8 +291,10 @@ class Queue {
   //   used are an implementation detail of PeekBatchPriority().
   using BatchPriorityKey = std::pair<int, int64_t>;
 
-  Queue(const typename SharedBatchScheduler<TaskType>::QueueOptions& options,
-        Env* env, ProcessBatchCallback process_batch_callback,
+  using QueueOptions = ::xla_serving::QueueOptions<TaskType>;
+
+  Queue(const QueueOptions& options, Env* env,
+        ProcessBatchCallback process_batch_callback,
         SchedulableBatchCallback schedulable_batch_callback);
 
   // Illegal to destruct unless the queue is empty.
@@ -448,8 +350,7 @@ class Queue {
 
  private:
   // Computes the max_execution_batch_size of the queue based on queue options.
-  static size_t GetMaxExecutionBatchSize(
-      const typename SharedBatchScheduler<TaskType>::QueueOptions& options) {
+  static size_t GetMaxExecutionBatchSize(const QueueOptions& options) {
     // If `enable_large_batch_splitting`, returns `max_execution_batch_size`
     // configured by user options directly; returns `input_batch_size_limit`
     // otherwise.
@@ -543,7 +444,7 @@ class Queue {
   // enable_priority_queue is false.
   std::vector<std::unique_ptr<TaskType>> GetLowPriorityTasks(size_t size);
 
-  const typename SharedBatchScheduler<TaskType>::QueueOptions options_;
+  const QueueOptions options_;
 
   // The environment to use.
   Env* env_;
@@ -610,13 +511,13 @@ class Queue {
   void operator=(const Queue&) = delete;
 };
 
-// A RAII-style object that points to a Queue and implements
+// A RAII-style object that points to a QueueBase and implements
 // the BatchScheduler API. To be handed out to clients who call AddQueue().
 template <typename TaskType>
 class QueueHandle : public BatchScheduler<TaskType> {
  public:
   QueueHandle(std::shared_ptr<SharedBatchScheduler<TaskType>> scheduler,
-              Queue<TaskType>* queue);
+              QueueBase<TaskType>* queue);
   ~QueueHandle() override;
 
   absl::Status Schedule(std::unique_ptr<TaskType>* task) override;
@@ -631,10 +532,37 @@ class QueueHandle : public BatchScheduler<TaskType> {
 
   // The queue this handle wraps. Owned by 'scheduler_', which keeps it alive at
   // least until this class's destructor closes it.
-  Queue<TaskType>* queue_;
+  QueueBase<TaskType>* queue_;
 
   QueueHandle(const QueueHandle&) = delete;
   void operator=(const QueueHandle&) = delete;
+};
+
+// TODO: Clean up once the migration to QueueBase is complete.
+template <typename TaskType>
+class LegacyQueueHandle : public BatchScheduler<TaskType> {
+ public:
+  LegacyQueueHandle(std::shared_ptr<SharedBatchScheduler<TaskType>> scheduler,
+                    Queue<TaskType>* queue);
+  ~LegacyQueueHandle() override;
+
+  absl::Status Schedule(std::unique_ptr<TaskType>* task) override;
+  size_t NumEnqueuedTasks() const override;
+  size_t SchedulingCapacity() const override;
+
+  size_t max_task_size() const override {
+    return legacy_queue_->max_task_size();
+  }
+
+ private:
+  // The scheduler that owns 'queue_'.
+  std::shared_ptr<SharedBatchScheduler<TaskType>> scheduler_;
+
+  // The legacy queue this handle wraps.
+  Queue<TaskType>* legacy_queue_;
+
+  LegacyQueueHandle(const LegacyQueueHandle&) = delete;
+  void operator=(const LegacyQueueHandle&) = delete;
 };
 
 }  // namespace internal
@@ -669,7 +597,7 @@ SharedBatchScheduler<TaskType>::~SharedBatchScheduler() {
   for (;;) {
     {
       absl::MutexLock l(mu_);
-      if (queues_.empty()) {
+      if (queues_.empty() && legacy_queues_.empty()) {
         break;
       }
     }
@@ -742,13 +670,53 @@ absl::Status SharedBatchScheduler<TaskType>::AddQueueAfterRewritingOptions(
     absl::MutexLock l(mu_);
     schedulable_batch_cv_.Signal();
   };
-  auto internal_queue =
-      std::unique_ptr<internal::Queue<TaskType>>(new internal::Queue<TaskType>(
-          options, options_.env, process_batch_callback,
-          schedulable_batch_callback));
-  auto handle = std::unique_ptr<BatchScheduler<TaskType>>(
-      new internal::QueueHandle<TaskType>(this->shared_from_this(),
-                                          internal_queue.get()));
+
+  // TODO: Clean up once the migration to QueueBase is complete.
+  if (!absl::GetFlag(FLAGS_jsv_use_queue_base)) {
+    auto internal_queue = std::unique_ptr<internal::Queue<TaskType>>(
+        new internal::Queue<TaskType>(options, options_.env,
+                                      process_batch_callback,
+                                      schedulable_batch_callback));
+    auto handle = std::unique_ptr<BatchScheduler<TaskType>>(
+        new internal::LegacyQueueHandle<TaskType>(this->shared_from_this(),
+                                                  internal_queue.get()));
+    {
+      absl::MutexLock l(mu_);
+      legacy_queues_.push_back(std::move(internal_queue));
+      if (next_legacy_queue_to_schedule_ == legacy_queues_.end()) {
+        next_legacy_queue_to_schedule_ = legacy_queues_.begin();
+      }
+    }
+    *queue = std::move(handle);
+    return absl::OkStatus();
+  }
+
+  typename internal::QueueBase<TaskType>::ProcessBatchCallback
+      queue_base_callback;
+  if (std::holds_alternative<
+          std::function<void(BatchTaskUniquePtr)>>(
+          process_batch_callback)) {
+    queue_base_callback = std::get<
+        std::function<void(BatchTaskUniquePtr)>>(
+        process_batch_callback);
+  } else {
+    auto& callback_with_padding = std::get<
+        std::function<void(BatchTaskUniquePtr,
+                           std::vector<std::unique_ptr<TaskType>>)>>(
+        process_batch_callback);
+    queue_base_callback = [callback_with_padding](BatchTaskUniquePtr batch) {
+      callback_with_padding(std::move(batch), {});
+    };
+  }
+
+  // TODO: Instantiate the appropriate queue (FifoQueue or
+  // PriorityAwareQueue) based on options.priority_batching_policy instead of
+  // hardcoding FifoQueue.
+  auto internal_queue = std::make_unique<internal::FifoQueue<TaskType>>(
+      options, options_.env, std::move(queue_base_callback),
+      schedulable_batch_callback);
+  auto handle = std::make_unique<internal::QueueHandle<TaskType>>(
+      this->shared_from_this(), internal_queue.get());
   {
     absl::MutexLock l(mu_);
     queues_.push_back(std::move(internal_queue));
@@ -762,7 +730,9 @@ absl::Status SharedBatchScheduler<TaskType>::AddQueueAfterRewritingOptions(
 
 template <typename TaskType>
 SharedBatchScheduler<TaskType>::SharedBatchScheduler(const Options& options)
-    : options_(options), next_queue_to_schedule_(queues_.end()) {
+    : options_(options),
+      next_queue_to_schedule_(queues_.end()),
+      next_legacy_queue_to_schedule_(legacy_queues_.end()) {
   // Kick off the batch threads.
   PeriodicFunction::Options periodic_fn_options;
   periodic_fn_options.thread_name_prefix =
@@ -783,11 +753,11 @@ bool SharedBatchScheduler<TaskType>::BatchExists(
 
 template <typename TaskType>
 void SharedBatchScheduler<TaskType>::GetNextWorkItem_Locked(
-    internal::Queue<TaskType>** queue_for_batch_out,
+    internal::QueueBase<TaskType>** queue_for_batch_out,
     BatchTaskUniquePtr* batch_to_process_out) {
   BatchTaskUniquePtr batch_to_process;
-  internal::Queue<TaskType>* queue_for_batch = nullptr;
-  std::optional<typename internal::Queue<TaskType>::BatchPriorityKey>
+  internal::QueueBase<TaskType>* queue_for_batch = nullptr;
+  std::optional<typename internal::QueueBase<TaskType>::BatchPriorityKey>
       batch_priority_key;
   const int num_queues = queues_.size();
   for (int num_queues_tried = 0;
@@ -845,11 +815,101 @@ void SharedBatchScheduler<TaskType>::GetNextWorkItem_Locked(
 }
 
 template <typename TaskType>
+void SharedBatchScheduler<TaskType>::GetLegacyNextWorkItem_Locked(
+    internal::Queue<TaskType>** queue_for_batch_out,
+    BatchTaskUniquePtr* batch_to_process_out) {
+  BatchTaskUniquePtr batch_to_process;
+  internal::Queue<TaskType>* queue_for_batch = nullptr;
+  std::optional<typename internal::QueueBase<TaskType>::BatchPriorityKey>
+      batch_priority_key;
+  const int num_queues = legacy_queues_.size();
+  for (int num_queues_tried = 0;
+       !BatchExists(batch_to_process) && num_queues_tried < num_queues;
+       ++num_queues_tried) {
+    DCHECK(next_legacy_queue_to_schedule_ != legacy_queues_.end());
+
+    // If a closed queue responds to ScheduleBatch() with nullptr, the queue
+    // will never yield any further batches so we can drop it. To avoid a
+    // race, we take a snapshot of the queue's closedness state *before*
+    // calling ScheduleBatch().
+    const bool queue_closed = (*next_legacy_queue_to_schedule_)->closed();
+
+    bool queue_has_work = false;
+
+    if (options_.rank_queues) {
+      auto key = (*next_legacy_queue_to_schedule_)->PeekBatchPriority();
+      queue_has_work = key.has_value();
+      if (key.has_value() && (!batch_priority_key.has_value() ||
+                              key.value() < batch_priority_key.value())) {
+        batch_priority_key = key;
+        queue_for_batch = next_legacy_queue_to_schedule_->get();
+      }
+    } else {
+      // Ask '*next_legacy_queue_to_schedule_' if it wants us to process a batch
+      batch_to_process = (*next_legacy_queue_to_schedule_)->ScheduleBatch();
+      queue_has_work = BatchExists(batch_to_process);
+
+      if (queue_has_work) {
+        queue_for_batch = next_legacy_queue_to_schedule_->get();
+      }
+    }
+
+    // Advance 'next_queue_base_to_schedule_'.
+    if (queue_closed && (*next_legacy_queue_to_schedule_)->IsEmpty() &&
+        !queue_has_work) {
+      // We've encountered a closed queue with no work to do. Drop it.
+      DCHECK_NE(queue_for_batch, next_legacy_queue_to_schedule_->get());
+      next_legacy_queue_to_schedule_ =
+          legacy_queues_.erase(next_legacy_queue_to_schedule_);
+    } else {
+      ++next_legacy_queue_to_schedule_;
+    }
+    if (next_legacy_queue_to_schedule_ == legacy_queues_.end() &&
+        !legacy_queues_.empty()) {
+      // We've hit the end. Wrap to the first queue.
+      next_legacy_queue_to_schedule_ = legacy_queues_.begin();
+    }
+  }
+
+  if (options_.rank_queues && batch_priority_key.has_value()) {
+    batch_to_process = queue_for_batch->ScheduleBatch();
+  }
+
+  *queue_for_batch_out = queue_for_batch;
+  *batch_to_process_out = std::move(batch_to_process);
+}
+
+template <typename TaskType>
 void SharedBatchScheduler<TaskType>::ThreadLogic() {
   // A batch to process next (or nullptr if no work to do).
   BatchTaskUniquePtr batch_to_process;
+  // TODO: Remove once the migration to QueueBase is complete.
+  if (!absl::GetFlag(FLAGS_jsv_use_queue_base)) {
+    // A batch to process next (or nullptr if no work to do).
+    BatchTaskUniquePtr batch_to_process;
+    // The queue with which 'batch_to_process' is associated.
+    internal::Queue<TaskType>* queue_for_batch = nullptr;
+    {
+      absl::MutexLock l(mu_);
+      while (true) {
+        GetLegacyNextWorkItem_Locked(&queue_for_batch, &batch_to_process);
+        if (BatchExists(batch_to_process)) break;
+        // We couldn't find any work to do. Wait until a new batch becomes
+        // schedulable, or some time has elapsed, before checking again.
+        schedulable_batch_cv_.WaitWithTimeout(&mu_, absl::Milliseconds(1));
+        if (legacy_queues_.empty()) return;
+      }
+    }
+
+    size_t batch_size_to_schedule = batch_to_process->size();
+    queue_for_batch->ProcessBatch(
+        std::move(batch_to_process),
+        queue_for_batch->GetLowPriorityTasksForPadding(batch_size_to_schedule));
+    return;
+  }
+
   // The queue with which 'batch_to_process' is associated.
-  internal::Queue<TaskType>* queue_for_batch = nullptr;
+  internal::QueueBase<TaskType>* queue_for_batch = nullptr;
   {
     absl::MutexLock l(mu_);
     while (true) {
@@ -862,19 +922,15 @@ void SharedBatchScheduler<TaskType>::ThreadLogic() {
     }
   }
 
-  size_t batch_size_to_schedule = batch_to_process->size();
-  queue_for_batch->ProcessBatch(
-      std::move(batch_to_process),
-      queue_for_batch->GetLowPriorityTasksForPadding(batch_size_to_schedule));
+  queue_for_batch->ProcessBatch(std::move(batch_to_process));
 }
 
 namespace internal {
 
 template <typename TaskType>
-Queue<TaskType>::Queue(
-    const typename SharedBatchScheduler<TaskType>::QueueOptions& options,
-    Env* env, ProcessBatchCallback process_batch_callback,
-    SchedulableBatchCallback schedulable_batch_callback)
+Queue<TaskType>::Queue(const QueueOptions& options, Env* env,
+                       ProcessBatchCallback process_batch_callback,
+                       SchedulableBatchCallback schedulable_batch_callback)
     : options_(options),
       env_(env),
       max_execution_batch_size_(GetMaxExecutionBatchSize(options_)),
@@ -1528,7 +1584,7 @@ TaskQueue<TaskType>& Queue<TaskType>::GetLowPriorityTaskQueue() {
 template <typename TaskType>
 QueueHandle<TaskType>::QueueHandle(
     std::shared_ptr<SharedBatchScheduler<TaskType>> scheduler,
-    Queue<TaskType>* queue)
+    QueueBase<TaskType>* queue)
     : scheduler_(scheduler), queue_(queue) {}
 
 template <typename TaskType>
@@ -1551,8 +1607,35 @@ size_t QueueHandle<TaskType>::SchedulingCapacity() const {
   return queue_->SchedulingCapacity();
 }
 
+template <typename TaskType>
+LegacyQueueHandle<TaskType>::LegacyQueueHandle(
+    std::shared_ptr<SharedBatchScheduler<TaskType>> scheduler,
+    Queue<TaskType>* queue)
+    : scheduler_(scheduler), legacy_queue_(std::move(queue)) {}
+
+template <typename TaskType>
+LegacyQueueHandle<TaskType>::~LegacyQueueHandle() {
+  legacy_queue_->CloseAndWaitUntilEmpty();
+}
+
+template <typename TaskType>
+absl::Status LegacyQueueHandle<TaskType>::Schedule(
+    std::unique_ptr<TaskType>* task) {
+  return legacy_queue_->Schedule(task);
+}
+
+template <typename TaskType>
+size_t LegacyQueueHandle<TaskType>::NumEnqueuedTasks() const {
+  return legacy_queue_->NumEnqueuedTasks();
+}
+
+template <typename TaskType>
+size_t LegacyQueueHandle<TaskType>::SchedulingCapacity() const {
+  return legacy_queue_->SchedulingCapacity();
+}
+
 }  // namespace internal
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_SHARED_BATCH_SCHEDULER_H_
+#endif  // XLA_SERVING_RUNTIME_BATCHING_SHARED_BATCH_SCHEDULER_H_

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_TEST_UTILS_STATUS_MACROS_H_
-#define THIRD_PARTY_NEPTUNE_DATA_TEST_UTILS_STATUS_MACROS_H_
+#ifndef XLA_SERVING_DATA_TEST_UTILS_STATUS_MACROS_H_
+#define XLA_SERVING_DATA_TEST_UTILS_STATUS_MACROS_H_
 
 // IWYU pragma: always_keep
 
@@ -35,4 +35,4 @@
   lhs = std::move(*ASSERT_OK_AND_ASSIGN_CONCAT(status_or_, __LINE__))
 #endif
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_TEST_UTILS_STATUS_MACROS_H_
+#endif  // XLA_SERVING_DATA_TEST_UTILS_STATUS_MACROS_H_

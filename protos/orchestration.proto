@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-package neptune_model_orchestration;
+package xla_saved_model_orchestration;
 
 import "protos/type.proto";
 
@@ -49,7 +49,7 @@ message Pipeline {
   // The overall output signature will be the output signature of the
   // post-processor if present, otherwise the output signature of the model
   // function.
-  neptune_model_type.FunctionSignature signature = 1;
+  xla_saved_model_type.FunctionSignature signature = 1;
 
   // An optional signature that is a (ordered) mapping from names to
   // `TensorType`. This signature is useful for some execution environments that
@@ -106,9 +106,9 @@ message Component {
   Role role = 2;
   // The named_signature of the first and last components is used to derive the
   // pipeline's named signature. For intermediate components, the named input
-  // signature is used by JSV to filter out unwanted named signatures for each
-  // kernel. The named output signature will be used to update the available
-  // tensor map of the ExecuteContext.
+  // signature is used by XLA Serving to filter out unwanted named signatures
+  // for each kernel. The named output signature will be used to update the
+  // available tensor map of the ExecuteContext.
   optional NamedSignature named_signature = 4;
   // If set, specifies the name of the weights to be bound to this function.
   // This field is primarily used for model functions and is typically omitted
@@ -135,9 +135,9 @@ message NamedTensorTypeList {
 
 message NamedTensorType {
   string name = 1;
-  neptune_model_type.TensorType tensor_type = 2;
-  // Number of downstream consumers of this tensor. This value is computed
-  // by OEX during export and used by JSV to manage tensor cache eviction.
+  xla_saved_model_type.TensorType tensor_type = 2;
+  // Number of downstream consumers of this tensor. This value is computed by
+  // OEX during export and used by XLA Serving to manage tensor cache eviction.
   optional int32 consumer_count = 3;
 }
 
@@ -392,6 +392,20 @@ message BatchOptions {
 
   // Controls the internal queue batching strategy.
   PriorityBatchingPolicy priority_batching_policy = 12;
+
+  // Options for priority-aware batching. Effective when
+  // priority_batching_policy is set to PRIORITY_AWARE.
+  message PriorityAwareBatchingOptions {
+    // The maximum sum of task sizes to enqueue. Must be non-negative.
+    int32 max_queue_depth = 1;
+
+    // If true, the priority aware batch queue will resplit tasks into smaller
+    // subtasks if needed.
+    bool enable_task_resplit = 2;
+  }
+
+  // Configuration options for priority-aware batching.
+  PriorityAwareBatchingOptions priority_aware_batching_options = 13;
 }
 
 message MetadataForBatching {

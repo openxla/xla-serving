@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_CORE_STREAMING_STREAM_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_CORE_STREAMING_STREAM_H_
+#ifndef XLA_SERVING_RUNTIME_CORE_STREAMING_STREAM_H_
+#define XLA_SERVING_RUNTIME_CORE_STREAMING_STREAM_H_
 
 #include <algorithm>
 #include <cstdint>
@@ -36,13 +36,13 @@
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/tsl/platform/threadpool_interface.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 struct StreamedResult {
-  absl::flat_hash_map<std::string, neptune::HostBuffer> host_buffers;
+  absl::flat_hash_map<std::string, xla_serving::HostBuffer> host_buffers;
   absl::Time enqueued_time;
 };
 
@@ -76,7 +76,7 @@ class StreamWorkerInterface {
                                  absl::Duration latency) {}
   virtual absl::Status InvokeStreamCallback(
       int64_t callback_id, const std::vector<std::string>& names,
-      const std::vector<std::pair<int64_t, std::vector<neptune::HostBuffer>>>&
+      const std::vector<std::pair<int64_t, std::vector<xla_serving::HostBuffer>>>&
           responses) = 0;
 
  private:
@@ -144,7 +144,7 @@ class StreamCallbackRegistry {
   absl::StatusOr<ScopedStreamCallback> Register(
       absl::string_view model_name, int64_t callback_id, int64_t step_id,
       absl::AnyInvocable<
-          void(absl::flat_hash_map<std::string, neptune::HostBuffer>)>
+          void(absl::flat_hash_map<std::string, xla_serving::HostBuffer>)>
           callback);
 
   absl::Status Invoke(tsl::thread::ThreadPoolInterface* thread_pool,
@@ -162,7 +162,7 @@ class StreamCallbackRegistry {
                   absl::string_view model_name, int64_t callback_id,
                   int64_t step_id,
                   absl::AnyInvocable<
-                      void(absl::flat_hash_map<std::string, neptune::HostBuffer>)>
+                      void(absl::flat_hash_map<std::string, xla_serving::HostBuffer>)>
                       callback)
         : registry_(registry),
           model_name_(model_name),
@@ -188,7 +188,7 @@ class StreamCallbackRegistry {
     std::string model_name_;
     int64_t callback_id_;
     int64_t step_id_;
-    absl::AnyInvocable<void(absl::flat_hash_map<std::string, neptune::HostBuffer>)>
+    absl::AnyInvocable<void(absl::flat_hash_map<std::string, xla_serving::HostBuffer>)>
         callback_;
 
     absl::Mutex mu_;
@@ -241,6 +241,6 @@ class ScopedStreamCallback {
   int64_t step_id_ = -1;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_STREAMING_STREAM_H_
+#endif  // XLA_SERVING_RUNTIME_CORE_STREAMING_STREAM_H_

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/batching/batch_scheduler_utils.h"  // from @neptune
+#include "runtime/core/batching/batch_scheduler_utils.h"  // from @xla_serving
 
 #include <algorithm>
 #include <cstdint>
@@ -24,10 +24,10 @@
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
-#include "runtime/core/batching/batch_stats.h"  // from @neptune
-#include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
+#include "runtime/core/batching/batch_stats.h"  // from @xla_serving
+#include "runtime/kernel/batching/batch_options_utils.h"  // from @xla_serving
 
-namespace neptune {
+namespace xla_serving {
 
 int GetNextAllowedBatchSize(int batch_size,
                             const std::vector<int32_t>& allowed_batch_sizes,
@@ -153,4 +153,4 @@ int32_t ApplyBatchPaddingPolicy(
   return batch_down_size;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

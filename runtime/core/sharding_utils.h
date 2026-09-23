@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_CORE_SHARDING_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_CORE_SHARDING_UTILS_H_
+#ifndef XLA_SERVING_RUNTIME_CORE_SHARDING_UTILS_H_
+#define XLA_SERVING_RUNTIME_CORE_SHARDING_UTILS_H_
 
 #include <cstdint>
 #include <vector>
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/core/device_buffer.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/device_buffer.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
@@ -33,7 +33,7 @@
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
-namespace neptune::sharding_internal {
+namespace xla_serving::sharding_internal {
 
 // Splits the given `input_buffer` into equal shapes of slices.
 //
@@ -109,6 +109,6 @@ absl::StatusOr<DeviceBuffer> MakeDeviceBufferFromPinnedHost(
     xla::ifrt::ShardingRef sharding,
     const tsl::thread::ThreadPool& thread_pool);
 
-}  // namespace neptune::sharding_internal
+}  // namespace xla_serving::sharding_internal
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_CORE_SHARDING_UTILS_H_
+#endif  // XLA_SERVING_RUNTIME_CORE_SHARDING_UTILS_H_

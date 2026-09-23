@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_RESOURCE_MANAGER_PYTHON_RESOURCE_PYBIND_H_
-#define THIRD_PARTY_NEPTUNE_DATA_RESOURCE_MANAGER_PYTHON_RESOURCE_PYBIND_H_
+#ifndef XLA_SERVING_DATA_RESOURCE_MANAGER_PYTHON_RESOURCE_PYBIND_H_
+#define XLA_SERVING_DATA_RESOURCE_MANAGER_PYTHON_RESOURCE_PYBIND_H_
 
 #include <string>
 #include <utility>
@@ -21,14 +21,14 @@
 
 #include "absl/functional/any_invocable.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "data/resource_manager/cc/asset.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
+#include "data/resource_manager/cc/asset.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
 #include "include/pybind11/pybind11.h"  // from @pybind11_bazel
 #include "include/pybind11/stl.h"  // from @pybind11_bazel
 #include "include/pybind11/trampoline_self_life_support.h"  // from @pybind11_bazel
 #include "pybind11_abseil/status_casters.h"  // from @pybind11_abseil
 
-namespace neptune::data {
+namespace xla_serving::data {
 
 // Trampoline class for Resource to allow overriding virtual methods in Python.
 class PyResource : public Resource,
@@ -53,6 +53,6 @@ void RegisterPybindResourceExt(pybind11::module& m, const std::string& name) {
   cls.def_property_readonly("class_name", &Resource::class_name);
 }
 
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_RESOURCE_MANAGER_PYTHON_RESOURCE_PYBIND_H_
+#endif  // XLA_SERVING_DATA_RESOURCE_MANAGER_PYTHON_RESOURCE_PYBIND_H_

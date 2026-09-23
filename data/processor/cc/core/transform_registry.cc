@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/processor/cc/core/transform_registry.h"  // from @neptune
+#include "data/processor/cc/core/transform_registry.h"  // from @xla_serving
 
 #include <cstddef>
 #include <memory>
@@ -33,17 +33,17 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/api/type_info.h"  // from @neptune
-#include "data/processor/cc/api/value.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/api/type_info.h"  // from @xla_serving
+#include "data/processor/cc/api/value.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace core {
 
@@ -108,7 +108,7 @@ TransformRegistry::CreateTransform(absl::string_view name,
 absl::StatusOr<std::unique_ptr<TransformBase>>
 TransformRegistry::DeserializeTransform(
     const TransformConfig& config,
-    absl::Span<const std::shared_ptr<neptune::data::Resource>> resources) {
+    absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources) {
   TransformFactoryHolder* holder = nullptr;
   {
     absl::MutexLock lock(transform_registry_mu_);
@@ -123,7 +123,7 @@ TransformRegistry::DeserializeTransform(
     }
     // Multiple holders: wrap in DynamicDispatchTransform
     if (it->second.size() > 1) {
-      std::vector<std::shared_ptr<neptune::data::Resource>> res_vec(
+      std::vector<std::shared_ptr<xla_serving::data::Resource>> res_vec(
           resources.begin(), resources.end());
       Device device = FromDeviceProto(config.device());
       return DynamicDispatchTransform::Create(config, std::move(res_vec),
@@ -230,12 +230,12 @@ absl::Status TransformFactoryHolder::Execute(TransformBase* base,
 
 namespace {
 
-xla::ifrt::DType GetDType(const neptune::HostBuffer& hb) { return hb.dtype(); }
+xla::ifrt::DType GetDType(const xla_serving::HostBuffer& hb) { return hb.dtype(); }
 xla::ifrt::DType GetDType(const api::HostBufferSpec& spec) {
   return spec.dtype;
 }
 
-const xla::ifrt::Shape& GetShape(const neptune::HostBuffer& hb) {
+const xla::ifrt::Shape& GetShape(const xla_serving::HostBuffer& hb) {
   return hb.shape();
 }
 const xla::ifrt::Shape& GetShape(const api::HostBufferSpec& spec) {
@@ -288,16 +288,16 @@ struct ValueTraits;
 template <>
 struct ValueTraits<api::Value> {
   static bool IsList(const api::Value& value) {
-    return value.IsType<std::vector<neptune::HostBuffer>>();
+    return value.IsType<std::vector<xla_serving::HostBuffer>>();
   }
-  static absl::Span<const neptune::HostBuffer> GetList(const api::Value& value) {
-    return value.Get<std::vector<neptune::HostBuffer>>();
+  static absl::Span<const xla_serving::HostBuffer> GetList(const api::Value& value) {
+    return value.Get<std::vector<xla_serving::HostBuffer>>();
   }
   static bool IsSingle(const api::Value& value) {
-    return value.IsType<neptune::HostBuffer>();
+    return value.IsType<xla_serving::HostBuffer>();
   }
-  static const neptune::HostBuffer& GetSingle(const api::Value& value) {
-    return value.Get<neptune::HostBuffer>();
+  static const xla_serving::HostBuffer& GetSingle(const api::Value& value) {
+    return value.Get<xla_serving::HostBuffer>();
   }
 };
 
@@ -511,4 +511,4 @@ absl::Span<const api::TypeInfo> DynamicDispatchTransform::OutputTypes() const {
 
 }  // namespace core
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

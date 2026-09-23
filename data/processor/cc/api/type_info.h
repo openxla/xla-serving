@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_API_TYPE_INFO_H_
-#define THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_API_TYPE_INFO_H_
+#ifndef XLA_SERVING_DATA_PROCESSOR_CC_API_TYPE_INFO_H_
+#define XLA_SERVING_DATA_PROCESSOR_CC_API_TYPE_INFO_H_
 
 #include <typeinfo>
 #include <utility>
@@ -21,7 +21,7 @@
 #include "absl/base/fast_type_id.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace api {
 
@@ -81,6 +81,6 @@ TypeInfo CreateTypeInfo() {
 
 }  // namespace api
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_API_TYPE_INFO_H_
+#endif  // XLA_SERVING_DATA_PROCESSOR_CC_API_TYPE_INFO_H_

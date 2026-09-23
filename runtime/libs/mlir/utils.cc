@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/libs/mlir/utils.h"  // from @neptune
+#include "runtime/libs/mlir/utils.h"  // from @xla_serving
 
 #include <cstdint>
 #include <optional>
@@ -36,7 +36,7 @@
 #include "xla/python/pjrt_ifrt/pjrt_dtype.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune::sharding_internal {
+namespace xla_serving::sharding_internal {
 
 absl::StatusOr<xla::ifrt::DType> ToIfrtDType(const mlir::Type& type) {
   xla::PrimitiveType primitive_type;
@@ -77,4 +77,4 @@ absl::StatusOr<MlirShape> ToMlirShape(const mlir::Type& type) {
   return MlirShape{};
 }
 
-}  // namespace neptune::sharding_internal
+}  // namespace xla_serving::sharding_internal

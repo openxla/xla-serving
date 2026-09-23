@@ -12,21 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "examples/composite_processor/add_two_input_buffers_transform.h"  // from @neptune
+#include "examples/composite_processor/add_two_input_buffers_transform.h"  // from @xla_serving
 
 #include <cstdint>
 #include <memory>
 
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
-#include "data/processor/cc/api/registry.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/cc/core/transform_registry.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/cc/core/transform_registry.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 
-namespace neptune_examples {
+namespace xla_serving_examples {
 namespace composite {
 
 absl::StatusOr<std::unique_ptr<AddTwoInputBuffersTransform>>
@@ -34,8 +34,8 @@ AddTwoInputBuffersTransform::Create() {
   return std::make_unique<AddTwoInputBuffersTransform>();
 }
 
-absl::StatusOr<neptune::HostBuffer> AddTwoInputBuffersTransform::operator()(
-    neptune::HostBuffer in_buffer1, neptune::HostBuffer in_buffer2) {
+absl::StatusOr<xla_serving::HostBuffer> AddTwoInputBuffersTransform::operator()(
+    xla_serving::HostBuffer in_buffer1, xla_serving::HostBuffer in_buffer2) {
   if (in_buffer1.shape() != in_buffer2.shape()) {
     return absl::InvalidArgumentError("Input buffers must have the same shape");
   }
@@ -43,8 +43,8 @@ absl::StatusOr<neptune::HostBuffer> AddTwoInputBuffersTransform::operator()(
       in_buffer1.dtype().kind() != xla::ifrt::DType::kS32) {
     return absl::InvalidArgumentError("Input buffers must have the same dtype");
   }
-  neptune::HostBuffer out_buffer =
-      neptune::HostBuffer(in_buffer1.dtype(), in_buffer1.shape());
+  xla_serving::HostBuffer out_buffer =
+      xla_serving::HostBuffer(in_buffer1.dtype(), in_buffer1.shape());
 
   int64_t num_elements = in_buffer1.shape().num_elements();
   const int* data1 = static_cast<const int*>(in_buffer1.base());
@@ -56,9 +56,9 @@ absl::StatusOr<neptune::HostBuffer> AddTwoInputBuffersTransform::operator()(
   return out_buffer;
 }
 
-absl::StatusOr<neptune::data::composite::TransformConfig>
+absl::StatusOr<xla_serving::data::composite::TransformConfig>
 AddTwoInputBuffersTransform::ToProto() const {
-  neptune::data::composite::TransformConfig config;
+  xla_serving::data::composite::TransformConfig config;
   config.set_op_name("AddTwoInputBuffersTransform");
   return config;
 }
@@ -66,12 +66,12 @@ AddTwoInputBuffersTransform::ToProto() const {
 ND_REGISTER_TRANSFORM(AddTwoInputBuffersTransform,
                       "AddTwoInputBuffersTransform")
     .SetDeserializer(
-        [](const neptune::data::composite::TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+        [](const xla_serving::data::composite::TransformConfig& config,
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<
-                std::unique_ptr<neptune::data::composite::TransformBase>> {
+                std::unique_ptr<xla_serving::data::composite::TransformBase>> {
           return std::make_unique<AddTwoInputBuffersTransform>();
         });
 
 }  // namespace composite
-}  // namespace neptune_examples
+}  // namespace xla_serving_examples

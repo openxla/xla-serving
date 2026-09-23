@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/kernel/batching/batch_resource_base.h"  // from @neptune
+#include "runtime/kernel/batching/batch_resource_base.h"  // from @xla_serving
 
 #include <algorithm>
 #include <cstddef>
@@ -44,19 +44,19 @@
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/core/allocator.h"  // from @neptune
-#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
-#include "runtime/core/batching/batch_scheduler_utils.h"  // from @neptune
-#include "runtime/core/batching/batch_stats.h"  // from @neptune
-#include "runtime/core/batching/input_split_metadata.h"  // from @neptune
-#include "runtime/core/batching/threadsafe_status.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/incremental_barrier.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
-#include "runtime/kernel/batching/ragged_utils.h"  // from @neptune
-#include "runtime/kernel/batching/warmup.h"  // from @neptune
-#include "runtime/kernel/kernel.h"  // from @neptune
+#include "runtime/core/allocator.h"  // from @xla_serving
+#include "runtime/core/batching/batch_scheduler.h"  // from @xla_serving
+#include "runtime/core/batching/batch_scheduler_utils.h"  // from @xla_serving
+#include "runtime/core/batching/batch_stats.h"  // from @xla_serving
+#include "runtime/core/batching/input_split_metadata.h"  // from @xla_serving
+#include "runtime/core/batching/threadsafe_status.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/incremental_barrier.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/kernel/batching/batch_options_utils.h"  // from @xla_serving
+#include "runtime/kernel/batching/ragged_utils.h"  // from @xla_serving
+#include "runtime/kernel/batching/warmup.h"  // from @xla_serving
+#include "runtime/kernel/kernel.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/lib/monitoring/counter.h"  // from @xla
@@ -78,10 +78,10 @@
 #include "tsl/platform/context.h"  // from @tsl
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
-ABSL_FLAG(bool, jsv_support_batching_for_ragged_inputs, false,
+ABSL_FLAG(bool, xla_serving_support_batching_for_ragged_inputs, false,
           "Whether to support composite types in batching.");
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 using BufferMatrix = BatchResourceBase::BufferMatrix;
@@ -346,11 +346,11 @@ absl::Status BatchResourceBase::RegisterInput(
 
   // Only used to support batching for ragged inputs.
   // Takes effect when
-  // `FLAGS_jsv_support_batching_for_ragged_inputs` is true.
+  // `FLAGS_xla_serving_support_batching_for_ragged_inputs` is true.
   int64_t batch_size = -1;
   std::vector<InputClassification> input_classifications;
   input_classifications.reserve(inputs_for_batch.size());
-  if (absl::GetFlag(FLAGS_jsv_support_batching_for_ragged_inputs)) {
+  if (absl::GetFlag(FLAGS_xla_serving_support_batching_for_ragged_inputs)) {
     for (int i = 0; i < inputs_for_batch.size(); ++i) {
       InputClassification classification = ClassifyInput(i, ragged_inputs_);
       input_classifications.push_back(classification);
@@ -386,7 +386,7 @@ absl::Status BatchResourceBase::RegisterInput(
                        i, " has no dimensions."));
     }
 
-    if (absl::GetFlag(FLAGS_jsv_support_batching_for_ragged_inputs)) {
+    if (absl::GetFlag(FLAGS_xla_serving_support_batching_for_ragged_inputs)) {
       InputClassification classification = input_classifications[i];
       if (classification.type == kRaggedRowSplits) {
         if (batch_size != -1 &&
@@ -420,7 +420,7 @@ absl::Status BatchResourceBase::RegisterInput(
     }
     batch_components->inputs.push_back(host_buffer);
   }
-  if (absl::GetFlag(FLAGS_jsv_support_batching_for_ragged_inputs)) {
+  if (absl::GetFlag(FLAGS_xla_serving_support_batching_for_ragged_inputs)) {
     // For ragged inputs, we cannot determine the batch size based on the first
     // dimension of the input buffers similar to Dense inputs. Thus, we use the
     // inferred batch size above based on row splits size.
@@ -477,7 +477,7 @@ absl::Status BatchResourceBase::RegisterInput(
   // TODO: b/405168505: Checking model name existence is copied form TF, and is
   // kept for compatibility. Maybe remove it.
   if (!context->metadata.model_name.empty()) {
-    // TODO: Update the serving path to use the JSV warmup
+    // TODO: Update the serving path to use the XLA Serving warmup
     // registry in case of Orbax models.
     WarmupStateRegistry::Key key(std::string(context->metadata.model_name),
                                  context->metadata.model_version);
@@ -496,7 +496,7 @@ absl::Status BatchResourceBase::RegisterInput(
   return batcher_queue->Schedule(&batch_components);
 }
 
-/*static*/ BatchResourceBase::BatcherT::QueueOptions
+/*static*/ BatchResourceBase::QueueOptions
 BatchResourceBase::GetBatcherQueueOptions(
     int32_t num_batch_threads, int32_t max_batch_size,
     int32_t batch_timeout_micros, int32_t max_enqueued_batches,
@@ -507,9 +507,11 @@ BatchResourceBase::GetBatcherQueueOptions(
     int32_t low_priority_max_enqueued_batches,
     const std::vector<int32_t>& low_priority_allowed_batch_sizes,
     MixedPriorityBatchingPolicy mixed_priority_batching_policy,
+    PriorityBatchingPolicy priority_batching_policy,
+    PriorityAwareBatchingOptions priority_aware_batching_options,
     tsl::thread::ThreadPool* thread_pool, Allocator* allocator,
     std::vector<RaggedInputSpec> ragged_inputs) {
-  BatcherT::QueueOptions batcher_queue_options;
+  QueueOptions batcher_queue_options;
   batcher_queue_options.input_batch_size_limit = max_batch_size;
   batcher_queue_options.max_enqueued_batches = max_enqueued_batches;
   batcher_queue_options.batch_timeout_micros = batch_timeout_micros;
@@ -539,6 +541,9 @@ BatchResourceBase::GetBatcherQueueOptions(
       low_priority_allowed_batch_sizes;
   batcher_queue_options.mixed_priority_batching_policy =
       mixed_priority_batching_policy;
+  batcher_queue_options.priority_batching_policy = priority_batching_policy;
+  batcher_queue_options.priority_aware_batching_options =
+      priority_aware_batching_options;
   batcher_queue_options.enable_large_batch_splitting =
       enable_large_batch_splitting;
   batcher_queue_options.allocator = allocator;
@@ -637,7 +642,7 @@ absl::Status BatchResourceBase::ConcatInputBuffers(
   // `just_for_warmup` is true, the real data is not added. Otherwise, the real
   // data is added to the front of each `concatenated_buffer`.
   for (int i = 0; i < num_inputs; ++i) {
-    if (absl::GetFlag(FLAGS_jsv_support_batching_for_ragged_inputs)) {
+    if (absl::GetFlag(FLAGS_xla_serving_support_batching_for_ragged_inputs)) {
       auto classification = ClassifyInput(i, ragged_inputs_);
       if (classification.type == kRaggedRowSplits) {
         if (just_for_warmup) {
@@ -830,7 +835,6 @@ absl::Status BatchResourceBase::SplitOutputBuffers(
 
 void BatchResourceBase::CleanUpFunctionHelper(
     BatchTask& task, const absl::Status& status) const {
-  tsl::WithContext wc(task.propagated_context);
   if (!status.ok() &&
       absl::StrContains(status.message(),
                         "Function was cancelled before it was started")) {
@@ -1153,7 +1157,7 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
   // initializes input of `output_tasks` with split results.
   for (int i = 0; i < num_input_buffers; ++i) {
     InputClassification classification;
-    if (absl::GetFlag(FLAGS_jsv_support_batching_for_ragged_inputs)) {
+    if (absl::GetFlag(FLAGS_xla_serving_support_batching_for_ragged_inputs)) {
       classification = ClassifyInput(i, ragged_inputs);
     } else {
       classification = {kDense};
@@ -1340,4 +1344,4 @@ void BatchResourceBase::RecordBatchDelayMetrics(
   }
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

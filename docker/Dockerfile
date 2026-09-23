@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Stage 1: Build Neptune binary
+# Stage 1: Build XLA Serving binary
 FROM ubuntu:22.04@sha256:eb29ed27b0821dca09c2e28b39135e185fc1302036427d5f4d70a41ce8fd7659 as build_image
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -68,18 +68,18 @@ WORKDIR /src
 COPY . .
 
 # Build the binary
-RUN bazel build //runtime/serving/gcp/server:jsv_serving_main
+RUN bazel build //runtime/serving/gcp/server:xla_serving_main_cpu
 
 # Stage 2: Runtime image
 FROM ubuntu:22.04@sha256:eb29ed27b0821dca09c2e28b39135e185fc1302036427d5f4d70a41ce8fd7659
 
-ARG NEPTUNE_VERSION_GIT_BRANCH=master
-ARG NEPTUNE_VERSION_GIT_COMMIT=head
+ARG XLA_SERVING_VERSION_GIT_BRANCH=master
+ARG XLA_SERVING_VERSION_GIT_COMMIT=head
 ARG DEBIAN_FRONTEND=noninteractive
 
 LABEL maintainer="neptune-eng@google.com"
-LABEL neptune_github_branchtag=${NEPTUNE_VERSION_GIT_BRANCH}
-LABEL neptune_github_commit=${NEPTUNE_VERSION_GIT_COMMIT}
+LABEL xla_serving_github_branchtag=${XLA_SERVING_VERSION_GIT_BRANCH}
+LABEL xla_serving_github_commit=${XLA_SERVING_VERSION_GIT_COMMIT}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -87,9 +87,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Neptune Serving pkg & dependencies
-COPY --from=build_image /src/bazel-bin/runtime/serving/gcp/server/jsv_serving_main /usr/bin/jsv_serving_main
-COPY --from=build_image /src/bazel-bin/runtime/serving/gcp/server/jsv_serving_main.runfiles /usr/bin/jsv_serving_main.runfiles
+# Install XLA Serving pkg & dependencies
+COPY --from=build_image /src/bazel-bin/runtime/serving/gcp/server/xla_serving_main_cpu /usr/bin/xla_serving_main
+COPY --from=build_image /src/bazel-bin/runtime/serving/gcp/server/xla_serving_main_cpu.runfiles /usr/bin/xla_serving_main.runfiles
 
 # Expose ports
 # gRPC
@@ -102,9 +102,9 @@ ENV MODEL_NAME=default
 # Create a script that runs the model server so we can use environment variables
 # while also passing in arguments from the docker command line
 RUN echo '#!/bin/bash \n\n\
-jsv_serving_main --port=8500 \
+xla_serving_main --port=8500 \
 --model_name=${MODEL_NAME} --model_path=${MODEL_BASE_PATH}/${MODEL_NAME} \
-"$@"' > /usr/bin/neptune_serving_entrypoint.sh \
-&& chmod +x /usr/bin/neptune_serving_entrypoint.sh
+"$@"' > /usr/bin/xla_serving_entrypoint.sh \
+&& chmod +x /usr/bin/xla_serving_entrypoint.sh
 
-ENTRYPOINT ["/usr/bin/neptune_serving_entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/xla_serving_entrypoint.sh"]

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/tensorflow/utils/common_utils.h"  // from @neptune
+#include "runtime/tensorflow/utils/common_utils.h"  // from @xla_serving
 
 #include <string>
 
@@ -20,18 +20,18 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
-#include "runtime/core/constants.h"  // from @neptune
-#include "runtime/interpreter/manifest_utils.h"  // from @neptune
+#include "protos/manifest.pb.h"  // from @xla_serving
+#include "runtime/core/constants.h"  // from @xla_serving
+#include "runtime/interpreter/manifest_utils.h"  // from @xla_serving
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 
 // Gets the TF SavedModel supplement from the manifest.
-absl::StatusOr<const neptune_model_manifest::UnstructuredData>
-GetTfSavedModelSupplement(const neptune_model_manifest::Manifest& manifest) {
+absl::StatusOr<const xla_saved_model_manifest::UnstructuredData>
+GetTfSavedModelSupplement(const xla_saved_model_manifest::Manifest& manifest) {
   const auto& dict = manifest.supplemental_info();
   auto it = dict.find(kTfSavedModelSupplementalName);
   if (it == dict.end()) {
@@ -46,7 +46,7 @@ GetTfSavedModelSupplement(const neptune_model_manifest::Manifest& manifest) {
 }  // namespace
 
 absl::StatusOr<bool> HasTfSavedModelSupplement(absl::string_view model_path) {
-  TF_ASSIGN_OR_RETURN(neptune_model_manifest::Manifest manifest,
+  TF_ASSIGN_OR_RETURN(xla_saved_model_manifest::Manifest manifest,
                       GetManifest(model_path));
   const auto& dict = manifest.supplemental_info();
   return dict.contains(kTfSavedModelSupplementalName);
@@ -54,18 +54,18 @@ absl::StatusOr<bool> HasTfSavedModelSupplement(absl::string_view model_path) {
 
 absl::StatusOr<std::string> GetTfSavedModelDirPath(
     absl::string_view model_path) {
-  TF_ASSIGN_OR_RETURN(neptune_model_manifest::Manifest manifest,
+  TF_ASSIGN_OR_RETURN(xla_saved_model_manifest::Manifest manifest,
                       GetManifest(model_path));
   TF_ASSIGN_OR_RETURN(
-      const neptune_model_manifest::UnstructuredData tf_saved_model_supplement,
+      const xla_saved_model_manifest::UnstructuredData tf_saved_model_supplement,
       GetTfSavedModelSupplement(manifest));
 
   TF_RETURN_IF_ERROR(CheckMimeAndDataType(
       tf_saved_model_supplement, {kTfSavedModelMimeType},
-      {neptune_model_manifest::UnstructuredData::kFileSystemLocation},
+      {xla_saved_model_manifest::UnstructuredData::kFileSystemLocation},
       "TF SavedModel supplement"));
 
   return GetAbsoluteFileSystemPath(
       model_path, tf_saved_model_supplement.file_system_location());
 }
-}  // namespace neptune
+}  // namespace xla_serving

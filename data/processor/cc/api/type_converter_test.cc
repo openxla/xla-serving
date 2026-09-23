@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/processor/cc/api/type_converter.h"  // from @neptune
+#include "data/processor/cc/api/type_converter.h"  // from @xla_serving
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
-#include "data/processor/cc/api/value.h"  // from @neptune
-#include "data/test_utils/status_macros.h"  // from @neptune
+#include "data/processor/cc/api/value.h"  // from @xla_serving
+#include "data/test_utils/status_macros.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace api {
 namespace {
@@ -63,4 +63,4 @@ TEST(TypedTransformTest, ErrorTransform) {
 }  // namespace
 }  // namespace api
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
