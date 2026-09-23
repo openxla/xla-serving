@@ -33,7 +33,6 @@ from xla_saved_model._src.core import orchestration_proto_utils
 from xla_saved_model._src.core import persistence_lib
 from xla_saved_model._src.core import saveable
 from xla_saved_model._src.core import shlo_type
-from xla_saved_model._src.core import type_conversions
 from xla_saved_model._src.core import type_proto_utils
 from xla_saved_model._src.core import value
 from xla_saved_model._src.export import constants
@@ -41,6 +40,7 @@ from xla_saved_model._src.export import jax_model
 from xla_saved_model._src.export import serving_config
 from xla_saved_model._src.export import tensorflow_model
 from xla_saved_model._src.export import warmup
+from xla_saved_model._src.jax2xsm import utils as jax2xsm_utils
 from xla_saved_model._src.processors import jax_processor
 from xla_saved_model._src.processors import processor
 from xla_saved_model._src.processors import tf_processor
@@ -276,10 +276,10 @@ def _update_save_bundle_with_pipeline_node(
       use_batching=pipeline_node.use_batching,
   )
   if is_graph_based:
-    shlo_input_sig = type_conversions.to_shlo_tensor_spec(
+    shlo_input_sig = jax2xsm_utils.to_shlo_tensor_spec(
         prepared_processor.input_signature
     )
-    shlo_output_sig = type_conversions.to_shlo_tensor_spec(
+    shlo_output_sig = jax2xsm_utils.to_shlo_tensor_spec(
         prepared_processor.output_signature
     )
     component.named_signature.CopyFrom(
@@ -370,10 +370,10 @@ def _update_save_bundle(
       pipeline_output_signature = node_output_signature
       input_signature = node_output_signature
 
-  shlo_input_signature = type_conversions.to_shlo_tensor_spec(
+  shlo_input_signature = jax2xsm_utils.to_shlo_tensor_spec(
       pipeline_input_signature
   )
-  shlo_output_signature = type_conversions.to_shlo_tensor_spec(
+  shlo_output_signature = jax2xsm_utils.to_shlo_tensor_spec(
       pipeline_output_signature
   )
 

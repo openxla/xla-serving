@@ -16,6 +16,7 @@
 
 from typing import Any
 
+import numpy as np
 import tensorflow as tf
 
 from xla_saved_model._src.core import shlo_type
@@ -37,6 +38,27 @@ def tf_dtype_from(dtype: shlo_type.ShloDType | tf.DType) -> Any:
       return dtype
 
 
+def shlo_dtype_from(
+    dtype: tf.DType | shlo_type.ShloDType,
+) -> shlo_type.ShloDType:
+  match dtype:
+
+    case tf.bfloat16:
+      return shlo_type.ShloDType.bf16
+
+    case tf.string:
+      return shlo_type.ShloDType.str
+
+    case tf.resource | tf.variant:
+      raise ValueError(f"Can't convert TF dtype {dtype} to an XSE dtype")
+
+    case tf.DType():
+      return shlo_type.np_dtype_to_shlo_dtype(np.dtype(dtype.as_numpy_dtype()))
+
+    case _:
+      return dtype
+
+
 def tf_type_spec_from(
     spec: shlo_type.ShloTensorSpec | tf.TypeSpec,
 ) -> tf.TypeSpec:
@@ -51,6 +73,32 @@ def tf_type_spec_from(
           dtype=tf_dtype_from(spec.dtype),
           name=getattr(spec, "name", None),
       )
+
+
+def shlo_tensor_spec_from(
+    spec: tf.TensorSpec | shlo_type.ShloTensorSpec,
+) -> shlo_type.ShloTensorSpec | tuple[shlo_type.ShloTensorSpec, ...]:
+  """Converts a TF type spec to a ShloTensorSpec."""
+
+  match spec:
+
+    case tf.TypeSpec():
+      if not isinstance(spec, tf.TensorSpec):
+        # A composite type spec (RaggedTensorSpec, etc.)
+        expanded = tf.nest.flatten(spec, expand_composites=True)
+        return tuple(shlo_tensor_spec_from(s) for s in expanded)  # pyrefly: ignore[bad-return]
+
+      # A plain (non-composite) TensorSpec.
+      return shlo_type.ShloTensorSpec(
+          shape=tuple(spec.shape.as_list())
+          if spec.shape.rank is not None
+          else None,
+          dtype=shlo_dtype_from(spec.dtype),
+          name=getattr(spec, "name", None),
+      )
+
+    case _:
+      return spec
 
 
 def find_ragged_inputs_indices_if_any(
