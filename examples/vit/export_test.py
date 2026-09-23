@@ -35,12 +35,9 @@ _SAMPLE_IMAGE_PATH = flags.DEFINE_string(
 
 
 def _model_runner(model_path: str):
-  try:
-    from xla_saved_model_runner import model_runner  # pylint: disable=g-import-not-at-top
+  from xla_saved_model_runner import model_runner  # pylint: disable=g-import-not-at-top
 
-    return model_runner.ModelRunner(model_path=model_path)
-  except ImportError:
-    return None
+  return model_runner.ModelRunner(model_path=model_path)
 
 
 class ExportTest(parameterized.TestCase):
@@ -58,11 +55,6 @@ class ExportTest(parameterized.TestCase):
         os.path.isfile(os.path.join(export_path, 'orchestration.pb'))
     )
     runner = _model_runner(export_path)
-    if runner is None:
-      logging.warning(
-          'ModelRunner not found, skipping running the exported model'
-      )
-      return
 
     test_image = np.random.randn(1, 224, 224, 3).astype(np.float32)
     outputs = runner.signature('serving_default').run_with_dict_return(

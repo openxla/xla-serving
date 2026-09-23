@@ -15,19 +15,15 @@
 """Tests for XLA SavedModel export of NNX model with JAX preprocessor."""
 
 import os
-from absl import logging
 from absl.testing import absltest
 import numpy as np
 from examples.nnx_jax_preprocessor import export
 
 
 def _model_runner(model_path: str):
-  try:
-    from xla_saved_model_runner import model_runner  # pylint: disable=g-import-not-at-top
+  from xla_saved_model_runner import model_runner  # pylint: disable=g-import-not-at-top
 
-    return model_runner.ModelRunner(model_path=model_path)
-  except ImportError:
-    return None
+  return model_runner.ModelRunner(model_path=model_path)
 
 
 class ExportTest(absltest.TestCase):
@@ -50,11 +46,6 @@ class ExportTest(absltest.TestCase):
     )
 
     runner = _model_runner(export_path)
-    if runner is None:
-      logging.warning(
-          'ModelRunner not found, skipping running the exported model'
-      )
-      return
 
     inputs = {
         'feature_1': np.ones((3, 1), dtype=np.int32),

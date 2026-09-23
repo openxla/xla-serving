@@ -13,21 +13,15 @@
 # limitations under the License.
 
 import os
-from absl import logging
 from absl.testing import absltest
 import numpy as np
 from examples.composite_processor import export
 
 
 def _model_runner(model_path: str):
-  try:
-    from xla_saved_model_runner import model_runner  # pylint: disable=g-import-not-at-top
+  from xla_saved_model_runner import model_runner  # pylint: disable=g-import-not-at-top
 
-    return model_runner.ModelRunner(model_path=model_path)
-  except (ImportError, ValueError) as e:
-    logging.warning('Failed to initialize ModelRunner: %s', e)
-    return None
-
+  return model_runner.ModelRunner(model_path=model_path)
 
 
 class ExportTest(absltest.TestCase):
@@ -42,11 +36,6 @@ class ExportTest(absltest.TestCase):
     )
 
     runner = _model_runner(export_path)
-    if runner is None:
-      logging.warning(
-          'ModelRunner not found, skipping running the exported model'
-      )
-      return
 
     inputs = {
         'x': np.ones((3, 4), dtype=np.int32),

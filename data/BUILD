@@ -106,6 +106,7 @@ cc_shared_library(
 genrule(
     name = "stage_xla_serving_data_pkg",
     srcs = [
+        "__init__.py",
         ":xla_serving_data_core",
         "@pybind11_abseil//pybind11_abseil:status.so",
         "//data/ops:bucket_pad.py",
@@ -188,7 +189,7 @@ genrule(
   mkdir -p $(@D)/xla_serving_data/resource_manager/proto
   mkdir -p $(@D)/xla_serving_data/pybind11_abseil
 
-  touch $(@D)/xla_serving_data/__init__.py
+  cp $(location __init__.py) $(@D)/xla_serving_data/__init__.py
   touch $(@D)/xla_serving_data/ops/__init__.py
   touch $(@D)/xla_serving_data/kernels/__init__.py
   touch $(@D)/xla_serving_data/kernels/bucket_pad/__init__.py
@@ -360,6 +361,7 @@ genrule(
     name = "stage_xla_serving_data_test_pkg",
     testonly = 1,
     srcs = [
+        "__init__.py",
         ":xla_serving_data_test_core",
         "//data/processor/python/examples:add_int_transform_pybind.so",
         "//data/processor/python/examples:add_host_buffer_transform_pybind.so",
@@ -395,7 +397,7 @@ genrule(
     ],
     cmd = """
   mkdir -p $(@D)/xla_serving_data_test/processor/python/examples
-  touch $(@D)/xla_serving_data_test/__init__.py
+  cp $(location __init__.py) $(@D)/xla_serving_data_test/__init__.py
   touch $(@D)/xla_serving_data_test/processor/__init__.py
   touch $(@D)/xla_serving_data_test/processor/python/__init__.py
   touch $(@D)/xla_serving_data_test/processor/python/examples/__init__.py
