@@ -237,6 +237,7 @@ class BatchResourceBase : public ResourceBase {
       int32_t batch_timeout_micros, int32_t max_enqueued_batches,
       const std::vector<int32_t>& allowed_batch_sizes,
       bool enable_large_batch_splitting, bool disable_padding,
+      bool pad_variable_length_inputs,
       absl::string_view batch_padding_policy,
       int32_t low_priority_max_batch_size,
       int32_t low_priority_batch_timeout_micros,

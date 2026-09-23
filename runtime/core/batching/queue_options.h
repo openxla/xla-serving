@@ -108,6 +108,10 @@ struct QueueOptions {
   // If true, the padding will not be appended.
   bool disable_padding = false;
 
+  // If true, variable-length inputs across non-batch dimensions (dim >= 1) are
+  // padded to the maximum shape within the batch before concatenation.
+  bool pad_variable_length_inputs = false;
+
   // The padding policy to use.
   //
   // See the documentation for kPadUpPolicy for details.
