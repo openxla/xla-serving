@@ -69,22 +69,6 @@ class TestAddFromResourceModule:
 
 class CompositeProcessorTest(parameterized.TestCase):
 
-  def test_convert_jd_type_to_shlo_type(self):
-    self.assertEqual(
-        composite_processor._convert_jd_type_to_shlo_type(np.dtype("int32")),
-        shlo_type.ShloDType.i32,
-    )
-    self.assertEqual(
-        composite_processor._convert_jd_type_to_shlo_type(np.dtype("float32")),
-        shlo_type.ShloDType.f32,
-    )
-    self.assertEqual(
-        composite_processor._convert_jd_type_to_shlo_type(np.dtype("str")),
-        shlo_type.ShloDType.str,
-    )
-    with self.assertRaisesRegex(ValueError, "Expected a numpy.dtype"):
-      composite_processor._convert_jd_type_to_shlo_type("int32")
-
   def test_init_empty_transforms(self):
     with self.assertRaisesRegex(
         ValueError, "Expected at least one transform to be passed in"

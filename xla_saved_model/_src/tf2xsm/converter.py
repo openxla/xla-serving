@@ -32,6 +32,7 @@ from xla_saved_model._src.core import file_utils
 from xla_saved_model._src.core import persistence_lib
 from xla_saved_model._src.core import serializable_function
 from xla_saved_model._src.core import shlo_type
+from xla_saved_model._src.core import type_conversions as xsm_type_conversions
 from xla_saved_model._src.core import unstructured_data
 from xla_saved_model._src.tf2xsm import type_conversion
 
@@ -121,17 +122,21 @@ def _xsm_signature_from_tf_signature(
   def _convert_leaf(path, leaf):
     xsm_name = _xsm_name(leaf, path)
 
-    shlo_spec = type_conversion.shlo_tensor_spec_from(leaf)
-    if isinstance(shlo_spec, tuple):
+    expanded = tf.nest.flatten(leaf, expand_composites=True)
+    if len(expanded) > 1:
       # The value has been expanded from a composite type; we keep TF-like
       # naming convention for the flattened arguments, e.g. for a composite
       # input named 'x' we will have names 'x', 'x_1', etc. for the leaves.
-      for i, spec in enumerate(shlo_spec):
+      shlo_specs = tuple(
+          xsm_type_conversions.to_shlo_tensor_spec(s) for s in expanded
+      )
+      for i, spec in enumerate(shlo_specs):
         spec.name = xsm_name if i == 0 else f'{xsm_name}_{i}'
+      return shlo_specs
     else:
+      shlo_spec = xsm_type_conversions.to_shlo_tensor_spec(leaf)
       shlo_spec.name = xsm_name
-
-    return shlo_spec
+      return shlo_spec
 
   return jax.tree.map_with_path(_convert_leaf, tf_signature)
 
