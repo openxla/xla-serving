@@ -17,7 +17,7 @@
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
-// TODO(qidichen): move or add the unit test from MIRA.
+// TODO: move or add the unit test from MIRA.
 #ifndef XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_
 #define XLA_SERVING_RUNTIME_DATA_LOADER_OCP_LOADER_CHECKPOINT_LOADER_H_
 

@@ -46,7 +46,7 @@ leaf).
 //     std::variant<std::vector<Tree>, std::map<std::string, Tree>, ...> tree;
 //   }
 //
-// TODO(wangpeng): Consider defining a new type for `Tree`.
+// TODO: Consider defining a new type for `Tree`.
 using Tree = Value;
 
 using Tuple = std::vector<Tree>;

@@ -141,7 +141,7 @@ absl::Status ValidateStableHlo(
       return absl::InvalidArgumentError(
           "Function body must have `StableHloFunctionBody`");
     }
-    // TODO b/401364010: Verify all have the same number of inputs and outputs.
+    // TODO: Verify all have the same number of inputs and outputs.
   }
   return absl::OkStatus();
 }
@@ -722,7 +722,7 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateStableHloRunnerOp(
   TF_RETURN_IF_ERROR(
       builder.SetConfig(kStablehloOptimizer, create_options.optimizer.get()));
 
-  // TODO b/401364010: It is fine to use the first function to infer the
+  // TODO: It is fine to use the first function to infer the
   // assigned devices. We will rely on the `manifest` to get the assigned
   // devices, rather than using `func` to infer the assigned devices. Remove
   // `func` from the input argument list once assigned devices are available in

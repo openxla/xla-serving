@@ -70,7 +70,7 @@ message Pipeline {
   // model functions determines the order of execution. The output of the nth
   // model function serves as the input to the (n+1)th model function.
   // Currently, we ONLY support AT MOST ONE model function (thus, having no
-  // model functions is allowed). See b/421976850.
+  // model functions is allowed).
   repeated BoundModelFunction model_functions = 4 [deprecated = true];
 
   // The names (in manifest) of the post-processor functions. For multi-stage

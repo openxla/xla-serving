@@ -124,7 +124,7 @@ cc_library(
     name = "numpy_utils",
     srcs = ["numpy_utils.cc"],
     hdrs = ["numpy_utils.h"],
-    copts = ["-fexceptions"],  # go/cpp-3p-exceptions
+    copts = ["-fexceptions"],
     features = ["-use_header_modules"],  # Required for -fexceptions.
     deps = [
         "@abseil-cpp//absl/log",

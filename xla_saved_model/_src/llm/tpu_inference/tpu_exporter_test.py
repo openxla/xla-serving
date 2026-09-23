@@ -367,7 +367,7 @@ class ExporterTest(absltest.TestCase):
       self.assertIn("text_output", post_processed)
       manual_output = post_processed["text_output"].numpy()
       self.assertEqual(manual_output.shape, (2, beam_width))
-      # TODO(armandouv): Compare manual_output with e2e_output once we debug why
+      # TODO: Compare manual_output with e2e_output once we debug why
       # they are different.
 
     # 2. Export the model to TF SavedModel using the integration exporter

@@ -22,7 +22,7 @@ jobs:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:0ad60e35d5870853c4c463f1c23dff6ed2dbfe3b1f708406c25a7606a5cae078
     strategy:
       matrix:
-        # TODO(hjswe): Re-enable once the tests are fixed.
+        # TODO: Re-enable once the tests are fixed.
         # python-version: ["3.10", "3.11", "3.12"]
         python-version: ["3.12"]
         jax-version: ["newest"]

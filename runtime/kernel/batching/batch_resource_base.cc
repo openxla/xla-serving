@@ -471,10 +471,10 @@ absl::Status BatchResourceBase::RegisterInput(
       std::string(context->metadata.model_name),
       context->metadata.model_version));
   // Sequentialize warmup batches scheduling.
-  // TODO: b/405168505: Maybe move the sequentialization logic to the
+  // TODO: Maybe move the sequentialization logic to the
   // `WarmupStateRegistry` for centralized control, safer and clearer
   // synchronization, and code sharing.
-  // TODO: b/405168505: Checking model name existence is copied form TF, and is
+  // TODO: Checking model name existence is copied form TF, and is
   // kept for compatibility. Maybe remove it.
   if (!context->metadata.model_name.empty()) {
     // TODO: Update the serving path to use the XLA Serving warmup
@@ -488,7 +488,7 @@ absl::Status BatchResourceBase::RegisterInput(
                                    },
                                    &outstanding_batch_total_size_});
     }
-    // TODO: b/405168505: Inheriting the TF behavior, but maybe only touch
+    // TODO: Inheriting the TF behavior, but maybe only touch
     // `outstanding_batch_total_size_` during warmup phase.
     outstanding_batch_total_size_ += batch_components->size();
   }
@@ -1087,7 +1087,7 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
        num_output = input_task->num_outputs,
        thread_pool = thread_pool, allocator = allocator]() mutable {
         // TODO: Add input_task status check once the eviction is
-        // supported. A similar check is in cl/876314593.
+        // supported.
         if (!input_task->status->status().ok()) {
           input_task->FinishTask(input_task->status->status());
           return;
@@ -1102,7 +1102,7 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
           to_concatenate.reserve(split_task_output->size());
           for (int j = 0; j < split_task_output->size(); ++j) {
             // TODO: Add defensive validation once the eviction
-            // is supported. A similar validation is in cl/877442161.
+            // is supported.
             to_concatenate.push_back(std::move((*split_task_output)[j][i]));
           }
           absl::StatusOr<HostBuffer> output_buffer =

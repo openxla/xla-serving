@@ -1283,7 +1283,7 @@ Queue<TaskType>::ScheduleBatch() {
           new_batch.AddTask(std::move(task), old_batch_time);
         }
         if (!new_batch.empty()) {
-          // TODO - b/325954758: Reconsider the starting time of a trimmed
+          // TODO: Reconsider the starting time of a trimmed
           // batch.
           //
           // Ideally, we'd set open_batch_start_time_micros_ to time we received

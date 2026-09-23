@@ -32,7 +32,7 @@
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "Eigen/Core"  // IWYU pragma: keep, go/lsc-fix-eigen-includes
+#include "Eigen/Core"  // IWYU pragma: keep
 #include "runtime/core/allocator.h"  // from @xla_serving
 #include "runtime/core/default_allocator.h"  // from @xla_serving
 #include "runtime/core/host_buffer_type_utils.h"  // from @xla_serving
@@ -45,7 +45,6 @@
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "tsl/platform/tstring.h"  // from @tsl
 
-// go/lsc-fix-eigen-includes
 // IWYU pragma: no_include "Eigen/src/Core/util/ConfigureVectorization.h"
 
 ABSL_FLAG(int64_t, xla_serving_host_buffer_max_elements, int64_t{1} << 32,

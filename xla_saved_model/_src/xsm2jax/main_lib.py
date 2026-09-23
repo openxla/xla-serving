@@ -40,7 +40,7 @@ def _deserialize_disabled_safety_check(disabled_check):  # pylint: disable=missi
     # shape_assertions has been deprecated in June 2024 (turned into a no-op),
     # and removed in November 2024. We deserialize it to a DisabledSafetyCheck
     # that has no effect.
-    # TODO(necula): remove this after June 2025, when we should not have any
+    # TODO: remove this after June 2025, when we should not have any
     # more serialized artifacts with shape_assertions.
     return jax.export.DisabledSafetyCheck.custom_call("no op")
   else:

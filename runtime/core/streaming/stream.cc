@@ -95,7 +95,7 @@ SliceBuffersByRequestId(absl::Span<const int32_t> step_ids,
   int64_t start_idx = 0;
   while (start_idx < batch_size) {
     int64_t current_request_id = step_ids[start_idx];
-    // TODO (b/492320525): Make kInvalidStepId a global constant so that we can
+    // TODO: Make kInvalidStepId a global constant so that we can
     // reuse the same constant at step ID creation and batching padding.
     if (current_request_id == kInvalidStepId) {
       break;

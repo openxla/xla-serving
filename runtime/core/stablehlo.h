@@ -31,7 +31,7 @@
 
 namespace xla_serving {
 
-// TODO b/401364010 - Add unit test for this class.
+// TODO: Add unit test for this class.
 
 // A class that holds a StableHLO or a list of concretized StableHLOs for
 // a polymorphic StableHLO.

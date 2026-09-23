@@ -344,7 +344,7 @@ absl::StatusOr<ArgShape> ToArgShape(const xla_saved_model_type::Shape& shape) {
   return arg_shape;
 }
 
-// TODO(wangpeng): flatten_types's type can directly be
+// TODO: flatten_types's type can directly be
 //   vector<xla_saved_model_manifest::TensorType>.
 absl::Status FlattenType(
     const xla_saved_model_type::Type& type,

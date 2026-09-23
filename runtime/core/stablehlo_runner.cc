@@ -706,7 +706,7 @@ StableHloRunner::LookUpOrCreateExecutable(
           "Got new input shapes requiring a new executable, but "
           "can't create it after full initialization. Please warm "
           "up the model with all the input shapes that are possible during "
-          "serving. (See go/tf-model-warmup for more details.)"));
+          "serving."));
       return future;
     }
 

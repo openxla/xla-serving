@@ -430,7 +430,7 @@ LoadedStableHlo::CloneModuleBundle(
                        ". Allowed input shapes: ", allowed_input_shapes_str));
     }
 
-    // TODO b/401364010: Consider adding a check to make sure the input DTypes
+    // TODO: Consider adding a check to make sure the input DTypes
     // are compatible with the MLIR module. May not be feasible as this code
     // runs in the critical path of serving.
     return std::make_unique<LoadedStableHlo::ModuleBundle>(

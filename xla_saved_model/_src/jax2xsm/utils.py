@@ -124,8 +124,8 @@ def hlo_sharding_to_op_sharding(
   output = xla_data_pb2.OpSharding()
   # Note: `to_proto(self) -> xla_extension.OpSharding` so we need to serialize
   # and then parse.
-  # TODO: See if go/proto-generated-python#sharing-messages can
-  # help us share messages between Python and C++.
+  # TODO: See if the generated proto Python module can share
+  # message types with C++ directly, and avoid this round trip.
   output.ParseFromString(
       jex_sharding.get_serialized_proto_from_hlo_sharding(hlo_sharding)
   )
