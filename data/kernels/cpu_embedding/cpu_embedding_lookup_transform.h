@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_LOOKUP_TRANSFORM_H_
-#define THIRD_PARTY_NEPTUNE_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_LOOKUP_TRANSFORM_H_
+#ifndef XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_LOOKUP_TRANSFORM_H_
+#define XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_LOOKUP_TRANSFORM_H_
 
 #include <memory>
 #include <string>
@@ -24,15 +24,15 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @neptune
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/api/type_info.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @xla_serving
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/api/type_info.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 class CpuEmbeddingLookupTransform : public TransformBase {
@@ -44,13 +44,13 @@ class CpuEmbeddingLookupTransform : public TransformBase {
       int64_t embedding_dim = 128,
       std::vector<std::vector<int64_t>> output_shapes = {});
 
-  std::vector<std::shared_ptr<neptune::data::Resource>> GetAllResources()
+  std::vector<std::shared_ptr<xla_serving::data::Resource>> GetAllResources()
       const override;
 
-  absl::StatusOr<std::vector<neptune::HostBuffer>> operator()(
-      std::vector<neptune::HostBuffer> ids,
-      std::vector<neptune::HostBuffer> row_pointers,
-      std::vector<neptune::HostBuffer> weights);
+  absl::StatusOr<std::vector<xla_serving::HostBuffer>> operator()(
+      std::vector<xla_serving::HostBuffer> ids,
+      std::vector<xla_serving::HostBuffer> row_pointers,
+      std::vector<xla_serving::HostBuffer> weights);
 
   absl::Status PropagateSignatureImpl(
       api::ShapeInferenceContext& context) const override;
@@ -77,6 +77,6 @@ class CpuEmbeddingLookupTransform : public TransformBase {
 };
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_LOOKUP_TRANSFORM_H_
+#endif  // XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_LOOKUP_TRANSFORM_H_

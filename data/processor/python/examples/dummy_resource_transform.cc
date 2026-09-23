@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/processor/python/examples/dummy_resource_transform.h"  // from @neptune
+#include "data/processor/python/examples/dummy_resource_transform.h"  // from @xla_serving
 
 #include <cstdint>
 #include <memory>
@@ -21,15 +21,15 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/processor/cc/api/registry.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/cc/core/transform_registry.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/resource_manager/cc/asset.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
-#include "data/resource_manager/proto/resource_manager.pb.h"  // from @neptune
+#include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/cc/core/transform_registry.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/resource_manager/cc/asset.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
+#include "data/resource_manager/proto/resource_manager.pb.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 absl::Status DummyResource::LoadImpl() {
@@ -47,7 +47,7 @@ DummyResourceTransform::Create() {
 }
 
 DummyResourceTransform::DummyResourceTransform(
-    std::shared_ptr<neptune::data::Resource> resource) {
+    std::shared_ptr<xla_serving::data::Resource> resource) {
   resources_.push_back(resource);
 }
 
@@ -62,7 +62,7 @@ absl::StatusOr<TransformConfig> DummyResourceTransform::ToProto() const {
   return config;
 }
 
-std::vector<std::shared_ptr<neptune::data::Resource>>
+std::vector<std::shared_ptr<xla_serving::data::Resource>>
 DummyResourceTransform::GetAllResources() const {
   return resources_;
 }
@@ -70,7 +70,7 @@ DummyResourceTransform::GetAllResources() const {
 ND_REGISTER_TRANSFORM(DummyResourceTransform, "DummyResourceTransform")
     .SetDeserializer(
         [](const TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           for (uint64_t id : config.resource_ids()) {
             for (const auto& r : resources) {
@@ -83,4 +83,4 @@ ND_REGISTER_TRANSFORM(DummyResourceTransform, "DummyResourceTransform")
         });
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

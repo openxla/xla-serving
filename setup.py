@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Setup file for neptune_model. Stages and compiles protos before building."""
+"""Setup file for xla_saved_model. Stages and compiles protos before building."""
 
 import pathlib
 import re
@@ -26,30 +26,30 @@ from setuptools import setup
 from setuptools.command.build_py import build_py
 
 ROOT_DIR = pathlib.Path(__file__).parent.resolve()
-PACKAGE_NAME = "neptune_model"
+PACKAGE_NAME = "xla_saved_model"
 PROTOS_SRC_DIR = ROOT_DIR / "protos"
 PROTOS_STAGING_DIR = ROOT_DIR / "build" / "protos"
 
 # Relocates imports to ensure that generated Python protos use
 # Python-specific import paths withihn the built package.
-NEPTUNE_PROTOS_IMPORT_PREFIX_MAPPING = {
-    "protos/": "neptune_model/protos/",
-    "xla/": "neptune_model/protos/xla/",
+XLA_SAVED_MODEL_PROTOS_IMPORT_PREFIX_MAPPING = {
+    "protos/": "xla_saved_model/protos/",
+    "xla/": "xla_saved_model/protos/xla/",
 }
 
 XLA_PROTOS_IMPORT_PREFIX_MAPPING = {
-    "xla/": "neptune_model/protos/xla/",
+    "xla/": "xla_saved_model/protos/xla/",
 }
 
-# All of xla names used by neptune_model protos now need to point to the
-# neptune_model.protos.xla namespace.
-NEPTUNE_PROTOS_NAMES_MAPPING = {
-    "xla.": "neptune_model.xla.",
+# All of xla names used by xla_saved_model protos now need to point to the
+# xla_saved_model.protos.xla namespace.
+XLA_SAVED_MODEL_PROTOS_NAMES_MAPPING = {
+    "xla.": "xla_saved_model.xla.",
 }
 
 XLA_PROTOS_PACKAGE_MAPPING = {
-    "package xla;": "package neptune_model.xla;",
-    "xla.": "neptune_model.xla.",
+    "package xla;": "package xla_saved_model.xla;",
+    "xla.": "xla_saved_model.xla.",
 }
 
 
@@ -127,13 +127,13 @@ def stage_protos():
     rewrite_proto_file(
         src,
         dst,
-        NEPTUNE_PROTOS_IMPORT_PREFIX_MAPPING,
-        NEPTUNE_PROTOS_NAMES_MAPPING,
+        XLA_SAVED_MODEL_PROTOS_IMPORT_PREFIX_MAPPING,
+        XLA_SAVED_MODEL_PROTOS_NAMES_MAPPING,
     )
     staged.append(dst.relative_to(PROTOS_STAGING_DIR))
 
   # Place XLA protos under the the package root "protos/xla"
-  # subdirectory to ensure they're importable via 'neptune_model.protos.xla'.
+  # subdirectory to ensure they're importable via 'xla_saved_model.protos.xla'.
   staged.extend(stage_xla_protos(pkg_stage_root / "protos" / "xla"))
 
   # Stage test-only files located inside the package root directory.
@@ -144,8 +144,8 @@ def stage_protos():
     rewrite_proto_file(
         src,
         dst,
-        NEPTUNE_PROTOS_IMPORT_PREFIX_MAPPING,
-        NEPTUNE_PROTOS_NAMES_MAPPING,
+        XLA_SAVED_MODEL_PROTOS_IMPORT_PREFIX_MAPPING,
+        XLA_SAVED_MODEL_PROTOS_NAMES_MAPPING,
     )
     staged.append(dst.relative_to(PROTOS_STAGING_DIR))
 

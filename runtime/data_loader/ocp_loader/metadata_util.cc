@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/data_loader/ocp_loader/metadata_util.h"  // from @neptune
+#include "runtime/data_loader/ocp_loader/metadata_util.h"  // from @xla_serving
 
 #include <string>
 #include <vector>
@@ -30,7 +30,8 @@
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "tsl/platform/path.h"  // from @tsl
-namespace neptune {
+
+namespace xla_serving {
 
 constexpr const char* METADATA_FILE_NAME = "_METADATA";
 constexpr const char* TREE_METADATA = "tree_metadata";
@@ -65,8 +66,7 @@ absl::StatusOr<std::vector<std::vector<std::string>>> GetParamNameLists(
     if (skip_deserialize) {
       continue;
     }
-    nlohmann::ordered_json key_metadata =
-            tree_metadata_kv[KEY_METADATA];
+    nlohmann::ordered_json key_metadata = tree_metadata_kv[KEY_METADATA];
     std::vector<std::string> paths;
     for (nlohmann::ordered_json::iterator key_metadata_iter =
              key_metadata.begin();
@@ -98,7 +98,7 @@ std::vector<std::string> GetParamNamesFromLists(
 absl::StatusOr<std::vector<std::string>> GetParamNames(
     const nlohmann::ordered_json& metadata_json) {
   TF_ASSIGN_OR_RETURN(std::vector<std::vector<std::string>> param_name_lists,
-                   GetParamNameLists(metadata_json));
+                      GetParamNameLists(metadata_json));
   std::vector<std::string> param_names =
       GetParamNamesFromLists(param_name_lists);
   return param_names;
@@ -121,7 +121,7 @@ absl::StatusOr<std::vector<std::string>> GetParamNamesForSubTree(
     const nlohmann::ordered_json& metadata_json,
     std::vector<std::string>& sub_tree) {
   TF_ASSIGN_OR_RETURN(std::vector<std::vector<std::string>> param_name_lists,
-                   GetParamNameLists(metadata_json));
+                      GetParamNameLists(metadata_json));
   if (sub_tree.empty()) {  // Fall back to get all param names
     return GetParamNamesFromLists(param_name_lists);
   }
@@ -149,8 +149,8 @@ absl::StatusOr<std::vector<std::string>> GetAllWeightNamesFromCheckpoint(
   // Parse _METADATA to get the path to each weight.
   std::string metadata;
   TF_RETURN_IF_ERROR(tsl::ReadFileToString(
-      tsl::Env::Default(), tsl::io::JoinPath(checkpoint_path, METADATA_FILE_NAME),
-      &metadata));
+      tsl::Env::Default(),
+      tsl::io::JoinPath(checkpoint_path, METADATA_FILE_NAME), &metadata));
   VLOG(1) << "metadata_json: " << metadata;
   nlohmann::ordered_json metadata_json =
       nlohmann::ordered_json::parse(metadata);
@@ -163,4 +163,4 @@ absl::StatusOr<std::vector<std::string>> GetAllWeightNamesFromCheckpoint(
   return all_weight_names;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/kernels/cpu_embedding/cpu_embedding_lookup_transform.h"  // from @neptune
+#include "data/kernels/cpu_embedding/cpu_embedding_lookup_transform.h"  // from @xla_serving
 
 #include <cstddef>
 #include <cstdint>
@@ -29,17 +29,17 @@
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/kernels/cpu_embedding/cpu_embedding.pb.h"  // from @neptune
-#include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @neptune
-#include "data/processor/cc/api/registry.h"  // from @neptune
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "data/kernels/cpu_embedding/cpu_embedding.pb.h"  // from @xla_serving
+#include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @xla_serving
+#include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 namespace {}  // namespace
@@ -115,15 +115,15 @@ CpuEmbeddingLookupTransform::Create(
           std::move(output_shapes)));
 }
 
-std::vector<std::shared_ptr<neptune::data::Resource>>
+std::vector<std::shared_ptr<xla_serving::data::Resource>>
 CpuEmbeddingLookupTransform::GetAllResources() const {
   return {resource_};
 }
 
 // Static helper to validate lookup inputs.
-absl::Status ValidateLookupInputs(const neptune::HostBuffer& ids,
-                                  const neptune::HostBuffer& row_pointers,
-                                  const neptune::HostBuffer& weights) {
+absl::Status ValidateLookupInputs(const xla_serving::HostBuffer& ids,
+                                  const xla_serving::HostBuffer& row_pointers,
+                                  const xla_serving::HostBuffer& weights) {
   if (row_pointers.shape().dims().empty()) {
     return absl::InvalidArgumentError(
         "row_pointers HostBuffer must be at least 1D (got scalar).");
@@ -206,10 +206,10 @@ absl::Status ValidateLookupInputs(const neptune::HostBuffer& ids,
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::vector<neptune::HostBuffer>>
+absl::StatusOr<std::vector<xla_serving::HostBuffer>>
 CpuEmbeddingLookupTransform::operator()(
-    std::vector<neptune::HostBuffer> ids, std::vector<neptune::HostBuffer> row_pointers,
-    std::vector<neptune::HostBuffer> weights) {
+    std::vector<xla_serving::HostBuffer> ids, std::vector<xla_serving::HostBuffer> row_pointers,
+    std::vector<xla_serving::HostBuffer> weights) {
   if (ids.size() != feature_names_.size()) {
     return absl::InvalidArgumentError(absl::StrCat(
         "CpuEmbeddingLookupTransform expected ", feature_names_.size(),
@@ -228,12 +228,12 @@ CpuEmbeddingLookupTransform::operator()(
     }
   }
 
-  std::vector<neptune::HostBuffer> outputs;
+  std::vector<xla_serving::HostBuffer> outputs;
   outputs.reserve(feature_names_.size());
 
   for (size_t i = 0; i < feature_names_.size(); ++i) {
     const auto& feature_name = feature_names_[i];
-    neptune::HostBuffer ids_hb = ids[i];
+    xla_serving::HostBuffer ids_hb = ids[i];
 
     if (ids_hb.DebugString() == "Empty host buffer" ||
         ids_hb.base() == nullptr) {
@@ -295,8 +295,8 @@ CpuEmbeddingLookupTransform::operator()(
       }
       row_pointers_span = absl::MakeConstSpan(temp_row_pointers);
     } else {
-      neptune::HostBuffer row_pointers_hb = row_pointers[i];
-      neptune::HostBuffer weights_hb = weights[i];
+      xla_serving::HostBuffer row_pointers_hb = row_pointers[i];
+      xla_serving::HostBuffer weights_hb = weights[i];
 
       RETURN_IF_ERROR(
           ValidateLookupInputs(ids_hb, row_pointers_hb, weights_hb));
@@ -314,7 +314,7 @@ CpuEmbeddingLookupTransform::operator()(
       weights_span = absl::MakeConstSpan(w_ptr, w_flat.size());
     }
 
-    neptune::HostBuffer output_hb;
+    xla_serving::HostBuffer output_hb;
     auto allocator = [&](size_t size) {
       int64_t dim1 = size;
       int64_t dim2 = 1;
@@ -322,11 +322,11 @@ CpuEmbeddingLookupTransform::operator()(
         dim1 = batch_size;
         dim2 = size / batch_size;
         output_hb =
-            neptune::HostBuffer(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+            xla_serving::HostBuffer(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                             xla::ifrt::Shape({dim1, dim2}));
       } else {
         output_hb =
-            neptune::HostBuffer(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+            xla_serving::HostBuffer(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
                             xla::ifrt::Shape({static_cast<int64_t>(size)}));
       }
       auto out_flat = output_hb.flat<float>();
@@ -396,7 +396,7 @@ absl::StatusOr<TransformConfig> CpuEmbeddingLookupTransform::ToProto() const {
     config.add_resource_ids(resource_->id());
   }
 
-  namespace jce = ::neptune::data::composite::transforms::cpu_embedding;
+  namespace jce = ::xla_serving::data::composite::transforms::cpu_embedding;
   jce::CpuEmbeddingLookupTransformConfig detail;
   if (!feature_names_.empty()) {
     detail.set_feature(feature_names_[0]);
@@ -418,21 +418,21 @@ ND_REGISTER_TRANSFORM(CpuEmbeddingLookupTransform,
                       "CpuEmbeddingLookupTransform")
     .SetDeserializer(
         [](const TransformConfig& config,
-           absl::Span<const std::shared_ptr<neptune::data::Resource>> resources)
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           if (resources.empty()) {
             return absl::InvalidArgumentError(
                 "CpuEmbeddingLookupTransform requires a resource.");
           }
           auto resource = std::dynamic_pointer_cast<CpuEmbeddingEngineResource>(
-              const_cast<std::shared_ptr<neptune::data::Resource>&>(
+              const_cast<std::shared_ptr<xla_serving::data::Resource>&>(
                   resources[0]));
           if (resource == nullptr) {
             return absl::InvalidArgumentError(
                 "Resource is not a CpuEmbeddingEngineResource.");
           }
 
-          namespace jce = ::neptune::data::composite::transforms::cpu_embedding;
+          namespace jce = ::xla_serving::data::composite::transforms::cpu_embedding;
           jce::CpuEmbeddingLookupTransformConfig detail;
           std::vector<std::string> feature_names;
           std::vector<std::string> output_feature_names;
@@ -468,4 +468,4 @@ ND_REGISTER_TRANSFORM(CpuEmbeddingLookupTransform,
         });
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

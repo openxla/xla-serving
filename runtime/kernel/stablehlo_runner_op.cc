@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/kernel/stablehlo_runner_op.h"  // from @neptune
+#include "runtime/kernel/stablehlo_runner_op.h"  // from @xla_serving
 
 #include <cstdint>
 #include <memory>
@@ -28,21 +28,21 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/core/aot_stablehlo_runner.h"  // from @neptune
-#include "runtime/core/flat_signature.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/core/ifrt_loaded_variable_registry.h"  // from @neptune
-#include "runtime/core/stablehlo.h"  // from @neptune
-#include "runtime/core/stablehlo_optimizer.h"  // from @neptune
-#include "runtime/core/stablehlo_runner.h"  // from @neptune
-#include "runtime/core/streaming/utils.h"  // from @neptune
-#include "runtime/core/value.h"  // from @neptune
-#include "runtime/interpreter/manifest_utils.h"  // from @neptune
-#include "runtime/kernel/kernel.h"  // from @neptune
-#include "runtime/kernel/kernel_builder_constants.h"  // from @neptune
-#include "runtime/kernel/kernel_builder_context.h"  // from @neptune
-#include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
-#include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @neptune
+#include "runtime/core/aot_stablehlo_runner.h"  // from @xla_serving
+#include "runtime/core/flat_signature.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/ifrt_loaded_variable_registry.h"  // from @xla_serving
+#include "runtime/core/stablehlo.h"  // from @xla_serving
+#include "runtime/core/stablehlo_optimizer.h"  // from @xla_serving
+#include "runtime/core/stablehlo_runner.h"  // from @xla_serving
+#include "runtime/core/streaming/utils.h"  // from @xla_serving
+#include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/interpreter/manifest_utils.h"  // from @xla_serving
+#include "runtime/kernel/kernel.h"  // from @xla_serving
+#include "runtime/kernel/kernel_builder_constants.h"  // from @xla_serving
+#include "runtime/kernel/kernel_builder_context.h"  // from @xla_serving
+#include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @xla_serving
+#include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @xla_serving
 #include "google/protobuf/message.h"
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
@@ -55,7 +55,7 @@
 #include "xla/xla_data.pb.h"  // from @xla
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
 namespace {
 
@@ -239,15 +239,15 @@ absl::Status StableHloRunnerOp::RunInternal(ExecuteContext& context) {
   if (stablehlo_runner_->has_streaming()) {
     int32_t request_id = context.run_context.request_id;
     if (inputs_span.size() == stablehlo_runner_->GetNumInputs()) {
-      absl::StatusOr<neptune::HostBuffer> request_ids_buffer_status;
+      absl::StatusOr<HostBuffer> request_ids_buffer_status;
       if (!context.run_context.request_ids.empty()) {
         request_ids_buffer_status =
-            neptune::CreateRequestIdsBuffer(context.run_context.request_ids);
+            CreateRequestIdsBuffer(context.run_context.request_ids);
       } else {
         request_ids_buffer_status =
-            neptune::CreateScalarRequestIdBuffer(request_id);
+            CreateScalarRequestIdBuffer(request_id);
       }
-      TF_ASSIGN_OR_RETURN(neptune::HostBuffer request_ids_buffer,
+      TF_ASSIGN_OR_RETURN(HostBuffer request_ids_buffer,
                           request_ids_buffer_status);
       inputs_with_stream_step_id.assign(inputs_span.begin(), inputs_span.end());
       inputs_with_stream_step_id.push_back(
@@ -267,4 +267,4 @@ absl::Status StableHloRunnerOp::RunInternal(ExecuteContext& context) {
   return absl::OkStatus();
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

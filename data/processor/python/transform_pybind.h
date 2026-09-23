@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_PYTHON_TRANSFORM_PYBIND_H_
-#define THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_PYTHON_TRANSFORM_PYBIND_H_
+#ifndef XLA_SERVING_DATA_PROCESSOR_PYTHON_TRANSFORM_PYBIND_H_
+#define XLA_SERVING_DATA_PROCESSOR_PYTHON_TRANSFORM_PYBIND_H_
 
 #include <atomic>
 #include <mutex>
@@ -26,12 +26,12 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/api/type_info.h"  // from @neptune
-#include "data/processor/cc/api/value.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/cc/core/transform_registry.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/api/type_info.h"  // from @xla_serving
+#include "data/processor/cc/api/value.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/cc/core/transform_registry.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
 #include "include/pybind11/pybind11.h"  // from @pybind11_bazel
 #include "include/pybind11/stl.h"  // from @pybind11_bazel
 #include "include/pybind11/trampoline_self_life_support.h"  // from @pybind11_bazel
@@ -39,7 +39,7 @@
 #include "pybind11_abseil/status_casters.h"  // from @pybind11_abseil
 #include "pybind11_protobuf/native_proto_caster.h"  // from @pybind11_protobuf
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace pybind_internal {
 
@@ -57,7 +57,7 @@ void SetFactoryInternal(pybind11::module& m, const std::string& name,
         r.status();
         *std::move(r);
       }, "Create method must return an absl::StatusOr");
-  auto cls = pybind11::classh<T, neptune::data::composite::TransformBase>(
+  auto cls = pybind11::classh<T, xla_serving::data::composite::TransformBase>(
       m, name.c_str());
   cls.def(pybind11::init([factory](Args... args) {
             auto result = factory(std::forward<Args>(args)...);
@@ -211,7 +211,7 @@ template <typename T, typename ReturnType, typename... Args>
 void SetDynamicFactoryInternal(pybind11::module& m, const std::string& name,
                                ReturnType (*factory)(Args...)) {
   auto cls = pybind11::classh<core::DynamicDispatchTransform,
-                              neptune::data::composite::TransformBase>(
+                              xla_serving::data::composite::TransformBase>(
       m, name.c_str());
   cls.def(pybind11::init([name](Args... args) {
             std::vector<api::Value> values;
@@ -261,6 +261,6 @@ void RegisterDynamicPybindTransformExt(pybind11::module& m,
 }
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_PYTHON_TRANSFORM_PYBIND_H_
+#endif  // XLA_SERVING_DATA_PROCESSOR_PYTHON_TRANSFORM_PYBIND_H_

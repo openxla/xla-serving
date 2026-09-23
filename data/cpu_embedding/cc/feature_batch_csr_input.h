@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_CC_FEATURE_BATCH_CSR_INPUT_H_
-#define THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_CC_FEATURE_BATCH_CSR_INPUT_H_
+#ifndef XLA_SERVING_DATA_CPU_EMBEDDING_CC_FEATURE_BATCH_CSR_INPUT_H_
+#define XLA_SERVING_DATA_CPU_EMBEDDING_CC_FEATURE_BATCH_CSR_INPUT_H_
 
 #include <cstddef>
 #include <cstdint>
@@ -25,7 +25,7 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 
-namespace neptune::data::cpu_embedding {
+namespace xla_serving::data::cpu_embedding {
 
 // This class represents a batch of samples for a single feature. It is expected
 // to be read-only after construction.
@@ -65,6 +65,6 @@ class FeatureBatchCsrInput {
   std::vector<float> weights_;
 };
 
-}  // namespace neptune::data::cpu_embedding
+}  // namespace xla_serving::data::cpu_embedding
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_CC_FEATURE_BATCH_CSR_INPUT_H_
+#endif  // XLA_SERVING_DATA_CPU_EMBEDDING_CC_FEATURE_BATCH_CSR_INPUT_H_

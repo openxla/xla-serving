@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_BATCH_RUNNER_OP_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_BATCH_RUNNER_OP_H_
+#ifndef XLA_SERVING_RUNTIME_KERNEL_BATCHING_BATCH_RUNNER_OP_H_
+#define XLA_SERVING_RUNTIME_KERNEL_BATCHING_BATCH_RUNNER_OP_H_
 
 #include <cstdint>
 #include <functional>
@@ -26,21 +26,21 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "runtime/core/allocator.h"  // from @neptune
-#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
-#include "runtime/core/batching/shared_batch_scheduler.h"  // from @neptune
-#include "runtime/core/default_allocator.h"  // from @neptune
-#include "runtime/core/flat_signature.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
-#include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
-#include "runtime/kernel/batching/batch_resource_base.h"  // from @neptune
-#include "runtime/kernel/kernel.h"  // from @neptune
-#include "runtime/kernel/kernel_builder_context.h"  // from @neptune
-#include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
+#include "runtime/core/allocator.h"  // from @xla_serving
+#include "runtime/core/batching/batch_scheduler.h"  // from @xla_serving
+#include "runtime/core/batching/shared_batch_scheduler.h"  // from @xla_serving
+#include "runtime/core/default_allocator.h"  // from @xla_serving
+#include "runtime/core/flat_signature.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/kernel/batching/batch_options_utils.h"  // from @xla_serving
+#include "runtime/kernel/batching/batch_resource_base.h"  // from @xla_serving
+#include "runtime/kernel/kernel.h"  // from @xla_serving
+#include "runtime/kernel/kernel_builder_context.h"  // from @xla_serving
+#include "runtime/kernel/kernel_io_data_type.h"  // from @xla_serving
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "tsl/platform/refcount.h"  // from @tsl
-namespace neptune {
+namespace xla_serving {
 
 struct BatchRunnerOpOptions {
   std::vector<MetaArgSpec> input_signature;
@@ -60,19 +60,22 @@ struct BatchRunnerOpOptions {
   std::vector<int32_t> low_priority_allowed_batch_sizes;
   MixedPriorityBatchingPolicy mixed_priority_batching_policy =
       MixedPriorityBatchingPolicy::kLowPriorityPaddingWithMaxBatchSize;
+  PriorityBatchingPolicy priority_batching_policy =
+      PriorityBatchingPolicy::kStrictFifo;
+  PriorityAwareBatchingOptions priority_aware_batching_options;
   Allocator* allocator = DefaultAllocator::GetInstance();
   std::vector<RaggedInputSpec> ragged_inputs;
 };
 
-// A batch implementation in JSV that take a list of kernels and run them in a
-// batch mode.
-class JsvBatchResource : public BatchResourceBase {
+// A batch implementation in XLA Serving that take a list of kernels and run
+// them in a batch mode.
+class XlaServingBatchResource : public BatchResourceBase {
  public:
-  JsvBatchResource(
+  XlaServingBatchResource(
       std::vector<std::unique_ptr<Kernel>> batched_graph,
       std::shared_ptr<SharedBatchScheduler<BatchResourceBase::BatchTask>>
           batcher,
-      const BatchResourceBase::BatcherT::QueueOptions& batcher_queue_options,
+      const BatchResourceBase::QueueOptions& batcher_queue_options,
       std::vector<int32_t> allowed_batch_sizes,
       tsl::thread::ThreadPool* thread_pool,
       std::vector<RaggedInputSpec> ragged_inputs = {})
@@ -120,7 +123,7 @@ class BatchRunnerOp : public CancellableAsyncKernel {
 
   // TODO: Make it to private and use `CreateBatchRunnerOp`.
   explicit BatchRunnerOp(
-      tsl::core::RefCountPtr<JsvBatchResource> batch_resource,
+      tsl::core::RefCountPtr<XlaServingBatchResource> batch_resource,
       std::unique_ptr<FlatSignature> input_signature = nullptr,
       std::unique_ptr<FlatSignature> output_signature = nullptr)
       : CancellableAsyncKernel(std::move(input_signature),
@@ -137,7 +140,7 @@ class BatchRunnerOp : public CancellableAsyncKernel {
  private:
   tsl::Future<> RunAsyncInternal(ExecuteContext& context) override;
 
-  tsl::core::RefCountPtr<JsvBatchResource> batch_resource_;
+  tsl::core::RefCountPtr<XlaServingBatchResource> batch_resource_;
 };
 
 // The `thread_pool` will be used for non-blocking tasks such as concat and
@@ -147,6 +150,6 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateBatchRunnerOp(
     std::vector<std::unique_ptr<Kernel>> kernels,
     const BatchRunnerOpOptions& options, tsl::thread::ThreadPool* thread_pool);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_BATCH_RUNNER_OP_H_
+#endif  // XLA_SERVING_RUNTIME_KERNEL_BATCHING_BATCH_RUNNER_OP_H_

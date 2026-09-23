@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_IDENTITY_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_IDENTITY_H_
+#ifndef XLA_SERVING_RUNTIME_KERNEL_IDENTITY_H_
+#define XLA_SERVING_RUNTIME_KERNEL_IDENTITY_H_
 
 #include <memory>
 #include <string>
 
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
-#include "runtime/kernel/kernel.h"  // from @neptune
-#include "runtime/kernel/kernel_builder_context.h"  // from @neptune
-#include "runtime/kernel/kernel_io_data_type.h"  // from @neptune
+#include "runtime/kernel/kernel.h"  // from @xla_serving
+#include "runtime/kernel/kernel_builder_context.h"  // from @xla_serving
+#include "runtime/kernel/kernel_io_data_type.h"  // from @xla_serving
 
-namespace neptune {
+namespace xla_serving {
 class IdentityKernel : public CancellableKernel {
  public:
   ~IdentityKernel() override = default;
@@ -54,6 +54,6 @@ class IdentityKernel : public CancellableKernel {
 
   int num_host_buffers_;
 };
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_IDENTITY_H_
+#endif  // XLA_SERVING_RUNTIME_KERNEL_IDENTITY_H_

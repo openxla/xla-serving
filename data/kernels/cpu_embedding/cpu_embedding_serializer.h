@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_SERIALIZER_H_
-#define THIRD_PARTY_NEPTUNE_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_SERIALIZER_H_
+#ifndef XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_SERIALIZER_H_
+#define XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_SERIALIZER_H_
 
 #include <string>
 #include <vector>
 
-#include "data/cpu_embedding/cc/array.h"  // from @neptune
-#include "data/resource_manager/cc/asset.h"  // from @neptune
+#include "data/cpu_embedding/cc/array.h"  // from @xla_serving
+#include "data/resource_manager/cc/asset.h"  // from @xla_serving
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 absl::StatusOr<std::vector<Asset>> SerializeCpuEmbedding(
@@ -33,6 +33,6 @@ absl::StatusOr<std::vector<Asset>> SerializeCpuEmbedding(
     std::string_view manifest_proto_text);
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_SERIALIZER_H_
+#endif  // XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_SERIALIZER_H_

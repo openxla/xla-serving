@@ -1,0 +1,211 @@
+name: Nightly Serving Test (GPU)
+
+on:
+  schedule:
+    # Run nightly at 07:00 UTC (after nightly image push at 04:00 UTC)
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+    inputs:
+      image:
+        description: 'Docker image to test'
+        required: false
+        default: 'gcr.io/neptune-serving-engine/gpu-jax-cuda12:nightly'
+        type: string
+      release_tag:
+        description: 'GitHub Release tag for wheels (leave empty for latest release)'
+        required: false
+        default: ''
+        type: string
+      runner:
+        description: 'Runner label to run on'
+        required: false
+        default: 'linux-x86-a2-48-a100-4gpu'
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  nightly-test-gpu:
+    name: Nightly Serving Test (GPU)
+    runs-on: ${{ inputs.runner || 'linux-x86-a2-48-a100-4gpu' }}
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:0ad60e35d5870853c4c463f1c23dff6ed2dbfe3b1f708406c25a7606a5cae078
+      options: --gpus all --shm-size 2g
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Configure Git Safe Directory
+        run: |
+          git config --global --add safe.directory /__w/neptune/neptune
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          git config --global --add safe.directory "*"
+
+      - name: Verify GPU Availability
+        run: |
+          echo "Checking NVIDIA GPU status..."
+          if command -v nvidia-smi > /dev/null 2>&1; then
+            nvidia-smi
+          else
+            echo "nvidia-smi not found in PATH, checking driver files..."
+            ls -la /dev/nvidia* 2>/dev/null || echo "No /dev/nvidia* device nodes found"
+          fi
+
+      - name: Install Crane
+        run: |
+          if ! command -v crane > /dev/null 2>&1; then
+            echo "Installing crane..."
+            mkdir -p "$HOME/.local/bin"
+            curl -sL https://github.com/google/go-containerregistry/releases/download/v0.20.2/go-containerregistry_Linux_x86_64.tar.gz | tar -xz -C "$HOME/.local/bin" crane
+            chmod +x "$HOME/.local/bin/crane"
+            echo "$HOME/.local/bin" >> $GITHUB_PATH
+          fi
+
+      - name: Authenticate to Container Registry
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          if command -v gcloud > /dev/null 2>&1; then
+            gcloud auth configure-docker gcr.io --quiet || true
+            gcloud auth print-access-token | crane auth login -u oauth2accesstoken --password-stdin gcr.io || true
+          fi
+
+      - name: Extract Serving Image
+        env:
+          IMAGE: ${{ inputs.image || 'gcr.io/neptune-serving-engine/gpu-jax-cuda12:nightly' }}
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "Extracting Docker image: ${IMAGE}"
+          mkdir -p /tmp/xla-serving
+          crane export "${IMAGE}" - | tar -xf - -C /tmp/xla-serving
+          echo "Verifying serving binary..."
+          ls -la /tmp/xla-serving/runtime/serving/gcp/server/
+
+      - name: Install uv and Set up Python
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          python-version: "3.12"
+
+      - name: Create virtual environment
+        run: |
+          uv venv --python 3.12
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
+
+      - name: Download Release Wheels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          git config --global --add safe.directory /__w/neptune/neptune || true
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}" || true
+          git config --global --add safe.directory "*" || true
+          mkdir -p wheels
+          if [ -n "${RELEASE_TAG}" ]; then
+            echo "Downloading wheels from release: ${RELEASE_TAG} (repo: ${GH_REPO})"
+            gh release download "${RELEASE_TAG}" --repo "${GH_REPO}" --pattern "*.whl" --dir wheels
+          else
+            echo "Downloading wheels from latest release (repo: ${GH_REPO})"
+            gh release download --repo "${GH_REPO}" --pattern "*.whl" --dir wheels
+          fi
+          ls -la wheels/
+
+      - name: Install Release Wheels and Test Dependencies
+        run: |
+          echo "Installing downloaded wheels..."
+          uv pip install wheels/*.whl
+          # Install JAX with CUDA 12 support, Flax (for examples.nnx), and grpcio
+          uv pip install "jax[cuda12]" flax grpcio
+
+      - name: Verify JAX GPU Support
+        run: |
+          echo "Checking JAX devices..."
+          python3 -c "import jax; print('JAX devices:', jax.devices()); assert any(d.platform == 'gpu' for d in jax.devices()), 'No GPU device found in JAX!'"
+
+      - name: Export NNX Example Model
+        run: |
+          mkdir -p /tmp/exported_model
+          rm -rf /tmp/test_workspace && mkdir -p /tmp/test_workspace
+          cp -r examples /tmp/test_workspace/
+          cd /tmp/test_workspace
+          python3 -m examples.nnx.run_export --export_path=/tmp/exported_model
+          ls -la /tmp/exported_model
+
+      - name: Start XLA Serving GPU Server and Run End-to-End Prediction Test
+        run: |
+          # Discover GPU server binary
+          if [ -f /tmp/xla-serving/runtime/serving/gcp/server/xla_serving_main_gpu ]; then
+            SERVER_BIN="/tmp/xla-serving/runtime/serving/gcp/server/xla_serving_main_gpu"
+          else
+            SERVER_BIN=$(find /tmp/xla-serving -name "xla_serving_main_gpu" -type f -executable 2>/dev/null | head -n 1)
+          fi
+
+          if [ -z "${SERVER_BIN}" ] || [ ! -x "${SERVER_BIN}" ]; then
+            echo "Error: No executable XLA serving GPU binary (xla_serving_main_gpu) found in extracted image!"
+            find /tmp/xla-serving -type f -perm -111
+            exit 1
+          fi
+
+          # Set up CUDA / dynamic library paths
+          CUDA_LIB_DIRS=$(find /tmp/xla-serving -type d \( -name "lib64" -o -name "lib" \) 2>/dev/null | tr '\n' ':')
+          NVIDIA_PIP_LIB_DIRS=$(find "${VIRTUAL_ENV}" -type d -path "*/nvidia/*/lib" 2>/dev/null | tr '\n' ':')
+          export LD_LIBRARY_PATH="${NVIDIA_PIP_LIB_DIRS}${CUDA_LIB_DIRS}/usr/local/nvidia/lib64:/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}"
+          echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}"
+
+          PLATFORM_FLAG="--orbax_grpc_server_platform=cuda"
+
+          echo "Starting XLA Serving GPU binary: ${SERVER_BIN} with ${PLATFORM_FLAG}..."
+          "${SERVER_BIN}" \
+            ${PLATFORM_FLAG} \
+            --model_name=nnx \
+            --model_path=/tmp/exported_model \
+            --use_insecure_grpc_credentials=true \
+            --port=8500 > /tmp/xla-serving.log 2>&1 &
+          SERVER_PID=$!
+          echo "SERVER_PID=${SERVER_PID}" >> $GITHUB_ENV
+          echo "Started XLA Serving server with PID ${SERVER_PID}"
+
+          echo "Waiting for XLA Serving server to be ready..."
+          READY=false
+          for i in $(seq 1 45); do
+            if grep -q "JAX Serving listening on" /tmp/xla-serving.log 2>/dev/null; then
+              echo "XLA Serving GPU server is ready after ${i}s!"
+              READY=true
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "${READY}" != "true" ]; then
+            echo "XLA Serving GPU server failed to start within 45s. Server logs:"
+            cat /tmp/xla-serving.log || true
+            exit 1
+          fi
+
+          echo "Running prediction test against GPU serving endpoint..."
+          python3 /tmp/test_workspace/examples/nnx/test_prediction_client.py \
+            --server_address=localhost:8500 \
+            --model_name=nnx \
+            --signature_name=serving_default \
+            --batch_size=4 \
+            --timeout=60
+
+      - name: Clean up Server
+        if: always()
+        run: |
+          if [ -f /tmp/xla-serving.log ]; then
+            echo "=== XLA Serving Logs ==="
+            cat /tmp/xla-serving.log
+          fi
+          if [ -n "${SERVER_PID}" ]; then
+            kill -9 "${SERVER_PID}" 2>/dev/null || true
+          fi

@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-package neptune.serving;
+package xla_serving.serving;
 
 import "protos/grpc/model.proto";
 import "protos/grpc/predict.proto";

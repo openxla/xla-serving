@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_CC_FEATURE_SPEC_H_
-#define THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_CC_FEATURE_SPEC_H_
+#ifndef XLA_SERVING_DATA_CPU_EMBEDDING_CC_FEATURE_SPEC_H_
+#define XLA_SERVING_DATA_CPU_EMBEDDING_CC_FEATURE_SPEC_H_
 
 #include <cstdint>
 #include <string>
 
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 
-namespace neptune::data::cpu_embedding {
+namespace xla_serving::data::cpu_embedding {
 
 struct FeatureSpec {
   std::string name;
@@ -34,6 +34,6 @@ void AbslStringify(Sink& sink, const FeatureSpec& spec) {
                spec.name, spec.table_name, spec.max_sequence_length);
 }
 
-}  // namespace neptune::data::cpu_embedding
+}  // namespace xla_serving::data::cpu_embedding
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_CPU_EMBEDDING_CC_FEATURE_SPEC_H_
+#endif  // XLA_SERVING_DATA_CPU_EMBEDDING_CC_FEATURE_SPEC_H_

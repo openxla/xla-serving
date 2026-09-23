@@ -12,6 +12,9 @@ common --define=LIBDIR=$(PREFIX)/lib
 common --define=INCLUDEDIR=$(PREFIX)/include
 common --define=PROTOBUF_INCLUDE_PATH=$(PREFIX)/include
 
+# Default Python toolchain configuration (Python 3.12)
+common --@rules_python//python/config_settings:python_version=3.12
+
 # TODO: Migrate for https://github.com/bazelbuild/bazel/issues/7260
 common:clang_local --noincompatible_enable_cc_toolchain_resolution
 common:clang_local --@rules_ml_toolchain//common:enable_hermetic_cc=False
@@ -29,6 +32,12 @@ common:cuda --@local_config_cuda//cuda:override_include_cuda_libs=true
 build:cuda --copt=-Wno-unused-command-line-argument
 build:cuda --copt=-Wno-gnu-offsetof-extensions
 
+# NVCC only supports GNU libstdc++ on Linux. Use glibc 2.35 sysroot which provides
+# GCC 12 libstdc++ with full C++20 support (required by Abseil and Tensorstore).
+common:cuda --repo_env SYSROOT_DIST=linux_glibc_2_35
+common:cuda --@rules_ml_toolchain//common:stdlib=libstdc++
+common:cuda --@rules_ml_toolchain//common:static_libcxx=false
+
 # CUDA 12 with clang
 common:cuda_v12_clang --config=cuda
 common:cuda_v12_clang --repo_env=HERMETIC_CUDA_VERSION="12.9.1"
@@ -37,7 +46,7 @@ common:cuda_v12_clang --repo_env=HERMETIC_NVSHMEM_VERSION="3.3.9"
 common:cuda_v12_clang --repo_env=HERMETIC_NCCL_VERSION="2.29.7"
 common:cuda_v12_clang --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_50,sm_60,sm_70,sm_80,sm_90"
 # common CUDA and other C++ targets with Clang
-common:cuda_v12 --@local_config_cuda//:cuda_compiler=clang
+common:cuda_v12_clang --@local_config_cuda//:cuda_compiler=clang
 
 
 # CUDA 12 with nvcc: It can support more cuda compute capabilities for newer
@@ -74,6 +83,18 @@ common --define=tsl_link_protobuf=true
 
 common --repository_cache=~/.bazel_repository_cache
 
+# Make action keys independent of the client environment (e.g. $PATH) so that
+# the remote cache in `gs://xse-bazel-cache` is shared across CI runs and
+# developer machines instead of being re-populated on every build.
+build --incompatible_strict_action_env
+
+# Always compile PIC code. In opt mode, Bazel by default builds both PIC (.pic.o)
+# and non-PIC (.o) object files for shared libraries vs binaries/tests, which
+# compiles shared C++ dependencies (XLA, LLVM, MLIR, TensorFlow, TensorStore)
+# twice and prevents cc_test targets from reusing remote cache entries produced
+# by Python shared library builds.
+build --force_pic
+
 # Required by Abseil and Tensorstore to prevent compilation errors
 # (e.g. InstantiateRawHashMap not found) and ensure correct ABI compatibility.
 build --cxxopt=-std=c++20
@@ -83,13 +104,16 @@ build --copt=-D_LIBCPP_ENABLE_CXX20_REMOVED_FEATURES=1
 build --host_copt=-D_LIBCPP_ENABLE_CXX20_REMOVED_TYPE_TRAITS=1
 build --host_copt=-D_LIBCPP_ENABLE_CXX20_REMOVED_FEATURES=1
 
-# Neptune Data.
-build --copt=-DPYBIND11_ABSEIL_STATUS_MODULE_PATH=neptune_data.pybind11_abseil.status
+# XLA Serving Data.
+build --copt=-DPYBIND11_ABSEIL_STATUS_MODULE_PATH=xla_serving_data.pybind11_abseil.status
 
 # GCS Remote Cache configs (xse-bazel-cache)
 common:remote_cache --remote_cache="https://storage.googleapis.com/xse-bazel-cache/"
+common:remote_cache --remote_download_outputs=toplevel
+common:remote_cache --remote_max_connections=128
+common:remote_cache --remote_retries=3
+common:remote_cache --remote_timeout=60
+common:remote_cache --remote_cache_compression=true
 common:remote_cache_readonly --config=remote_cache --remote_upload_local_results=false
 common:remote_cache_readwrite --config=remote_cache --remote_upload_local_results=true --google_default_credentials
-
-
 

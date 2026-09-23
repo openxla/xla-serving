@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Neptune export for an NNX recommender model."""
+"""XLA SavedModel export for an NNX recommender model."""
 
 import os
 import tempfile
@@ -22,11 +22,11 @@ import orbax.checkpoint as ocp
 import tensorflow as tf
 
 from examples.nnx_tf import model as nnx_tf_model
-from neptune_model._src.export import jax_model
-from neptune_model._src.export import main_lib
-from neptune_model._src.export import serving_config
-from neptune_model._src.export import tensorflow_model
-from neptune_model.protos import orchestration_pb2
+from xla_saved_model.protos import orchestration_pb2
+from xla_saved_model._src.export import jax_model
+from xla_saved_model._src.export import main_lib
+from xla_saved_model._src.export import serving_config
+from xla_saved_model._src.export import tensorflow_model
 
 
 @tf.function
@@ -37,7 +37,7 @@ def simple_postprocessor(inputs: dict[str, tf.Tensor]) -> dict[str, tf.Tensor]:
 
 
 def export_model(export_path: str):
-  """Exports the NNX recommender model using Neptune."""
+  """Exports the NNX recommender model using XLA SavedModel."""
 
   rngs = nnx.Rngs(0)
   embedding_layer, model = nnx_tf_model.build_model(rngs)

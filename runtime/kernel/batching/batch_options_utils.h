@@ -12,20 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_BATCH_OPTIONS_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_BATCH_OPTIONS_UTILS_H_
+#ifndef XLA_SERVING_RUNTIME_KERNEL_BATCHING_BATCH_OPTIONS_UTILS_H_
+#define XLA_SERVING_RUNTIME_KERNEL_BATCHING_BATCH_OPTIONS_UTILS_H_
 
 #include <string>
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "protos/orchestration.pb.h"  // from @neptune
-#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
+#include "protos/orchestration.pb.h"  // from @xla_serving
+#include "runtime/core/batching/batch_scheduler.h"  // from @xla_serving
 #include "xla/tsl/platform/criticality.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
-using neptune_model_orchestration::BatchOptions;
+using xla_saved_model_orchestration::BatchOptions;
 
 // batch_padding_policy string constants matching with the
 // BatchOptions.BatchPaddingPolicy enum.
@@ -45,9 +45,18 @@ absl::StatusOr<MixedPriorityBatchingPolicy> GetMixedPriorityBatchingPolicy(
 absl::string_view MixedPriorityBatchingPolicyToString(
     MixedPriorityBatchingPolicy policy);
 
+absl::StatusOr<PriorityBatchingPolicy> GetPriorityBatchingPolicy(
+    BatchOptions::PriorityBatchingPolicy priority_batching_policy);
+
+absl::string_view PriorityBatchingPolicyToString(
+    PriorityBatchingPolicy policy);
+
+absl::StatusOr<PriorityAwareBatchingOptions> GetPriorityAwareBatchingOptions(
+    const BatchOptions::PriorityAwareBatchingOptions& options);
+
 absl::string_view CriticalityToString(
     tsl::criticality::Criticality criticality);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_BATCHING_BATCH_OPTIONS_UTILS_H_
+#endif  // XLA_SERVING_RUNTIME_KERNEL_BATCHING_BATCH_OPTIONS_UTILS_H_

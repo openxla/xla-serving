@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/serving/gcp/server/flags.h"  // from @neptune
+#include "runtime/serving/gcp/server/flags.h"  // from @xla_serving
 
 #include <string>
 #include "absl/flags/flag.h"  // from @abseil-cpp

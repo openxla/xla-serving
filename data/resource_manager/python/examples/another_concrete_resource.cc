@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/resource_manager/python/examples/another_concrete_resource.h"  // from @neptune
+#include "data/resource_manager/python/examples/another_concrete_resource.h"  // from @xla_serving
 
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "data/resource_manager/cc/resource.h"  // from @neptune
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
 
 namespace testing_namespace {
 

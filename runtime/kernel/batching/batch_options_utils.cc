@@ -12,19 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/kernel/batching/batch_options_utils.h"  // from @neptune
+#include "runtime/kernel/batching/batch_options_utils.h"  // from @xla_serving
 
+#include <cstddef>
 #include <string>
 
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "protos/orchestration.pb.h"  // from @neptune
-#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
+#include "protos/orchestration.pb.h"  // from @xla_serving
+#include "runtime/core/batching/batch_scheduler.h"  // from @xla_serving
 #include "xla/tsl/platform/criticality.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 absl::StatusOr<std::string> GetBatchPaddingPolicyString(
     BatchOptions::BatchPaddingPolicy batch_padding_policy) {
@@ -78,6 +79,45 @@ absl::string_view MixedPriorityBatchingPolicyToString(
   return "unknown_mixed_priority_batching_policy";
 }
 
+absl::StatusOr<PriorityBatchingPolicy> GetPriorityBatchingPolicy(
+    BatchOptions::PriorityBatchingPolicy priority_batching_policy) {
+  switch (priority_batching_policy) {
+    case BatchOptions::PRIORITY_BATCHING_POLICY_UNSPECIFIED:
+    case BatchOptions::STRICT_FIFO:
+      return PriorityBatchingPolicy::kStrictFifo;
+    case BatchOptions::PRIORITY_AWARE:
+      return PriorityBatchingPolicy::kPriorityAware;
+    default:
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Unsupported priority batching policy: ", priority_batching_policy));
+  }
+}
+
+absl::string_view PriorityBatchingPolicyToString(
+    PriorityBatchingPolicy policy) {
+  switch (policy) {
+    case PriorityBatchingPolicy::kStrictFifo:
+      return kStrictFifoAttrValue;
+    case PriorityBatchingPolicy::kPriorityAware:
+      return kPriorityAwareAttrValue;
+  }
+  return "unknown_priority_batching_policy";
+}
+
+absl::StatusOr<PriorityAwareBatchingOptions> GetPriorityAwareBatchingOptions(
+    const BatchOptions::PriorityAwareBatchingOptions& options) {
+  if (options.max_queue_depth() < 0) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("`priority_aware_batching_options.max_queue_depth` must "
+                     "be non-negative, but got: ",
+                     options.max_queue_depth()));
+  }
+  return PriorityAwareBatchingOptions{
+      .max_queue_depth = static_cast<size_t>(options.max_queue_depth()),
+      .enable_task_resplit = options.enable_task_resplit(),
+  };
+}
+
 absl::string_view CriticalityToString(
     tsl::criticality::Criticality criticality) {
   switch (criticality) {
@@ -93,4 +133,4 @@ absl::string_view CriticalityToString(
   return "unknown_criticality";
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

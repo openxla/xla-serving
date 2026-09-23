@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_AUTH_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_AUTH_UTILS_H_
+#ifndef XLA_SERVING_RUNTIME_SERVING_GCP_AUTH_UTILS_H_
+#define XLA_SERVING_RUNTIME_SERVING_GCP_AUTH_UTILS_H_
 
 #include <memory>
 #include <string>
@@ -22,7 +22,7 @@
 #include "include/grpcpp/security/credentials.h"  // from @grpc
 #include "include/grpcpp/security/server_credentials.h"  // from @grpc
 
-namespace neptune {
+namespace xla_serving {
 namespace serving {
 
 // Creates gRPC server credentials based on the provided flags.
@@ -38,6 +38,6 @@ CreateChannelCredentials(std::string server_cert_chain_path,
                          bool use_insecure_grpc_credentials);
 
 }  // namespace serving
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_SERVING_GCP_AUTH_UTILS_H_
+#endif  // XLA_SERVING_RUNTIME_SERVING_GCP_AUTH_UTILS_H_

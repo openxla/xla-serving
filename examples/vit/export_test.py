@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for Neptune export of the ViT image classifier."""
+"""Tests for XLA SavedModel export of the ViT image classifier."""
 
 import os
 
@@ -36,7 +36,7 @@ _SAMPLE_IMAGE_PATH = flags.DEFINE_string(
 
 def _model_runner(model_path: str):
   try:
-    from neptune_model_runner import model_runner  # pylint: disable=g-import-not-at-top
+    from xla_saved_model_runner import model_runner  # pylint: disable=g-import-not-at-top
 
     return model_runner.ModelRunner(model_path=model_path)
   except ImportError:

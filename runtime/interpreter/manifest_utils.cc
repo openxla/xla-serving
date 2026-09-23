@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/interpreter/manifest_utils.h"  // from @neptune
+#include "runtime/interpreter/manifest_utils.h"  // from @xla_serving
 
 #include <algorithm>
 #include <cstddef>
@@ -37,15 +37,15 @@
 #include "absl/strings/strip.h"  // from @abseil-cpp
 #include "absl/strings/substitute.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
-#include "protos/orchestration.pb.h"  // from @neptune
-#include "protos/type.pb.h"  // from @neptune
-#include "runtime/core/constants.h"  // from @neptune
-#include "runtime/core/flat_signature.h"  // from @neptune
-#include "runtime/core/stablehlo_utils.h"  // from @neptune
-#include "runtime/core/type.h"  // from @neptune
-#include "runtime/interpreter/orbax_type_utils.h"  // from @neptune
-#include "runtime/kernel/kernel_builder_constants.h"  // from @neptune
+#include "protos/manifest.pb.h"  // from @xla_serving
+#include "protos/orchestration.pb.h"  // from @xla_serving
+#include "protos/type.pb.h"  // from @xla_serving
+#include "runtime/core/constants.h"  // from @xla_serving
+#include "runtime/core/flat_signature.h"  // from @xla_serving
+#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
+#include "runtime/core/type.h"  // from @xla_serving
+#include "runtime/interpreter/orbax_type_utils.h"  // from @xla_serving
+#include "runtime/kernel/kernel_builder_constants.h"  // from @xla_serving
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "google/protobuf/util/message_differencer.h"
@@ -61,7 +61,7 @@
 #include "xla/xla_data.pb.h"  // from @xla
 #include "tsl/platform/path.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
 using type::Dict;
 using type::StringTypePairs;
@@ -77,10 +77,10 @@ struct ModelVersionMetadata {
   std::string manifest_file_path;
 };
 
-// Converts a vector of `neptune_model_type::LeafType` to a vector of `ArgSpec`.
+// Converts a vector of `xla_saved_model_type::LeafType` to a vector of `ArgSpec`.
 // We assume that the leaf types are all `TensorType`.
 absl::StatusOr<std::vector<ArgSpec>> ConvertToArgSpecs(
-    absl::Span<const neptune_model_type::LeafType> flatten_types) {
+    absl::Span<const xla_saved_model_type::LeafType> flatten_types) {
   std::vector<ArgSpec> input_specs;
   // TODO: populate shape from function body
   input_specs.reserve(flatten_types.size());
@@ -93,8 +93,8 @@ absl::StatusOr<std::vector<ArgSpec>> ConvertToArgSpecs(
 }
 
 // Gets the orchestration data from the manifest.
-absl::StatusOr<const neptune_model_manifest::UnstructuredData> GetOrchestration(
-    const neptune_model_manifest::Manifest& manifest) {
+absl::StatusOr<const xla_saved_model_manifest::UnstructuredData> GetOrchestration(
+    const xla_saved_model_manifest::Manifest& manifest) {
   const auto& dict = manifest.supplemental_info();
   auto it = dict.find(kOrchestrationSupplementalName);
   if (it == dict.end()) {
@@ -107,9 +107,9 @@ absl::StatusOr<const neptune_model_manifest::UnstructuredData> GetOrchestration(
 
 // Gets the name of the data case.
 std::string GetDataCaseName(
-    neptune_model_manifest::UnstructuredData::DataCase data_case) {
+    xla_saved_model_manifest::UnstructuredData::DataCase data_case) {
   const google::protobuf::FieldDescriptor* field_descriptor =
-      neptune_model_manifest::UnstructuredData::descriptor()->FindFieldByNumber(
+      xla_saved_model_manifest::UnstructuredData::descriptor()->FindFieldByNumber(
           data_case);
   return field_descriptor == nullptr ? "DATA_NOT_SET"
                                      : std::string(field_descriptor->name());
@@ -127,25 +127,25 @@ SortedByStringKey(const Dict& dict) {
   return pairs;
 }
 
-bool IsSequence(const neptune_model_type::Type& type) {
+bool IsSequence(const xla_saved_model_type::Type& type) {
   return type.has_tuple() || type.has_list();
 }
 
 // Returns the elements of a sequence type. Assumes that the type is a sequence.
-const google::protobuf::RepeatedPtrField<neptune_model_type::Type>&
-GetElementsFromSequence(const neptune_model_type::Type& type) {
+const google::protobuf::RepeatedPtrField<xla_saved_model_type::Type>&
+GetElementsFromSequence(const xla_saved_model_type::Type& type) {
   return type.has_tuple() ? type.tuple().elements() : type.list().elements();
 }
 
 // Returns true if the `type` matches the args-kwargs ([(), {}]) pattern.
-bool IsArgsKwargsPattern(const neptune_model_type::Type& type) {
-  // TODO: consider using a tree structure (e.g. `neptune::type::Type`)
-  // to first translate `neptune_model_type::Type` to this tree structure to
+bool IsArgsKwargsPattern(const xla_saved_model_type::Type& type) {
+  // TODO: consider using a tree structure (e.g. `xla_serving::type::Type`)
+  // to first translate `xla_saved_model_type::Type` to this tree structure to
   // simplify the logic.
   if (!IsSequence(type)) {
     return false;
   }
-  const google::protobuf::RepeatedPtrField<neptune_model_type::Type>& elements =
+  const google::protobuf::RepeatedPtrField<xla_saved_model_type::Type>& elements =
       GetElementsFromSequence(type);
   if (elements.size() != 2) {
     return false;
@@ -155,11 +155,11 @@ bool IsArgsKwargsPattern(const neptune_model_type::Type& type) {
 
 // Returns true if the `type` matches the args-hybrids-kwargs ([(), {}/(), {}])
 // pattern.
-bool IsArgsHybridsKwargsPattern(const neptune_model_type::Type& type) {
+bool IsArgsHybridsKwargsPattern(const xla_saved_model_type::Type& type) {
   if (!IsSequence(type)) {
     return false;
   }
-  const google::protobuf::RepeatedPtrField<neptune_model_type::Type>& elements =
+  const google::protobuf::RepeatedPtrField<xla_saved_model_type::Type>& elements =
       GetElementsFromSequence(type);
   if (elements.size() != 3) {
     return false;
@@ -170,7 +170,7 @@ bool IsArgsHybridsKwargsPattern(const neptune_model_type::Type& type) {
 
 // Fills `specs` from `type`. The `name` is used to construct the name in the
 // `MetaArgSpec`.
-absl::Status FillMetaArgSpecs(const neptune_model_type::Type& type,
+absl::Status FillMetaArgSpecs(const xla_saved_model_type::Type& type,
                               std::vector<MetaArgSpec>& specs) {
   if (type.has_leaf()) {
     TF_ASSIGN_OR_RETURN(ArgSpec spec,
@@ -182,14 +182,14 @@ absl::Status FillMetaArgSpecs(const neptune_model_type::Type& type,
   }
 
   switch (type.type_case()) {
-    case neptune_model_type::Type::kTuple:
+    case xla_saved_model_type::Type::kTuple:
       [[fallthrough]];
-    case neptune_model_type::Type::kList:
+    case xla_saved_model_type::Type::kList:
       for (const auto& element : GetElementsFromSequence(type)) {
         TF_RETURN_IF_ERROR(FillMetaArgSpecs(element, specs));
       }
       return absl::OkStatus();
-    case neptune_model_type::Type::kDict:
+    case xla_saved_model_type::Type::kDict:
       // We sort by the string key, aligned with JAX and OBM Python.
       for (const auto& [key, value] :
            SortedByStringKey(type.dict().string_to_type())) {
@@ -208,9 +208,9 @@ absl::Status FillMetaArgSpecs(const neptune_model_type::Type& type,
 // but it is not always available in the manifest. This is a best effort
 // implementation to avoid hard code the device assignment.
 absl::StatusOr<AssignedDevices> InferAssignedDevicesFromFunctionSignature(
-    const neptune_model_manifest::Function& stable_hlo_func) {
+    const xla_saved_model_manifest::Function& stable_hlo_func) {
   int64_t max_num_devices = 0;
-  std::vector<neptune_model_type::LeafType> leafs;
+  std::vector<xla_saved_model_type::LeafType> leafs;
   TF_RETURN_IF_ERROR(FlattenType(stable_hlo_func.signature().input(), leafs));
 
   for (const auto& leaf : leafs) {
@@ -236,16 +236,9 @@ absl::StatusOr<AssignedDevices> InferAssignedDevicesFromFunctionSignature(
 absl::StatusOr<ModelVersionMetadata> ParseModelVersionFile(
     absl::string_view model_path) {
   std::string metadata_str;
-  auto status = tsl::ReadFileToString(
-      tsl::Env::Default(),
-      tsl::io::JoinPath(model_path, kNeptuneModelManifestVersionTxt),
-      &metadata_str);
-  if (!status.ok()) {
-    TF_RETURN_IF_ERROR(tsl::ReadFileToString(
-        tsl::Env::Default(),
-        tsl::io::JoinPath(model_path, kOrbaxModelManifestVersionTxt),
-        &metadata_str));
-  }
+  TF_RETURN_IF_ERROR(tsl::ReadFileToString(
+      tsl::Env::Default(), tsl::io::JoinPath(model_path, kModelVersionTxt),
+      &metadata_str));
 
   std::string version;
   std::string mime_type;
@@ -274,11 +267,11 @@ absl::StatusOr<ModelVersionMetadata> ParseModelVersionFile(
     value = absl::StripPrefix(absl::StripSuffix(value, "\""), "\"");
 
     // Duplicate keys are overwritten.
-    if (key == kOrbaxModelManifestVersionKey) {
+    if (key == kModelManifestVersionKey) {
       version = value;
-    } else if (key == kOrbaxModelManifestMimeTypeKey) {
+    } else if (key == kModelManifestMimeTypeKey) {
       mime_type = value;
-    } else if (key == kOrbaxModelManifestManifestFilePathKey) {
+    } else if (key == kModelManifestFilePathKey) {
       manifest_file_path = value;
     } else {
       return absl::InvalidArgumentError(
@@ -294,7 +287,7 @@ absl::StatusOr<ModelVersionMetadata> ParseModelVersionFile(
 }  // namespace
 
 absl::StatusOr<ArgSpec> ConvertToArgSpec(
-    const neptune_model_type::TensorType& type) {
+    const xla_saved_model_type::TensorType& type) {
   TF_ASSIGN_OR_RETURN(xla::ifrt::DType dtype, ToIfrtDType(type.dtype()));
   TF_ASSIGN_OR_RETURN(ArgShape shape, ToArgShape(type.shape()));
   xla::OpSharding sharding = type.sharding();
@@ -307,9 +300,9 @@ absl::StatusOr<ArgSpec> ConvertToArgSpec(
   xla::ifrt::Shape ifrt_shape = ToIfrtShape(shape);
   std::optional<Placement> placement = std::nullopt;
   if (type.has_placement()) {
-    if (type.placement() == neptune_model_type::DEVICE) {
+    if (type.placement() == xla_saved_model_type::DEVICE) {
       placement = Placement::kDevice;
-    } else if (type.placement() == neptune_model_type::HOST) {
+    } else if (type.placement() == xla_saved_model_type::HOST) {
       placement = Placement::kHost;
     }
   }
@@ -323,8 +316,8 @@ absl::StatusOr<ArgSpec> ConvertToArgSpec(
   };
 }
 
-absl::StatusOr<xla::ifrt::DType> ToIfrtDType(neptune_model_type::DType type) {
-  if (type == neptune_model_type::DType::str) {
+absl::StatusOr<xla::ifrt::DType> ToIfrtDType(xla_saved_model_type::DType type) {
+  if (type == xla_saved_model_type::DType::str) {
     // This type has no corresponding `xla::PrimitiveType`.
     return xla::ifrt::DType(xla::ifrt::DType::kString);
   }
@@ -332,11 +325,11 @@ absl::StatusOr<xla::ifrt::DType> ToIfrtDType(neptune_model_type::DType type) {
   return xla::ifrt::ToDType(primitive_type);
 }
 
-absl::StatusOr<ArgShape> ToArgShape(const neptune_model_type::Shape& shape) {
+absl::StatusOr<ArgShape> ToArgShape(const xla_saved_model_type::Shape& shape) {
   if (shape.shape_with_known_rank().dimension_sizes().empty()) {
     return ArgShape({});
   }
-  const google::protobuf::RepeatedPtrField<neptune_model_type::DimensionSize>&
+  const google::protobuf::RepeatedPtrField<xla_saved_model_type::DimensionSize>&
       dimension_sizes = shape.shape_with_known_rank().dimension_sizes();
 
   ArgShape arg_shape;
@@ -352,12 +345,12 @@ absl::StatusOr<ArgShape> ToArgShape(const neptune_model_type::Shape& shape) {
 }
 
 // TODO(wangpeng): flatten_types's type can directly be
-//   vector<neptune_model_manifest::TensorType>.
+//   vector<xla_saved_model_manifest::TensorType>.
 absl::Status FlattenType(
-    const neptune_model_type::Type& type,
-    std::vector<neptune_model_type::LeafType>& flatten_types) {
+    const xla_saved_model_type::Type& type,
+    std::vector<xla_saved_model_type::LeafType>& flatten_types) {
   switch (type.type_case()) {
-    case neptune_model_type::Type::kLeaf: {
+    case xla_saved_model_type::Type::kLeaf: {
       if (!type.leaf().has_tensor_type()) {
         return absl::UnimplementedError(absl::StrCat(
             "Unsupported leaf type: ", type.leaf().SerializeAsString()));
@@ -365,19 +358,19 @@ absl::Status FlattenType(
       flatten_types.push_back(type.leaf());
       return absl::OkStatus();
     }
-    case neptune_model_type::Type::kNone:
+    case xla_saved_model_type::Type::kNone:
       // We can just ignore the none case.
       return absl::OkStatus();
-    case neptune_model_type::Type::kTuple:
+    case xla_saved_model_type::Type::kTuple:
       [[fallthrough]];
-    case neptune_model_type::Type::kList: {
+    case xla_saved_model_type::Type::kList: {
       for (const auto& element : (type.has_tuple() ? type.tuple().elements()
                                                    : type.list().elements())) {
         TF_RETURN_IF_ERROR(FlattenType(element, flatten_types));
       }
       return absl::OkStatus();
     }
-    case neptune_model_type::Type::kDict: {
+    case xla_saved_model_type::Type::kDict: {
       // We sort by the string key, aligned with JAX and OBM Python.
       for (const auto& [_, value] :
            SortedByStringKey(type.dict().string_to_type())) {
@@ -385,13 +378,13 @@ absl::Status FlattenType(
       }
       return absl::OkStatus();
     }
-    case neptune_model_type::Type::kStringTypePairs: {
+    case xla_saved_model_type::Type::kStringTypePairs: {
       for (const auto& element : type.string_type_pairs().elements()) {
         TF_RETURN_IF_ERROR(FlattenType(element.snd(), flatten_types));
       }
       return absl::OkStatus();
     }
-    case neptune_model_type::Type::TYPE_NOT_SET:
+    case xla_saved_model_type::Type::TYPE_NOT_SET:
       // Orbax Model should not allow this case.
       return absl::InvalidArgumentError(
           "The oneof field `Type.type` is not set.");
@@ -402,22 +395,22 @@ absl::Status FlattenType(
 }
 
 absl::StatusOr<std::vector<ArgSpec>> GetInputSpec(
-    const neptune_model_manifest::Function& func) {
-  std::vector<neptune_model_type::LeafType> flatten_types;
+    const xla_saved_model_manifest::Function& func) {
+  std::vector<xla_saved_model_type::LeafType> flatten_types;
   TF_RETURN_IF_ERROR(FlattenType(func.signature().input(), flatten_types));
   return ConvertToArgSpecs(flatten_types);
 }
 
 absl::StatusOr<std::vector<ArgSpec>> GetOutputSpec(
-    const neptune_model_manifest::Function& func) {
-  std::vector<neptune_model_type::LeafType> flatten_types;
+    const xla_saved_model_manifest::Function& func) {
+  std::vector<xla_saved_model_type::LeafType> flatten_types;
   TF_RETURN_IF_ERROR(FlattenType(func.signature().output(), flatten_types));
 
   return ConvertToArgSpecs(flatten_types);
 }
 
 absl::Status CheckMimeType(
-    const neptune_model_manifest::UnstructuredData& unstructured_data,
+    const xla_saved_model_manifest::UnstructuredData& unstructured_data,
     absl::Span<const absl::string_view> allowed_mime_types,
     absl::string_view description) {
   if (!unstructured_data.has_mime_type()) {
@@ -437,8 +430,8 @@ absl::Status CheckMimeType(
 }
 
 absl::Status CheckDataType(
-    const neptune_model_manifest::UnstructuredData& unstructured_data,
-    absl::Span<const neptune_model_manifest::UnstructuredData::DataCase>
+    const xla_saved_model_manifest::UnstructuredData& unstructured_data,
+    absl::Span<const xla_saved_model_manifest::UnstructuredData::DataCase>
         allowed_data_types,
     absl::string_view description) {
   for (const auto& allowed_data_type : allowed_data_types) {
@@ -457,9 +450,9 @@ absl::Status CheckDataType(
 }
 
 absl::Status CheckMimeAndDataType(
-    const neptune_model_manifest::UnstructuredData& unstructured_data,
+    const xla_saved_model_manifest::UnstructuredData& unstructured_data,
     absl::Span<const absl::string_view> allowed_mime_types,
-    absl::Span<const neptune_model_manifest::UnstructuredData::DataCase>
+    absl::Span<const xla_saved_model_manifest::UnstructuredData::DataCase>
         allowed_data_types,
     absl::string_view description) {
   TF_RETURN_IF_ERROR(
@@ -467,19 +460,18 @@ absl::Status CheckMimeAndDataType(
   return CheckDataType(unstructured_data, allowed_data_types, description);
 }
 
-absl::StatusOr<neptune_model_manifest::Manifest> GetManifest(
+absl::StatusOr<xla_saved_model_manifest::Manifest> GetManifest(
     absl::string_view model_path) {
   TF_ASSIGN_OR_RETURN(auto model_version_metadata,
                       ParseModelVersionFile(model_path));
   // TODO: Once there is more than one version of the model
   // we will need to check the list of supported versions and customize the
   // loading process accordingly.
-  if (model_version_metadata.version != kOrbaxModelManifestVersion) {
+  if (model_version_metadata.version != kModelManifestVersion) {
     return absl::InvalidArgumentError(absl::StrCat(
         "Unsupported version: ", model_version_metadata.version));
   }
-  if (model_version_metadata.mime_type != kOrbaxModelManifestMimeType &&
-      model_version_metadata.mime_type != kOrbaxModelManifestMimeTypeLegacy) {
+  if (model_version_metadata.mime_type != kModelManifestMimeType) {
     return absl::InvalidArgumentError(absl::StrCat(
         "Unsupported type: ", model_version_metadata.mime_type));
   }
@@ -488,7 +480,7 @@ absl::StatusOr<neptune_model_manifest::Manifest> GetManifest(
   }
   auto manifest_path =
       tsl::io::JoinPath(model_path, model_version_metadata.manifest_file_path);
-  neptune_model_manifest::Manifest manifest;
+  xla_saved_model_manifest::Manifest manifest;
   TF_RETURN_IF_ERROR(
       tsl::ReadBinaryProto(tsl::Env::Default(), manifest_path, &manifest));
   return manifest;
@@ -496,7 +488,7 @@ absl::StatusOr<neptune_model_manifest::Manifest> GetManifest(
 
 absl::StatusOr<std::string> GetAbsoluteFileSystemPath(
     absl::string_view model_path,
-    const neptune_model_manifest::FileSystemLocation& file_system_location) {
+    const xla_saved_model_manifest::FileSystemLocation& file_system_location) {
   if (!file_system_location.has_string_path()) {
     return absl::UnimplementedError(
         "FileSystemLocation does not have a string path. Only support string "
@@ -514,7 +506,7 @@ absl::StatusOr<std::string> GetAbsoluteFileSystemPath(
 }
 
 absl::StatusOr<FlatSignature> GetInputFlatSignature(
-    const neptune_model_type::Type& type, int offset) {
+    const xla_saved_model_type::Type& type, int offset) {
   // Input type will have the args-kwargs pattern or
   // args-hybrids-kwargs pattern.
   bool is_args_kwargs_pattern = IsArgsKwargsPattern(type);
@@ -525,9 +517,9 @@ absl::StatusOr<FlatSignature> GetInputFlatSignature(
         "supported for input.");
   }
 
-  const neptune_model_type::Type& positional_args =
+  const xla_saved_model_type::Type& positional_args =
       GetElementsFromSequence(type)[0];
-  const neptune_model_type::Dict& kwargs =
+  const xla_saved_model_type::Dict& kwargs =
       is_args_kwargs_pattern ? GetElementsFromSequence(type)[1].dict()
                              : GetElementsFromSequence(type)[2].dict();
 
@@ -556,15 +548,15 @@ absl::StatusOr<FlatSignature> GetInputFlatSignature(
 }
 
 absl::StatusOr<FlatSignature> GetOutputFlatSignature(
-    const neptune_model_type::Type& type) {
+    const xla_saved_model_type::Type& type) {
   std::vector<MetaArgSpec> specs;
   TF_RETURN_IF_ERROR(FillMetaArgSpecs(type, specs));
   return FlatSignature(std::move(specs));
 }
 
 absl::StatusOr<AssignedDevices> GetAssignedDevices(
-    const neptune_model_manifest::Manifest& manifest,
-    const neptune_model_manifest::Function& stable_hlo_func,
+    const xla_saved_model_manifest::Manifest& manifest,
+    const xla_saved_model_manifest::Function& stable_hlo_func,
     const xla::CompileOptionsProto* absl_nullable compile_options,
     bool ignore_device_assignment_in_manifest) {
   // If the device assignment is not available in the manifest, we infer it
@@ -637,7 +629,7 @@ absl::StatusOr<AssignedDevices> GetAssignedDevices(
 }
 
 absl::StatusOr<FlatSignature> GetFlatSignatureFromNamedSignature(
-    const neptune_model_orchestration::NamedTensorTypeList& inputs_or_outputs) {
+    const xla_saved_model_orchestration::NamedTensorTypeList& inputs_or_outputs) {
   if (inputs_or_outputs.named_tensor_types().empty()) {
     return absl::InvalidArgumentError(
         "Empty named signature. Not able to get the flat signature.");
@@ -658,11 +650,11 @@ absl::StatusOr<FlatSignature> GetFlatSignatureFromNamedSignature(
 }
 
 absl::StatusOr<std::optional<xla::CompileOptionsProto>> GetCompileOptions(
-    absl::Span<const neptune_model_manifest::Function* const> stablehlo_funcs,
+    absl::Span<const xla_saved_model_manifest::Function* const> stablehlo_funcs,
     absl::string_view platform_name) {
   std::optional<xla::CompileOptionsProto> compile_options;
   for (const auto& func : stablehlo_funcs) {
-    const neptune_model_manifest::StableHloFunctionBody& stable_hlo_body =
+    const xla_saved_model_manifest::StableHloFunctionBody& stable_hlo_body =
         func->body().stable_hlo_body();
     auto xla_options_it =
         stable_hlo_body.supplemental_info().find(kXlaCompileOptions);
@@ -672,9 +664,9 @@ absl::StatusOr<std::optional<xla::CompileOptionsProto>> GetCompileOptions(
       TF_RETURN_IF_ERROR(CheckMimeAndDataType(
           xla_options_it->second,
           {kXlaCompileOptionsMimeType, kXlaCompileOptionsMimeTypeLegacy},
-          {neptune_model_manifest::UnstructuredData::kInlinedBytes},
+          {xla_saved_model_manifest::UnstructuredData::kInlinedBytes},
           "xla_compile_options supplemental"));
-      std::optional<neptune_model_manifest::CompileOptionsProtoMap>
+      std::optional<xla_saved_model_manifest::CompileOptionsProtoMap>
           compile_options_map;
       compile_options_map.emplace();
       if (!compile_options_map->ParseFromString(
@@ -705,7 +697,7 @@ absl::StatusOr<std::optional<xla::CompileOptionsProto>> GetCompileOptions(
 absl::StatusOr<std::vector<std::string>> GetInputNames(
     absl::string_view orchestration_path, absl::string_view pipeline_name) {
   // Get the pipeline.
-  neptune_model_orchestration::Pipelines pipelines;
+  xla_saved_model_orchestration::Pipelines pipelines;
   TF_RETURN_IF_ERROR(tsl::ReadBinaryProto(
       tsl::Env::Default(), std::string(orchestration_path), &pipelines));
   const auto& pipeline_map = pipelines.name_to_pipeline();
@@ -720,7 +712,7 @@ absl::StatusOr<std::vector<std::string>> GetInputNames(
         "Pipeline \"", pipeline_name, "\" not found. Available pipelines: ",
         absl::StrJoin(pipeline_names, ", ")));
   }
-  const neptune_model_orchestration::Pipeline& pipeline = it->second;
+  const xla_saved_model_orchestration::Pipeline& pipeline = it->second;
   // Get the input flat signature from the pipeline.
   if (!pipeline.has_named_signature()) {
     return absl::InvalidArgumentError(
@@ -740,7 +732,7 @@ absl::StatusOr<std::vector<std::string>> GetInputNames(
 absl::StatusOr<std::vector<std::string>> GetOutputNames(
     absl::string_view orchestration_path, absl::string_view pipeline_name) {
   // Get the pipeline.
-  neptune_model_orchestration::Pipelines pipelines;
+  xla_saved_model_orchestration::Pipelines pipelines;
   TF_RETURN_IF_ERROR(tsl::ReadBinaryProto(
       tsl::Env::Default(), std::string(orchestration_path), &pipelines));
   const auto& pipeline_map = pipelines.name_to_pipeline();
@@ -755,7 +747,7 @@ absl::StatusOr<std::vector<std::string>> GetOutputNames(
         "Pipeline \"", pipeline_name, "\" not found. Available pipelines: ",
         absl::StrJoin(pipeline_names, ", ")));
   }
-  const neptune_model_orchestration::Pipeline& pipeline = it->second;
+  const xla_saved_model_orchestration::Pipeline& pipeline = it->second;
   // Get the output flat signature from the pipeline.
   if (!pipeline.has_named_signature()) {
     return absl::InvalidArgumentError(
@@ -772,35 +764,35 @@ absl::StatusOr<std::vector<std::string>> GetOutputNames(
   return std::vector<std::string>(names.begin(), names.end());
 }
 
-absl::StatusOr<neptune_model_orchestration::Pipelines> GetOexOrchestration(
+absl::StatusOr<xla_saved_model_orchestration::Pipelines> GetOexOrchestration(
     absl::string_view model_path,
-    const neptune_model_manifest::Manifest& manifest) {
+    const xla_saved_model_manifest::Manifest& manifest) {
   TF_ASSIGN_OR_RETURN(
-      const neptune_model_manifest::UnstructuredData orchestration,
+      const xla_saved_model_manifest::UnstructuredData orchestration,
       GetOrchestration(manifest));
 
   TF_RETURN_IF_ERROR(CheckMimeAndDataType(
       orchestration,
       {kOexOrchestrationMultiPipelineMimeType,
        kOexOrchestrationMultiPipelineMimeTypeLegacy},
-      {neptune_model_manifest::UnstructuredData::kFileSystemLocation},
+      {xla_saved_model_manifest::UnstructuredData::kFileSystemLocation},
       "Orchestration"));
 
   TF_ASSIGN_OR_RETURN(std::string orchestration_path,
                       GetAbsoluteFileSystemPath(
                           model_path, orchestration.file_system_location()));
-  neptune_model_orchestration::Pipelines pipelines;
+  xla_saved_model_orchestration::Pipelines pipelines;
 
   TF_RETURN_IF_ERROR(tsl::ReadBinaryProto(tsl::Env::Default(),
                                           orchestration_path, &pipelines));
   return pipelines;
 }
 
-absl::StatusOr<std::vector<const neptune_model_manifest::Function*>>
+absl::StatusOr<std::vector<const xla_saved_model_manifest::Function*>>
 GetStableHloFunctionsByObjectName(
 
     const absl::flat_hash_map<std::string,
-                              const neptune_model_manifest::TopLevelObject*>&
+                              const xla_saved_model_manifest::TopLevelObject*>&
         manifest_objects,
     absl::string_view function_object_name) {
   if (!manifest_objects.contains(function_object_name)) {
@@ -808,10 +800,10 @@ GetStableHloFunctionsByObjectName(
         absl::StrCat("Failed to find function object with name: \"",
                      function_object_name, "\""));
   }
-  const neptune_model_manifest::TopLevelObject* function_obj =
+  const xla_saved_model_manifest::TopLevelObject* function_obj =
       manifest_objects.at(function_object_name);
 
-  std::vector<const neptune_model_manifest::Function*> functions;
+  std::vector<const xla_saved_model_manifest::Function*> functions;
   if (function_obj->has_function()) {
     // This is the case for
     // - a StableHLO with concrete input and output shapes.
@@ -849,7 +841,7 @@ GetStableHloFunctionsByObjectName(
 }
 
 absl::Status ValidateCompiledExecutable(
-    const neptune_model_manifest::CompiledExecutableBody& compiled_exec,
+    const xla_saved_model_manifest::CompiledExecutableBody& compiled_exec,
     size_t num_inputs) {
   for (int idx : compiled_exec.aot_kept_var_idx()) {
     if (idx < 0 || idx >= num_inputs) {
@@ -861,4 +853,4 @@ absl::Status ValidateCompiledExecutable(
   return absl::OkStatus();
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

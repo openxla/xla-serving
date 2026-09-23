@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/data_loader/data_loader.h"  // from @neptune
+#include "runtime/data_loader/data_loader.h"  // from @xla_serving
 
 #include <memory>
 #include <utility>
@@ -23,19 +23,19 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
+#include "protos/manifest.pb.h"  // from @xla_serving
 
-namespace neptune {
+namespace xla_serving {
 
 absl::Status DataLoaderFactoryRegistry::RegisterDataLoaderFactory(
-    neptune_model_manifest::LoaderType loader_type,
+    xla_saved_model_manifest::LoaderType loader_type,
     DataLoaderFactory loader_factory) {
   absl::MutexLock lock(mu_);
   if (!type_to_factory_.try_emplace(loader_type, std::move(loader_factory))
            .second) {
     return absl::AlreadyExistsError(
         absl::StrCat("Data loader factory with name ",
-                     neptune_model_manifest::LoaderType_Name(loader_type),
+                     xla_saved_model_manifest::LoaderType_Name(loader_type),
                      " already exists."));
   }
   return absl::OkStatus();
@@ -43,16 +43,16 @@ absl::Status DataLoaderFactoryRegistry::RegisterDataLoaderFactory(
 
 absl::StatusOr<std::unique_ptr<DataLoader>>
 DataLoaderFactoryRegistry::CreateDataLoader(
-    neptune_model_manifest::LoaderType loader_type,
+    xla_saved_model_manifest::LoaderType loader_type,
     DataLoader::CreateOptions create_options) const {
   absl::MutexLock lock(mu_);
   const auto it = type_to_factory_.find(loader_type);
   if (it == type_to_factory_.end()) {
     return absl::NotFoundError(absl::StrCat(
         "Data loader with name ",
-        neptune_model_manifest::LoaderType_Name(loader_type), " not found."));
+        xla_saved_model_manifest::LoaderType_Name(loader_type), " not found."));
   }
   return it->second(std::move(create_options));
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_API_VALUE_H_
-#define THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_API_VALUE_H_
+#ifndef XLA_SERVING_DATA_PROCESSOR_CC_API_VALUE_H_
+#define XLA_SERVING_DATA_PROCESSOR_CC_API_VALUE_H_
 
 #include <new>
 #include <ostream>
@@ -25,9 +25,9 @@
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
-#include "data/processor/cc/api/type_info.h"  // from @neptune
+#include "data/processor/cc/api/type_info.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace api {
 
@@ -291,7 +291,7 @@ struct InPlaceHandler {
                             !std::is_copy_constructible_v<V>, int> = 0>
   static void CopyInternal(Value* self, Value* dest) {
     LOG(FATAL)  // Crash Ok
-        << "Copying a `neptune::Value` whose underlying type is not copyable is a "
+        << "Copying a `xla_serving::Value` whose underlying type is not copyable is a "
            "runtime error.";
   }
 
@@ -357,7 +357,7 @@ struct OutOfPlaceHandler {
                             !std::is_copy_constructible_v<V>, int> = 0>
   static void CopyInternal(Value* self, Value* dest) {
     LOG(FATAL)  // Crash Ok
-        << "Copying a `neptune::Value` whose underlying type is not copyable is a "
+        << "Copying a `xla_serving::Value` whose underlying type is not copyable is a "
            "runtime error.";
   }
 
@@ -478,6 +478,6 @@ bool Value::IsType() const {
 
 }  // namespace api
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_API_VALUE_H_
+#endif  // XLA_SERVING_DATA_PROCESSOR_CC_API_VALUE_H_

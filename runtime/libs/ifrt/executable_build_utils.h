@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_EXECUTABLE_BUILD_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_EXECUTABLE_BUILD_UTILS_H_
+#ifndef XLA_SERVING_RUNTIME_LIBS_IFRT_EXECUTABLE_BUILD_UTILS_H_
+#define XLA_SERVING_RUNTIME_LIBS_IFRT_EXECUTABLE_BUILD_UTILS_H_
 
 #include <cstdint>
 #include <memory>
@@ -26,7 +26,7 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
-#include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
+#include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @xla_serving
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/executable.h"  // from @xla
@@ -34,7 +34,7 @@
 #include "xla/service/computation_placer.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 constexpr absl::string_view kMissingProgramFingerprint =
     "MISSING_PROGRAM_FINGERPRINT";
@@ -64,6 +64,6 @@ std::string GetProgramFingerprintWithTimestamp(
     absl_nonnull xla::ifrt::LoadedExecutableRef ifrt_executable,
     absl::Time now);
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_EXECUTABLE_BUILD_UTILS_H_
+#endif  // XLA_SERVING_RUNTIME_LIBS_IFRT_EXECUTABLE_BUILD_UTILS_H_

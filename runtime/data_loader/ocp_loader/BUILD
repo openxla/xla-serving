@@ -2,7 +2,7 @@ load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(default_visibility = [
-    "@neptune//:__subpackages__",
+    "@xla_serving//:__subpackages__",
 ])
 
 cc_library(
@@ -19,9 +19,8 @@ cc_library(
         "@nlohmann_json//:json",
         "@tensorstore//tensorstore:data_type",
         "@xla//xla:xla_data_proto_cc",
-        "@xla//xla/hlo/ir:hlo_sharding",
         "@xla//xla/python/ifrt",
-        "@xla//xla/python/pjrt_ifrt:xla_ifrt",
+        "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",
     ],
 )

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_MLIR_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_MLIR_UTILS_H_
+#ifndef XLA_SERVING_RUNTIME_LIBS_MLIR_UTILS_H_
+#define XLA_SERVING_RUNTIME_LIBS_MLIR_UTILS_H_
 
 #include <cstdint>
 #include <optional>
@@ -27,7 +27,7 @@
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune::sharding_internal {
+namespace xla_serving::sharding_internal {
 
 // Converts an MLIR type to IFRT DType.
 absl::StatusOr<xla::ifrt::DType> ToIfrtDType(const mlir::Type& type);
@@ -40,6 +40,6 @@ using MlirShape = absl::InlinedVector<std::optional<int64_t>, 4>;
 // the program will have to be refined before compilation.
 absl::StatusOr<MlirShape> ToMlirShape(const mlir::Type& type);
 
-}  // namespace neptune::sharding_internal
+}  // namespace xla_serving::sharding_internal
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_MLIR_UTILS_H_
+#endif  // XLA_SERVING_RUNTIME_LIBS_MLIR_UTILS_H_

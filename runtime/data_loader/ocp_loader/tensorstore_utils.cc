@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/data_loader/ocp_loader/tensorstore_utils.h"  // from @neptune
+#include "runtime/data_loader/ocp_loader/tensorstore_utils.h"  // from @xla_serving
 
 #include <cstdint>
 #include <filesystem>  // NOLINT(build/c++17)
@@ -29,6 +29,7 @@
 #include "absl/strings/match.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_format.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "nlohmann/json.hpp"  // from @nlohmann_json
 #include "nlohmann/json_fwd.hpp"  // from @nlohmann_json
@@ -40,10 +41,11 @@
 #include "xla/python/ifrt/memory.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "tensorstore/data_type.h"  // from @tensorstore
 
-namespace neptune {
+namespace xla_serving {
 
 namespace {
 
@@ -107,7 +109,7 @@ absl::StatusOr<nlohmann::json> BuildKvstoreTspec(
     bool use_ocdbt,
     const std::optional<std::variant<int, std::string>>& process_id) {
   std::string default_driver = std::string(kDefaultDriver);
-  
+
   // TODO: Consider using tensorflow/tsl/platform/file_system.h to
   // replace `std::filesystem`.
   std::string normalized_directory =
@@ -304,4 +306,4 @@ absl::StatusOr<tensorstore::DataType> ToTensorStoreDType(
   }
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

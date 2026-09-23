@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_BUILDER_CONTEXT_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_BUILDER_CONTEXT_H_
+#ifndef XLA_SERVING_RUNTIME_KERNEL_KERNEL_BUILDER_CONTEXT_H_
+#define XLA_SERVING_RUNTIME_KERNEL_KERNEL_BUILDER_CONTEXT_H_
 
 #include <string>
 
@@ -22,9 +22,9 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "runtime/core/value.h"  // from @neptune
+#include "runtime/core/value.h"  // from @xla_serving
 
-namespace neptune {
+namespace xla_serving {
 
 class KernelBuilderContext {
  public:
@@ -58,6 +58,6 @@ class KernelBuilderContext {
   absl::flat_hash_map<std::string, Value> configs_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_KERNEL_KERNEL_BUILDER_CONTEXT_H_
+#endif  // XLA_SERVING_RUNTIME_KERNEL_KERNEL_BUILDER_CONTEXT_H_

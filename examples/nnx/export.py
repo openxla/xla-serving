@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Neptune export for an NNX recommender model."""
+"""XLA SavedModel export for an NNX recommender model."""
 
 import os
 import tempfile
@@ -23,13 +23,13 @@ import jax.numpy as jnp
 from orbax import checkpoint as ocp
 
 from examples.nnx import model as nnx_model
-from neptune_model._src.export import jax_model
-from neptune_model._src.export import main_lib
-from neptune_model._src.export import serving_config
+from xla_saved_model._src.export import jax_model
+from xla_saved_model._src.export import main_lib
+from xla_saved_model._src.export import serving_config
 
 
-def export_model(export_path: str, dtype: jnp.dtype = jnp.float32):
-  """Exports the NNX recommender model using Neptune."""
+def export_model(export_path: str, dtype: jnp.dtype = jnp.float32):  # pyrefly: ignore[bad-function-definition]
+  """Exports the NNX recommender model using XLA SavedModel."""
 
   rngs = nnx.Rngs(0)
   _, model = nnx_model.build_model(rngs)
@@ -80,7 +80,7 @@ def export_model(export_path: str, dtype: jnp.dtype = jnp.float32):
                   'feature_3': 'b, _',
                   'feature_4': 'b, _',
               },
-              jax_export_kwargs={'platforms': ['cpu', 'tpu']},
+              jax_export_kwargs={'platforms': ['cpu', 'cuda', 'tpu']},
           ),
           params=ckpt_params,
       ),

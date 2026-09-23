@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_VALUE_MATCHER_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_VALUE_MATCHER_H_
+#ifndef XLA_SERVING_RUNTIME_VALUE_MATCHER_H_
+#define XLA_SERVING_RUNTIME_VALUE_MATCHER_H_
 
 #include <ostream>
 
 #include "gtest/gtest.h"
-#include "runtime/core/value.h"  // from @neptune
+#include "runtime/core/value.h"  // from @xla_serving
 
-namespace neptune {
+namespace xla_serving {
 namespace internal {
 // Implementation of ValueOfType matcher. See comments of ValueOfType for
 // details.
@@ -84,6 +84,6 @@ class ValueOfType {
   const ::testing::Matcher<const T&>& inner_matcher_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_VALUE_MATCHER_H_
+#endif  // XLA_SERVING_RUNTIME_VALUE_MATCHER_H_

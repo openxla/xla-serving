@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/libs/ifrt/executable_build_utils.h"  // from @neptune
+#include "runtime/libs/ifrt/executable_build_utils.h"  // from @xla_serving
 
 #include <memory>
 #include <string>
@@ -24,7 +24,7 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
-#include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
+#include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @xla_serving
 #include "xla/debug_options_flags.h"  // from @xla
 #include "xla/pjrt/pjrt_compiler.h"  // from @xla
 #include "xla/pjrt/pjrt_executable.h"  // from @xla
@@ -39,7 +39,7 @@
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 namespace {
 
@@ -82,7 +82,7 @@ absl::StatusOr<xla::ifrt::LoadedExecutableRef> BuildIfrtExecutable(
 // Some CompilationEnvironment protos used by libtpu are not compiled into the
 // binary, so we need to clear them when compiling on GCE.
 // TODO: Support compilation environment protos on GCE.
-#ifdef JSV_ON_GCE
+#ifdef XLA_SERVING_ON_GCE
     if (options.compile_options->has_executable_build_options() &&
         options.compile_options->executable_build_options().has_comp_envs()) {
       options.compile_options->mutable_executable_build_options()
@@ -149,4 +149,4 @@ std::string GetProgramFingerprintWithTimestamp(
                       kProgramFingerprintAndTimestampDelimiter, now_timestamp);
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

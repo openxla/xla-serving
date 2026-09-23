@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/serving/gcp/server/ifrt_client_creator.h"  // from @neptune
+#include "runtime/serving/gcp/server/ifrt_client_creator.h"  // from @xla_serving
 
 #include <memory>
 #include <utility>
@@ -26,7 +26,7 @@
 #include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 namespace serving {
 
 absl::StatusOr<std::shared_ptr<xla::ifrt::Client>> GetIfrtClient(
@@ -40,4 +40,4 @@ absl::StatusOr<std::shared_ptr<xla::ifrt::Client>> GetIfrtClient(
 }
 
 }  // namespace serving
-}  // namespace neptune
+}  // namespace xla_serving

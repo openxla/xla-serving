@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/grid.h"  // from @neptune
+#include "runtime/core/grid.h"  // from @xla_serving
 
 #include <string>
 
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 
 std::string GridCoords::ToString() const {
   return absl::StrCat("[", dim[0], ",", dim[1], ",", dim[2], ",", dim[3], "]");
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

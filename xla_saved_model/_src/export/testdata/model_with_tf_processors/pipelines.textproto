@@ -1,0 +1,95 @@
+# proto-file: protos/orchestration.proto
+# proto-message: Pipelines
+name_to_pipeline {
+  key: "serving_default"
+  value {
+    signature {
+      input {
+        tuple {
+          elements {
+            tuple {
+              elements {
+                leaf {
+                  tensor_type {
+                    shape {
+                      shape_with_known_rank {
+                        dimension_sizes {
+                          size: 4
+                        }
+                      }
+                    }
+                    dtype: f32
+                  }
+                }
+              }
+            }
+          }
+          elements {
+            dict {
+            }
+          }
+        }
+      }
+      output {
+        leaf {
+          tensor_type {
+            shape {
+              shape_with_known_rank {
+                dimension_sizes {
+                  size: 4
+                }
+              }
+            }
+            dtype: f32
+          }
+        }
+      }
+    }
+    named_signature {
+      inputs {
+        named_tensor_types {
+          name: "x"
+          tensor_type {
+            shape {
+              shape_with_known_rank {
+                dimension_sizes {
+                  size: 4
+                }
+              }
+            }
+            dtype: f32
+          }
+        }
+      }
+      outputs {
+        named_tensor_types {
+          name: "output_0"
+          tensor_type {
+            shape {
+              shape_with_known_rank {
+                dimension_sizes {
+                  size: 4
+                }
+              }
+            }
+            dtype: f32
+          }
+        }
+      }
+    }
+    components {
+      function_name: "pre_serving_default"
+      role: ROLE_MODEL
+    }
+    components {
+      function_name: "jax_model_serving_default"
+      role: ROLE_MODEL
+      weights_name: "_weights"
+    }
+    components {
+      function_name: "post_serving_default"
+      role: ROLE_MODEL
+    }
+
+  }
+}

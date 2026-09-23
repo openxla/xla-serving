@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_KERNEL_BUILTIN_TENSORFLOW_KERNEL_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_KERNEL_BUILTIN_TENSORFLOW_KERNEL_H_
+#ifndef XLA_SERVING_RUNTIME_TENSORFLOW_KERNEL_BUILTIN_TENSORFLOW_KERNEL_H_
+#define XLA_SERVING_RUNTIME_TENSORFLOW_KERNEL_BUILTIN_TENSORFLOW_KERNEL_H_
 
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "runtime/kernel/kernel.h"  // from @neptune
+#include "runtime/kernel/kernel.h"  // from @xla_serving
 
-namespace neptune {
+namespace xla_serving {
 
 absl::Status RegisterBuiltinTensorflowKernels(KernelRegistry& registry);
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_KERNEL_BUILTIN_TENSORFLOW_KERNEL_H_
+#endif  // XLA_SERVING_RUNTIME_TENSORFLOW_KERNEL_BUILTIN_TENSORFLOW_KERNEL_H_

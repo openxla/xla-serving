@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/python/ifrt_client_factory.h"  // from @neptune
+#include "runtime/python/ifrt_client_factory.h"  // from @xla_serving
 
 #include <memory>
 #include <string>
@@ -30,7 +30,7 @@
 #include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 namespace {
 
@@ -74,4 +74,4 @@ absl::StatusOr<std::shared_ptr<xla::ifrt::Client>> CreateIfrtClient(
       absl::StrCat("Unsupported platform: ", platform));
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

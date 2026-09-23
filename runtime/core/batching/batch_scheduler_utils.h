@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_BATCH_SCHEDULER_UTILS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_BATCH_SCHEDULER_UTILS_H_
+#ifndef XLA_SERVING_RUNTIME_BATCHING_BATCH_SCHEDULER_UTILS_H_
+#define XLA_SERVING_RUNTIME_BATCHING_BATCH_SCHEDULER_UTILS_H_
 
 #include <cstdint>
 #include <memory>
 #include <vector>
 
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "runtime/core/batching/batch_scheduler.h"  // from @neptune
-#include "runtime/core/batching/batch_stats.h"  // from @neptune
+#include "runtime/core/batching/batch_scheduler.h"  // from @xla_serving
+#include "runtime/core/batching/batch_stats.h"  // from @xla_serving
 
-namespace neptune {
+namespace xla_serving {
 
 // Returns the next allowed batch size, which is the smallest allowed batch size
 // greater than or equal to the given batch size. If allowed_batch_sizes,
@@ -68,6 +68,6 @@ void MaybeBatchDown(Batch<TaskType>& batch,
   }
 }
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_BATCHING_BATCH_SCHEDULER_UTILS_H_
+#endif  // XLA_SERVING_RUNTIME_BATCHING_BATCH_SCHEDULER_UTILS_H_

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_PERSISTENT_COMPILATION_CACHE_IFRT_PERSISTENT_COMPILATION_CACHE_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_PERSISTENT_COMPILATION_CACHE_IFRT_PERSISTENT_COMPILATION_CACHE_H_
+#ifndef XLA_SERVING_RUNTIME_LIBS_IFRT_PERSISTENT_COMPILATION_CACHE_IFRT_PERSISTENT_COMPILATION_CACHE_H_
+#define XLA_SERVING_RUNTIME_LIBS_IFRT_PERSISTENT_COMPILATION_CACHE_IFRT_PERSISTENT_COMPILATION_CACHE_H_
 
 #include <memory>
 
@@ -25,7 +25,7 @@
 #include "xla/python/ifrt/hlo/hlo_program.h"  // from @xla
 #include "xla/python/ifrt/program.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 class IfrtPersistentCompilationCache {
  public:
@@ -48,6 +48,6 @@ class IfrtPersistentCompilationCache {
           value_fn);
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_LIBS_IFRT_PERSISTENT_COMPILATION_CACHE_IFRT_PERSISTENT_COMPILATION_CACHE_H_
+#endif  // XLA_SERVING_RUNTIME_LIBS_IFRT_PERSISTENT_COMPILATION_CACHE_IFRT_PERSISTENT_COMPILATION_CACHE_H_

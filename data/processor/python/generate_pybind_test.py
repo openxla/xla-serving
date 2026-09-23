@@ -26,6 +26,26 @@ class GeneratePybindTest(absltest.TestCase):
     self.assertEqual(generate_pybind.map_cpp_type_to_py("double"), "float")
     self.assertEqual(generate_pybind.map_cpp_type_to_py("unmapped_type"), "Any")
 
+  def test_map_cpp_type_to_py_ignores_runtime_namespace(self):
+    # The runtime's C++ namespace is rewritten on export, so both spellings
+    # have to resolve to the same Python type.
+    expected = "composite_processor_pybind.HostBuffer"
+    for cpp_type in (
+        "HostBuffer",
+        "jsv::HostBuffer",
+        "xla_serving::HostBuffer",
+    ):
+      self.assertEqual(generate_pybind.map_cpp_type_to_py(cpp_type), expected)
+
+  def test_parse_signature_unnamed_namespaced_param(self):
+    # An unnamed parameter must be recognised as a type under either
+    # namespace, rather than being mistaken for a parameter name.
+    for namespace in ("jsv", "xla_serving"):
+      self.assertEqual(
+          generate_pybind.parse_signature(f"{namespace}::HostBuffer"),
+          "self, arg0: composite_processor_pybind.HostBuffer",
+      )
+
   def test_map_cpp_type_to_py_vector(self):
     self.assertEqual(
         generate_pybind.map_cpp_type_to_py("std::vector<int>"), "list[int]"

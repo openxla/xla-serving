@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_LOADED_STABLEHLO_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_LOADED_STABLEHLO_H_
+#ifndef XLA_SERVING_RUNTIME_LOADED_STABLEHLO_H_
+#define XLA_SERVING_RUNTIME_LOADED_STABLEHLO_H_
 
 #include <memory>
 #include <optional>
@@ -30,14 +30,14 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/OwningOpRef.h"  // from @llvm-project
-#include "runtime/core/stablehlo.h"  // from @neptune
-#include "runtime/core/stablehlo_utils.h"  // from @neptune
-#include "runtime/libs/ifrt/stablehlo_loader.h"  // from @neptune
+#include "runtime/core/stablehlo.h"  // from @xla_serving
+#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
+#include "runtime/libs/ifrt/stablehlo_loader.h"  // from @xla_serving
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // A class that holds loaded StableHLO(s) (i.e. MLIR module(s)) representing
 // a single JAX model. The loaded StableHLO(s) could be:
@@ -199,6 +199,6 @@ class LoadedStableHlo {
   const bool has_streaming_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_LOADED_STABLEHLO_H_
+#endif  // XLA_SERVING_RUNTIME_LOADED_STABLEHLO_H_

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_RESOURCE_MANAGER_CC_ASSET_MANAGER_H_
-#define THIRD_PARTY_NEPTUNE_DATA_RESOURCE_MANAGER_CC_ASSET_MANAGER_H_
+#ifndef XLA_SERVING_DATA_RESOURCE_MANAGER_CC_ASSET_MANAGER_H_
+#define XLA_SERVING_DATA_RESOURCE_MANAGER_CC_ASSET_MANAGER_H_
 
 #include <memory>
 #include <string>
@@ -25,9 +25,9 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
-#include "data/resource_manager/cc/asset.h"  // from @neptune
+#include "data/resource_manager/cc/asset.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 
 class AssetManager {
  public:
@@ -45,6 +45,6 @@ class AssetManager {
       ABSL_GUARDED_BY(mu_);
 };
 
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_RESOURCE_MANAGER_CC_ASSET_MANAGER_H_
+#endif  // XLA_SERVING_DATA_RESOURCE_MANAGER_CC_ASSET_MANAGER_H_

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @neptune
+#include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @xla_serving
 
 #include <cstddef>
 #include <cstdint>
@@ -28,17 +28,17 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "data/cpu_embedding/cc/array.h"  // from @neptune
-#include "data/cpu_embedding/cc/cpu_embedding_engine.h"  // from @neptune
-#include "data/cpu_embedding/cc/embedding_table.h"  // from @neptune
-#include "data/cpu_embedding/cc/feature_spec.h"  // from @neptune
-#include "data/kernels/cpu_embedding/cpu_embedding.pb.h"  // from @neptune
-#include "data/kernels/cpu_embedding/safe_int_utils.h"  // from @neptune
-#include "data/resource_manager/cc/asset.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
+#include "data/cpu_embedding/cc/array.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/cpu_embedding_engine.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/embedding_table.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/feature_spec.h"  // from @xla_serving
+#include "data/kernels/cpu_embedding/cpu_embedding.pb.h"  // from @xla_serving
+#include "data/kernels/cpu_embedding/safe_int_utils.h"  // from @xla_serving
+#include "data/resource_manager/cc/asset.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
 #include "xla/tsl/platform/env.h"  // from @xla
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 namespace {
@@ -226,4 +226,4 @@ absl::StatusOr<int32_t> CpuEmbeddingEngineResource::GetEmbeddingDim(
 ND_REGISTER_RESOURCE(CpuEmbeddingEngineResource, "CpuEmbeddingEngineResource");
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data

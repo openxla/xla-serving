@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_TF_SAVED_MODEL_RUNNER_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_TF_SAVED_MODEL_RUNNER_H_
+#ifndef XLA_SERVING_RUNTIME_TENSORFLOW_TF_SAVED_MODEL_RUNNER_H_
+#define XLA_SERVING_RUNTIME_TENSORFLOW_TF_SAVED_MODEL_RUNNER_H_
 
 #include <memory>
 #include <optional>
@@ -34,7 +34,7 @@
 #include "tensorflow/core/tfrt/runtime/runtime.h"  // from @org_tensorflow
 #include "tensorflow/core/tfrt/saved_model/saved_model.h"  // from @org_tensorflow
 
-namespace neptune {
+namespace xla_serving {
 
 // Runs a TF SavedModel. This is a thin wrapper around
 // `tensorflow::tfrt_stub::SavedModel`.
@@ -124,6 +124,6 @@ class TfSavedModelRunner {
   std::unique_ptr<tensorflow::tfrt_stub::SavedModel> tfrt_loaded_saved_model_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_TENSORFLOW_TF_SAVED_MODEL_RUNNER_H_
+#endif  // XLA_SERVING_RUNTIME_TENSORFLOW_TF_SAVED_MODEL_RUNNER_H_

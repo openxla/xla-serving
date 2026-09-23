@@ -137,7 +137,7 @@ def main():
     write('  pybind11_protobuf::ImportNativeProtoCasters();')
     write('  try {')
     write(
-        '    py::module::import("neptune_data.resource_manager.python.resource_manager_pybind");'
+        '    py::module::import("xla_serving_data.resource_manager.python.resource_manager_pybind");'
     )
     write('  } catch (py::error_already_set& e) {')
     write('    try {')
@@ -147,7 +147,7 @@ def main():
     )
     write('    } catch (const py::error_already_set& e2) {')
     write(
-        '      throw std::runtime_error("Failed to import both neptune_data and'
+        '      throw std::runtime_error("Failed to import both xla_serving_data and'
         ' data. Original error: " + std::string(e.what()));'
     )
     write('    }')
@@ -155,7 +155,7 @@ def main():
 
     for type_name, py_name in registrations:
       write(
-          f'  ::neptune::data::RegisterPybindResourceExt<{type_name}>(m,'
+          f'  ::xla_serving::data::RegisterPybindResourceExt<{type_name}>(m,'
           f' "{py_name}");'
       )
 

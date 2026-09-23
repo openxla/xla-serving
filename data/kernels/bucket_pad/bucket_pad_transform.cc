@@ -1,4 +1,4 @@
-// Copyright 2024 The Neptune Authors.
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/kernels/bucket_pad/bucket_pad_transform.h"  // from @neptune
+#include "data/kernels/bucket_pad/bucket_pad_transform.h"  // from @xla_serving
 
 #include <algorithm>
 #include <cstdint>
@@ -30,24 +30,24 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/kernels/bucket_pad/bucket_pad_transform.pb.h"  // from @neptune
-#include "data/processor/cc/api/registry.h"  // from @neptune
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/api/type_info.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/cc/utils/default_value_utils.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "data/kernels/bucket_pad/bucket_pad_transform.pb.h"  // from @xla_serving
+#include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/api/type_info.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/cc/utils/default_value_utils.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 
-namespace neptune::data::composite::transforms {
+namespace xla_serving::data::composite::transforms {
 namespace {
 
 template <typename T>
-absl::Status ExecuteTypedPad(const neptune::HostBuffer& input,
-                             neptune::HostBuffer& output, int norm_axis,
+absl::Status ExecuteTypedPad(const xla_serving::HostBuffer& input,
+                             xla_serving::HostBuffer& output, int norm_axis,
                              int64_t in_dim, int64_t target_dim,
                              const utils::DefaultValue& pad_value_proto) {
   T pad_val = T(0);
@@ -165,8 +165,8 @@ BucketPadTransform::CreateFromProto(const BucketPadArgs& args) {
 
 absl::StatusOr<std::unique_ptr<BucketPadTransform>>
 BucketPadTransform::CreateFromTransformConfig(
-    const ::neptune::data::composite::TransformConfig& config,
-    absl::Span<const std::shared_ptr<neptune::data::Resource>> resources) {
+    const ::xla_serving::data::composite::TransformConfig& config,
+    absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources) {
   BucketPadArgs args;
   if (!config.detail().UnpackTo(&args)) {
     return absl::InvalidArgumentError(
@@ -181,11 +181,11 @@ BucketPadTransform::BucketPadTransform(std::vector<int64_t> target_dimensions,
     : target_dimensions_(std::move(target_dimensions)),
       axis_(axis),
       pad_value_(std::move(pad_value)),
-      input_types_({api::CreateTypeInfo<neptune::HostBuffer>()}),
-      output_types_({api::CreateTypeInfo<neptune::HostBuffer>()}) {}
+      input_types_({api::CreateTypeInfo<xla_serving::HostBuffer>()}),
+      output_types_({api::CreateTypeInfo<xla_serving::HostBuffer>()}) {}
 
-absl::StatusOr<neptune::HostBuffer> BucketPadTransform::operator()(
-    const neptune::HostBuffer& input) const {
+absl::StatusOr<xla_serving::HostBuffer> BucketPadTransform::operator()(
+    const xla_serving::HostBuffer& input) const {
   const auto& in_dims = input.shape().dims();
   int rank = in_dims.size();
   if (rank == 0) {
@@ -235,7 +235,7 @@ absl::StatusOr<neptune::HostBuffer> BucketPadTransform::operator()(
 
   xla::ifrt::Shape out_shape(out_dims);
 
-  neptune::HostBuffer output(input.dtype(), out_shape);
+  xla_serving::HostBuffer output(input.dtype(), out_shape);
 
   switch (input.dtype().kind()) {
     case xla::ifrt::DType::kF32:
@@ -289,7 +289,7 @@ absl::Status BucketPadTransform::Execute(api::ExecuteContext& context) {
         absl::StrCat("BucketPadTransform expects exactly 1 input, got ",
                      context.inputs.size()));
   }
-  const auto& input = context.inputs[0].Get<neptune::HostBuffer>();
+  const auto& input = context.inputs[0].Get<xla_serving::HostBuffer>();
   auto output_or = (*this)(input);
   if (!output_or.ok()) {
     return output_or.status();
@@ -348,9 +348,9 @@ absl::Status BucketPadTransform::PropagateSignatureImpl(
   return absl::OkStatus();
 }
 
-absl::StatusOr<::neptune::data::composite::TransformConfig>
+absl::StatusOr<::xla_serving::data::composite::TransformConfig>
 BucketPadTransform::ToProto() const {
-  ::neptune::data::composite::TransformConfig config;
+  ::xla_serving::data::composite::TransformConfig config;
   config.set_op_name("BucketPadTransform");
 
   BucketPadArgs args;
@@ -373,4 +373,4 @@ std::string BucketPadTransform::DebugName() const {
 ND_REGISTER_TRANSFORM(BucketPadTransform, "BucketPadTransform")
     .SetDeserializer(&BucketPadTransform::CreateFromTransformConfig);
 
-}  // namespace neptune::data::composite::transforms
+}  // namespace xla_serving::data::composite::transforms

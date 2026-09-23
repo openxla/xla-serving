@@ -3,7 +3,7 @@ load("@pybind11_bazel//:build_defs.bzl", "pybind_extension", "pybind_library")
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
 package(default_visibility = [
-    "@neptune//:__subpackages__",
+    "@xla_serving//:__subpackages__",
 ])
 
 py_library(
@@ -14,7 +14,7 @@ py_library(
 pybind_extension(
     name = "composite_processor_pybind",
     srcs = ["composite_processor_pybind.cc"],
-    dynamic_deps = ["@neptune//data:neptune_data_core"],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_core"],
     linkopts = ["-Wl,-rpath,$$ORIGIN/../.."],
     deps = [
         ":transform_pybind",
@@ -30,22 +30,23 @@ pybind_extension(
         "@abseil-cpp//absl/types:span",
         "@com_google_protobuf//:any_cc_proto",
         "@dlpack",
-        "@neptune//data/processor/cc/api:transform_context",
-        "@neptune//data/processor/cc/api:type_info",
-        "@neptune//data/processor/cc/api:value",
-        "@neptune//data/processor/cc/core:composite_processor",
-        "@neptune//data/processor/cc/core:transform",
-        "@neptune//data/processor/cc/core/graph:execution_graph",
-        "@neptune//data/processor/cc/utils:buffer_utils",
-        "@neptune//data/processor/proto:transform_config_cc_proto",
-        "@neptune//data/resource_manager/proto:resource_manager_cc_proto",
-        "@neptune//runtime/core:host_buffer",
+        "@nanobind_bazel//:nanobind",
         "@pybind11_abseil//pybind11_abseil:status_casters",
         "@pybind11_protobuf//pybind11_protobuf:native_proto_caster",
         "@tsl//tsl/platform:tstring",
         "@xla//xla/python:types",
         "@xla//xla/python/ifrt",
         "@xla//xla/tsl/platform:status_macros",
+        "@xla_serving//data/processor/cc/api:transform_context",
+        "@xla_serving//data/processor/cc/api:type_info",
+        "@xla_serving//data/processor/cc/api:value",
+        "@xla_serving//data/processor/cc/core:composite_processor",
+        "@xla_serving//data/processor/cc/core:transform",
+        "@xla_serving//data/processor/cc/core/graph:execution_graph",
+        "@xla_serving//data/processor/cc/utils:buffer_utils",
+        "@xla_serving//data/processor/proto:transform_config_cc_proto",
+        "@xla_serving//data/resource_manager/proto:resource_manager_cc_proto",
+        "@xla_serving//runtime/core:host_buffer",
     ],
 )
 
@@ -54,11 +55,11 @@ pybind_extension(
     testonly = True,
     srcs = ["composite_processor_test_utils_pybind.cc"],
     deps = [
-        "@neptune//data/processor/cc/core:transform",
-        "@neptune//data/processor/cc/utils:buffer_utils",
-        "@neptune//runtime/core:host_buffer",
         "@pybind11_abseil//pybind11_abseil:status_casters",
         "@pybind11_protobuf//pybind11_protobuf:native_proto_caster",
+        "@xla_serving//data/processor/cc/core:transform",
+        "@xla_serving//data/processor/cc/utils:buffer_utils",
+        "@xla_serving//runtime/core:host_buffer",
     ],
 )
 
@@ -69,19 +70,19 @@ py_test(
         ":composite_processor_pybind",
         ":composite_processor_test_utils_pybind",
         "@absl_py//absl/testing:absltest",
-        "@neptune//data/processor/proto:transform_config_py_pb2",
-        "@neptune//data/processor/python/examples:add_from_resource_transform_pybind",
-        "@neptune//data/processor/python/examples:add_host_buffer_transform_pybind",
-        "@neptune//data/processor/python/examples:add_int_transform_pybind",
-        "@neptune//data/processor/python/examples:add_two_transform_pybind",
-        "@neptune//data/processor/python/examples:int_resource_pybind",
-        "@neptune//data/processor/python/examples:make_dict_transform_pybind",
-        "@neptune//data/processor/python/examples:multiply_by_five_transform_pybind",
-        "@neptune//data/processor/python/examples:suffix_transform_pybind",
-        "@neptune//data/resource_manager/python:resource_manager",
-        "@neptune_pypi//jax",
-        "@neptune_pypi//ml_dtypes",  # build_cleaner: keep
-        "@neptune_pypi//numpy",
+        "@xla_serving//data/processor/proto:transform_config_py_pb2",
+        "@xla_serving//data/processor/python/examples:add_from_resource_transform_pybind",
+        "@xla_serving//data/processor/python/examples:add_host_buffer_transform_pybind",
+        "@xla_serving//data/processor/python/examples:add_int_transform_pybind",
+        "@xla_serving//data/processor/python/examples:add_two_transform_pybind",
+        "@xla_serving//data/processor/python/examples:int_resource_pybind",
+        "@xla_serving//data/processor/python/examples:make_dict_transform_pybind",
+        "@xla_serving//data/processor/python/examples:multiply_by_five_transform_pybind",
+        "@xla_serving//data/processor/python/examples:suffix_transform_pybind",
+        "@xla_serving//data/resource_manager/python:resource_manager",
+        "@xla_serving_pypi//jax",
+        "@xla_serving_pypi//ml_dtypes",  # build_cleaner: keep
+        "@xla_serving_pypi//numpy",
     ],
 )
 
@@ -93,14 +94,14 @@ pybind_library(
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
-        "@neptune//data/processor/cc/api:transform_context",
-        "@neptune//data/processor/cc/api:type_info",
-        "@neptune//data/processor/cc/api:value",
-        "@neptune//data/processor/cc/core:transform",
-        "@neptune//data/processor/proto:transform_config_cc_proto",
         "@pybind11_abseil//pybind11_abseil:absl_casters",
         "@pybind11_abseil//pybind11_abseil:status_casters",
         "@pybind11_protobuf//pybind11_protobuf:native_proto_caster",
+        "@xla_serving//data/processor/cc/api:transform_context",
+        "@xla_serving//data/processor/cc/api:type_info",
+        "@xla_serving//data/processor/cc/api:value",
+        "@xla_serving//data/processor/cc/core:transform",
+        "@xla_serving//data/processor/proto:transform_config_cc_proto",
     ],
 )
 

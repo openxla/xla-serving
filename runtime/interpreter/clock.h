@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_CLOCK_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_CLOCK_H_
+#ifndef XLA_SERVING_RUNTIME_INTERPRETER_CLOCK_H_
+#define XLA_SERVING_RUNTIME_INTERPRETER_CLOCK_H_
 
 #include "absl/base/no_destructor.h"  // from @abseil-cpp
 #include "absl/time/clock.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 
 class Clock {
  public:
@@ -40,6 +40,6 @@ class RealClock : public Clock {
   }
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_CLOCK_H_
+#endif  // XLA_SERVING_RUNTIME_INTERPRETER_CLOCK_H_

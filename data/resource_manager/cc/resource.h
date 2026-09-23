@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_RESOURCE_MANAGER_CC_RESOURCE_H_
-#define THIRD_PARTY_NEPTUNE_DATA_RESOURCE_MANAGER_CC_RESOURCE_H_
+#ifndef XLA_SERVING_DATA_RESOURCE_MANAGER_CC_RESOURCE_H_
+#define XLA_SERVING_DATA_RESOURCE_MANAGER_CC_RESOURCE_H_
 
 #include <cstdint>
 #include <memory>
@@ -29,11 +29,11 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "xla/tsl/platform/status_macros.h"
-#include "data/resource_manager/cc/asset.h"  // from @neptune
-#include "data/resource_manager/cc/resource_internal.h"  // from @neptune
-#include "data/resource_manager/proto/resource_manager.pb.h"  // from @neptune
+#include "data/resource_manager/cc/asset.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource_internal.h"  // from @xla_serving
+#include "data/resource_manager/proto/resource_manager.pb.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 
 class Resource {
  public:
@@ -89,7 +89,7 @@ absl::Status RegisterResource(const std::string& class_name) {
   RETURN_IF_ERROR(internal::ResourceFactory::GetInstance().Register(
       class_name,
       [](uint64_t id, std::string name,
-         std::vector<neptune::data::Asset> assets, std::string class_name) {
+         std::vector<xla_serving::data::Asset> assets, std::string class_name) {
         return std::make_shared<T>(id, std::move(name), std::move(assets),
                                    std::move(class_name));
       }));
@@ -97,7 +97,7 @@ absl::Status RegisterResource(const std::string& class_name) {
       std::type_index(typeid(T)), class_name);
 }
 
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
 #ifndef ND_REGISTER_RESOURCE_HOOK
 #define ND_REGISTER_RESOURCE_HOOK(Type, Name)
@@ -105,7 +105,7 @@ absl::Status RegisterResource(const std::string& class_name) {
 
 #define ND_REGISTER_RESOURCE_INTERNAL_IMPL(Type, Name, Id)   \
   static bool Resource_Registered_##Id = []() {              \
-    CHECK_OK(::neptune::data::RegisterResource<Type>(Name)); \
+    CHECK_OK(::xla_serving::data::RegisterResource<Type>(Name)); \
     ND_REGISTER_RESOURCE_HOOK(Type, Name);                   \
     return true;                                             \
   }();
@@ -116,4 +116,4 @@ absl::Status RegisterResource(const std::string& class_name) {
 #define ND_REGISTER_RESOURCE(Type, Name) \
   ND_REGISTER_RESOURCE_INTERNAL(Type, Name, __COUNTER__)
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_RESOURCE_MANAGER_CC_RESOURCE_H_
+#endif  // XLA_SERVING_DATA_RESOURCE_MANAGER_CC_RESOURCE_H_

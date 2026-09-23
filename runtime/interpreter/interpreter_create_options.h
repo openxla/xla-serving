@@ -12,27 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_INTERPRETER_CREATE_OPTIONS_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_INTERPRETER_CREATE_OPTIONS_H_
+#ifndef XLA_SERVING_RUNTIME_INTERPRETER_INTERPRETER_CREATE_OPTIONS_H_
+#define XLA_SERVING_RUNTIME_INTERPRETER_INTERPRETER_CREATE_OPTIONS_H_
 
 #include <cstdint>
 #include <memory>
 #include <string>
 
 #include "absl/base/nullability.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
-#include "runtime/core/allocator.h"  // from @neptune
-#include "runtime/core/default_allocator.h"  // from @neptune
-#include "runtime/core/stablehlo_optimizer.h"  // from @neptune
-#include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
-#include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @neptune
+#include "protos/manifest.pb.h"  // from @xla_serving
+#include "runtime/core/allocator.h"  // from @xla_serving
+#include "runtime/core/default_allocator.h"  // from @xla_serving
+#include "runtime/core/stablehlo_optimizer.h"  // from @xla_serving
+#include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @xla_serving
+#include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @xla_serving
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "tsl/platform/protobuf.h"  // from @tsl
 
-namespace neptune {
+namespace xla_serving {
 
-// LINT.IfChange(InterpreterCreateOptions)
 // The options to create the interpreter. This is a virtual class to allow
 // subclasses to add more options. Therefore, one should always use the pointer
 // or reference instead of the object itself.
@@ -66,9 +65,9 @@ struct InterpreterCreateOptions {
   Allocator* absl_nonnull allocator = DefaultAllocator::GetInstance();
   // The platform name to use for `xla::ExecutableBuildOptions`. If not set,
   // the default platform name will be "TPU".
-  // platform_name should be the name of neptune_model_manifest::Platform name.
-  std::string platform_name = neptune_model_manifest::Platform_Name(
-      neptune_model_manifest::Platform::TPU);
+  // platform_name should be the name of xla_saved_model_manifest::Platform name.
+  std::string platform_name = xla_saved_model_manifest::Platform_Name(
+      xla_saved_model_manifest::Platform::TPU);
   // If true, the interpreter will only load the pipeline when it is requested.
   bool lazy_loading_pipelines = false;
   // If true, the device assignment in the manifest will be ignored.
@@ -99,7 +98,6 @@ struct InterpreterCreateOptions {
   // against compiled_exec.target_topology_label() in the AOT manifest.
   std::string target_topology_label;
 };
-// LINT.ThenChange(//depot//third_party/neptune/runtime/interpreter/interpreter.cc:InterpreterCreateOptionsValidation)
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INTERPRETER_INTERPRETER_CREATE_OPTIONS_H_
+#endif  // XLA_SERVING_RUNTIME_INTERPRETER_INTERPRETER_CREATE_OPTIONS_H_

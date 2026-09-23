@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""pytest configuration for neptune."""
+"""pytest configuration for XLA Serving."""
 
 from typing import Any
 from absl import flags

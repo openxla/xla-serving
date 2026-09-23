@@ -676,10 +676,14 @@ class CompositeProcessorTest(absltest.TestCase):
     self.assertEqual(na_out.tolist(), [[1, 2, 3], [4, 5, 6]])
 
   def test_host_buffer_from_numpy_dlpack_copy(self):
-    # Re-create until the array is Eigen-aligned.
-    na = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.int32)
-    while not test_utils.is_numpy_eigen_aligned(na):
-      na = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.int32)
+    # Allocate a buffer with 64 extra bytes padding to ensure 64-byte alignment
+    # required by Eigen (AVX-512).
+    align = 64
+    raw = np.empty(2 * 3 * 4 + align, dtype=np.uint8)
+    offset = (align - (raw.ctypes.data % align)) % align
+    na = raw[offset : offset + 24].view(np.int32).reshape((2, 3))
+    na[:] = [[1, 2, 3], [4, 5, 6]]
+    self.assertTrue(test_utils.is_numpy_eigen_aligned(na))
     hb = composite_processor_pybind.HostBuffer.from_dlpack(na, copy=True)
     self.assertEqual(hb.dtype, np.int32)
     self.assertEqual(hb.shape, (2, 3))

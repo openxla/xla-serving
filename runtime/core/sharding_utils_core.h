@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_SHARDING_UTILS_CORE_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_SHARDING_UTILS_CORE_H_
+#ifndef XLA_SERVING_RUNTIME_SHARDING_UTILS_CORE_H_
+#define XLA_SERVING_RUNTIME_SHARDING_UTILS_CORE_H_
 
 #include <cstdint>
 #include <functional>
@@ -26,13 +26,13 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "Eigen/Core"
 #include "unsupported/Eigen/CXX11/Tensor"
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/macros.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
-namespace neptune::sharding_internal {
+namespace xla_serving::sharding_internal {
 
 // Validates the input shape for slicing.
 absl::Status ValidateShapesForSlice(absl::string_view input_name,
@@ -450,6 +450,6 @@ class XlaNDConcatenator {
   }
 };
 
-}  // namespace neptune::sharding_internal
+}  // namespace xla_serving::sharding_internal
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_SHARDING_UTILS_CORE_H_
+#endif  // XLA_SERVING_RUNTIME_SHARDING_UTILS_CORE_H_

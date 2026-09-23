@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/cpu_embedding/cc/array.h"  // from @neptune
+#include "data/cpu_embedding/cc/array.h"  // from @xla_serving
 
 #include <any>
 #include <cstdint>
@@ -24,7 +24,7 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "unsupported/Eigen/CXX11/Tensor"
 
-namespace neptune::data::cpu_embedding {
+namespace xla_serving::data::cpu_embedding {
 namespace {
 
 TEST(ArrayTest, ConstructFromSpan) {
@@ -96,4 +96,4 @@ TEST(ArrayTest, ReleaseBufferShared) {
 }
 
 }  // namespace
-}  // namespace neptune::data::cpu_embedding
+}  // namespace xla_serving::data::cpu_embedding

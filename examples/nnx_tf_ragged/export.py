@@ -12,16 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Neptune model with a TF preprocessor that uses tf.RaggedTensor and tf.SparseTensor."""
+"""XLA SavedModel with a TF preprocessor using Ragged and Sparse tensors."""
 
 import jax.numpy as jnp
 import tensorflow as tf
 
-from neptune_model._src.export import jax_model
-from neptune_model._src.export import main_lib
-from neptune_model._src.export import serving_config
-from neptune_model._src.export import tensorflow_model
-from neptune_model.protos import orchestration_pb2
+from xla_saved_model.protos import orchestration_pb2
+from xla_saved_model._src.export import jax_model
+from xla_saved_model._src.export import main_lib
+from xla_saved_model._src.export import serving_config
+from xla_saved_model._src.export import tensorflow_model
 
 
 @tf.function

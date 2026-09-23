@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/resource_manager/cc/asset_manager.h"  // from @neptune
+#include "data/resource_manager/cc/asset_manager.h"  // from @xla_serving
 
 #include <memory>
 #include <string>
@@ -23,9 +23,9 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
-#include "data/resource_manager/cc/asset.h"  // from @neptune
+#include "data/resource_manager/cc/asset.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 
 AssetManager& AssetManager::GetInstance() {
   static absl::NoDestructor<AssetManager> instance;
@@ -55,4 +55,4 @@ absl::StatusOr<const Asset*> AssetManager::GetAsset(absl::string_view name) {
   return it->second.get();
 }
 
-}  // namespace neptune::data
+}  // namespace xla_serving::data

@@ -1,4 +1,4 @@
-module(name = "neptune")
+module(name = "xla_serving")
 
 # go/keep-sorted start
 bazel_dep(name = "abseil-cpp", version = "20260526.0")
@@ -120,7 +120,6 @@ archive_override(
 tf_third_party = use_extension("@org_tensorflow//third_party/extensions:third_party.bzl", "third_party_ext")
 use_repo(tf_third_party, "tf_runtime")
 
-# TODO: upstreaming in cl/822016400 copybara:strip
 single_version_override(
     module_name = "grpc",
     patch_strip = 1,
@@ -301,14 +300,14 @@ SUPPORTED_PYTHON_VERSIONS = [
 
 [
     pip.parse(
-        hub_name = "neptune_pypi",
+        hub_name = "xla_serving_pypi",
         python_version = version,
         requirements_lock = "//:requirements_lock_" + version + ".txt",
     )
     for version in SUPPORTED_PYTHON_VERSIONS
 ]
 
-use_repo(pip, "neptune_pypi")
+use_repo(pip, "xla_serving_pypi")
 
 single_version_override(
     module_name = "highway",
@@ -325,6 +324,7 @@ single_version_override(
         "//third_party/absl:btree.patch",
         "//third_party/absl:build_dll.patch",
         "//third_party/absl:endian.patch",
+        "//third_party/absl:options.patch",
     ],
     version = "20260526.0",
 )

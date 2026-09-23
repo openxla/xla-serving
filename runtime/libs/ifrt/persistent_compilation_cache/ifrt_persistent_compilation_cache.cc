@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @neptune
+#include "runtime/libs/ifrt/persistent_compilation_cache/ifrt_persistent_compilation_cache.h"  // from @xla_serving
 
 #include <memory>
 #include <utility>
@@ -27,7 +27,7 @@
 #include "xla/python/ifrt/program.h"  // from @xla
 #include "xla/python/pjrt_ifrt/xla_compiler.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 absl::StatusOr<xla::ifrt::LoadedExecutableRef>
 IfrtPersistentCompilationCache::LookupLoadedExecutableOrCreate(
@@ -46,4 +46,4 @@ IfrtPersistentCompilationCache::LookupLoadedExecutableOrCreate(
   return value_fn(std::move(hlo_program), std::move(ifrt_xla_compile_options));
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

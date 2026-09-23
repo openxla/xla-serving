@@ -35,8 +35,8 @@ proto_library(
     deps = [
         ":model_proto",
         "@com_google_protobuf//:any_proto",
-        "@neptune//protos:orchestration_proto",
-        "@neptune//protos:type_proto",
+        "@xla_serving//protos:orchestration_proto",
+        "@xla_serving//protos:type_proto",
     ],
 )
 
@@ -125,4 +125,20 @@ cc_grpc_library(
     srcs = [":prediction_service_proto"],
     grpc_only = True,
     deps = [":prediction_service_cc_proto"],
+)
+
+# Proto definitions for model_server_config.proto
+proto_library(
+    name = "model_server_config_proto",
+    srcs = ["model_server_config.proto"],
+)
+
+cc_proto_library(
+    name = "model_server_config_cc_proto",
+    deps = [":model_server_config_proto"],
+)
+
+py_proto_library(
+    name = "model_server_config_py_pb2",
+    deps = [":model_server_config_proto"],
 )

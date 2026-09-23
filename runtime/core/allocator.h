@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_ALLOCATOR_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_ALLOCATOR_H_
+#ifndef XLA_SERVING_RUNTIME_ALLOCATOR_H_
+#define XLA_SERVING_RUNTIME_ALLOCATOR_H_
 
 #include <cstddef>
 
-namespace neptune {
+namespace xla_serving {
 
 // An interface for allocating memory.
 class Allocator {
@@ -33,6 +33,6 @@ class Allocator {
   virtual ~Allocator() = default;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_ALLOCATOR_H_
+#endif  // XLA_SERVING_RUNTIME_ALLOCATOR_H_

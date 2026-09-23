@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_COMPOSITE_PROCESSOR_H_
-#define THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_COMPOSITE_PROCESSOR_H_
+#ifndef XLA_SERVING_DATA_PROCESSOR_CC_CORE_COMPOSITE_PROCESSOR_H_
+#define XLA_SERVING_DATA_PROCESSOR_CC_CORE_COMPOSITE_PROCESSOR_H_
 
 #include <cstddef>
 #include <memory>
@@ -22,14 +22,14 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/api/value.h"  // from @neptune
-#include "data/processor/cc/core/graph/execution_graph.h"  // from @neptune
-#include "data/processor/cc/core/graph/graph_executor.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/resource_manager/cc/resource_manager.h"  // from @neptune
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/api/value.h"  // from @xla_serving
+#include "data/processor/cc/core/graph/execution_graph.h"  // from @xla_serving
+#include "data/processor/cc/core/graph/graph_executor.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource_manager.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 namespace core {
 
@@ -68,7 +68,7 @@ class CompositeProcessor {
       const CompositeProcessorConfig& config,
       std::unique_ptr<GraphExecutor> executor = nullptr);
 
-  const neptune::data::ResourceManager& resource_manager() const;
+  const xla_serving::data::ResourceManager& resource_manager() const;
   GraphExecutor& executor() { return *executor_; }
   const GraphExecutor& executor() const { return *executor_; }
 
@@ -80,17 +80,17 @@ class CompositeProcessor {
  private:
   explicit CompositeProcessor(
       ExecutionGraph graph,
-      std::unique_ptr<neptune::data::ResourceManager> resource_manager =
+      std::unique_ptr<xla_serving::data::ResourceManager> resource_manager =
           nullptr,
       std::unique_ptr<GraphExecutor> executor = nullptr);
 
   ExecutionGraph graph_;
-  std::unique_ptr<neptune::data::ResourceManager> resource_manager_;
+  std::unique_ptr<xla_serving::data::ResourceManager> resource_manager_;
   std::unique_ptr<GraphExecutor> executor_;
 };
 
 }  // namespace core
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_PROCESSOR_CC_CORE_COMPOSITE_PROCESSOR_H_
+#endif  // XLA_SERVING_DATA_PROCESSOR_CC_CORE_COMPOSITE_PROCESSOR_H_

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 
 #include <cstdint>
 #include <cstring>
@@ -33,10 +33,10 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "Eigen/Core"  // IWYU pragma: keep, go/lsc-fix-eigen-includes
-#include "runtime/core/allocator.h"  // from @neptune
-#include "runtime/core/default_allocator.h"  // from @neptune
-#include "runtime/core/host_buffer_type_utils.h"  // from @neptune
-#include "runtime/core/host_buffer_utils.h"  // from @neptune
+#include "runtime/core/allocator.h"  // from @xla_serving
+#include "runtime/core/default_allocator.h"  // from @xla_serving
+#include "runtime/core/host_buffer_type_utils.h"  // from @xla_serving
+#include "runtime/core/host_buffer_utils.h"  // from @xla_serving
 #include "xla/overflow_util.h"  // from @xla
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
@@ -48,11 +48,11 @@
 // go/lsc-fix-eigen-includes
 // IWYU pragma: no_include "Eigen/src/Core/util/ConfigureVectorization.h"
 
-ABSL_FLAG(int64_t, jsv_host_buffer_max_elements, int64_t{1} << 32,
+ABSL_FLAG(int64_t, xla_serving_host_buffer_max_elements, int64_t{1} << 32,
           "Maximum number of elements allowed in a HostBuffer to prevent "
           "OOM/DoS.");
 
-namespace neptune {
+namespace xla_serving {
 namespace {
 bool DataTypeCanUseMemCpy(xla::ifrt::DType dtype) {
   switch (dtype.kind()) {
@@ -114,7 +114,8 @@ absl::Status ValidateHostBufferShape(xla::ifrt::DType dtype,
   }
 
   // Limit check to prevent OOM/DoS.
-  int64_t max_elements = absl::GetFlag(FLAGS_jsv_host_buffer_max_elements);
+  int64_t max_elements =
+      absl::GetFlag(FLAGS_xla_serving_host_buffer_max_elements);
   if (num_elements > max_elements) {
     return absl::InvalidArgumentError(
         absl::StrFormat("HostBuffer shape too large: %d elements (max %d)",
@@ -584,4 +585,4 @@ std::string BufferData::DebugString() const {
   return out;
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

@@ -14,7 +14,7 @@
 
 edition = "2024";
 
-package neptune.data;
+package xla_serving.data;
 
 import option "google/protobuf/cpp_features.proto";
 

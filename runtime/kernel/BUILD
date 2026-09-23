@@ -5,8 +5,8 @@ package_group(
     name = "kernel_users",
     packages = [
         "//runtime/interpreter/...",
-        "//runtime/neptune_data/...",
         "//runtime/tensorflow/...",
+        "//runtime/xla_serving_data/...",
     ],
 )
 
@@ -20,7 +20,7 @@ package_group(
 # Allow users of interpreter to use `KernelIODataType`.
 package_group(
     name = "interpreter_users",
-    includes = ["@neptune//runtime/interpreter:interpreter_users"],
+    includes = ["@xla_serving//runtime/interpreter:interpreter_users"],
 )
 
 cc_library(
@@ -33,7 +33,7 @@ cc_library(
     visibility = [
         ":kernel_internal",
         ":kernel_users",
-        "@neptune//runtime/tensorflow:__subpackages__",
+        "@xla_serving//runtime/tensorflow:__subpackages__",
     ],
     deps = [
         "@abseil-cpp//absl/container:flat_hash_map",
@@ -41,7 +41,7 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/strings:string_view",
-        "@neptune//runtime/core:value",
+        "@xla_serving//runtime/core:value",
     ],
 )
 
@@ -55,8 +55,8 @@ cc_library(
         ":kernel",
         ":stablehlo_runner_op",
         "@abseil-cpp//absl/status",
-        "@neptune//runtime/kernel/batching:batch_runner_op",
         "@xla//xla/tsl/platform:errors",
+        "@xla_serving//runtime/kernel/batching:batch_runner_op",
     ],
 )
 
@@ -77,7 +77,7 @@ cc_library(
     visibility = [
         ":kernel_internal",
         ":kernel_users",
-        "@neptune//runtime/tensorflow:__subpackages__",
+        "@xla_serving//runtime/tensorflow:__subpackages__",
     ],
     deps = [
         ":kernel_builder_context",
@@ -92,13 +92,13 @@ cc_library(
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/types:span",
-        "@neptune//runtime/core:flat_signature",
-        "@neptune//runtime/core:value",
-        "@neptune//runtime/interpreter:context",
         "@xla//xla/pjrt:pjrt_future",
         "@xla//xla/tsl/concurrency:future",
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/core:flat_signature",
+        "@xla_serving//runtime/core:value",
+        "@xla_serving//runtime/interpreter:context",
     ],
 )
 
@@ -119,24 +119,24 @@ cc_library(
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
         "@com_google_protobuf//:protobuf",
-        "@neptune//runtime/core:device_buffer",
-        "@neptune//runtime/core:flat_signature",
-        "@neptune//runtime/core:host_buffer",
-        "@neptune//runtime/core:ifrt_loaded_variable_registry",
-        "@neptune//runtime/core:stablehlo",
-        "@neptune//runtime/core:stablehlo_optimizer",
-        "@neptune//runtime/core:stablehlo_runner",
-        "@neptune//runtime/core:value",
-        "@neptune//runtime/core/streaming:utils",
-        "@neptune//runtime/interpreter:manifest_utils",
-        "@neptune//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",
-        "@neptune//runtime/libs/ifrt/serving_core_selector",
         "@tsl//tsl/profiler/lib:traceme",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/pjrt/proto:compile_options_proto_cc",
         "@xla//xla/python/ifrt",
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/core:device_buffer",
+        "@xla_serving//runtime/core:flat_signature",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/core:ifrt_loaded_variable_registry",
+        "@xla_serving//runtime/core:stablehlo",
+        "@xla_serving//runtime/core:stablehlo_optimizer",
+        "@xla_serving//runtime/core:stablehlo_runner",
+        "@xla_serving//runtime/core:value",
+        "@xla_serving//runtime/core/streaming:utils",
+        "@xla_serving//runtime/interpreter:manifest_utils",
+        "@xla_serving//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",
+        "@xla_serving//runtime/libs/ifrt/serving_core_selector",
     ],
 )
 

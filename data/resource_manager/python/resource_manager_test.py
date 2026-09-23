@@ -23,6 +23,8 @@ from data.resource_manager.python.examples import concrete_resource_pybind
 from data.test_utils import test_utils
 from pybind11_abseil import status as error
 
+_STATUS_NOT_OK = (error.StatusNotOk, RuntimeError)
+
 _TEST_PROTO_MESSAGE = """
   resources {{
     id: {id1}
@@ -86,18 +88,18 @@ class ResourceManagerTest(absltest.TestCase):
 
   def test_asset_load_content_not_found(self):
     asset = resource_manager.Asset(path="/no/such/asset2", name="asset2")
-    with self.assertRaisesRegex(error.StatusNotOk, "NOT_FOUND"):
+    with self.assertRaisesRegex(_STATUS_NOT_OK, "NOT_FOUND"):
       asset.load_content()
 
   def test_resource_manager_create_duplicate_resource_id_is_error(self):
     resource1 = FakeResource(resource_id=1)
     resource2 = FakeResource(resource_id=1)
-    with self.assertRaisesRegex(error.StatusNotOk, "ALREADY_EXISTS"):
+    with self.assertRaisesRegex(_STATUS_NOT_OK, "ALREADY_EXISTS"):
       resource_manager.ResourceManager([resource1, resource2])
 
   def test_resource_manager_create_duplicate_resource_is_error(self):
     resource = FakeResource()
-    with self.assertRaisesRegex(error.StatusNotOk, "ALREADY_EXISTS"):
+    with self.assertRaisesRegex(_STATUS_NOT_OK, "ALREADY_EXISTS"):
       resource_manager.ResourceManager([resource, resource])
 
   def test_resource_manager_add_resource_ignoring_duplicates_and_get(self):
@@ -124,12 +126,12 @@ class ResourceManagerTest(absltest.TestCase):
     rm = resource_manager.ResourceManager([])
     res = FakeResource()
     rm.add_resource(res)
-    with self.assertRaisesRegex(error.StatusNotOk, "ALREADY_EXISTS"):
+    with self.assertRaisesRegex(_STATUS_NOT_OK, "ALREADY_EXISTS"):
       rm.add_resource(res)
 
   def test_resource_manager_get_nonexistent(self):
     rm = resource_manager.ResourceManager([])
-    with self.assertRaisesRegex(error.StatusNotOk, "NOT_FOUND"):
+    with self.assertRaisesRegex(_STATUS_NOT_OK, "NOT_FOUND"):
       rm.get_resource(999)
 
   def test_resource_manager_get_all_assets(self):
@@ -164,7 +166,7 @@ class ResourceManagerTest(absltest.TestCase):
     res = concrete_resource_pybind.CppConcreteResource([asset1, asset2])
 
     # CppConreteResource::Load is expected to return an error.
-    with self.assertRaisesRegex(error.StatusNotOk, "CppConcreteResource"):
+    with self.assertRaisesRegex(_STATUS_NOT_OK, "CppConcreteResource"):
       res.load()
 
     self.assertIsNotNone(res.name)
@@ -247,12 +249,12 @@ class ResourceManagerTest(absltest.TestCase):
     self.assertEqual(res4.assets, [])
     for res in resources:
       self.assertIsInstance(res, resource_manager.CppResource)
-    with self.assertRaisesRegex(error.StatusNotOk, "CppConcreteResource"):
+    with self.assertRaisesRegex(_STATUS_NOT_OK, "CppConcreteResource"):
       res1.load()
     res2.load()  # OkConcreteResource should not raise error.
-    with self.assertRaisesRegex(error.StatusNotOk, "AnotherConcreteResource"):
+    with self.assertRaisesRegex(_STATUS_NOT_OK, "AnotherConcreteResource"):
       res3.load()
-    with self.assertRaisesRegex(error.StatusNotOk, "AnotherConcreteResource"):
+    with self.assertRaisesRegex(_STATUS_NOT_OK, "AnotherConcreteResource"):
       res4.load()
 
     # Verify get_all_assets api.

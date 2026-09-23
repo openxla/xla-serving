@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @neptune
+#include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @xla_serving
 
 #include <algorithm>
 #include <cstddef>
@@ -27,7 +27,7 @@
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 
-namespace neptune::data::cpu_embedding {
+namespace xla_serving::data::cpu_embedding {
 namespace {
 
 absl::Status Validate(absl::Span<const int64_t> embedding_ids,
@@ -83,4 +83,4 @@ absl::Span<const float> FeatureBatchCsrInput::GetSampleWeights(
       row_pointers_[sample_index + 1] - row_pointers_[sample_index]);
 }
 
-}  // namespace neptune::data::cpu_embedding
+}  // namespace xla_serving::data::cpu_embedding

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_KERNELS_CPU_EMBEDDING_DENSE_CPU_EMBEDDING_LOOKUP_TRANSFORM_H_
-#define THIRD_PARTY_NEPTUNE_DATA_KERNELS_CPU_EMBEDDING_DENSE_CPU_EMBEDDING_LOOKUP_TRANSFORM_H_
+#ifndef XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_DENSE_CPU_EMBEDDING_LOOKUP_TRANSFORM_H_
+#define XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_DENSE_CPU_EMBEDDING_LOOKUP_TRANSFORM_H_
 
 #include <cstdint>
 #include <memory>
@@ -24,15 +24,15 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @neptune
-#include "data/kernels/cpu_embedding/dense_cpu_embedding_lookup.pb.h"  // from @neptune
-#include "data/processor/cc/api/transform_context.h"  // from @neptune
-#include "data/processor/cc/core/transform.h"  // from @neptune
-#include "data/processor/proto/transform_config.pb.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
-#include "runtime/core/host_buffer.h"  // from @neptune
+#include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @xla_serving
+#include "data/kernels/cpu_embedding/dense_cpu_embedding_lookup.pb.h"  // from @xla_serving
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/core/transform.h"  // from @xla_serving
+#include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
+#include "runtime/core/host_buffer.h"  // from @xla_serving
 
-namespace neptune::data::composite {
+namespace xla_serving::data::composite {
 
 // Transform for high-performance dense CPU embedding lookup.
 //
@@ -54,15 +54,15 @@ class DenseCpuEmbeddingLookupTransform : public TransformBase {
   CreateForFeature(std::shared_ptr<CpuEmbeddingEngineResource> resource,
                    std::string feature_name, int64_t pad_value = 0);
 
-  std::vector<std::shared_ptr<neptune::data::Resource>> GetAllResources()
+  std::vector<std::shared_ptr<xla_serving::data::Resource>> GetAllResources()
       const override;
 
   absl::Status Execute(api::ExecuteContext& context) override;
   absl::Span<const api::TypeInfo> InputTypes() const override;
   absl::Span<const api::TypeInfo> OutputTypes() const override;
 
-  absl::StatusOr<std::vector<neptune::HostBuffer>> operator()(
-      std::vector<neptune::HostBuffer> dense_ids_list);
+  absl::StatusOr<std::vector<xla_serving::HostBuffer>> operator()(
+      std::vector<xla_serving::HostBuffer> dense_ids_list);
 
   absl::Status PropagateSignatureImpl(
       api::ShapeInferenceContext& context) const override;
@@ -91,6 +91,6 @@ class DenseCpuEmbeddingLookupTransform : public TransformBase {
   std::string debug_string_;
 };
 
-}  // namespace neptune::data::composite
+}  // namespace xla_serving::data::composite
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_KERNELS_CPU_EMBEDDING_DENSE_CPU_EMBEDDING_LOOKUP_TRANSFORM_H_
+#endif  // XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_DENSE_CPU_EMBEDDING_LOOKUP_TRANSFORM_H_

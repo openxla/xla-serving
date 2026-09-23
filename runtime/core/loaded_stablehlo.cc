@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/core/loaded_stablehlo.h"  // from @neptune
+#include "runtime/core/loaded_stablehlo.h"  // from @xla_serving
 
 #include <memory>
 #include <optional>
@@ -36,10 +36,10 @@
 #include "mlir/include/mlir/IR/BuiltinAttributes.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/Operation.h"  // from @llvm-project
-#include "runtime/core/stablehlo.h"  // from @neptune
-#include "runtime/core/stablehlo_utils.h"  // from @neptune
-#include "runtime/libs/ifrt/stablehlo_loader.h"  // from @neptune
-#include "runtime/libs/mlir/dump_mlir_util.h"  // from @neptune
+#include "runtime/core/stablehlo.h"  // from @xla_serving
+#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
+#include "runtime/libs/ifrt/stablehlo_loader.h"  // from @xla_serving
+#include "runtime/libs/mlir/dump_mlir_util.h"  // from @xla_serving
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
@@ -47,7 +47,7 @@
 #include "xla/xla_data.pb.h"  // from @xla
 
 // TODO: Add unit tests for this file.
-namespace neptune {
+namespace xla_serving {
 
 namespace {
 
@@ -153,7 +153,7 @@ bool HasStreaming(mlir::ModuleOp module) {
     if (op->getName().getStringRef() == "stablehlo.custom_call") {
       if (auto target_attr =
               op->getAttrOfType<mlir::StringAttr>("call_target_name")) {
-        if (target_attr.getValue() == "neptune_stream") {
+        if (target_attr.getValue() == "xla_serving_stream") {
           found = true;
         }
       }
@@ -460,4 +460,4 @@ void LoadedStableHlo::ReleaseAllModules() {
   }
 }
 
-}  // namespace neptune
+}  // namespace xla_serving

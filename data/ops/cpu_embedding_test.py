@@ -19,6 +19,7 @@ from absl.testing import absltest
 import jax
 import numpy as np
 from data.kernels.cpu_embedding import cpu_embedding_serializer_pybind
+from data.kernels.cpu_embedding import unpack_host_buffer_vector_module
 from data.ops import cpu_embedding
 from data.processor.python import composite_processor_pybind
 
@@ -360,6 +361,168 @@ class CpuEmbeddingModuleTest(absltest.TestCase):
       _ = cpu_embedding.CpuEmbeddingResource(
           table_data, combine_modes, feature_specs
       )
+
+  def test_dense_cpu_embedding_lookup_transform_direct_call(self):
+    table_data = {
+        "feat1": np.array(
+            [[0.0, 0.0], [1.0, 1.0], [2.0, 2.0], [3.0, 3.0]], dtype=np.float32
+        )
+    }
+    combine_modes = {"feat1": "SUM"}
+    feature_specs = [{"name": "feat1", "table_name": "feat1"}]
+    resource = cpu_embedding.CpuEmbeddingResource(
+        table_data, combine_modes, feature_specs
+    )
+
+    transform = cpu_embedding.DenseCpuEmbeddingLookupTransform(
+        resource=resource,
+        feature_names="feat1",
+        pad_value=0,
+    )
+
+    # Verify output signature
+    in_spec = (jax.ShapeDtypeStruct(shape=(2, 3), dtype=np.int32),)
+    out_sig = transform.get_output_signature(in_spec)
+    self.assertEqual(out_sig[0].shape, (2, 2))
+    self.assertEqual(out_sig[0].dtype, jax.numpy.float32)
+
+    # Test direct call with HostBuffer
+    input_ids = np.array([[1, 2, 0], [3, 0, 0]], dtype=np.int32)
+    hb_input = composite_processor_pybind.HostBuffer.from_dlpack(input_ids)
+    output_hb = transform(hb_input)
+    output_arr = np.from_dlpack(output_hb)
+
+    # Row 0: [1] + [2] = [3.0, 3.0]
+    # Row 1: [3] = [3.0, 3.0]
+    expected = np.array([[3.0, 3.0], [3.0, 3.0]], dtype=np.float32)
+    np.testing.assert_allclose(output_arr, expected)
+    resource.close()
+
+  def test_cpu_embedding_functional_op(self):
+    table_data = {
+        "feat1": np.array([[0.0, 0.0], [1.0, 2.0]], dtype=np.float32),
+        "feat2": np.array([[0.0, 0.0, 0.0], [3.0, 4.0, 5.0]], dtype=np.float32),
+    }
+    combine_modes = {"feat1": "SUM", "feat2": "SUM"}
+    feature_specs = [
+        {"name": "feat1", "table_name": "feat1"},
+        {"name": "feat2", "table_name": "feat2"},
+    ]
+    resource = cpu_embedding.CpuEmbeddingResource(
+        table_data, combine_modes, feature_specs
+    )
+
+    # Single feature call
+    ids1 = np.array([[1, 0]], dtype=np.int32)
+    hb1 = composite_processor_pybind.HostBuffer.from_dlpack(ids1)
+    out1 = cpu_embedding.cpu_embedding(
+        hb1, resource=resource, feature_name="feat1", pad_value=0
+    )
+    np.testing.assert_allclose(np.from_dlpack(out1), np.array([[1.0, 2.0]], dtype=np.float32))
+
+    # Multi-feature call
+    ids2 = np.array([[1, 0]], dtype=np.int32)
+    hb1 = composite_processor_pybind.HostBuffer.from_dlpack(ids1)
+    hb2 = composite_processor_pybind.HostBuffer.from_dlpack(ids2)
+    out1_multi, out2_multi = cpu_embedding.cpu_embedding(
+        [hb1, hb2],
+        resource=resource,
+        feature_names=["feat1", "feat2"],
+        pad_value=0,
+    )
+    np.testing.assert_allclose(np.from_dlpack(out1_multi), np.array([[1.0, 2.0]], dtype=np.float32))
+    np.testing.assert_allclose(np.from_dlpack(out2_multi), np.array([[3.0, 4.0, 5.0]], dtype=np.float32))
+    resource.close()
+
+  def test_unpack_host_buffer_vector_module_lifecycle(self):
+    module_single = unpack_host_buffer_vector_module.UnpackHostBufferVectorModule(
+        output_count=1,
+        output_shapes=[[2, 4]],
+    )
+    module_single.initialize(None)
+    self.assertIsNotNone(module_single.transform)
+    sig_single = module_single.get_output_signature(None)
+    self.assertEqual(sig_single.shape, (2, 4))
+    self.assertEqual(sig_single.dtype, jax.numpy.float32)
+
+    module_multi = unpack_host_buffer_vector_module.UnpackHostBufferVectorModule(
+        output_count=2,
+        output_shapes=[[2, 4], [2, 2]],
+        dtype=jax.numpy.int32,
+    )
+    module_multi.initialize(None)
+    sig_multi = module_multi.get_output_signature(None)
+    self.assertLen(sig_multi, 2)
+    self.assertEqual(sig_multi[0].shape, (2, 4))
+    self.assertEqual(sig_multi[1].shape, (2, 2))
+    self.assertEqual(sig_multi[0].dtype, jax.numpy.int32)
+    self.assertEqual(sig_multi[1].dtype, jax.numpy.int32)
+
+  def test_dense_cpu_embedding_lookup_transform_explicit_dimensions_and_edge_cases(self):
+    table_data = {
+        "feat1": np.array([[0.0, 0.0], [1.0, 2.0]], dtype=np.float32),
+        "feat2": np.array([[0.0, 0.0, 0.0], [3.0, 4.0, 5.0]], dtype=np.float32),
+    }
+    combine_modes = {"feat1": "SUM", "feat2": "SUM"}
+    feature_specs = [
+        {"name": "feat1", "table_name": "feat1"},
+        {"name": "feat2", "table_name": "feat2"},
+    ]
+    resource = cpu_embedding.CpuEmbeddingResource(
+        table_data, combine_modes, feature_specs
+    )
+
+    # Test explicit integer embedding_dim
+    t_int_dim = cpu_embedding.DenseCpuEmbeddingLookupTransform(
+        resource=resource,
+        feature_names=["feat1", "feat2"],
+        embedding_dim=4,
+    )
+    t_int_dim.initialize(None)
+    self.assertLen(t_int_dim._embedding_dims, 2)
+    self.assertEqual(t_int_dim._embedding_dims, [4, 4])
+    self.assertIn(
+        f"assets/{cpu_embedding.MANIFEST_ASSET_NAME}", t_int_dim.export_assets()
+    )
+
+    # Test explicit sequence embedding_dim
+    t_seq_dim = cpu_embedding.DenseCpuEmbeddingLookupTransform(
+        resource=resource,
+        feature_names=["feat1", "feat2"],
+        embedding_dim=[2, 3],
+    )
+    self.assertEqual(t_seq_dim._embedding_dims, [2, 3])
+
+    # Test empty input signature edge case
+    empty_sig = t_seq_dim.get_output_signature([])
+    self.assertEqual(empty_sig, [])
+
+    resource.close()
+
+  def test_cpu_embedding_lookup_transform_wrapper(self):
+    table_data = {
+        "feat1": np.array([[0.0, 0.0], [1.0, 2.0]], dtype=np.float32),
+    }
+    combine_modes = {"feat1": "SUM"}
+    feature_specs = [{"name": "feat1", "table_name": "feat1"}]
+    resource = cpu_embedding.CpuEmbeddingResource(
+        table_data, combine_modes, feature_specs
+    )
+
+    wrapper = cpu_embedding.CpuEmbeddingLookupTransformWrapper(
+        resource=resource,
+        feature_name="feat1",
+        embedding_dim=2,
+        output_feature_name="feat1_out",
+    )
+    wrapper.initialize(None)
+    self.assertIsNotNone(wrapper.transform)
+    self.assertIn(
+        f"assets/{cpu_embedding.MANIFEST_ASSET_NAME}", wrapper.export_assets()
+    )
+    out_sig = wrapper.get_output_signature(None)
+    self.assertIsNotNone(out_sig)
+    resource.close()
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
 load("@rules_proto//proto:defs.bzl", "proto_library")
 
-package(default_visibility = ["@neptune//data:neptune_data_internal"])
+package(default_visibility = ["@xla_serving//data:xla_serving_data_internal"])
 
 cc_library(
     name = "buffer_utils",
@@ -59,6 +59,6 @@ cc_test(
         "@abseil-cpp//absl/status:statusor",
         "@com_google_protobuf//:any_cc_proto",
         "@googletest//:gtest_main",
-        "@neptune//data/test_utils:status_macros",
+        "@xla_serving//data/test_utils:status_macros",
     ],
 )

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "data/cpu_embedding/cc/compute_activations.h"  // from @neptune
+#include "data/cpu_embedding/cc/compute_activations.h"  // from @xla_serving
 
 #include <cstdint>
 #include <string>
@@ -22,12 +22,12 @@
 #include "gtest/gtest.h"
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "Eigen/Core"
-#include "data/cpu_embedding/cc/array.h"  // from @neptune
-#include "data/cpu_embedding/cc/embedding_table.h"  // from @neptune
-#include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @neptune
-#include "data/test_utils/status_macros.h"  // from @neptune
+#include "data/cpu_embedding/cc/array.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/embedding_table.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @xla_serving
+#include "data/test_utils/status_macros.h"  // from @xla_serving
 
-namespace neptune::data::cpu_embedding {
+namespace xla_serving::data::cpu_embedding {
 namespace {
 
 using ::testing::ElementsAre;
@@ -253,4 +253,4 @@ INSTANTIATE_TYPED_TEST_SUITE_P(test, ComputeActivationsTest, MyTypes,
                                TypeNamer);
 
 }  // namespace
-}  // namespace neptune::data::cpu_embedding
+}  // namespace xla_serving::data::cpu_embedding

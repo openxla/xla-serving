@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_STABLEHLO_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_STABLEHLO_H_
+#ifndef XLA_SERVING_RUNTIME_STABLEHLO_H_
+#define XLA_SERVING_RUNTIME_STABLEHLO_H_
 
 #include <memory>
 #include <string>
@@ -25,11 +25,11 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "protos/manifest.pb.h"  // from @neptune
-#include "runtime/core/stablehlo_utils.h"  // from @neptune
+#include "protos/manifest.pb.h"  // from @xla_serving
+#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
 #include "xla/xla_data.pb.h"  // from @xla
 
-namespace neptune {
+namespace xla_serving {
 
 // TODO b/401364010 - Add unit test for this class.
 
@@ -77,7 +77,7 @@ class StableHlo {
 
   // Creates an StableHlo object from one or multiple `Function`s.
   static absl::StatusOr<std::unique_ptr<StableHlo>> Create(
-      absl::Span<const neptune_model_manifest::Function* const> funcs);
+      absl::Span<const xla_saved_model_manifest::Function* const> funcs);
 
   // Creates an StableHlo object directly from a list of `Spec`s.
   static absl::StatusOr<std::unique_ptr<StableHlo>> Create(
@@ -93,6 +93,6 @@ class StableHlo {
   const std::vector<Spec> specs_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_STABLEHLO_H_
+#endif  // XLA_SERVING_RUNTIME_STABLEHLO_H_

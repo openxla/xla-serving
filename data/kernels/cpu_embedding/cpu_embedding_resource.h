@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_RESOURCE_H_
-#define THIRD_PARTY_NEPTUNE_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_RESOURCE_H_
+#ifndef XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_RESOURCE_H_
+#define XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_RESOURCE_H_
 
 #include <cstdint>
 #include <memory>
@@ -23,10 +23,10 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
-#include "data/cpu_embedding/cc/cpu_embedding_engine.h"  // from @neptune
-#include "data/resource_manager/cc/resource.h"  // from @neptune
+#include "data/cpu_embedding/cc/cpu_embedding_engine.h"  // from @xla_serving
+#include "data/resource_manager/cc/resource.h"  // from @xla_serving
 
-namespace neptune::data {
+namespace xla_serving::data {
 namespace composite {
 
 class CpuEmbeddingEngineResource : public Resource {
@@ -55,6 +55,6 @@ class CpuEmbeddingEngineResource : public Resource {
 };
 
 }  // namespace composite
-}  // namespace neptune::data
+}  // namespace xla_serving::data
 
-#endif  // THIRD_PARTY_NEPTUNE_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_RESOURCE_H_
+#endif  // XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_RESOURCE_H_

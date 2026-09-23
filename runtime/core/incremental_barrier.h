@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_NEPTUNE_RUNTIME_INCREMENTAL_BARRIER_H_
-#define THIRD_PARTY_NEPTUNE_RUNTIME_INCREMENTAL_BARRIER_H_
+#ifndef XLA_SERVING_RUNTIME_INCREMENTAL_BARRIER_H_
+#define XLA_SERVING_RUNTIME_INCREMENTAL_BARRIER_H_
 
 #include <functional>
 
 #include "absl/functional/any_invocable.h"  // from @abseil-cpp
 
-namespace neptune {
+namespace xla_serving {
 
 class InternalIncrementalBarrier;
 
@@ -76,6 +76,6 @@ class IncrementalBarrier {
   InternalIncrementalBarrier* internal_barrier_;
 };
 
-}  // namespace neptune
+}  // namespace xla_serving
 
-#endif  // THIRD_PARTY_NEPTUNE_RUNTIME_INCREMENTAL_BARRIER_H_
+#endif  // XLA_SERVING_RUNTIME_INCREMENTAL_BARRIER_H_
