@@ -1,6 +1,16 @@
 common --enable_bzlmod
 common --incompatible_disallow_empty_glob=false
 
+# gRPC's src/core/BUILD requests features = ["layering_check"], and Clang's
+# module-based strict decluse check doesn't correctly attribute ownership of
+# protobuf's generated upb headers (e.g. google/protobuf/duration.upb.h) to
+# their owning module even when that module is a declared "use" dependency,
+# so it hard-errors on Clang toolchains that implement the feature (Xcode
+# Clang locally, and the hermetic Clang toolchain used elsewhere). The
+# feature is disabled by default everywhere and only activates because gRPC
+# explicitly requests it, so turning it off globally is safe.
+common --features=-layering_check
+
 common --incompatible_enable_cc_toolchain_resolution
 common --repo_env USE_HERMETIC_CC_TOOLCHAIN=1
 common --repo_env SYSROOT_DIST=linux_glibc_2_31
