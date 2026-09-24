@@ -1,0 +1,24 @@
+diff --git a/tensorflow/compiler/mlir/tfrt/transforms/mlrt/while_to_map_fn.cc b/tensorflow/compiler/mlir/tfrt/transforms/mlrt/while_to_map_fn.cc
+--- a/tensorflow/compiler/mlir/tfrt/transforms/mlrt/while_to_map_fn.cc
++++ b/tensorflow/compiler/mlir/tfrt/transforms/mlrt/while_to_map_fn.cc
+@@ -14,8 +14,6 @@ limitations under the License.
+ ==============================================================================*/
+ #include "tensorflow/compiler/mlir/tfrt/transforms/mlrt/while_to_map_fn.h"
+
+-#include <linux/limits.h>
+-
+ #include <algorithm>
+ #include <cstdint>
+ #include <iterator>
+diff --git a/tensorflow/compiler/mlir/tfrt/transforms/mlrt/async_while.cc b/tensorflow/compiler/mlir/tfrt/transforms/mlrt/async_while.cc
+--- a/tensorflow/compiler/mlir/tfrt/transforms/mlrt/async_while.cc
++++ b/tensorflow/compiler/mlir/tfrt/transforms/mlrt/async_while.cc
+@@ -14,8 +14,6 @@ limitations under the License.
+ ==============================================================================*/
+ #include "tensorflow/compiler/mlir/tfrt/transforms/mlrt/async_while.h"
+
+-#include <linux/limits.h>
+-
+ #include <algorithm>
+ #include <deque>
+ #include <list>
