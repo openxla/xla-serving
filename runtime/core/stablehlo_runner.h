@@ -106,6 +106,14 @@ class StableHloRunner {
           h2d_transfer_executor_factory = nullptr,
       std::optional<int64_t> callback_id = std::nullopt);
 
+  // Sets the number of IFRT execution streams to spread executions across.
+  // Consecutive executions are assigned round-robin by launch ID. Executions
+  // on different streams may run concurrently; the PjRt CPU client otherwise
+  // runs one program at a time per device. Must be >= 1. Call before the
+  // runner is used for execution.
+  absl::Status SetNumExecutionStreams(int num_execution_streams);
+  int num_execution_streams() const { return num_execution_streams_; }
+
   // Virtual destructor is required for safe polymorphic destruction of
   // subclasses.
   virtual ~StableHloRunner() = default;
@@ -499,6 +507,9 @@ class StableHloRunner {
   // TODO: Remove this launch_id once request_id is always
   // propagated through Interpreter::Run.
   static std::atomic<uint32_t> launch_id_;
+
+  // See `SetNumExecutionStreams`.
+  int num_execution_streams_ = 1;
 
   // If nullptr, no optimization will be enabled.
   StablehloOptimizer* absl_nullable optimizer_;

@@ -19,3 +19,11 @@
 
 ABSL_FLAG(std::string, orbax_grpc_server_platform, "cpu",
           "The platform to use. It can be cpu, tpu, or cuda.");
+
+ABSL_FLAG(int, num_execution_streams, 1,
+          "Number of IFRT execution streams to spread StableHLO executions "
+          "across. Executions on different streams may run concurrently. "
+          "On the cpu platform the default of 1 runs one batch at a time "
+          "regardless of the number of batch threads; 4 is a reasonable "
+          "starting point on a 16 vCPU host. Has little effect on gpu/tpu, "
+          "where a device executes in stream order on hardware.");

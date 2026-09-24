@@ -42,6 +42,8 @@ inline constexpr absl::string_view kFunctionFlatOutputSignature =
 inline constexpr absl::string_view kServingCoreSelector =
     "serving_core_selector";
 inline constexpr absl::string_view kStableCallbackId = "stable_callback_id";
+inline constexpr absl::string_view kNumExecutionStreams =
+    "num_execution_streams";
 
 // Constants for AOT execution path.
 inline constexpr absl::string_view kIfrtLoadedExecutables =

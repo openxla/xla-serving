@@ -876,18 +876,39 @@ StableHloRunner::LookupWeights(std::optional<size_t> device_id) {
   return arrays;
 }
 
+absl::Status StableHloRunner::SetNumExecutionStreams(
+    int num_execution_streams) {
+  if (num_execution_streams < 1) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("num_execution_streams must be >= 1, got ",
+                     num_execution_streams));
+  }
+  num_execution_streams_ = num_execution_streams;
+  return absl::OkStatus();
+}
+
 absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunner::Execute(
     absl::Span<const xla_serving::Value> inputs, ExecuteOptions options,
     const RunContext& run_context) {
-  tsl::profiler::TraceMe trace_me([&]() {
-    return tsl::profiler::TraceMeEncode("StableHloRunner::Execute", {});
-  });
-
-  VLOG(2) << "Start StableHloRunner execution";
-
   bool has_streaming = loaded_stablehlo_->has_streaming();
   int64_t expected_num_inputs = loaded_stablehlo_->num_user_inputs();
-  int32_t xla_launch_id = static_cast<int32_t>(launch_id_.fetch_add(1));
+  const uint32_t launch_seq = launch_id_.fetch_add(1);
+  int32_t xla_launch_id = static_cast<int32_t>(launch_seq);
+  // Round-robin executions across streams. IFRT orders executions only within
+  // a stream, so batches on different streams can execute concurrently. The
+  // ID is surfaced in the trace so concurrency can be verified from a profile.
+  // Modulo on the unsigned counter keeps the ID non-negative after wraparound.
+  const int64_t execution_stream_id = static_cast<int64_t>(
+      launch_seq % static_cast<uint32_t>(num_execution_streams_));
+  tsl::profiler::TraceMe trace_me([&]() {
+    return tsl::profiler::TraceMeEncode(
+        "StableHloRunner::Execute",
+        {{"execution_stream_id", execution_stream_id}});
+  });
+
+  VLOG(2) << "Start StableHloRunner execution on stream "
+          << execution_stream_id;
+
   if (inputs.size() != expected_num_inputs &&
       (!has_streaming || inputs.size() != expected_num_inputs + 1)) {
     return absl::InvalidArgumentError(
@@ -1073,6 +1094,7 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunner::Execute(
           {
               .launch_id = xla_launch_id,
               .fill_status = true,
+              .execution_stream_id = execution_stream_id,
           },
           // IFRT requires an explicit device mapping when executing portable
           //  or unbound executables. If the executable already has

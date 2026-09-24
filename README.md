@@ -311,6 +311,34 @@ bazel run //runtime/serving/gcp/server:xla_serving_main_cpu -- \
   --warmup_server=false
 ```
 
+### Concurrent Execution on CPU
+
+The PjRt CPU client runs one XLA program at a time per execution stream, and
+by default every execution uses stream 0. On the `cpu` platform this means all
+batches funnel through a single queue no matter how many batch threads the
+model configures: batch threads block in `StableHloRunner::Execute` waiting for
+their turn, and throughput caps at one batch per program execution time.
+
+`--num_execution_streams=N` spreads consecutive executions round-robin across
+N IFRT execution streams. Executions on different streams may run
+concurrently, so up to N batches execute at once on the same device with a
+single copy of the weights. Batches are independent, so this is safe for
+serving. Start with 4 on a 16 vCPU host and keep the batch thread count near
+N + 2; more threads only add queueing and oversubscribe the intra-op pool.
+
+```bash
+bazel run //runtime/serving/gcp/server:xla_serving_main_cpu -- \
+  --model_path <Exported model path> \
+  --model_name <model_name> \
+  --orbax_grpc_server_platform cpu \
+  --num_execution_streams=4
+```
+
+Each `StableHloRunner::Execute` trace event carries an `execution_stream_id`
+argument, so a profile shows directly whether executions overlap. The flag has
+little effect on `cuda` and `tpu`, where a device executes programs in stream
+order on the hardware and the host does not block.
+
 ## XLA SavedModel Export Migration Guide
 
 With the release of `TensorflowModel` and explicit orchestration pipelines, several APIs in `xla_saved_model` have been updated to support exporting multiple models (such as JAX models combined with TensorFlow preprocessing and postprocessing) and complex multi-stage pipelines.

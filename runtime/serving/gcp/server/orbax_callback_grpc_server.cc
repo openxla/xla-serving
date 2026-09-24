@@ -258,6 +258,14 @@ OrbaxCallbackGrpcServer::Create(const ModelServerConfig& config,
           tsl::Env::Default(), tsl::ThreadOptions(),
           "OrbaxCheckpointLoaderThreadPool", kThreadPoolNumThreads);
 
+  const int num_execution_streams = absl::GetFlag(FLAGS_num_execution_streams);
+  if (num_execution_streams < 1) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "--num_execution_streams must be >= 1, got ", num_execution_streams));
+  }
+  LOG(INFO) << "StableHLO executions will use " << num_execution_streams
+            << " execution stream(s).";
+
   absl::flat_hash_map<std::string, std::shared_ptr<ModelEntry>> models;
   for (const auto& model_config : config.model_config_list().configs()) {
     const std::string& model_name = model_config.name();
@@ -294,6 +302,7 @@ OrbaxCallbackGrpcServer::Create(const ModelServerConfig& config,
     create_options->ifrt_client = client;
     create_options->computation_thread_pool = computation_thread_pool.get();
     create_options->platform_name = orbax_platform;
+    create_options->num_execution_streams = num_execution_streams;
 
     // TODO: Support loading and warming up models concurrently.
     std::unique_ptr<xla_serving::Interpreter> interpreter;
