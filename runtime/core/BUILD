@@ -619,7 +619,6 @@ cc_library(
     deps = [
         ":h2d_transfer_executor",
         ":host_buffer",
-        ":host_buffer_utils",
         ":sharding_utils",
         "@abseil-cpp//absl/base:nullability",
         "@abseil-cpp//absl/container:flat_hash_map",
@@ -633,6 +632,7 @@ cc_library(
         "@xla//xla:shape_util",
         "@xla//xla/pjrt:pjrt_client",
         "@xla//xla/pjrt:pjrt_layout",
+        "@xla//xla/pjrt:transpose",
         "@xla//xla/python/ifrt",
         "@xla//xla/python/pjrt_ifrt",
         "@xla//xla/python/pjrt_ifrt:pjrt_dtype",

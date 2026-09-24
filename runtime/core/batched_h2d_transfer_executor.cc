@@ -17,8 +17,10 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <iterator>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -32,11 +34,12 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
-#include "runtime/core/host_buffer_utils.h"  // from @xla_serving
 #include "runtime/core/sharding_utils.h"  // from @xla_serving
+#include "xla/layout_util.h"  // from @xla
 #include "xla/literal.h"  // from @xla
 #include "xla/pjrt/pjrt_client.h"  // from @xla
 #include "xla/pjrt/pjrt_layout.h"  // from @xla
+#include "xla/pjrt/transpose.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
@@ -77,17 +80,6 @@ struct BatchPlan {
   // single-device `HloSharding` so device count matches `pjrt_buffers.size()`).
   xla::ifrt::ShardingRef effective_sharding;
 };
-
-// Returns true if `input` has non-default (custom) byte strides.
-bool HasCustomByteStrides(const HostBuffer& input) {
-  if (!input.byte_strides().has_value()) {
-    return false;
-  }
-  std::optional<absl::InlinedVector<int64_t, 4>> default_strides =
-      CreateDefaultStrides(input.shape().dims(), input.storage_dtype());
-  return !default_strides.has_value() ||
-         *input.byte_strides() != *default_strides;
-}
 
 // Represents an entry in a per-device batch, mapping a device buffer slot back
 // to the output slot and the source host buffer.
@@ -242,29 +234,98 @@ absl::StatusOr<BatchPlan> GetShardedBatchPlan(
   };
 }
 
+// Returns true if the buffer has standard dense major-to-minor byte strides.
+bool HasDefaultByteStrides(const HostBuffer& buffer,
+                           xla::PrimitiveType primitive_type) {
+  // Any tensor with 0 or 1 element has no gaps between elements, so its
+  // representation at buffer.base() is already contiguous.
+  if (buffer.shape().num_elements() <= 1) {
+    return true;
+  }
+  if (!buffer.byte_strides().has_value()) {
+    return true;
+  }
+  const auto& strides = *buffer.byte_strides();
+  const auto& dims = buffer.shape().dims();
+  if (strides.size() != dims.size()) {
+    return false;
+  }
+  return xla::LayoutUtil::ByteStridesIsMajorToMinor(strides, dims,
+                                                    primitive_type);
+}
+
+// Linearizes a strided or transposed HostBuffer into a new C-contiguous
+// HostBuffer.
+absl::StatusOr<HostBuffer> MakeContiguousHostBuffer(
+    const HostBuffer& input, xla::PrimitiveType primitive_type,
+    tsl::thread::ThreadPool& thread_pool) {
+  if (input.shape().num_elements() <= 1) {
+    return input;
+  }
+
+  HostBuffer contiguous_buffer(input.dtype(), input.shape());
+
+  std::vector<int64_t> permutation(input.shape().dims().size());
+  std::iota(permutation.begin(), permutation.end(), 0);
+  // Cap max threads per transpose (matching ConcatCPUImpl in host_buffer.h) to
+  // avoid saturating the shared pool under high concurrency; TransposePlan also
+  // enforces a 1MB/64MB per-thread minimum and runs smaller buffers inline.
+  constexpr int kMaxTransposeThreads = 4;
+  xla::TransposePlan::Options options{
+      .elem_size_in_bytes = static_cast<size_t>(
+          xla::ShapeUtil::ByteSizeOfPrimitiveType(primitive_type)),
+      .dims = input.shape().dims(),
+      .permutation = permutation,
+      .input_striding =
+          input.byte_strides().has_value()
+              ? std::optional<xla::TransposePlan::Striding>{*input
+                                                                 .byte_strides()}
+              : std::nullopt,
+      .num_threads = std::min(kMaxTransposeThreads, thread_pool.NumThreads()),
+  };
+
+  TF_ASSIGN_OR_RETURN(std::unique_ptr<xla::TransposePlan> plan,
+                      xla::TransposePlan::Create(options));
+  plan->Execute(input.base(), contiguous_buffer.base(),
+                [&thread_pool](std::function<void()> fn) {
+                  thread_pool.Schedule(std::move(fn));
+                });
+  return contiguous_buffer;
+}
+
 // Inspects the input buffer and sharding to determine if it qualifies for
 // batched transfer. If eligible, returns the batch plan with shard targets.
 // Returns std::nullopt if the input should route to the fallback path (e.g.
-// non-uniform shardings, strings, sub-byte types, custom host byte strides).
+// non-uniform shardings, strings, sub-byte types, 0-element tensors).
 absl::StatusOr<std::optional<BatchPlan>> GetBatchPlanIfEligible(
-    const HostBuffer& input, const xla::ifrt::ShardingRef& sharding,
+    const HostBuffer& original_input, const xla::ifrt::ShardingRef& sharding,
     xla::ifrt::Client* client, tsl::thread::ThreadPool& thread_pool) {
   // Disqualify strings, packed storage (sub-byte types), and 0-element tensors.
-  if (input.dtype().kind() == xla::ifrt::DType::kString ||
-      input.dtype() != input.storage_dtype() ||
-      input.shape().num_elements() == 0) {
+  if (original_input.dtype().kind() == xla::ifrt::DType::kString ||
+      original_input.dtype() != original_input.storage_dtype() ||
+      original_input.shape().num_elements() == 0) {
+    return std::nullopt;
+  }
+
+  // TODO: Support batching non-default memory_kind (e.g.,
+  // pinned_host) by resolving PjRtMemorySpace* from sharding->memory_kind() and
+  // grouping batches by PjRtMemorySpace* instead of defaulting to
+  // default_memory_space().
+  if (!sharding->memory_kind().is_default()) {
     return std::nullopt;
   }
 
   TF_ASSIGN_OR_RETURN(xla::PrimitiveType primitive_type,
-                      xla::ifrt::ToPrimitiveType(input.dtype()));
+                      xla::ifrt::ToPrimitiveType(original_input.dtype()));
 
-  // Default MakeShape assumes a dense, major-to-minor layout.
-  // If the buffer uses custom byte strides (e.g. view or slice),
-  // route it to the fallback path which correctly handles host layouts.
-  if (HasCustomByteStrides(input)) {
-    return std::nullopt;
+  std::optional<HostBuffer> contiguous_input;
+  if (!HasDefaultByteStrides(original_input, primitive_type)) {
+    TF_ASSIGN_OR_RETURN(
+        contiguous_input,
+        MakeContiguousHostBuffer(original_input, primitive_type, thread_pool));
   }
+  const HostBuffer& input =
+      contiguous_input.has_value() ? *contiguous_input : original_input;
 
   // Case 1: SingleDeviceSharding (tensor targeted to 1 device)
   if (const auto* single_device_sharding =
@@ -281,7 +342,9 @@ absl::StatusOr<std::optional<BatchPlan>> GetBatchPlanIfEligible(
         .shard_targets = {ShardTarget{
             .device = devices[0],
             .shape = std::move(xla_shape),
-            .source_buffer = input,
+            .source_buffer = contiguous_input.has_value()
+                                 ? std::move(*contiguous_input)
+                                 : input,
         }},
         .effective_sharding = sharding,
     };
@@ -307,7 +370,9 @@ absl::StatusOr<std::optional<BatchPlan>> GetBatchPlanIfEligible(
           .shard_targets = {ShardTarget{
               .device = target_device,
               .shape = std::move(xla_shape),
-              .source_buffer = input,
+              .source_buffer = contiguous_input.has_value()
+                                   ? std::move(*contiguous_input)
+                                   : input,
           }},
           .effective_sharding = xla::ifrt::SingleDeviceSharding::Create(
               target_device, sharding->memory_kind()),
@@ -332,7 +397,9 @@ absl::StatusOr<std::optional<BatchPlan>> GetBatchPlanIfEligible(
       shard_targets.push_back(ShardTarget{
           .device = devices[dev_idx],
           .shape = is_last ? std::move(xla_shape) : xla_shape,
-          .source_buffer = input,
+          .source_buffer = (is_last && contiguous_input.has_value())
+                               ? std::move(*contiguous_input)
+                               : input,
       });
     }
     return BatchPlan{
@@ -501,7 +568,7 @@ BatchedH2DTransferExecutor::ExecuteTransfer(
   }
 
   // Phase 4: Concurrently initiate default transfers for fallback inputs
-  // (e.g. partitioned/tiled shardings, strings, strided buffers).
+  // (e.g. strings, sub-byte types, 0-element tensors, non-default memory).
   for (int idx : fallback_input_indices) {
     TF_ASSIGN_OR_RETURN(
         results[idx],
