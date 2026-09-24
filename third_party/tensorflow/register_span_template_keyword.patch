@@ -1,0 +1,35 @@
+diff --git a/tensorflow/core/tfrt/mlrt/interpreter/register_span.h b/tensorflow/core/tfrt/mlrt/interpreter/register_span.h
+--- a/tensorflow/core/tfrt/mlrt/interpreter/register_span.h
++++ b/tensorflow/core/tfrt/mlrt/interpreter/register_span.h
+@@ -91,12 +91,12 @@
+   explicit RegisterValueIterator(RegisterIterator reg_iter)
+       : reg_iter_(reg_iter) {}
+ 
+-  reference operator*() const { return (*reg_iter_).Get<T>(); }
++  reference operator*() const { return (*reg_iter_).template Get<T>(); }
+ 
+-  pointer operator->() const { return &(*reg_iter_).Get<T>(); }
++  pointer operator->() const { return &(*reg_iter_).template Get<T>(); }
+ 
+   reference operator[](difference_type i) const {
+-    return (*(reg_iter_ + i)).Get<T>();
++    return (*(reg_iter_ + i)).template Get<T>();
+   }
+ 
+   Iter& operator+=(difference_type d) {
+@@ -196,10 +196,12 @@
+   // NOLINTNEXTLINE(google-explicit-constructor)
+   RegisterValueSpan(RegisterSpan reg_span) : reg_span_(reg_span) {}
+ 
+-  T& operator[](size_t idx) { return reg_span_[idx].Get<T>(); }
+-  const T& operator[](size_t idx) const { return reg_span_[idx].Get<T>(); }
++  T& operator[](size_t idx) { return reg_span_[idx].template Get<T>(); }
++  const T& operator[](size_t idx) const {
++    return reg_span_[idx].template Get<T>();
++  }
+ 
+-  void Destroy(size_t idx) { reg_span_[idx].Destroy<T>(); }
++  void Destroy(size_t idx) { reg_span_[idx].template Destroy<T>(); }
+ 
+   size_t size() const { return reg_span_.size(); }
+ 

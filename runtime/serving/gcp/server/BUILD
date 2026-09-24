@@ -30,10 +30,17 @@ XLA_SERVING_MAIN_COMMON_DEPS = [
     "@xla//xla/tsl/profiler/rpc:profiler_server_impl",
 ]
 
+# --allow-multiple-definition is a GNU ld flag; Apple's linker doesn't
+# support it and rejects the build outright, so only pass it on Linux.
+ALLOW_MULTIPLE_DEFINITION_LINKOPTS = select({
+    "@platforms//os:osx": [],
+    "//conditions:default": ["-Wl,--allow-multiple-definition"],
+})
+
 cc_binary(
     name = "xla_serving_main_cpu",
     srcs = ["main.cc"],
-    linkopts = ["-Wl,--allow-multiple-definition"],
+    linkopts = ALLOW_MULTIPLE_DEFINITION_LINKOPTS,
     deps = [
         ":xla_serving_callback_grpc_server_cpu",
     ] + XLA_SERVING_MAIN_COMMON_DEPS,
@@ -42,7 +49,7 @@ cc_binary(
 cc_binary(
     name = "xla_serving_main_gpu",
     srcs = ["main.cc"],
-    linkopts = ["-Wl,--allow-multiple-definition"],
+    linkopts = ALLOW_MULTIPLE_DEFINITION_LINKOPTS,
     tags = ["manual"],
     deps = [
         ":xla_serving_callback_grpc_server_gpu",
@@ -52,7 +59,7 @@ cc_binary(
 cc_binary(
     name = "xla_serving_main_tpu",
     srcs = ["main.cc"],
-    linkopts = ["-Wl,--allow-multiple-definition"],
+    linkopts = ALLOW_MULTIPLE_DEFINITION_LINKOPTS,
     tags = ["manual"],
     deps = [
         ":xla_serving_callback_grpc_server_tpu",

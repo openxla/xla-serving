@@ -1,11 +1,28 @@
 common --enable_bzlmod
 common --incompatible_disallow_empty_glob=false
 
+# gRPC's src/core/BUILD requests features = ["layering_check"], and Clang's
+# module-based strict decluse check doesn't correctly attribute ownership of
+# protobuf's generated upb headers (e.g. google/protobuf/duration.upb.h) to
+# their owning module even when that module is a declared "use" dependency,
+# so it hard-errors on Clang toolchains that implement the feature (Xcode
+# Clang locally, and the hermetic Clang toolchain used elsewhere). The
+# feature is disabled by default everywhere and only activates because gRPC
+# explicitly requests it, so turning it off globally is safe.
+common --features=-layering_check
+
 common --incompatible_enable_cc_toolchain_resolution
 common --repo_env USE_HERMETIC_CC_TOOLCHAIN=1
 common --repo_env SYSROOT_DIST=linux_glibc_2_31
 common --@rules_ml_toolchain//common:stdlib=libc++
 common --@rules_ml_toolchain//common:static_libcxx=true
+
+# Apple Clang >=16 (Xcode CLT) hard-errors on aligned new/delete for the
+# Bazel-default -mmacosx-version-min=10.11; over-aligned XLA types (e.g.
+# xla::Literal) need aligned allocation, which requires macOS >=10.13.
+# arm64 macOS requires >=11.0 anyway, so use that as the floor.
+build --macos_minimum_os=11.0
+build --host_macos_minimum_os=11.0
 
 common --define=PREFIX=/usr
 common --define=LIBDIR=$(PREFIX)/lib

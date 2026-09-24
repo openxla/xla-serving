@@ -112,6 +112,13 @@ archive_override(
     patch_strip = 1,
     patches = [
         "//third_party/tensorflow:where_op_gpu.patch",
+        # Newer Clang (e.g. Apple Clang 21) requires the `template`
+        # disambiguator for these member-template calls; older compilers
+        # accepted them without it.
+        "//third_party/tensorflow:register_span_template_keyword.patch",
+        # <linux/limits.h> doesn't exist on macOS, and these files don't
+        # actually use anything from it (no PATH_MAX/NAME_MAX/etc.).
+        "//third_party/tensorflow:macos_linux_limits_include.patch",
     ],
     strip_prefix = "tensorflow-bf9294b7ddba0380f22c85cfb87310f586747059",
     urls = ["https://github.com/tensorflow/tensorflow/archive/bf9294b7ddba0380f22c85cfb87310f586747059.zip"],
@@ -327,4 +334,18 @@ single_version_override(
         "//third_party/absl:options.patch",
     ],
     version = "20260526.0",
+)
+
+single_version_override(
+    module_name = "pybind11_abseil",
+    patch_strip = 1,
+    patches = [
+        # status.so and ok_status_singleton.so are plain cc_binary targets
+        # (not pybind_extension), so they miss the macOS
+        # "-undefined dynamic_lookup" linkopt needed to leave CPython
+        # symbols unresolved until the module is loaded into the
+        # interpreter.
+        "//third_party/pybind11_abseil:macos_undefined_dynamic_lookup.patch",
+    ],
+    version = "202402.0",
 )
