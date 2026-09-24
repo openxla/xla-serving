@@ -401,60 +401,18 @@ def _flat_input_signature(
   return (input_names[: len(leaves)], leaves)
 
 
-def _is_tf_container(node: Any) -> bool:
-  """Returns whether `node` is a container that JAX cannot see into.
-
-  TF wraps containers owned by a trackable (e.g. `_DictWrapper` for a dict
-  attribute of a `tf.Module`) in types JAX has no registration for, so JAX
-  treats them as opaque leaves. Being a `Mapping` or a `Sequence` is not on its
-  own enough to identify one: a `chex.dataclass` is a `Mapping`, and a named
-  tuple is a `Sequence`, but JAX understands both and their types carry
-  meaning. Only a container JAX cannot see into needs to be rebuilt.
-
-  Args:
-    node: A node of a PyTree.
-  """
-  return (
-      isinstance(node, (Mapping, Sequence))
-      and not isinstance(node, (str, bytes))
-      and jax.tree_util.all_leaves([node])
-  )
-
-
-def _rebuild_tf_container(node: Any) -> Any:
-  """Rebuilds a TF trackable container as its builtin equivalent."""
-  if not _is_tf_container(node):
-    return node
-  if isinstance(node, Mapping):
-    return {k: _unwrap_tf_containers(v) for k, v in node.items()}
-  values = [_unwrap_tf_containers(v) for v in node]
-  if hasattr(node, '_fields'):  # A named tuple.
-    named_tuple_type: Any = type(node)
-    return named_tuple_type(*values)
-  return tuple(values) if isinstance(node, tuple) else values
-
-
-def _unwrap_tf_containers(tree: Any) -> Any:
-  """Replaces TF trackable containers with their builtin equivalents.
-
-  TF wraps containers owned by a trackable, and functions built from them
-  return the wrappers rather than plain containers. JAX dispatches on the exact
-  container type, so a wrapper is treated as an opaque leaf and the tree
-  structure below it is lost.
-
-  Nodes JAX already understands are left as they are, including their type.
-  Rebuilding them would be destructive: a `chex.dataclass` would become a dict,
-  and a named tuple's children are keyed by field name where a list's are keyed
-  by index, so collapsing one into the other renames the outputs derived from
-  those keys.
-
-  Args:
-    tree: A PyTree that may contain TF trackable containers.
-
-  Returns:
-    The same tree with trackable containers replaced by builtin ones.
-  """
-  return jax.tree.map(_rebuild_tf_container, tree, is_leaf=_is_tf_container)
+def _unwrap_tf_trackables(
+    tf_trackable: Any,
+) -> Any:
+  """Unwraps TF trackables from the given PyTree."""
+  if isinstance(tf_trackable, Mapping):
+    return {k: _unwrap_tf_trackables(v) for k, v in tf_trackable.items()}
+  elif isinstance(tf_trackable, Sequence) and not isinstance(
+      tf_trackable, (str, bytes)
+  ):
+    return [_unwrap_tf_trackables(v) for v in tf_trackable]
+  else:
+    return tf_trackable
 
 
 def _output_name_for_key(key: Any) -> str:
@@ -464,11 +422,6 @@ def _output_name_for_key(key: Any) -> str:
     return f'{key.key}'
   elif isinstance(key, jax.tree_util.GetAttrKey):
     return f'{key.name}'
-  elif isinstance(key, jax.tree_util.FlattenedIndexKey):
-    # JAX synthesizes this for a node registered with `register_pytree_node`
-    # rather than `register_pytree_with_keys`, so its children are only
-    # identified by position, like a sequence's.
-    return f'{_OUTPUT_NAME_PREFIX}_{key.key}'
   raise ValueError(f'Invalid output key type: {key}')
 
 
@@ -479,31 +432,24 @@ def _output_name(path: Sequence[Any]) -> str:
   return '.'.join(_output_name_for_key(k) for k in path)
 
 
-def _leaf_output_names(path: Sequence[Any], leaf: Any) -> Sequence[str]:
-  """Returns the output names of a single leaf of the output signature.
-
-  A leaf is one entry of the JAX output tree, but a composite TF type (e.g. a
-  `tf.RaggedTensor`) holds several tensors and XSM has no composite type, so
-  each component needs a name of its own.
-
-  Args:
-    path: The JAX key path of the leaf.
-    leaf: The leaf itself.
-  """
-  base_name = _output_name(path)
-  num_tensors = len(tf.nest.flatten(leaf, expand_composites=True))
-  return [base_name] + [f'{base_name}_{i}' for i in range(num_tensors - 1)]
-
-
 def _output_names(
     fn: tf.types.experimental.ConcreteFunction,
 ) -> Sequence[str]:
   """Returns the flattened output signature of the given function."""
-  unwrapped_outputs = _unwrap_tf_containers(fn.structured_outputs)
-  names = []
-  for path, leaf in jax.tree.leaves_with_path(unwrapped_outputs):
-    names.extend(_leaf_output_names(path, leaf))
-  return names
+  unwrapped_outputs = _unwrap_tf_trackables(fn.structured_outputs)
+  leaves_with_path = jax.tree.leaves_with_path(unwrapped_outputs)
+  if not leaves_with_path:
+    return []
+
+  def _yield_names():
+    for path, leaf in leaves_with_path:
+      base_name = _output_name(path)
+      flat = tf.nest.flatten(leaf, expand_composites=True)
+      yield base_name
+      for i in range(len(flat) - 1):
+        yield f'{base_name}_{i}'
+
+  return list(_yield_names())
 
 
 def get_output_signature(
@@ -517,25 +463,18 @@ def get_output_signature(
   Args:
     fn: A concrete TF function.
   """
+  output_names_iter = iter(list(_output_names(fn)))
 
-  def _map_leaf(path, leaf):
+  def _map_leaf(t):
     flat_specs = tuple(
-        tf.TensorSpec(shape=s.shape, dtype=s.dtype, name=name)
-        for s, name in zip(
-            tf.nest.flatten(leaf, expand_composites=True),
-            _leaf_output_names(path, leaf),
-            strict=True,
+        tf.TensorSpec(
+            shape=s.shape, dtype=s.dtype, name=next(output_names_iter)
         )
+        for s in tf.nest.flatten(t, expand_composites=True)
     )
     return flat_specs[0] if len(flat_specs) == 1 else flat_specs
 
-  # `structured_outputs` may contain TF trackable containers (e.g.
-  # `_DictWrapper`). JAX dispatches on the exact container type, so those would
-  # be treated as opaque leaves and the output structure would collapse into a
-  # flat tuple.
-  return jax.tree.map_with_path(
-      _map_leaf, _unwrap_tf_containers(fn.structured_outputs)
-  )
+  return jax.tree.map(_map_leaf, fn.structured_outputs)
 
 
 def _to_keyword_only_fn(
