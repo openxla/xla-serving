@@ -152,12 +152,16 @@ cc_library(
     name = "interpreter_core",
     srcs = [
         "bundle_interpreter.cc",
-        "bundle_interpreter.h",
         "interpreter.cc",
+    ],
+    hdrs = [
+        "bundle_interpreter.h",
         "interpreter.h",
     ],
-    hdrs = [],
-    visibility = ["//visibility:private"],
+    visibility = [
+        ":internal",
+        ":interpreter_users",
+    ],
     deps = [
         ":context",
         ":interpreter_create_options",
@@ -235,15 +239,74 @@ cc_library(
 )
 
 cc_library(
+    name = "aot_execution",
+    visibility = [
+        ":internal",
+        ":interpreter_users",
+    ],
+    deps = [
+        ":init_lib",  # buildcleaner: keep
+        "@xla_serving//runtime/kernel:aot_stablehlo_runner_registration",  # buildcleaner: keep
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "jit_compilation",
     visibility = [
         ":internal",
         ":interpreter_users",
     ],
     deps = [
-        ":init_lib",
+        ":init_lib",  # buildcleaner: keep
+        "@xla_serving//runtime/kernel:aot_stablehlo_runner_registration",  # buildcleaner: keep
+        "@xla_serving//runtime/kernel:jit_stablehlo_runner_registration",  # buildcleaner: keep
     ],
     alwayslink = 1,
+)
+
+cc_library(
+    name = "aot_interpreter",
+    hdrs = [
+        "bundle_interpreter.h",
+        "interpreter.h",
+    ],
+    visibility = [
+        ":internal",
+        ":interpreter_users",
+    ],
+    deps = [
+        ":aot_execution",
+        ":checkpoint_weight_loading",
+        ":interpreter_core",
+        ":interpreter_create_options",
+        ":manifest_utils",
+        ":optional_function_handler_factory",
+        ":run_options",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/types:span",
+        "@com_google_protobuf//:protobuf_lite",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/tsl/concurrency:future",
+        "@xla//xla/tsl/platform:env",
+        "@xla_serving//protos:bundle_orchestration_cc_proto",
+        "@xla_serving//protos:manifest_cc_proto",
+        "@xla_serving//protos:orchestration_cc_proto",
+        "@xla_serving//runtime/core:flat_signature",
+        "@xla_serving//runtime/core:ifrt_loaded_variable_registry",
+        "@xla_serving//runtime/core:stablehlo",
+        "@xla_serving//runtime/core:value",
+        "@xla_serving//runtime/data_loader",
+        "@xla_serving//runtime/kernel",
+        "@xla_serving//runtime/kernel:kernel_io_data_type",
+    ],
 )
 
 # This is the interpreter that can run JAX-only models. This target is TF-free.
@@ -261,7 +324,6 @@ cc_library(
     ],
     deps = [
         ":checkpoint_weight_loading",
-        ":context",
         ":interpreter_core",
         ":interpreter_create_options",
         ":jit_compilation",
@@ -284,7 +346,6 @@ cc_library(
         "@xla_serving//protos:bundle_orchestration_cc_proto",
         "@xla_serving//protos:manifest_cc_proto",
         "@xla_serving//protos:orchestration_cc_proto",
-        "@xla_serving//protos:type_cc_proto",
         "@xla_serving//runtime/core:flat_signature",
         "@xla_serving//runtime/core:ifrt_loaded_variable_registry",
         "@xla_serving//runtime/core:stablehlo",

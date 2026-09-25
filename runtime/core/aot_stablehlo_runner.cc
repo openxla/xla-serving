@@ -32,11 +32,9 @@
 #include "absl/time/clock.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/ifrt_device_utils.h"  // from @xla_serving
-#include "runtime/core/loaded_stablehlo.h"  // from @xla_serving
 #include "runtime/core/sharding_utils.h"  // from @xla_serving
 #include "runtime/core/stablehlo.h"  // from @xla_serving
-#include "runtime/core/stablehlo_runner.h"  // from @xla_serving
-#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
+#include "runtime/core/stablehlo_runner_base.h"  // from @xla_serving
 #include "runtime/libs/ifrt/executable_build_utils.h"  // from @xla_serving
 #include "xla/python/ifrt/device.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
@@ -68,8 +66,8 @@ absl::StatusOr<std::unique_ptr<AotStableHloRunner>> AotStableHloRunner::Create(
 
   int num_weights = options.base_options.weights.size();
   TF_ASSIGN_OR_RETURN(
-      std::unique_ptr<LoadedStableHlo> loaded_stablehlo,
-      LoadedStableHlo::CreateForAot(options.stablehlo, num_weights));
+      ModelIoMetadata model_io_metadata,
+      ModelIoMetadata::CreateFromStableHlo(*options.stablehlo, num_weights));
 
   TF_ASSIGN_OR_RETURN(
       std::vector<xla::ifrt::Device*> assigned_ifrt_devices,
@@ -83,12 +81,9 @@ absl::StatusOr<std::unique_ptr<AotStableHloRunner>> AotStableHloRunner::Create(
       options.base_options.client->MakeDeviceList(assigned_ifrt_devices));
 
   auto runner = absl::WrapUnique(new AotStableHloRunner(
-      std::move(loaded_stablehlo), /*compile_options=*/std::nullopt,
-      options.base_options.client,
+      std::move(model_io_metadata), options.base_options.client,
       options.base_options.ifrt_loaded_variable_registry,
       std::move(options.base_options.weights), assigned_device_list,
-      /*compilation_environment_proto=*/nullptr,
-      /*persistent_compilation_cache=*/nullptr, /*optimizer=*/nullptr,
       options.base_options.assigned_devices,
       /*serving_core_selector=*/nullptr,
       /*h2d_transfer_executor_factory=*/nullptr,
@@ -109,7 +104,7 @@ absl::StatusOr<std::unique_ptr<AotStableHloRunner>> AotStableHloRunner::Create(
 
 absl::Status AotStableHloRunner::PopulateAotExecutableCache(
     StableHloRunnerAotOptions options) {
-  int num_weights = loaded_stablehlo_->weight_specs().size();
+  int num_weights = model_io_metadata_.weight_specs.size();
 
   absl::MutexLock lock(mutex_);
   for (size_t i = 0; i < options.executables.size(); ++i) {
@@ -200,7 +195,7 @@ absl::Status AotStableHloRunner::PopulateAotExecutableCache(
   return absl::OkStatus();
 }
 
-tsl::Future<StableHloRunner::SharedCachedExecutableBundle>
+tsl::Future<AotStableHloRunner::SharedCachedExecutableBundle>
 AotStableHloRunner::LookUpOrCreateExecutable(
     absl::Span<const xla::ifrt::Shape> input_shapes,
     absl::Span<const xla::ifrt::DType> input_dtypes) {

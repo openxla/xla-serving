@@ -21,15 +21,61 @@
 #include <string>
 #include <utility>
 
+#include "absl/base/no_destructor.h"  // from @abseil-cpp
+#include "absl/base/thread_annotations.h"  // from @abseil-cpp
+#include "absl/container/flat_hash_map.h"  // from @abseil-cpp
+#include "absl/functional/any_invocable.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "runtime/core/flat_signature.h"  // from @xla_serving
-#include "runtime/core/stablehlo_runner.h"  // from @xla_serving
+#include "runtime/core/stablehlo.h"  // from @xla_serving
+#include "runtime/core/stablehlo_runner_base.h"  // from @xla_serving
 #include "runtime/kernel/kernel.h"  // from @xla_serving
 #include "runtime/kernel/kernel_builder_context.h"  // from @xla_serving
 #include "runtime/kernel/kernel_io_data_type.h"  // from @xla_serving
 
 namespace xla_serving {
+
+// Execution mode for running StableHLO computations.
+enum class StableHloRunnerMode {
+  kJit,
+  kAot,
+};
+
+// Factory type for creating a `StableHloRunnerBase` instance.
+using StableHloRunnerFactory =
+    absl::AnyInvocable<absl::StatusOr<std::unique_ptr<StableHloRunnerBase>>(
+        const KernelBuilderContext& context,
+        std::shared_ptr<StableHlo> stablehlo,
+        StableHloRunnerOptions base_options) const>;
+
+// Global registry for `StableHloRunner` factories.
+class StableHloRunnerFactoryRegistry {
+ public:
+  // Registers a StableHLO runner factory for the given `mode`.
+  // Returns error if the `mode` is already registered.
+  absl::Status Register(StableHloRunnerMode mode,
+                        StableHloRunnerFactory factory);
+
+  // Creates a `StableHloRunnerBase` instance for the given `mode`.
+  // Returns error if the `mode` is not registered.
+  absl::StatusOr<std::unique_ptr<StableHloRunnerBase>> Create(
+      StableHloRunnerMode mode, const KernelBuilderContext& context,
+      std::shared_ptr<StableHlo> stablehlo,
+      StableHloRunnerOptions base_options) const;
+
+  // Returns the process-wide global registry singleton.
+  static StableHloRunnerFactoryRegistry& GetGlobalRegistry() {
+    static absl::NoDestructor<StableHloRunnerFactoryRegistry> registry;
+    return *registry;
+  }
+
+ private:
+  mutable absl::Mutex mu_;
+  absl::flat_hash_map<StableHloRunnerMode, StableHloRunnerFactory> factories_
+      ABSL_GUARDED_BY(mu_);
+};
 
 // A kernel that runs a StableHlo computation.
 // It takes a list of `xla_serving::HostBuffer` as inputs and outputs.
@@ -74,16 +120,17 @@ class StableHloRunnerOp : public CancellableKernel {
   }
 
  private:
-  explicit StableHloRunnerOp(std::unique_ptr<StableHloRunner> stablehlo_runner,
-                             std::unique_ptr<FlatSignature> input_signature,
-                             std::unique_ptr<FlatSignature> output_signature)
+  explicit StableHloRunnerOp(
+      std::unique_ptr<StableHloRunnerBase> stablehlo_runner,
+      std::unique_ptr<FlatSignature> input_signature,
+      std::unique_ptr<FlatSignature> output_signature)
       : CancellableKernel(std::move(input_signature),
                           std::move(output_signature)),
         stablehlo_runner_(std::move(stablehlo_runner)) {}
 
   absl::Status RunInternal(ExecuteContext& context) override;
 
-  std::unique_ptr<StableHloRunner> stablehlo_runner_;
+  std::unique_ptr<StableHloRunnerBase> stablehlo_runner_;
 
   friend class StableHloRunnerTestPeer;
 };
