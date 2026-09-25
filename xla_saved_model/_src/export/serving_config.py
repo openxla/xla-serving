@@ -215,6 +215,15 @@ class ServingConfig:
     ):
       return
 
+    if (
+        self.batch_options.pad_variable_length_inputs
+        and not self.batch_options.disable_large_batch_splitting
+    ):
+      raise ValueError(
+          "disable_large_batch_splitting must be True when"
+          " pad_variable_length_inputs is True."
+      )
+
     if self.batch_options.max_batch_size == 0:
       if self.batch_options.allowed_batch_sizes:
         self.batch_options.max_batch_size = (

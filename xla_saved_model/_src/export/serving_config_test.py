@@ -68,6 +68,20 @@ class ServingConfigTest(parameterized.TestCase):
           0,
       ),
       (
+          "valid_pad_variable_length_inputs",
+          orchestration_pb2.BatchOptions(
+              batch_component=orchestration_pb2.BatchOptions.MODEL_FUNCTION,
+              max_batch_size=8,
+              allowed_batch_sizes=[2, 4, 8],
+              max_enqueued_batches=1,
+              disable_large_batch_splitting=True,
+              pad_variable_length_inputs=True,
+          ),
+          8,
+          1,
+          0,
+      ),
+      (
           "infer_max_batch_size",
           orchestration_pb2.BatchOptions(
               batch_component=orchestration_pb2.BatchOptions.MODEL_FUNCTION,
@@ -212,6 +226,17 @@ class ServingConfigTest(parameterized.TestCase):
               max_batch_size=8, max_enqueued_batches=0
           ),
           r"`max_enqueued_batches` must be at least 1",
+      ),
+      (
+          "invalid_pad_variable_length_inputs_with_large_batch_splitting",
+          False,
+          orchestration_pb2.BatchOptions(
+              max_batch_size=8,
+              pad_variable_length_inputs=True,
+              disable_large_batch_splitting=False,
+              max_enqueued_batches=1,
+          ),
+          r"disable_large_batch_splitting must be True when pad_variable_length_inputs is True.",
       ),
       (
           "low_priority_missing_max_batch_size",
