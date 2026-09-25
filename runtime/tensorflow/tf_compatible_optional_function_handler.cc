@@ -110,13 +110,15 @@ std::vector<std::string> SortedKeys(const Dict& dict) {
 
 absl::StatusOr<std::shared_ptr<TfSavedModelRunner>>
 TfCompatibleOptionalFunctionHandler::CreateTfSavedModelRunner(
-    absl::string_view model_path, TfrtOptions tfrt_options) {
+    absl::string_view model_path, TfrtOptions tfrt_options,
+    TfSavedModelRunner::WorkQueueFactory work_queue_factory) {
   TF_ASSIGN_OR_RETURN(xla_saved_model_manifest::Manifest manifest,
                       GetManifest(model_path));
   TF_ASSIGN_OR_RETURN(std::string saved_model_dir,
                       GetTfSavedModelDirPath(model_path));
-  return TfSavedModelRunner::Create(
-      saved_model_dir, std::move(tfrt_options.saved_model_options));
+  return TfSavedModelRunner::Create(saved_model_dir,
+                                    std::move(tfrt_options.saved_model_options),
+                                    std::move(work_queue_factory));
 }
 
 absl::StatusOr<std::unique_ptr<Kernel>>
@@ -171,15 +173,16 @@ TfCompatibleOptionalFunctionHandler::HandleFunction(
             &create_options);
     if (tf_compatible_load_options != nullptr) {
       tf_saved_model_runner_ = CreateTfSavedModelRunner(
-          model_path, tf_compatible_load_options->tfrt_options);
+          model_path, tf_compatible_load_options->tfrt_options,
+          tf_compatible_load_options->work_queue_factory);
     } else {
       LOG(WARNING)
           << "No options for loading and running TF SavedModel is provided "
              "during loading the model. Using the default options. "
              "This will greatly impact the performance and should only be "
              "used for testing.";
-      tf_saved_model_runner_ =
-          CreateTfSavedModelRunner(model_path, TfrtOptions());
+      tf_saved_model_runner_ = CreateTfSavedModelRunner(
+          model_path, TfrtOptions(), /*work_queue_factory=*/nullptr);
     }
   });
   TF_ASSIGN_OR_RETURN(std::shared_ptr<TfSavedModelRunner> tf_saved_model_runner,

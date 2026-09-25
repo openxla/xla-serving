@@ -61,8 +61,9 @@ class TfCompatibleOptionalFunctionHandler : public OptionalFunctionHandler {
   // Finds the TF SavedModel directory from the manifest and creates the
   // `TfSavedModelRunner`.
   static absl::StatusOr<std::shared_ptr<TfSavedModelRunner>>
-  CreateTfSavedModelRunner(absl::string_view model_path,
-                           TfrtOptions tfrt_options);
+  CreateTfSavedModelRunner(
+      absl::string_view model_path, TfrtOptions tfrt_options,
+      TfSavedModelRunner::WorkQueueFactory work_queue_factory);
 
   // Makes sure that the `tf_saved_model_runner_` is initialized only once.
   absl::once_flag tf_saved_model_runner_init_once_;

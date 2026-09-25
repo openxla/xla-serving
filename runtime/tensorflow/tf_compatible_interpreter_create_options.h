@@ -15,9 +15,12 @@
 #ifndef XLA_SERVING_RUNTIME_TENSORFLOW_TF_COMPATIBLE_INTERPRETER_CREATE_OPTIONS_H_
 #define XLA_SERVING_RUNTIME_TENSORFLOW_TF_COMPATIBLE_INTERPRETER_CREATE_OPTIONS_H_
 
+#include <functional>
+#include <memory>
 #include <optional>
 
 #include "runtime/interpreter/interpreter_create_options.h"  // from @xla_serving
+#include "tensorflow/core/tfrt/runtime/work_queue_interface.h"  // from @org_tensorflow
 #include "tensorflow/core/tfrt/saved_model/saved_model.h"  // from @org_tensorflow
 
 namespace xla_serving {
@@ -34,6 +37,12 @@ struct TfrtOptions {
 // postprocessing functions.
 struct TfCompatibleInterpreterCreateOptions : public InterpreterCreateOptions {
   TfrtOptions tfrt_options;
+  // Optional. Called once per TF function execution to create a per-request
+  // work queue for inter/intra-op work. If empty, or if it returns nullptr, the
+  // runtime's default request queue is used. Anything captured by the callable
+  // must outlive the interpreter.
+  std::function<std::unique_ptr<tensorflow::tfrt_stub::WorkQueueInterface>()>
+      work_queue_factory;
 };
 
 }  // namespace xla_serving

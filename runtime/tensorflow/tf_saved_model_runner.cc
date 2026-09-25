@@ -89,7 +89,8 @@ absl::flat_hash_set<std::string> FindInvalidInputNames(
 
 absl::StatusOr<std::shared_ptr<TfSavedModelRunner>> TfSavedModelRunner::Create(
     absl::string_view saved_model_dir,
-    std::optional<tensorflow::tfrt_stub::SavedModel::Options> load_options) {
+    std::optional<tensorflow::tfrt_stub::SavedModel::Options> load_options,
+    WorkQueueFactory work_queue_factory) {
   if (saved_model_dir.empty()) {
     return absl::InvalidArgumentError("saved_model_dir is empty");
   }
@@ -107,8 +108,8 @@ absl::StatusOr<std::shared_ptr<TfSavedModelRunner>> TfSavedModelRunner::Create(
   if (tfrt_loaded_saved_model == nullptr) {
     return absl::InternalError("Failed to load TF SavedModel. Got nullptr.");
   }
-  return std::shared_ptr<TfSavedModelRunner>(
-      new TfSavedModelRunner(std::move(tfrt_loaded_saved_model)));
+  return std::shared_ptr<TfSavedModelRunner>(new TfSavedModelRunner(
+      std::move(tfrt_loaded_saved_model), std::move(work_queue_factory)));
 }
 
 tensorflow::tfrt_stub::SavedModel::Options
@@ -206,6 +207,17 @@ absl::StatusOr<std::vector<tensorflow::Tensor>> TfSavedModelRunner::Execute(
               "Input tensor with name \"", input_name,
               "\" does not match the TensorSpec in the function signature."));
       num_used_inputs++;
+    }
+  }
+
+  // If a work queue factory is provided, run the TF function on the
+  // per-request work queue obtained from it. `work_queue` must outlive the
+  // graph execution below.
+  std::unique_ptr<tensorflow::tfrt_stub::WorkQueueInterface> work_queue;
+  if (work_queue_factory_) {
+    work_queue = work_queue_factory_();
+    if (work_queue != nullptr) {
+      run_options.work_queue = work_queue.get();
     }
   }
 

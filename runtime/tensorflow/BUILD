@@ -97,6 +97,7 @@ cc_library(
         "@xla_serving//runtime/interpreter:interpreter_users",
     ],
     deps = [
+        "@org_tensorflow//tensorflow/core/tfrt/runtime:work_queue_interface",
         "@org_tensorflow//tensorflow/core/tfrt/saved_model:saved_model_cpu",
         "@xla_serving//runtime/interpreter:interpreter_create_options",
     ],

@@ -15,6 +15,7 @@
 #ifndef XLA_SERVING_RUNTIME_TENSORFLOW_TF_SAVED_MODEL_RUNNER_H_
 #define XLA_SERVING_RUNTIME_TENSORFLOW_TF_SAVED_MODEL_RUNNER_H_
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -32,6 +33,7 @@
 #include "tensorflow/core/framework/graph.pb.h"  // from @org_tensorflow
 #include "tensorflow/core/framework/tensor.h"  // from @org_tensorflow
 #include "tensorflow/core/tfrt/runtime/runtime.h"  // from @org_tensorflow
+#include "tensorflow/core/tfrt/runtime/work_queue_interface.h"  // from @org_tensorflow
 #include "tensorflow/core/tfrt/saved_model/saved_model.h"  // from @org_tensorflow
 
 namespace xla_serving {
@@ -48,16 +50,24 @@ class TfSavedModelRunner {
   // tensor] : m) { ... }`.
   using NameToTensorMap = absl::flat_hash_map<std::string, tensorflow::Tensor>;
 
+  // Creates a per-request work queue. May return nullptr, in which case the
+  // runtime's default request queue is used.
+  using WorkQueueFactory = std::function<
+      std::unique_ptr<tensorflow::tfrt_stub::WorkQueueInterface>()>;
+
   // Creates a TfSavedModelRunner from the given TF SavedModel directory. Here a
   // shared pointer is used to allow sharing the TF SavedModel across different
   // functions, e.g., pre-processing and post-processing functions.
 
   // If `load_options` is not provided, a default
-  // `tensorflow::tfrt_stub::Runtime` will be created.
+  // `tensorflow::tfrt_stub::Runtime` will be created. If `work_queue_factory`
+  // is provided, it is called once per `Execute` to obtain the work queue used
+  // for that execution.
   static absl::StatusOr<std::shared_ptr<TfSavedModelRunner>> Create(
       absl::string_view saved_model_dir,
       std::optional<tensorflow::tfrt_stub::SavedModel::Options> load_options =
-          std::nullopt);
+          std::nullopt,
+      WorkQueueFactory work_queue_factory = nullptr);
 
   // Executes a certain TF function in the TF SavedModel with the given inputs.
   // `inputs` contains pairs of <input_tensor_name, input_tensor>. Each input
@@ -110,8 +120,10 @@ class TfSavedModelRunner {
 
  private:
   explicit TfSavedModelRunner(std::unique_ptr<tensorflow::tfrt_stub::SavedModel>
-                                  tfrt_loaded_saved_model)
-      : tfrt_loaded_saved_model_(std::move(tfrt_loaded_saved_model)) {}
+                                  tfrt_loaded_saved_model,
+                              WorkQueueFactory work_queue_factory = nullptr)
+      : tfrt_loaded_saved_model_(std::move(tfrt_loaded_saved_model)),
+        work_queue_factory_(std::move(work_queue_factory)) {}
 
   // Creates default options to load the TF SavedModel.
   static tensorflow::tfrt_stub::SavedModel::Options GetDefaultLoadOptions();
@@ -122,6 +134,9 @@ class TfSavedModelRunner {
   // Used to cache the loaded TF SavedModel so that it can be shared across
   // different functions, e.g., pre-processing and post-processing functions.
   std::unique_ptr<tensorflow::tfrt_stub::SavedModel> tfrt_loaded_saved_model_;
+
+  // May be empty, in which case the default work queue is used.
+  WorkQueueFactory work_queue_factory_;
 };
 
 }  // namespace xla_serving
