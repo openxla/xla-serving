@@ -53,6 +53,7 @@ struct BatchRunnerOpOptions {
   std::vector<int32_t> allowed_batch_sizes;
   bool enable_large_batch_splitting = true;
   bool disable_padding = false;
+  bool pad_variable_length_inputs = false;
   std::string batch_padding_policy = std::string(kPadUpPolicy);
   int low_priority_max_batch_size = 0;
   int low_priority_batch_timeout_micros = 0;

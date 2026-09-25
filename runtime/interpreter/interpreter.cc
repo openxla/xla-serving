@@ -346,6 +346,8 @@ absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
                                batch_options.allowed_batch_sizes().end()},
       .enable_large_batch_splitting =
           !batch_options.disable_large_batch_splitting() && !has_streaming,
+      .pad_variable_length_inputs =
+          batch_options.pad_variable_length_inputs(),
       .batch_padding_policy = std::move(batch_padding_policy_string),
       .mixed_priority_batching_policy = mixed_priority_batching_policy,
       .priority_batching_policy = priority_batching_policy,

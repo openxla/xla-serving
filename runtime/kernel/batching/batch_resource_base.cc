@@ -54,6 +54,7 @@
 #include "runtime/core/incremental_barrier.h"  // from @xla_serving
 #include "runtime/core/value.h"  // from @xla_serving
 #include "runtime/kernel/batching/batch_options_utils.h"  // from @xla_serving
+#include "runtime/kernel/batching/pad_utils.h"  // from @xla_serving
 #include "runtime/kernel/batching/ragged_utils.h"  // from @xla_serving
 #include "runtime/kernel/batching/warmup.h"  // from @xla_serving
 #include "runtime/kernel/kernel.h"  // from @xla_serving
@@ -502,7 +503,8 @@ BatchResourceBase::GetBatcherQueueOptions(
     int32_t batch_timeout_micros, int32_t max_enqueued_batches,
     const std::vector<int32_t>& allowed_batch_sizes,
     bool enable_large_batch_splitting, bool disable_padding,
-    absl::string_view batch_padding_policy, int32_t low_priority_max_batch_size,
+    bool pad_variable_length_inputs, absl::string_view batch_padding_policy,
+    int32_t low_priority_max_batch_size,
     int32_t low_priority_batch_timeout_micros,
     int32_t low_priority_max_enqueued_batches,
     const std::vector<int32_t>& low_priority_allowed_batch_sizes,
@@ -572,6 +574,7 @@ BatchResourceBase::GetBatcherQueueOptions(
   }
 
   batcher_queue_options.disable_padding = disable_padding;
+  batcher_queue_options.pad_variable_length_inputs = pad_variable_length_inputs;
   batcher_queue_options.batch_padding_policy = batch_padding_policy;
 
   return batcher_queue_options;
@@ -710,11 +713,18 @@ absl::Status BatchResourceBase::ConcatInputBuffers(
       for (int task_idx = 0; task_idx < unbatched_tasks.size(); ++task_idx) {
         to_concatenate.push_back(unbatched_tasks[task_idx]->inputs.at(i));
       }
+      if (batcher_queue_options_.pad_variable_length_inputs) {
+        TF_ASSIGN_OR_RETURN(
+            to_concatenate,
+            PadToCommonNonBatchDims(to_concatenate,
+                                    batcher_queue_options_.allocator));
+      }
     }
     // Add padding as needed if padding is allowed. Use the first row of the
     // first task's buffer as the data for padding.
     if (padding_amount != 0) {
-      const HostBuffer& padding_source = batch.task(0).inputs.at(i);
+      const HostBuffer& padding_source =
+          just_for_warmup ? batch.task(0).inputs.at(i) : to_concatenate.front();
       HostBuffer padding;
       if (padding_source.shape().dims()[0] == 0) {
         return absl::InvalidArgumentError(absl::StrCat(
@@ -845,7 +855,6 @@ void BatchResourceBase::CleanUpFunctionHelper(
   }
   task.FinishTask(status);
 }
-
 
 absl::StatusOr<const BatchResourceBase::BatchTask&>
 BatchResourceBase::GetLatestDeadlineTask(const BatchT& batch) const {

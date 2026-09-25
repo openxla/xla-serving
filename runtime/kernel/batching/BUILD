@@ -10,6 +10,7 @@ cc_library(
     ],
     deps = [
         ":batch_options_utils",
+        ":pad_utils",
         ":ragged_utils",
         ":warmup",
         "@abseil-cpp//absl/base:no_destructor",
