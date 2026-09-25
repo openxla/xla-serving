@@ -401,18 +401,57 @@ def _flat_input_signature(
   return (input_names[: len(leaves)], leaves)
 
 
-def _unwrap_tf_trackables(
-    tf_trackable: Any,
-) -> Any:
-  """Unwraps TF trackables from the given PyTree."""
-  if isinstance(tf_trackable, Mapping):
-    return {k: _unwrap_tf_trackables(v) for k, v in tf_trackable.items()}
-  elif isinstance(tf_trackable, Sequence) and not isinstance(
-      tf_trackable, (str, bytes)
-  ):
-    return [_unwrap_tf_trackables(v) for v in tf_trackable]
-  else:
-    return tf_trackable
+# TF replaces a container owned by a trackable (a dict attribute of a
+# `tf.Module`, the outputs of a function restored from a SavedModel, ...) with a
+# wrapper such as `_DictWrapper`, `ListWrapper` or `_TupleWrapper`. They all
+# derive from this class.
+_TF_CONTAINER_WRAPPER = tf.__internal__.tracking.TrackableDataStructure
+
+
+def _is_tf_container_wrapper(node: Any) -> bool:
+  return isinstance(node, _TF_CONTAINER_WRAPPER)
+
+
+def _rebuild_tf_container_wrapper(wrapper: Any) -> Any:
+  """Rebuilds a TF container wrapper as the builtin container it wraps."""
+  if isinstance(wrapper, Mapping):
+    return {k: _unwrap_tf_trackables(v) for k, v in wrapper.items()}
+  values = [_unwrap_tf_trackables(v) for v in wrapper]
+  if hasattr(wrapper, '_fields'):  # A `_TupleWrapper` around a named tuple.
+    # `type()` would return the wrapper; `__class__` is forwarded to the
+    # wrapped named tuple.
+    return wrapper.__class__(*values)
+  return tuple(values) if isinstance(wrapper, tuple) else values
+
+
+def _unwrap_tf_trackables(tree: Any) -> Any:
+  """Replaces TF container wrappers in `tree` with builtin containers.
+
+  Whether JAX can traverse a TF wrapper, and whether it then sees the wrapper's
+  keys, depends on what has been registered with JAX in the process: it may be
+  an opaque leaf, or a node whose children are identified by position only.
+  Either way the structure and the names derived from it would be lost, so the
+  wrappers are identified by type and rebuilt before JAX looks at the tree.
+
+  Every other node is left as it is, including its type: a `chex.dataclass` or
+  a named tuple is not a wrapper, and callers match their JAX-side structures
+  (e.g. `input_polymorphic_shapes`) against it.
+
+  Args:
+    tree: A PyTree that may contain TF container wrappers.
+
+  Returns:
+    The same tree with TF container wrappers replaced by builtin containers.
+  """
+  return jax.tree.map(
+      lambda node: (
+          _rebuild_tf_container_wrapper(node)
+          if _is_tf_container_wrapper(node)
+          else node
+      ),
+      tree,
+      is_leaf=_is_tf_container_wrapper,
+  )
 
 
 def _output_name_for_key(key: Any) -> str:
@@ -422,7 +461,15 @@ def _output_name_for_key(key: Any) -> str:
     return f'{key.key}'
   elif isinstance(key, jax.tree_util.GetAttrKey):
     return f'{key.name}'
-  raise ValueError(f'Invalid output key type: {key}')
+  raise ValueError(
+      f'Cannot derive an output name from JAX key {key!r} (type'
+      f' {type(key).__name__}). Output names come from the keys JAX assigns'
+      ' to each node in the output structure; a node registered with'
+      ' `jax.tree_util.register_pytree_node` has positional keys only.'
+      ' Register the output type with'
+      ' `jax.tree_util.register_pytree_with_keys` or return a dict, list,'
+      ' tuple, named tuple or dataclass instead.'
+  )
 
 
 def _output_name(path: Sequence[Any]) -> str:
@@ -432,24 +479,33 @@ def _output_name(path: Sequence[Any]) -> str:
   return '.'.join(_output_name_for_key(k) for k in path)
 
 
+def _component_output_name(base_name: str, index: int) -> str:
+  """Returns the output name of the `index`-th tensor of a leaf.
+
+  A composite TF type (e.g. a `tf.RaggedTensor`) is one leaf but holds several
+  tensors, and XSM has no composite type, so each component needs a name.
+
+  Args:
+    base_name: The output name of the leaf.
+    index: The index of the tensor in the flattened leaf.
+  """
+  return base_name if index == 0 else f'{base_name}_{index - 1}'
+
+
 def _output_names(
     fn: tf.types.experimental.ConcreteFunction,
 ) -> Sequence[str]:
   """Returns the flattened output signature of the given function."""
-  unwrapped_outputs = _unwrap_tf_trackables(fn.structured_outputs)
-  leaves_with_path = jax.tree.leaves_with_path(unwrapped_outputs)
-  if not leaves_with_path:
-    return []
-
-  def _yield_names():
-    for path, leaf in leaves_with_path:
-      base_name = _output_name(path)
-      flat = tf.nest.flatten(leaf, expand_composites=True)
-      yield base_name
-      for i in range(len(flat) - 1):
-        yield f'{base_name}_{i}'
-
-  return list(_yield_names())
+  names = []
+  for path, leaf in jax.tree.leaves_with_path(
+      _unwrap_tf_trackables(fn.structured_outputs)
+  ):
+    base_name = _output_name(path)
+    num_tensors = len(tf.nest.flatten(leaf, expand_composites=True))
+    names.extend(
+        _component_output_name(base_name, i) for i in range(num_tensors)
+    )
+  return names
 
 
 def get_output_signature(
@@ -463,18 +519,22 @@ def get_output_signature(
   Args:
     fn: A concrete TF function.
   """
-  output_names_iter = iter(list(_output_names(fn)))
 
-  def _map_leaf(t):
+  def _map_leaf(path, leaf):
+    base_name = _output_name(path)
     flat_specs = tuple(
         tf.TensorSpec(
-            shape=s.shape, dtype=s.dtype, name=next(output_names_iter)
+            shape=s.shape,
+            dtype=s.dtype,
+            name=_component_output_name(base_name, i),
         )
-        for s in tf.nest.flatten(t, expand_composites=True)
+        for i, s in enumerate(tf.nest.flatten(leaf, expand_composites=True))
     )
     return flat_specs[0] if len(flat_specs) == 1 else flat_specs
 
-  return jax.tree.map(_map_leaf, fn.structured_outputs)
+  return jax.tree.map_with_path(
+      _map_leaf, _unwrap_tf_trackables(fn.structured_outputs)
+  )
 
 
 def _to_keyword_only_fn(

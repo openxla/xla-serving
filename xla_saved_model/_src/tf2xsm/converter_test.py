@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import collections
 import dataclasses
 import itertools
 import os
+import types
 
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -29,6 +31,9 @@ from tensorflow.core.protobuf import saved_model_pb2  # pylint: disable=g-direct
 _T1 = tf.TensorSpec((2, 3), tf.float32)
 _T2 = tf.TensorSpec((4, 5), tf.float64)
 _T3 = tf.TensorSpec((6,), tf.float32)
+
+
+_NamedOutputs = collections.namedtuple('_NamedOutputs', ['alpha', 'beta'])
 
 
 @dataclasses.dataclass
@@ -222,6 +227,239 @@ class Tf2XsmConverterTest(
 
     with self.assertRaises(AttributeError):
       f.get_concrete_function()
+
+  def test_output_signature_preserves_tracked_dict_structure(self):
+    class _Scaler(tf.Module):
+
+      def __init__(self):
+        super().__init__()
+        # TF replaces dicts assigned to a trackable with `_DictWrapper`, and
+        # functions built from them return `_DictWrapper` too.
+        self.scales = {'a': 2.0, 'b': 3.0}
+
+      @tf.function(autograph=False)
+      def __call__(self, x):
+        return tf.nest.map_structure(lambda scale: x * scale, self.scales)
+
+    # `tf.function` holds only a weak reference to the bound instance, so the
+    # module has to outlive tracing.
+    scaler = _Scaler()
+    cf = scaler.__call__.get_concrete_function(
+        tf.TensorSpec(shape=(None, 1), dtype=tf.float32)
+    )
+
+    output_signature = converter.get_output_signature(cf)
+
+    self.assertEqual(
+        jax.tree_util.tree_structure(output_signature),
+        jax.tree_util.tree_structure({'a': 0, 'b': 0}),
+    )
+
+  def test_output_signature_preserves_tracked_list_structure(self):
+    class _Splitter(tf.Module):
+
+      def __init__(self):
+        super().__init__()
+        # TF replaces lists assigned to a trackable with `ListWrapper`, the
+        # sequence counterpart of `_DictWrapper`.
+        self.scales = [2.0, 3.0]
+
+      @tf.function(autograph=False)
+      def __call__(self, x):
+        return tf.nest.map_structure(lambda scale: x * scale, self.scales)
+
+    splitter = _Splitter()
+    cf = splitter.__call__.get_concrete_function(
+        tf.TensorSpec(shape=(None, 1), dtype=tf.float32)
+    )
+
+    output_signature = converter.get_output_signature(cf)
+
+    self.assertEqual(
+        jax.tree_util.tree_structure(output_signature),
+        jax.tree_util.tree_structure([0, 0]),
+    )
+    self.assertEqual(
+        [spec.name for spec in output_signature],
+        ['output_0', 'output_1'],
+    )
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='_tuple',
+          values=(2.0, {'gamma': 3.0}),
+          expected_structure=(0, {'gamma': 0}),
+          expected_names=['output_0', 'output_1.gamma'],
+      ),
+      dict(
+          testcase_name='_named_tuple',
+          values=_NamedOutputs(alpha=2.0, beta={'gamma': 3.0}),
+          expected_structure=_NamedOutputs(alpha=0, beta={'gamma': 0}),
+          expected_names=['alpha', 'beta.gamma'],
+      ),
+  )
+  def test_output_signature_rebuilds_tf_tuple_wrapper(
+      self, values, expected_structure, expected_names
+  ):
+    # TF wraps a tuple (named or not) owned by a trackable in `_TupleWrapper`
+    # when it holds a mutable container such as a dict. A traced `tf.function`
+    # returns plain tuples, so build the wrapper directly.
+    outputs = tf.__internal__.tracking.wrap(
+        tf.nest.map_structure(lambda v: tf.fill((2, 1), v), values)
+    )
+    # Precondition: the outputs are a TF container wrapper.
+    self.assertIsInstance(
+        outputs, tf.__internal__.tracking.TrackableDataStructure
+    )
+    # `get_output_signature` only reads `structured_outputs`.
+    cf = types.SimpleNamespace(structured_outputs=outputs)
+
+    output_signature = converter.get_output_signature(cf)
+
+    self.assertEqual(
+        jax.tree_util.tree_structure(output_signature),
+        jax.tree_util.tree_structure(expected_structure),
+    )
+    self.assertEqual(
+        [spec.name for spec in jax.tree.leaves(output_signature)],
+        expected_names,
+    )
+
+  def test_output_signature_names_children_of_keyless_tf_dict_wrapper(self):
+    # Depending on what else is registered with JAX in the process, JAX may
+    # traverse a `_DictWrapper` but only see its children by position
+    # (`FlattenedIndexKey`), which loses the keys the outputs are named after.
+    # Reproduce that with a private subclass registered keylessly.
+    dict_wrapper_type = type(tf.__internal__.tracking.wrap({}))
+
+    class _KeylessDictWrapper(dict_wrapper_type):  # pytype: disable=invalid-inheritance
+      pass
+
+    jax.tree_util.register_pytree_node(
+        _KeylessDictWrapper,
+        lambda d: (tuple(d.values()), tuple(d.keys())),
+        lambda keys, values: _KeylessDictWrapper(dict(zip(keys, values))),
+    )
+    outputs = _KeylessDictWrapper({'pred': tf.zeros((2, 1))})
+    # Preconditions: JAX traverses the wrapper without seeing its keys.
+    self.assertEqual(
+        [path for path, _ in jax.tree.leaves_with_path(outputs)],
+        [(jax.tree_util.FlattenedIndexKey(0),)],
+    )
+    # `get_output_signature` only reads `structured_outputs`.
+    cf = types.SimpleNamespace(structured_outputs=outputs)
+
+    output_signature = converter.get_output_signature(cf)
+
+    self.assertEqual(
+        jax.tree_util.tree_structure(output_signature),
+        jax.tree_util.tree_structure({'pred': 0}),
+    )
+    self.assertEqual(output_signature['pred'].name, 'pred')
+
+  def test_output_signature_rejects_keyless_output_type(self):
+    # Only TF's own wrappers are rebuilt; any other type JAX identifies
+    # children of by position alone cannot be named.
+    class _KeylessOutputs:
+
+      def __init__(self, pred):
+        self.pred = pred
+
+    jax.tree_util.register_pytree_node(
+        _KeylessOutputs,
+        lambda o: ((o.pred,), None),
+        lambda _, children: _KeylessOutputs(*children),
+    )
+    cf = types.SimpleNamespace(
+        structured_outputs=_KeylessOutputs(tf.zeros((2, 1)))
+    )
+
+    with self.assertRaisesRegex(ValueError, 'register_pytree_with_keys'):
+      converter.get_output_signature(cf)
+
+  def test_output_signature_preserves_mappable_dataclass_type(self):
+    # A `chex.dataclass` is a `Mapping`, but unlike a TF container wrapper it
+    # is a type JAX understands, and callers match their
+    # `input_polymorphic_shapes` against it. Rebuilding it as a dict changes
+    # the structure and breaks that match.
+    @tf.function(autograph=False)
+    def f(x):
+      return _ChexDataclass(a=x + 1.0, b=x + 2.0)
+
+    cf = f.get_concrete_function(
+        tf.TensorSpec(shape=(None, 1), dtype=tf.float32)
+    )
+
+    output_signature = converter.get_output_signature(cf)
+
+    self.assertIsInstance(output_signature, _ChexDataclass)
+    self.assertEqual(output_signature.a.name, 'a')
+    self.assertEqual(output_signature.b.name, 'b')
+
+  def test_output_signature_names_named_tuple_fields_like_tf(self):
+    # TF names the SavedModel outputs of a named-tuple-returning function after
+    # the fields ('alpha', 'beta'), not 'output_0'/'output_1' as it does for a
+    # plain tuple or list.
+    @tf.function(autograph=False)
+    def f(x):
+      return _NamedOutputs(alpha=x + 1.0, beta=x + 2.0)
+
+    cf = f.get_concrete_function(
+        tf.TensorSpec(shape=(None, 1), dtype=tf.float32)
+    )
+
+    output_signature = converter.get_output_signature(cf)
+
+    self.assertIsInstance(output_signature, _NamedOutputs)
+    self.assertEqual(output_signature.alpha.name, 'alpha')
+    self.assertEqual(output_signature.beta.name, 'beta')
+
+  @parameterized.named_parameters(
+      dict(testcase_name='_single', get_return_value=lambda x: x + 1.0),
+      dict(testcase_name='_tuple', get_return_value=lambda x: (x + 1.0, x)),
+      dict(testcase_name='_list', get_return_value=lambda x: [x + 1.0, x]),
+      dict(
+          testcase_name='_dict',
+          get_return_value=lambda x: {'p': x + 1.0, 'q': x},
+      ),
+      dict(
+          testcase_name='_named_tuple',
+          get_return_value=lambda x: _NamedOutputs(alpha=x + 1.0, beta=x),
+      ),
+  )
+  def test_output_names_match_tf_saved_model(self, get_return_value):
+    # `get_output_signature` promises names that match the ones TF writes into
+    # the SavedModel, so anchor them against a real TF SavedModel rather than
+    # against hardcoded strings. Composite tensors are excluded: TF exposes one
+    # signature key per composite while XSM has no composite type and needs a
+    # distinct name per component (see `test_composite_tensor_outputs`).
+    @tf.function(autograph=False)
+    def f(x):
+      return get_return_value(x)
+
+    cf = f.get_concrete_function(
+        tf.TensorSpec(shape=(None, 1), dtype=tf.float32)
+    )
+
+    # The function has to be owned by a module: saving a bare `tf.function`
+    # with `signatures` makes TF attach the signature map to the function
+    # itself and then fail to serialize it.
+    module = tf.Module()
+    module.serve = f
+    path = self.create_tempdir().full_path
+    tf.saved_model.save(module, path, signatures={'serving_default': cf})
+    tf_output_names = (
+        tf.saved_model.load(path)
+        .signatures['serving_default']
+        .structured_outputs.keys()
+    )
+
+    output_signature = converter.get_output_signature(cf)
+
+    self.assertCountEqual(
+        [spec.name for spec in jax.tree.leaves(output_signature)],
+        tf_output_names,
+    )
 
   @parameterized.named_parameters(
       dict(
