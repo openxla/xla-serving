@@ -1,6 +1,7 @@
 #define EIGEN_USE_THREADS
 
 // Copyright 2026 Google LLC
+// Copyright 2026 Arm Ltd. and affiliates
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,9 +41,11 @@
 #include "unsupported/Eigen/CXX11/ThreadPool"
 #include "data/cpu_embedding/cc/array.h"  // from @xla_serving
 #include "data/cpu_embedding/cc/compute_activations.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/embedding_bag.h"  // from @xla_serving
 #include "data/cpu_embedding/cc/embedding_table.h"  // from @xla_serving
 #include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @xla_serving
 #include "data/cpu_embedding/cc/feature_spec.h"  // from @xla_serving
+
 namespace xla_serving::data::cpu_embedding {
 namespace {
 
@@ -91,14 +94,11 @@ absl::Status CpuEmbeddingEngine::AddLocalTable(
 }
 
 void CpuEmbeddingEngine::Clear() {
-  {
-    absl::MutexLock lock(feature_specs_mu_);
-    feature_specs_.clear();
-  }
-  {
-    absl::MutexLock lock(local_tables_mu_);
-    local_tables_.clear();
-  }
+  // Match ExecuteBatch's lock order to keep specs and tables consistent.
+  absl::MutexLock spec_lock(feature_specs_mu_);
+  absl::MutexLock table_lock(local_tables_mu_);
+  feature_specs_.clear();
+  local_tables_.clear();
 }
 
 absl::StatusOr<std::vector<Array>> CpuEmbeddingEngine::Execute(
@@ -178,6 +178,60 @@ absl::StatusOr<std::vector<Array>> CpuEmbeddingEngine::Execute(
   return status;
 }
 
+absl::Status CpuEmbeddingEngine::ExecuteBatch(
+    absl::Span<BatchRequest> requests) const {
+  if (requests.empty()) {
+    return absl::InvalidArgumentError(
+        "Embedding batch requires at least one request.");
+  }
+
+  // Resolve specs and tables under the same lock order as Clear.
+  std::vector<std::shared_ptr<const EmbeddingTable>> resolved_tables;
+  resolved_tables.reserve(requests.size());
+  {
+    absl::MutexLock spec_lock(feature_specs_mu_);
+    absl::MutexLock table_lock(local_tables_mu_);
+    for (size_t index = 0; index < requests.size(); ++index) {
+      const BatchRequest& request = requests[index];
+      auto spec_it = feature_specs_.find(request.feature_name);
+      if (spec_it == feature_specs_.end()) {
+        return absl::NotFoundError(
+            absl::StrCat("Feature spec not found for: ", request.feature_name));
+      }
+      if (spec_it->second.max_sequence_length != 0) {
+        return absl::UnimplementedError(
+            absl::StrCat("Batch request ", index,
+                         " requires a non-sequence feature specification."));
+      }
+      auto table_it = local_tables_.find(spec_it->second.table_name);
+      if (table_it == local_tables_.end()) {
+        return absl::NotFoundError(
+            absl::StrCat("Table not found for: ", spec_it->second.table_name));
+      }
+      resolved_tables.push_back(table_it->second);
+    }
+  }
+
+  std::vector<internal::EmbeddingBagRequest> batch_requests;
+  batch_requests.reserve(requests.size());
+  for (size_t index = 0; index < requests.size(); ++index) {
+    batch_requests.push_back({
+        .embedding_ids = requests[index].embedding_ids,
+        .row_pointers = requests[index].row_pointers,
+        .embedding_table = resolved_tables[index].get(),
+        .weights = requests[index].weights,
+        .output_allocator = &requests[index].output_allocator,
+    });
+  }
+
+  return internal::ExecuteEmbeddingBagBatch(
+      absl::MakeSpan(batch_requests), internal::EmbeddingBagBackend::kAuto,
+      thread_pool_.get());
+}
+
+// The in-place path retains custom-combiner support and block_size tuning.
+// TODO: Consider routing standard FP32 calls through ExecuteBatch after its
+// small-workload and block-size behavior is matched.
 template <typename T>
 absl::StatusOr<absl::Span<T>> CpuEmbeddingEngine::Execute(
     absl::string_view feature_name, absl::Span<const int64_t> embedding_ids,

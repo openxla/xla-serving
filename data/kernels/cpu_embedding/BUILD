@@ -69,6 +69,7 @@ cc_test(
     deps = [
         ":cpu_embedding_cc_proto",
         ":cpu_embedding_resource",
+        "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/types:span",
         "@googletest//:gtest_main",
         "@tsl//tsl/platform:path",
@@ -197,6 +198,7 @@ cc_library(
         "@abseil-cpp//absl/types:span",
         "@xla//xla/python/ifrt",
         "@xla//xla/tsl/platform:status_macros",
+        "@xla_serving//data/cpu_embedding/cc:cpu_embedding_engine",
         "@xla_serving//data/processor/cc/api:registry",
         "@xla_serving//data/processor/cc/api:transform_context",
         "@xla_serving//data/processor/cc/api:type_info",

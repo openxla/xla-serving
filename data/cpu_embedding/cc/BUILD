@@ -7,6 +7,14 @@ package(default_visibility = [
     "@xla_serving//data/cpu_embedding:__subpackages__",
 ])
 
+config_setting(
+    name = "linux_aarch64",
+    constraint_values = [
+        "@platforms//cpu:aarch64",
+        "@platforms//os:linux",
+    ],
+)
+
 cc_library(
     name = "embedding_table",
     srcs = ["embedding_table.cc"],
@@ -33,6 +41,7 @@ cc_library(
     deps = [
         ":array",
         ":compute_activations",
+        ":embedding_bag",
         ":embedding_table",
         ":feature_batch_csr_input",
         ":feature_spec",
@@ -84,6 +93,53 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "embedding_bag",
+    srcs = ["embedding_bag.cc"],
+    hdrs = ["embedding_bag.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
+    local_defines = select({
+        ":linux_aarch64": ["XLA_SERVING_HAS_SVE_EMBEDDING_BAG=1"],
+        "//conditions:default": [],
+    }),
+    visibility = ["//visibility:private"],
+    deps = [
+        ":array",
+        ":embedding_bag_f32_sve",
+        ":embedding_table",
+        "@abseil-cpp//absl/functional:any_invocable",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings:str_format",
+        "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/types:span",
+        "@eigen_archive//:eigen3",
+        "@xla//xla/tsl/platform:status_macros",
+    ],
+)
+
+cc_library(
+    name = "embedding_bag_f32_sve",
+    # Isolate SVE flags so portable objects remain valid on non-SVE AArch64.
+    srcs = ["embedding_bag_f32_sve.cc"],
+    hdrs = ["embedding_bag_f32_sve.h"],
+    copts = select({
+        ":linux_aarch64": [
+            "-march=armv8-a+sve",
+            "-msve-vector-bits=scalable",
+        ],
+        "//conditions:default": [],
+    }),
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
+    # -march differs from the target features of prebuilt header modules.
+    features = ["-use_header_modules"],
+    local_defines = select({
+        ":linux_aarch64": ["XLA_SERVING_HAS_SVE_EMBEDDING_BAG=1"],
+        "//conditions:default": [],
+    }),
+    visibility = ["//visibility:private"],
+)
+
 cc_test(
     name = "embedding_table_test",
     srcs = ["embedding_table_test.cc"],
@@ -122,6 +178,27 @@ cc_test(
 )
 
 cc_test(
+    name = "embedding_bag_test",
+    srcs = ["embedding_bag_test.cc"],
+    defines = [
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS",
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS",
+    ],
+    deps = [
+        ":array",
+        ":embedding_bag",
+        ":embedding_table",
+        "@abseil-cpp//absl/functional:any_invocable",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@abseil-cpp//absl/types:span",
+        "@eigen_archive//:eigen3",
+        "@googletest//:gtest_main",
+        "@xla_serving//data/test_utils:status_macros",
+    ],
+)
+
+cc_test(
     name = "feature_batch_csr_input_test",
     srcs = ["feature_batch_csr_input_test.cc"],
     defines = [
@@ -150,6 +227,8 @@ cc_test(
         ":embedding_table",
         ":feature_batch_csr_input",
         ":feature_spec",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
         "@abseil-cpp//absl/types:span",
         "@eigen_archive//:eigen3",
         "@googletest//:gtest_main",

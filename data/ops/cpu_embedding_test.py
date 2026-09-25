@@ -1,4 +1,5 @@
 # Copyright 2026 Google LLC
+# Copyright 2026 Arm Ltd. and affiliates
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,8 +17,10 @@
 
 import os
 from absl.testing import absltest
+from google.protobuf import text_format
 import jax
 import numpy as np
+from data.kernels.cpu_embedding import cpu_embedding_pb2
 from data.kernels.cpu_embedding import cpu_embedding_serializer_pybind
 from data.kernels.cpu_embedding import unpack_host_buffer_vector_module
 from data.ops import cpu_embedding
@@ -25,6 +28,22 @@ from data.processor.python import composite_processor_pybind
 
 
 class CpuEmbeddingModuleTest(absltest.TestCase):
+
+  def _execute(self, module, ids, row_pointers=(), weights=()):
+    def pack(arrays):
+      return composite_processor_pybind.Value([
+          composite_processor_pybind.HostBuffer.from_dlpack(array)
+          for array in arrays
+      ])
+
+    context = composite_processor_pybind.ExecuteContext()
+    context.inputs = [pack(ids), pack(row_pointers), pack(weights)]
+    module.transform.execute(context)
+    self.assertLen(context.outputs, 1)
+    return [
+        np.from_dlpack(buffer).copy()
+        for buffer in context.outputs[0].as_encapsulated_type()
+    ]
 
   def test_resource_and_module_lifecycle(self):
     # Setup mock matrix values
@@ -88,6 +107,98 @@ class CpuEmbeddingModuleTest(absltest.TestCase):
     # Cleanup resource files
     resource.close()
 
+  # Verify the public mapped-table path through execution.
+  def test_mapped_resource_uses_original_asset_and_executes(self):
+    table_data = np.array(
+        [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]],
+        dtype=np.float32,
+    )
+    table_path = os.path.join(self.create_tempdir().full_path, "table.bin")
+    table_data.tofile(table_path)
+    resource = cpu_embedding.CpuEmbeddingResource.from_mapped_tables(
+        {
+            "feature1": cpu_embedding.MappedEmbeddingTable(
+                path=table_path, shape=table_data.shape
+            )
+        },
+        {"feature1": "SUM"},
+        [{"name": "feature1", "table_name": "feature1"}],
+        max_cpu_slots=3,
+        block_size=17,
+    )
+    self.addCleanup(resource.close)
+
+    assets = {asset.name: asset for asset in resource.assets}
+    table_asset = assets["feature1"]
+    self.assertEqual(table_asset.path, table_path)
+    self.assertEmpty(table_asset.content)
+    self.assertEqual(resource.get_embedding_dim("feature1"), 3)
+
+    with open(
+        assets[cpu_embedding.MANIFEST_ASSET_NAME].path, encoding="utf-8"
+    ) as manifest_file:
+      manifest = text_format.Parse(
+          manifest_file.read(), cpu_embedding_pb2.CpuEmbeddingManifest()
+      )
+    self.assertEqual(manifest.max_cpu_slots, 3)
+    self.assertEqual(manifest.block_size, 17)
+
+    module = cpu_embedding.CpuEmbeddingModule(
+        resource,
+        feature_name="feature1",
+        output_feature_name="feature1_out",
+        output_shape=[2, 3],
+        dense_lookup=True,
+    )
+    ids = np.array([[0, 2], [1, 1]], dtype=np.int32)
+    result = self._execute(module, [ids])[0]
+    np.testing.assert_array_equal(
+        result,
+        np.array([[8.0, 10.0, 12.0], [8.0, 10.0, 12.0]], np.float32),
+    )
+
+    dense_transform = cpu_embedding.DenseCpuEmbeddingLookupTransform(
+        resource, "feature1", pad_value=-1
+    )
+    dense_result = dense_transform(
+        composite_processor_pybind.HostBuffer.from_dlpack(ids)
+    )
+    np.testing.assert_array_equal(np.from_dlpack(dense_result), result)
+
+  # Verify invalid mapped-table descriptors are rejected.
+  def test_mapped_resource_rejects_invalid_descriptors(self):
+    temp_dir = self.create_tempdir().full_path
+    table_path = os.path.join(temp_dir, "table.bin")
+    np.arange(6, dtype=np.float32).tofile(table_path)
+    valid = cpu_embedding.MappedEmbeddingTable(table_path, (2, 3))
+    combine_modes = {"table": "SUM"}
+    feature_specs = [{"name": "feature", "table_name": "table"}]
+
+    invalid_cases = [
+        ("../table", valid, "Invalid table name"),
+        (
+            "table",
+            cpu_embedding.MappedEmbeddingTable(table_path, (6,)),
+            "exact 2-D shape",
+        ),
+        (
+            "table",
+            cpu_embedding.MappedEmbeddingTable(table_path, (0, 3)),
+            "positive integers",
+        ),
+    ]
+    for table_name, descriptor, error_pattern in invalid_cases:
+      with self.subTest(error_pattern=error_pattern):
+        with self.assertRaisesRegex(ValueError, error_pattern):
+          cpu_embedding.CpuEmbeddingResource.from_mapped_tables(
+              {table_name: descriptor}, combine_modes, feature_specs
+          )
+
+    with self.assertRaisesRegex(TypeError, "MappedEmbeddingTable"):
+      cpu_embedding.CpuEmbeddingResource.from_mapped_tables(
+          {"table": table_path}, combine_modes, feature_specs
+      )
+
   def test_processor_execution_and_orbax_export(self):
     # Setup resource and module
     table_data = {
@@ -115,27 +226,7 @@ class CpuEmbeddingModuleTest(absltest.TestCase):
     row_pointers = np.array([0, 1, 3], dtype=np.int32)
     weights = np.array([1.0, 0.5, 0.5], dtype=np.float32)
 
-    inputs = [
-        composite_processor_pybind.Value(
-            [composite_processor_pybind.HostBuffer.from_dlpack(ids)]
-        ),
-        composite_processor_pybind.Value(
-            [composite_processor_pybind.HostBuffer.from_dlpack(row_pointers)]
-        ),
-        composite_processor_pybind.Value(
-            [composite_processor_pybind.HostBuffer.from_dlpack(weights)]
-        ),
-    ]
-
-    context = composite_processor_pybind.ExecuteContext()
-    context.inputs = inputs
-    module.transform.execute(context)
-    outputs = context.outputs
-    self.assertLen(outputs, 1)
-
-    out_hb_list = outputs[0].as_encapsulated_type()
-    self.assertLen(out_hb_list, 1)
-    out_arr = np.from_dlpack(out_hb_list[0])
+    out_arr = self._execute(module, [ids], [row_pointers], [weights])[0]
     expected_output = np.array(
         [[1.0, 2.0, 3.0], [2.5, 3.5, 4.5]], dtype=np.float32
     )
@@ -171,23 +262,7 @@ class CpuEmbeddingModuleTest(absltest.TestCase):
     # Test Execution via process() using 2D array of IDs [2, 2]
     ids = np.array([[0, 1], [1, 2]], dtype=np.int32)
 
-    inputs = [
-        composite_processor_pybind.Value(
-            [composite_processor_pybind.HostBuffer.from_dlpack(ids)]
-        ),
-        composite_processor_pybind.Value([]),
-        composite_processor_pybind.Value([]),
-    ]
-
-    context = composite_processor_pybind.ExecuteContext()
-    context.inputs = inputs
-    module.transform.execute(context)
-    outputs = context.outputs
-    self.assertLen(outputs, 1)
-
-    out_hb_list = outputs[0].as_encapsulated_type()
-    self.assertLen(out_hb_list, 1)
-    out_arr = np.from_dlpack(out_hb_list[0])
+    out_arr = self._execute(module, [ids])[0]
     # Expected output with SUM combiner:
     # Row 0: table1[0] + table1[1] = [1.0, 2.0, 3.0] + [4.0, 5.0, 6.0]
     # = [5.0, 7.0, 9.0]
@@ -249,32 +324,9 @@ class CpuEmbeddingModuleTest(absltest.TestCase):
     rp_b = np.array([0, 3], dtype=np.int32)
     w_b = np.array([0.5, 0.25, 0.25], dtype=np.float32)
 
-    inputs = [
-        composite_processor_pybind.Value([
-            composite_processor_pybind.HostBuffer.from_dlpack(ids_a),
-            composite_processor_pybind.HostBuffer.from_dlpack(ids_b),
-        ]),
-        composite_processor_pybind.Value([
-            composite_processor_pybind.HostBuffer.from_dlpack(rp_a),
-            composite_processor_pybind.HostBuffer.from_dlpack(rp_b),
-        ]),
-        composite_processor_pybind.Value([
-            composite_processor_pybind.HostBuffer.from_dlpack(w_a),
-            composite_processor_pybind.HostBuffer.from_dlpack(w_b),
-        ]),
-    ]
-
-    context = composite_processor_pybind.ExecuteContext()
-    context.inputs = inputs
-    module.transform.execute(context)
-    outputs = context.outputs
-    self.assertLen(outputs, 1)
-
-    out_hb_list = outputs[0].as_encapsulated_type()
-    self.assertLen(out_hb_list, 2)
-
-    out_a = np.from_dlpack(out_hb_list[0])
-    out_b = np.from_dlpack(out_hb_list[1])
+    out_a, out_b = self._execute(
+        module, [ids_a, ids_b], [rp_a, rp_b], [w_a, w_b]
+    )
 
     # Expected out_a: tableA[0]*1.0 + tableA[1]*1.0 / sum_weights(2.0)
     # = [1.0, 2.0] + [3.0, 4.0] / 2.0 = [2.0, 3.0]
@@ -320,26 +372,7 @@ class CpuEmbeddingModuleTest(absltest.TestCase):
     ids_a = np.array([[0, 1]], dtype=np.int32)
     ids_b = np.array([[1, 1]], dtype=np.int32)
 
-    inputs = [
-        composite_processor_pybind.Value([
-            composite_processor_pybind.HostBuffer.from_dlpack(ids_a),
-            composite_processor_pybind.HostBuffer.from_dlpack(ids_b),
-        ]),
-        composite_processor_pybind.Value([]),
-        composite_processor_pybind.Value([]),
-    ]
-
-    context = composite_processor_pybind.ExecuteContext()
-    context.inputs = inputs
-    module.transform.execute(context)
-    outputs = context.outputs
-    self.assertLen(outputs, 1)
-
-    out_hb_list = outputs[0].as_encapsulated_type()
-    self.assertLen(out_hb_list, 2)
-
-    out_a = np.from_dlpack(out_hb_list[0])
-    out_b = np.from_dlpack(out_hb_list[1])
+    out_a, out_b = self._execute(module, [ids_a, ids_b])
 
     # Combined tableA[0, 1] MEAN = [1.0, 2.0] + [3.0, 4.0] / 2.0 = [2.0, 3.0]
     np.testing.assert_allclose(out_a, np.array([[2.0, 3.0]], dtype=np.float32))
@@ -418,7 +451,9 @@ class CpuEmbeddingModuleTest(absltest.TestCase):
     out1 = cpu_embedding.cpu_embedding(
         hb1, resource=resource, feature_name="feat1", pad_value=0
     )
-    np.testing.assert_allclose(np.from_dlpack(out1), np.array([[1.0, 2.0]], dtype=np.float32))
+    np.testing.assert_allclose(
+        np.from_dlpack(out1), np.array([[1.0, 2.0]], dtype=np.float32)
+    )
 
     # Multi-feature call
     ids2 = np.array([[1, 0]], dtype=np.int32)
@@ -430,14 +465,21 @@ class CpuEmbeddingModuleTest(absltest.TestCase):
         feature_names=["feat1", "feat2"],
         pad_value=0,
     )
-    np.testing.assert_allclose(np.from_dlpack(out1_multi), np.array([[1.0, 2.0]], dtype=np.float32))
-    np.testing.assert_allclose(np.from_dlpack(out2_multi), np.array([[3.0, 4.0, 5.0]], dtype=np.float32))
+    np.testing.assert_allclose(
+        np.from_dlpack(out1_multi), np.array([[1.0, 2.0]], dtype=np.float32)
+    )
+    np.testing.assert_allclose(
+        np.from_dlpack(out2_multi),
+        np.array([[3.0, 4.0, 5.0]], dtype=np.float32),
+    )
     resource.close()
 
   def test_unpack_host_buffer_vector_module_lifecycle(self):
-    module_single = unpack_host_buffer_vector_module.UnpackHostBufferVectorModule(
-        output_count=1,
-        output_shapes=[[2, 4]],
+    module_single = (
+        unpack_host_buffer_vector_module.UnpackHostBufferVectorModule(
+            output_count=1,
+            output_shapes=[[2, 4]],
+        )
     )
     module_single.initialize(None)
     self.assertIsNotNone(module_single.transform)
@@ -445,10 +487,12 @@ class CpuEmbeddingModuleTest(absltest.TestCase):
     self.assertEqual(sig_single.shape, (2, 4))
     self.assertEqual(sig_single.dtype, jax.numpy.float32)
 
-    module_multi = unpack_host_buffer_vector_module.UnpackHostBufferVectorModule(
-        output_count=2,
-        output_shapes=[[2, 4], [2, 2]],
-        dtype=jax.numpy.int32,
+    module_multi = (
+        unpack_host_buffer_vector_module.UnpackHostBufferVectorModule(
+            output_count=2,
+            output_shapes=[[2, 4], [2, 2]],
+            dtype=jax.numpy.int32,
+        )
     )
     module_multi.initialize(None)
     sig_multi = module_multi.get_output_signature(None)
@@ -458,7 +502,9 @@ class CpuEmbeddingModuleTest(absltest.TestCase):
     self.assertEqual(sig_multi[0].dtype, jax.numpy.int32)
     self.assertEqual(sig_multi[1].dtype, jax.numpy.int32)
 
-  def test_dense_cpu_embedding_lookup_transform_explicit_dimensions_and_edge_cases(self):
+  def test_dense_cpu_embedding_lookup_transform_explicit_dimensions_and_edge_cases(
+      self,
+  ):
     table_data = {
         "feat1": np.array([[0.0, 0.0], [1.0, 2.0]], dtype=np.float32),
         "feat2": np.array([[0.0, 0.0, 0.0], [3.0, 4.0, 5.0]], dtype=np.float32),

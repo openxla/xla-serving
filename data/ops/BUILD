@@ -24,6 +24,8 @@ py_test(
     deps = [
         ":cpu_embedding",
         "@absl_py//absl/testing:absltest",
+        "@com_google_protobuf//:protobuf",
+        "@xla_serving//data/kernels/cpu_embedding:cpu_embedding_py_pb2",
         "@xla_serving//data/kernels/cpu_embedding:cpu_embedding_serializer_pybind",
         "@xla_serving//data/kernels/cpu_embedding:unpack_host_buffer_vector_module",
         "@xla_serving//data/processor/python:composite_processor_pybind",
