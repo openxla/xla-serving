@@ -58,11 +58,14 @@ jobs:
         run: |
           uv pip install build setuptools wheel grpcio-tools
 
-      - name: Build xla_serving_data and xla_serving_data_test wheels
+      - name: Build xla_serving_data, xla_serving_data_test and xla_saved_model_runner wheels
         env:
           CACHE_CONFIG: ${{ github.ref == 'refs/heads/main' && 'remote_cache_readwrite' || 'remote_cache_readonly' }}
         run: |
-          bazel build -c opt //data:xla_serving_data //data:xla_serving_data_test \
+          bazel build -c opt \
+            //data:xla_serving_data \
+            //data:xla_serving_data_test \
+            //runtime/python:xla_saved_model_runner \
             --@rules_python//python/config_settings:python_version=${{ matrix.python-version }} \
             --config=${CACHE_CONFIG} \
             --output_filter=DONT_MATCH_ANYTHING \
@@ -70,9 +73,11 @@ jobs:
             --show_progress_rate_limit=30 \
             --curses=no
 
-      - name: Install xla_serving_data and xla_serving_data_test wheels
+      - name: Install xla_serving_data, xla_serving_data_test and xla_saved_model_runner wheels
         run: |
-          uv pip install bazel-bin/data/xla_serving_data*.whl
+          uv pip install \
+            bazel-bin/data/xla_serving_data*.whl \
+            bazel-bin/runtime/python/xla_saved_model_runner*.whl
 
       - name: Build the XLA SavedModel Wheel
         run: |
@@ -92,6 +97,15 @@ jobs:
           import xla_saved_model
           print('✅ Successfully imported xla_saved_model!')
           print(f'📦 Version: {xla_saved_model.__version__}')
+
+          from xla_saved_model_runner import model_runner
+          print('✅ Successfully imported xla_saved_model_runner!')
+
+          import xla_serving_data
+          print('✅ Successfully imported xla_serving_data!')
+
+          import xla_serving_data_test
+          print('✅ Successfully imported xla_serving_data_test!')
           "
 
       - name: Install Test Dependencies and Run Pytest
@@ -100,12 +114,20 @@ jobs:
           uv pip uninstall triton 2>/dev/null || true
           pytest -v -s --full-trace -n auto xla_saved_model/
 
+      - name: Run Examples
+        # Exports each example model and runs it through ModelRunner. This is
+        # the only coverage that exercises the exporter and the runtime
+        # together, so it needs the wheels installed above.
+        run: |
+          pytest -v -s -n auto examples/
+
       - name: Upload Built Wheels
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: xla-saved-model-wheels
           path: |
             bazel-bin/data/xla_serving_data*.whl
+            bazel-bin/runtime/python/xla_saved_model_runner*.whl
             dist/*.whl
           retention-days: 1
 
@@ -156,6 +178,9 @@ jobs:
           import xla_saved_model
           print('✅ Successfully imported xla_saved_model!')
           print(f'📦 Version: {xla_saved_model.__version__}')
+
+          from xla_saved_model_runner import model_runner
+          print('✅ Successfully imported xla_saved_model_runner!')
           "
 
       - name: Install Test Dependencies and Run Pytest for LLM Module

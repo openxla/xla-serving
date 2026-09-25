@@ -14,8 +14,11 @@
 
 """pytest configuration for XLA Serving."""
 
+import os
 from typing import Any
 from absl import flags
+
+os.environ.setdefault("KERAS_BACKEND", "jax")
 
 
 def pytest_configure(config: Any) -> None:
