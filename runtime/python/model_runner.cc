@@ -144,10 +144,14 @@ class ModelRunner : public std::enable_shared_from_this<ModelRunner> {
       absl::string_view model_name, absl::string_view model_path,
       absl::string_view platform = "",
       absl::string_view target_topology_label = "",
-      bool allow_jit_fallback_for_aot = false) {
+      bool allow_jit_fallback_for_aot = false,
+      bool enable_input_r1_optimization = true,
+      bool enable_output_r1_optimization = false) {
     return std::shared_ptr<ModelRunner>(
         new ModelRunner(model_name, model_path, platform, target_topology_label,
-                        allow_jit_fallback_for_aot));
+                        allow_jit_fallback_for_aot,
+                        enable_input_r1_optimization,
+                        enable_output_r1_optimization));
   }
 
   // Signature is a wrapper of `xla_serving::Interpreter` exposed to Python for
@@ -198,11 +202,15 @@ class ModelRunner : public std::enable_shared_from_this<ModelRunner> {
   ModelRunner(absl::string_view model_name, absl::string_view model_path,
               absl::string_view platform,
               absl::string_view target_topology_label,
-              bool allow_jit_fallback_for_aot) {
+              bool allow_jit_fallback_for_aot,
+              bool enable_input_r1_optimization,
+              bool enable_output_r1_optimization) {
     LOG(INFO) << "Using ModelRunner to load model '" << model_name
               << "' from: " << model_path;
     ThrowIfError(Initialize(model_name, model_path, platform,
-                            target_topology_label, allow_jit_fallback_for_aot),
+                            target_topology_label, allow_jit_fallback_for_aot,
+                            enable_input_r1_optimization,
+                            enable_output_r1_optimization),
                  "Failed to initialize ModelRunner");
   }
 
@@ -210,7 +218,9 @@ class ModelRunner : public std::enable_shared_from_this<ModelRunner> {
                           absl::string_view model_path,
                           absl::string_view platform,
                           absl::string_view target_topology_label,
-                          bool allow_jit_fallback_for_aot);
+                          bool allow_jit_fallback_for_aot,
+                          bool enable_input_r1_optimization,
+                          bool enable_output_r1_optimization);
   static constexpr int kThreadPoolNumThreads = 16;
   std::unique_ptr<tsl::thread::ThreadPool> execute_worker_thread_pool_;
   std::shared_ptr<xla::ifrt::Client> client_;
@@ -221,11 +231,12 @@ class ModelRunner : public std::enable_shared_from_this<ModelRunner> {
   std::unique_ptr<xla_serving::Interpreter> interpreter_;
 };
 
-absl::Status ModelRunner::Initialize(absl::string_view model_name,
-                                     absl::string_view model_path,
-                                     absl::string_view platform,
-                                     absl::string_view target_topology_label,
-                                     bool allow_jit_fallback_for_aot) {
+absl::Status ModelRunner::Initialize(
+    absl::string_view model_name, absl::string_view model_path,
+    absl::string_view platform, absl::string_view target_topology_label,
+    bool allow_jit_fallback_for_aot,
+    bool enable_input_r1_optimization,
+    bool enable_output_r1_optimization) {
   std::string platform_str(platform);
   if (platform_str.empty()) {
     platform_str = "cpu";
@@ -375,7 +386,9 @@ NB_MODULE(model_runner, m) {
       .def(nb::new_(&ModelRunner::Create),
            nb::arg("model_name") = "called_from_python", nb::arg("model_path"),
            nb::arg("platform") = "", nb::arg("target_topology_label") = "",
-           nb::arg("allow_jit_fallback_for_aot") = false)
+           nb::arg("allow_jit_fallback_for_aot") = false,
+           nb::arg("enable_input_r1_optimization") = true,
+           nb::arg("enable_output_r1_optimization") = false)
       .def("ifrt_platform_name", &ModelRunner::IfrtPlatformName,
            "Gets the platform name (e.g. 'cpu', 'tpu') of the IFRT client.")
       .def("ifrt_device_count", &ModelRunner::IfrtDeviceCount,
