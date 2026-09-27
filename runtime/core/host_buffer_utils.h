@@ -31,9 +31,20 @@ std::optional<absl::InlinedVector<int64_t, 4>> CreateDefaultStrides(
     absl::Span<int64_t const> dims, xla::ifrt::DType dtype);
 
 // Appends a recursive representation of the given data to an output string.
+// If max_entries >= 0, dimensions with more than 2 * max_entries elements
+// will be summarized with an ellipsis "...".
 void AppendRecursive(std::string* out, xla::ifrt::DType dtype, const void* data,
                      size_t indent, absl::Span<int64_t const> byte_strides,
-                     absl::Span<int64_t const> counts);
+                     absl::Span<int64_t const> counts,
+                     int64_t max_entries = -1);
+
+// Formats host buffer data into a summarized string.
+// If byte_strides is not specified, default contiguous row-major strides are
+// used.
+std::string SummarizeBuffer(
+    xla::ifrt::DType dtype, absl::Span<int64_t const> shape, const void* data,
+    int64_t max_entries = -1,
+    std::optional<absl::Span<int64_t const>> byte_strides = std::nullopt);
 
 }  // namespace xla_serving
 

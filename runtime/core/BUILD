@@ -374,11 +374,13 @@ cc_library(
     name = "host_buffer_utils",
     srcs = ["host_buffer_utils.cc"],
     hdrs = ["host_buffer_utils.h"],
+    visibility = [":core_users"],
     deps = [
         "@abseil-cpp//absl/container:inlined_vector",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/types:span",
+        "@eigen_archive//:eigen3",
         "@tsl//tsl/platform:bfloat16",
         "@tsl//tsl/platform:tstring",
         "@xla//xla:util",
