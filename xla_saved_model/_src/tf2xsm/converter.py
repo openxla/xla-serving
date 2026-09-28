@@ -42,7 +42,7 @@ from tensorflow.core.protobuf import saved_model_pb2
 
 TF_CONCRETE_FUNCTION_HANDLE_MIME_TYPE = (
     'application/protobuf;'
-    ' type=neptune_model_tf_concrete_function_handle.TfConcreteFunctionHandle'
+    ' type=xla_saved_model_tf_concrete_function_handle.TfConcreteFunctionHandle'
 )
 TF_CONCRETE_FUNCTION_HANDLE_VERSION = '0.0.1'
 XSM_TF_SAVED_MODEL_SUB_DIR = 'tf_saved_model/'
@@ -669,8 +669,3 @@ def save_tf_functions(
           tf_saved_model_as_xsm_supplemental(tf_saved_model_sub_dir)
       )
   }
-
-
-# Backward-compatibility aliases.
-NPT_TF_SAVED_MODEL_SUB_DIR = XSM_TF_SAVED_MODEL_SUB_DIR
-tf_saved_model_as_npt_supplemental = tf_saved_model_as_xsm_supplemental

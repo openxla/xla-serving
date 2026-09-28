@@ -122,9 +122,6 @@ class PreparedJaxProcessor(processor.ProcessorDefaults):
   shlo_fns: Sequence[shlo_function.ShloFunction]
   weights_name: str | None = None
 
-  def to_npt_saveable(self, *args, **kwargs):
-    return self.to_xsm_saveable(*args, **kwargs)
-
   def to_xsm_saveable(self) -> saveable.Saveable:
     return self.shlo_fns[0] if len(self.shlo_fns) == 1 else tuple(self.shlo_fns)
 

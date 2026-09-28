@@ -62,7 +62,7 @@ MANIFEST_MIME_TYPE = (
 ################################################################################
 
 ORCHESTRATION_MULTI_PIPELINE_MIME_TYPE = (
-    'application/protobuf; type=neptune_orchestration.Pipelines'
+    'application/protobuf; type=xla_saved_model_orchestration.Pipelines'
 )
 ORCHESTRATION_MULTI_PIPELINE_VERSION = '0.0.1'
 # The filename of the orchestration proto file relative to the save

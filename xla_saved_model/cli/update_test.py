@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for NPT / OBM CLI `update` command."""
+"""Tests for XSM / OBM CLI `update` command."""
 
 import os
 from unittest import mock
@@ -41,7 +41,7 @@ class UpdateTest(absltest.TestCase):
       with_history: bool = True,
       initial_batch_size: int = 16,
   ) -> str:
-    """Creates a valid exported Neptune model directory for testing."""
+    """Creates a valid exported XSM model directory for testing."""
     model_dir = self.create_tempdir().full_path
 
     # Write model version file

@@ -22,7 +22,7 @@ MIME_TYPE_MLIR_STABLEHLO = 'application/x.mlir-stablehlo'
 MIME_TYPE_ORBAX_CHECKPOINT = 'application/x.orbax-checkpoint'
 
 MIME_TYPE_PIPELINES = (
-    'application/protobuf; type=neptune_orchestration.Pipelines'
+    'application/protobuf; type=xla_saved_model_orchestration.Pipelines'
 )
 
 MIME_TYPE_ORBAX_PIPELINES = (
@@ -31,7 +31,7 @@ MIME_TYPE_ORBAX_PIPELINES = (
 
 MIME_TYPE_TF_CONCRETE_FUNCTION = (
     'application/protobuf;'
-    ' type=neptune_model_tf_concrete_function_handle.TfConcreteFunctionHandle'
+    ' type=xla_saved_model_tf_concrete_function_handle.TfConcreteFunctionHandle'
 )
 
 MIME_TYPE_ORBAX_TF_CONCRETE_FUNCTION = (

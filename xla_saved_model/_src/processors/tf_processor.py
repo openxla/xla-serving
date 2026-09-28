@@ -73,9 +73,6 @@ class PreparedTfProcessor(processor.ProcessorDefaults):
   def output_signature(self) -> jaxtyping.PyTree:
     return self.prepared_function.serializable_fn.output_signature
 
-  def to_npt_saveable(self, *args, **kwargs):
-    return self.to_xsm_saveable(*args, **kwargs)
-
   def to_xsm_saveable(self) -> saveable.Saveable:
     return self.prepared_function.serializable_fn
 

@@ -47,9 +47,6 @@ class PreparedProcessor(Protocol):
   def to_xsm_saveable(self) -> saveable.Saveable:
     ...
 
-  def to_npt_saveable(self) -> saveable.Saveable:
-    return self.to_xsm_saveable()
-
   def on_persist(
       self,
   ) -> (

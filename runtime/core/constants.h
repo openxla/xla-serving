@@ -47,7 +47,7 @@ inline constexpr char kOrbaxCheckpointMimeType[] =
     "application/x.orbax-checkpoint";
 // Orbax orchestration mime type expression.
 inline constexpr char kOexOrchestrationMultiPipelineMimeType[] =
-    "application/protobuf; type=neptune_orchestration.Pipelines";
+    "application/protobuf; type=xla_saved_model_orchestration.Pipelines";
 inline constexpr char kOexOrchestrationMultiPipelineMimeTypeLegacy[] =
     "application/protobuf; type=orbax_export_orchestration.Pipelines";
 // StableHLO mime type expression.
@@ -65,7 +65,7 @@ inline constexpr char kTfSavedModelMimeType[] =
     "application/x.tensorflow-saved-model";
 inline constexpr char kTfConcreteFunctionHandleMimeType[] =
     "application/protobuf; "
-    "type=neptune_model_tf_concrete_function_handle.TfConcreteFunctionHandle";
+    "type=xla_saved_model_tf_concrete_function_handle.TfConcreteFunctionHandle";
 inline constexpr char kTfConcreteFunctionHandleMimeTypeLegacy[] =
     "application/protobuf; "
     "type=orbax_model_tf_concrete_function_handle.TfConcreteFunctionHandle";

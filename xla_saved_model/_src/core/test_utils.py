@@ -282,7 +282,3 @@ class XsmTestCase(parameterized.TestCase):  # pylint: disable=g-doc-args
         0,
         f"Binary at {bin_path} is empty",
     )
-
-
-# Backward-compatibility alias.
-NptTestCase = XsmTestCase

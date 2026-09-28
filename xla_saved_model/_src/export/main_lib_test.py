@@ -188,7 +188,7 @@ class SaveModelTest(test_utils.XsmTestCase):
             file_system_location {
               string_path: "orchestration.pb"
             }
-            mime_type: "application/protobuf; type=neptune_orchestration.Pipelines"
+            mime_type: "application/protobuf; type=xla_saved_model_orchestration.Pipelines"
             version: "0.0.1"
           }
         }

@@ -27,7 +27,7 @@ import orbax.checkpoint as ocp
 
 from xla_saved_model.protos import manifest_pb2
 from xla_saved_model.protos import type_pb2
-from xla_saved_model._src.core import persistence_lib as npt_core
+from xla_saved_model._src.core import persistence_lib as xsm_core
 from xla_saved_model._src.core import test_utils
 from xla_saved_model._src.jax2xsm import main_lib
 from xla_saved_model._src.test_utils import jax_mnist
@@ -140,10 +140,10 @@ class MainLibTest(test_utils.XsmTestCase):
         mime_type='application/x.orbax-checkpoint',
     )
 
-    npt_core.save(
+    xsm_core.save(
         obm_module,
         save_dir_path,
-        npt_core.SaveOptions(version=2),
+        xsm_core.SaveOptions(version=2),
     )
 
     ckpt_path = os.path.join(save_dir_path, ckpt_subdir)
@@ -152,7 +152,7 @@ class MainLibTest(test_utils.XsmTestCase):
         f'Checkpoint directory {ckpt_subdir} is empty.',
     )
 
-    manifest_proto = npt_core.load(save_dir_path)
+    manifest_proto = xsm_core.load(save_dir_path)
 
     if polymorphic_shape:
       batch_size = ''
@@ -441,15 +441,15 @@ class MainLibTest(test_utils.XsmTestCase):
         mime_type='application/x.orbax-checkpoint',
     )
 
-    npt_core.save(
+    xsm_core.save(
         obm_module,
         save_dir_path,
-        npt_core.SaveOptions(
+        xsm_core.SaveOptions(
             version=2,
         ),
     )
 
-    manifest_proto = npt_core.load(save_dir_path)
+    manifest_proto = xsm_core.load(save_dir_path)
 
     manifest_path = (
         pathlib.Path(__file__).parent.parent
@@ -507,13 +507,13 @@ class MainLibTest(test_utils.XsmTestCase):
 
     save_dir_path = self.create_tempdir().full_path
     obm_module = {'model_fn': obm_shlo_fn}
-    npt_core.save(
+    xsm_core.save(
         obm_module,
         save_dir_path,
-        npt_core.SaveOptions(version=2),
+        xsm_core.SaveOptions(version=2),
     )
 
-    manifest_proto = npt_core.load(save_dir_path)
+    manifest_proto = xsm_core.load(save_dir_path)
     fn_sig = manifest_proto.objects['model_fn'].function.signature
     input_tuple = fn_sig.input.tuple.elements[0].tuple.elements[0]
     w_type = input_tuple.dict.string_to_type['w'].leaf.tensor_type

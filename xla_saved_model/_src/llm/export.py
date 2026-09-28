@@ -173,13 +173,13 @@ def export_llm(
       jax_export_kwargs=jax_export_kwargs,
   )
 
-  npt_jax_model = jax_model.JaxModel(
+  xsm_jax_model = jax_model.JaxModel(
       apply_fn_bundle=apply_fn_bundle,
       params=params,
       jax_mesh=jax_mesh,
       name="jax_model",
   )
-  models.append(npt_jax_model)
+  models.append(xsm_jax_model)
 
   # 6. Save model bundle
   main_lib.save(

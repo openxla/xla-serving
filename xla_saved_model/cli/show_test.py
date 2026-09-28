@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for NPT CLI `show` command."""
+"""Tests for XSM CLI `show` command."""
 
 from unittest import mock
 

@@ -46,9 +46,7 @@ repository = 'http://github.com/AI-Hypercomputer/neptune'
 
 [project.scripts]
 xsm-cli = 'xla_saved_model.cli.xsm_cli:run'
-npt-cli = 'xla_saved_model.cli.xsm_cli:run'
 xsm-llm-export = 'xla_saved_model._src.llm.export_llm:main'
-npt-llm-export = 'xla_saved_model._src.llm.export_llm:main'
 
 # TODO: Figure out why composite_processor_test.py is failing on GitHub only.
 [tool.pytest.ini_options]

@@ -309,11 +309,11 @@ class XsmToJaxTest(parameterized.TestCase):
     manifest_proto = xsm.load(save_dir_path)
 
     # Loads the model function
-    loaded_npt_function = manifest_proto.objects[model_function_name].function
+    loaded_xsm_function = manifest_proto.objects[model_function_name].function
 
     # and its supplemental.
     jax_supplemental_filename = (
-        loaded_npt_function.body.stable_hlo_body.supplemental_info[
+        loaded_xsm_function.body.stable_hlo_body.supplemental_info[
             xsm.JAX_SPECIFIC_INFO
         ].file_system_location.string_path
     )
@@ -325,7 +325,7 @@ class XsmToJaxTest(parameterized.TestCase):
 
     # Deserialize the jax function and compare results from the 2 jax functions.
     deserialized_apply_function = xsm_to_jax.xsm_fn_to_apply_fn(
-        loaded_npt_function,
+        loaded_xsm_function,
         jax_supplemental_proto,
     )
 
@@ -374,9 +374,9 @@ class XsmToJaxTest(parameterized.TestCase):
     xsm.save(xsm_module, save_dir_path, xsm.SaveOptions(version=2))
 
     manifest_proto = xsm.load(save_dir_path)
-    loaded_npt_function = manifest_proto.objects[model_function_name].function
+    loaded_xsm_function = manifest_proto.objects[model_function_name].function
     jax_supplemental_filename = (
-        loaded_npt_function.body.stable_hlo_body.supplemental_info[
+        loaded_xsm_function.body.stable_hlo_body.supplemental_info[
             xsm.JAX_SPECIFIC_INFO
         ].file_system_location.string_path
     )
@@ -387,7 +387,7 @@ class XsmToJaxTest(parameterized.TestCase):
       jax_supplemental_proto.ParseFromString(f.read())
 
     deserialized_apply_function = xsm_to_jax.xsm_fn_to_apply_fn(
-        loaded_npt_function,
+        loaded_xsm_function,
         jax_supplemental_proto,
     )
 
@@ -477,11 +477,11 @@ class XsmToJaxTest(parameterized.TestCase):
     manifest_proto = xsm.load(save_dir_path)
 
     # Loads the model function
-    loaded_npt_function = manifest_proto.objects[model_function_name].function
+    loaded_xsm_function = manifest_proto.objects[model_function_name].function
 
     # and its supplemental.
     jax_supplemental_filename = (
-        loaded_npt_function.body.stable_hlo_body.supplemental_info[
+        loaded_xsm_function.body.stable_hlo_body.supplemental_info[
             xsm.JAX_SPECIFIC_INFO
         ].file_system_location.string_path
     )
@@ -493,7 +493,7 @@ class XsmToJaxTest(parameterized.TestCase):
 
     # Deserialize the jax function and compare results from the 2 jax functions.
     deserialized_apply_function = xsm_to_jax.xsm_fn_to_apply_fn(
-        loaded_npt_function,
+        loaded_xsm_function,
         jax_supplemental_proto,
     )
 

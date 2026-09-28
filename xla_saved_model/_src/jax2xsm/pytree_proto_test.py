@@ -96,21 +96,21 @@ class DefaultSerializedNameTest(parameterized.TestCase):
     # A library that re-exports its public API still records the module that
     # defines the type, so the name does not depend on what this process
     # happens to have imported.
-    package = types.ModuleType("neptune_test_package")
+    package = types.ModuleType("xla_saved_model_test_package")
 
     class _ReExported:
       pass
 
     _ReExported.__qualname__ = "_ReExported"
-    _ReExported.__module__ = "neptune_test_package._src.impl"
+    _ReExported.__module__ = "xla_saved_model_test_package._src.impl"
     setattr(package, "_ReExported", _ReExported)
     self.enter_context(
-        mock.patch.dict(sys.modules, {"neptune_test_package": package})
+        mock.patch.dict(sys.modules, {"xla_saved_model_test_package": package})
     )
 
     self.assertEqual(
         pytree_proto.default_serialized_name(_ReExported),
-        "neptune_test_package._src.impl._ReExported",
+        "xla_saved_model_test_package._src.impl._ReExported",
     )
 
 
@@ -250,7 +250,7 @@ class FromProtoTest(parameterized.TestCase):
   def test_name_no_imported_module_defines_raises(self):
     proto = jax_supplemental_pb2.PyTreeDef(
         kind=jax_supplemental_pb2.PyTreeDef.CUSTOM,
-        custom_name="neptune.test._NeverDefined",
+        custom_name="xla_saved_model.test._NeverDefined",
     )
 
     with self.assertRaisesRegex(

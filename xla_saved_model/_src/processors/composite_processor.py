@@ -165,9 +165,6 @@ class PreparedCompositeProcessor(processor.ProcessorDefaults):
   def output_signature(self) -> jaxtyping.PyTree:
     return self._output_signature
 
-  def to_npt_saveable(self, *args, **kwargs):
-    return self.to_xsm_saveable(*args, **kwargs)
-
   def to_xsm_saveable(self) -> saveable.Saveable:
     serialized_config = manifest_pb2.UnstructuredData(
         inlined_bytes=self.config.SerializeToString(),

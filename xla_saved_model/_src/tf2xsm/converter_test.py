@@ -480,7 +480,7 @@ class Tf2XsmConverterTest(
       self,
       get_return_value,
   ):
-    # There is a subset of return values that are supported by NPT but not
+    # There is a subset of return values that are supported by XSM but not
     # by TF SavedModel, e.g. nested dictionaries.
     @tf.function(autograph=False)
     def f(x, y):

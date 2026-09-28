@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Type conversion utilities to Neptune ShloTensorSpec."""
+"""Type conversion utilities to XSM ShloTensorSpec."""
 
 from collections.abc import Sequence
 import dataclasses

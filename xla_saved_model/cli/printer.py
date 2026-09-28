@@ -263,7 +263,3 @@ def redact_byte_fields(msg: message.Message):
           redact_byte_fields(entry)
       else:
         redact_byte_fields(value)
-
-
-# Backward-compatibility alias.
-npt_type = xsm_type

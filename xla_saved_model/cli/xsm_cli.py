@@ -38,8 +38,8 @@ cli.command(name='update')(update.update)
 
 @cli.command()
 def version() -> None:
-  """Prints the NPT CLI version."""
-  rich.print(f'NPT CLI version: {constants.CLI_VERSION}')
+  """Prints the XSM CLI version."""
+  rich.print(f'XSM CLI version: {constants.CLI_VERSION}')
 
 
 def main(unused_argv: Sequence[str]) -> None:
@@ -47,7 +47,7 @@ def main(unused_argv: Sequence[str]) -> None:
 
 
 def run() -> None:
-  """Runs the NPT CLI."""
+  """Runs the XSM CLI."""
   app.run(main, argv=sys.argv[:1])
 
 
