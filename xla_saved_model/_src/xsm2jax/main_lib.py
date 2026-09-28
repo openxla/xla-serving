@@ -270,6 +270,9 @@ def _restore_spec(
   Raises:
     ValueError: if the field is not set in the manifest signature, or if the
       recorded structure disagrees with the manifest about the number of leaves.
+    pytree_proto.UnresolvedPyTreeNodeError: if the recorded structure names a
+      custom PyTree node type this process has not imported. Import the package
+      defining the type before loading the model.
   """
   if not manifest_signature.HasField(signature_field):
     raise ValueError(

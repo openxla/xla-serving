@@ -255,9 +255,9 @@ def _to_pytree_def_proto(
   The manifest already describes tuples, lists, dicts and `None` exactly, so a
   structure built only from those is not recorded: doing so would add bytes to
   every artifact to restate what the manifest says. A structure that does
-  contain a custom node is recorded if every such node is registered for
-  serialization, and skipped with a warning otherwise, which leaves the artifact
-  exactly as it would have been before this field existed.
+  contain a custom node is recorded if every such node can be written down,
+  and skipped with a warning otherwise, which leaves the artifact exactly as it
+  would have been before this field existed.
 
   Args:
     treedef: The structure to serialize, or None if unknown.

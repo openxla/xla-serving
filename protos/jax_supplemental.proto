@@ -90,18 +90,18 @@ message PyTreeDef {
   // sorts dictionary keys when flattening, so these are sorted.
   repeated string children_names = 3;
 
-  // CUSTOM only. The name the node type was registered under via
-  // `pytree_proto.register_pytree_node_serialization`. Deserialization
-  // resolves the type by looking up this name in the reading process's
-  // registry. It is deliberately not a Python import path: an artifact must
-  // not be able to cause an arbitrary module to be imported, and a registered
-  // name stays stable when code moves.
+  // CUSTOM only. The name the node type is recorded under: the type's Python
+  // module and qualified name, so that a writer and a reader arrive at the
+  // same string without coordinating one.
+  //
+  // A reader resolves this against the modules it has already imported. It
+  // resembles an import path but is never used as one: an artifact must not be
+  // able to cause an arbitrary module to be imported.
   string custom_name = 4;
 
-  // CUSTOM only. The node's auxiliary data, produced by the `serialize_auxdata`
-  // callback supplied at registration and consumed by the matching
-  // `deserialize_auxdata`. Opaque to this proto, so auxiliary data that has no
-  // natural textual form (a dtype, say) is representable.
+  // CUSTOM only. The node's auxiliary data, serialized by `auxdata.serialize`,
+  // currently as UTF-8 JSON. Opaque to this proto, so the encoding can change
+  // without a schema change.
   bytes custom_auxdata = 5;
 }
 

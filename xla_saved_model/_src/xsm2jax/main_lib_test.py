@@ -21,7 +21,6 @@ from xla_saved_model.protos import jax_supplemental_pb2
 from xla_saved_model._src import core as xsm
 from xla_saved_model._src.jax2xsm import constants
 from xla_saved_model._src.jax2xsm import main_lib
-from xla_saved_model._src.jax2xsm import pytree_proto
 from xla_saved_model._src.test_utils import jax_mnist
 from xla_saved_model._src.xsm2jax import main_lib as xsm_to_jax
 
@@ -39,15 +38,6 @@ class _Params:
   weight: Any
   bias: Any
   name: str = dataclasses.field(metadata=dict(static=True), default='')
-
-
-pytree_proto.register_pytree_node_serialization(
-    _Params,
-    serialized_name='neptune.xsm2jax.test._Params',
-    # The auxiliary data is the tuple of static fields, here `(name,)`.
-    serialize_auxdata=lambda aux: aux[0].encode('utf-8'),
-    deserialize_auxdata=lambda b: (b.decode('utf-8'),),
-)
 
 
 def _to_shape_dtype_struct(x):

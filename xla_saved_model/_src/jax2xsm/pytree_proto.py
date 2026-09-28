@@ -19,35 +19,35 @@ framework-neutral `Type`, which cannot represent a custom PyTree node such as a
 `flax.struct.dataclass`. Such a node is written to the manifest as a plain list
 of its leaves, so a caller that rebuilds the calling convention from the
 manifest alone produces a `list` where the function expects the custom node,
-and the call is rejected even though every leaf matches.
+and the call is rejected even though every leaf matches. This module records
+the structure in the JAX supplemental so it can be restored exactly.
 
-This module serializes the structure into the JAX supplemental so it can be
-restored exactly.
+A custom node is recorded under the module and qualified name of its type, a
+name both sides derive without having to coordinate one, and its auxiliary
+data through `auxdata`. Nothing has to be registered anywhere.
 
-A custom node is identified in the proto by a registered name rather than by a
-Python import path, for two reasons: loading a model must never be able to
-cause an arbitrary module to be imported, and a name stays stable when code
-moves. Types opt in through `register_pytree_node_serialization` below, which
-mirrors `jax.export.register_pytree_node_serialization`. We keep our own
-registry because JAX exposes its registration function but not the registries
-it populates, and a serializer has to read them.
+The name resembles an import path and is deliberately never used as one:
+reading a model must not be able to cause a module to be imported. A reader
+resolves the name against the modules it has already imported, so a reader that
+wants its custom nodes rebuilt imports the packages defining them, the same way
+it would to construct one. A name that resolves to nothing raises
+`UnresolvedPyTreeNodeError`.
 """
 
-from collections.abc import Sequence
+import sys
 import types
-from typing import Any, NamedTuple, Protocol, TypeVar
+from typing import Any
 
 import jax
 
 from xla_saved_model.protos import jax_supplemental_pb2
-
-_T = TypeVar("_T")
+from xla_saved_model._src.jax2xsm import auxdata
 
 PyTreeDefProto = jax_supplemental_pb2.PyTreeDef
 _Kind = jax_supplemental_pb2.PyTreeDef.Kind
 
-# The node types the proto spells out directly. Everything else needs a
-# registration to be serializable.
+# The node types the proto spells out directly. Everything else is written as
+# a CUSTOM node, under a derived name.
 _KIND_BY_NODE_TYPE = {
     types.NoneType: _Kind.NONE,
     tuple: _Kind.TUPLE,
@@ -67,110 +67,87 @@ _FROM_NODE_DATA_AND_CHILDREN: Any = (
 )
 
 
-class SerializeAuxData(Protocol):
+def default_serialized_name(nodetype: type[Any]) -> str:
+  """Returns the name `nodetype` is recorded under.
 
-  def __call__(self, aux_data: Any, /) -> bytes:
-    """Serializes the auxiliary data of a PyTree node.
-
-    The auxiliary data is the second element of the pair returned by the
-    `flatten_func` registered with `jax.tree_util.register_pytree_node`.
-    """
-
-
-class DeserializeAuxData(Protocol):
-
-  def __call__(self, serialized_aux_data: bytes, /) -> Any:
-    """Inverse of `SerializeAuxData`."""
-
-
-class _Registration(NamedTuple):
-  serialized_name: str
-  nodetype: type[Any]
-  serialize_auxdata: SerializeAuxData
-  deserialize_auxdata: DeserializeAuxData
-
-
-_registry_by_node_type: dict[type[Any], _Registration] = {}
-_registry_by_serialized_name: dict[str, _Registration] = {}
-
-
-def register_pytree_node_serialization(
-    nodetype: type[_T],
-    *,
-    serialized_name: str,
-    serialize_auxdata: SerializeAuxData,
-    deserialize_auxdata: DeserializeAuxData,
-) -> type[_T]:
-  """Registers a custom PyTree node type for serialization.
-
-  Call this for any type that appears as a node in the inputs or outputs of a
-  function being exported and that is not a tuple, list, dict or `None`.
-  Without a registration the structure is simply not recorded, and the
-  structure a reader derives from the manifest flattens the node into a list.
-
-  The type must already be a PyTree node, that is
-  `jax.tree_util.register_pytree_node` (or one of its wrappers, such as
-  `jax.tree_util.register_dataclass` or `flax.struct.dataclass`) must have been
-  called for it. Only the auxiliary data needs callbacks here; the node itself
-  is rebuilt through JAX's own registry.
-
-  Both the reading and the writing process must have performed the
-  registration, with the same `serialized_name`.
+  Deriving the name lets a writer and a reader agree on it without
+  coordinating a string. `__qualname__` rather than `__name__` keeps any
+  enclosing classes, so two nested `_Inner` types do not collide.
 
   Args:
-    nodetype: The type whose PyTree nodes are to be serialized. It is an error
-      to register a type twice.
-    serialized_name: The name recorded in the proto and used to look the
-      registration up when reading. It is an error to register a name twice.
-      Prefer a name that identifies the owning project, for example
-      `"qwix.QArray"`.
-    serialize_auxdata: Converts the node's auxiliary data to bytes.
-    deserialize_auxdata: Inverse of `serialize_auxdata`.
+    nodetype: The type to name.
 
   Returns:
-    `nodetype`, so that this function can be used as a class decorator.
-
-  Raises:
-    ValueError: If `nodetype` or `serialized_name` is already registered.
+    The type's module and qualified name joined by a dot, for example
+    `qwix._src.core.qarray.QArray`.
   """
-  if nodetype in _registry_by_node_type:
-    raise ValueError(
-        f"Duplicate serialization registration for type `{nodetype}`. The"
-        " previous registration used the serialized_name"
-        f" `{_registry_by_node_type[nodetype].serialized_name}`."
-    )
-  if serialized_name in _registry_by_serialized_name:
-    raise ValueError(
-        "Duplicate serialization registration for the serialized_name"
-        f" `{serialized_name}`. The previous registration was for the type"
-        f" `{_registry_by_serialized_name[serialized_name].nodetype}`."
-    )
-  if nodetype in _KIND_BY_NODE_TYPE:
-    raise ValueError(
-        f"`{nodetype}` is represented by the proto directly and must not be"
-        " registered."
-    )
-
-  registration = _Registration(
-      serialized_name=serialized_name,
-      nodetype=nodetype,
-      serialize_auxdata=serialize_auxdata,
-      deserialize_auxdata=deserialize_auxdata,
-  )
-  _registry_by_node_type[nodetype] = registration
-  _registry_by_serialized_name[serialized_name] = registration
-  return nodetype
+  return f"{nodetype.__module__}.{nodetype.__qualname__}"
 
 
 class UnsupportedPyTreeDefError(Exception):
   """Raised when a `PyTreeDef` cannot be represented in the proto.
 
-  The expected cause is a custom node whose type was never registered with
-  `register_pytree_node_serialization`. Writers are expected to treat this as
-  "record nothing" rather than as a failure: the manifest still describes every
-  leaf, so the artifact stays exactly as it would have been before this feature
-  existed.
+  The expected cause is a custom node whose auxiliary data `auxdata.serialize`
+  cannot express. Writers are expected to treat this as "record nothing" rather
+  as a failure: the manifest still describes every leaf, so the artifact stays
+  exactly as it would have been before this feature existed.
   """
+
+
+class UnresolvedPyTreeNodeError(ValueError):
+  """Raised when a recorded custom node names a type this process lacks.
+
+  A process that cannot resolve the type cannot build the node, and so could
+  not have called the function with one either. Failing here names the missing
+  type at the point the model is read, rather than letting the caller discover
+  it later as a structure mismatch that mentions no type at all. The remedy is
+  to import the package defining the type before loading the model.
+
+  It subclasses `ValueError` so that callers predating the distinct type still
+  catch it.
+  """
+
+
+def _check_pytree_node_imported(serialized_name: str) -> type[Any]:
+  """Returns the PyTree node type `serialized_name` names, if it is loaded.
+
+  Only modules this process has already imported are consulted, so that
+  reading a model can never cause an import: an artifact names the type it
+  wants, and a process that has no reason to have that type simply does not
+  find it. A module name and a qualified name can each contain dots, so every
+  way of splitting the name is tried, deepest module first.
+
+  Args:
+    serialized_name: The name the writer recorded.
+
+  Returns:
+    The type.
+
+  Raises:
+    UnresolvedPyTreeNodeError: If no imported module defines a PyTree node of
+      that name.
+  """
+  parts = serialized_name.split(".")
+  for split in range(len(parts) - 1, 0, -1):
+    module = sys.modules.get(".".join(parts[:split]))
+    if module is None:
+      continue
+    found: Any = module
+    for attribute in parts[split:]:
+      found = getattr(found, attribute, None)
+      if found is None:
+        break
+    # A name can be shared by something that is not the node type it was
+    # recorded for, so take it only if it is in fact a PyTree node.
+    if isinstance(found, type) and jax.tree_util.default_registry.is_node(
+        found
+    ):
+      return found
+  raise UnresolvedPyTreeNodeError(
+      f"The PyTree node type recorded as `{serialized_name}` is not defined by"
+      " any module this process has imported. Import the module that defines"
+      " the type before loading the model."
+  )
 
 
 def contains_custom_node(treedef: jax.tree_util.PyTreeDef) -> bool:
@@ -205,9 +182,9 @@ def to_proto(treedef: jax.tree_util.PyTreeDef) -> PyTreeDefProto:
     The proto representation of `treedef`.
 
   Raises:
-    UnsupportedPyTreeDefError: If `treedef` contains a custom node that is not
-      registered for serialization, a dictionary with a non-string key, or a
-      registered node whose `serialize_auxdata` does not return bytes.
+    UnsupportedPyTreeDefError: If `treedef` contains a dictionary with a
+      non-string key, or a custom node whose auxiliary data `auxdata.serialize`
+      cannot express.
   """
   proto = PyTreeDefProto()
   node_data = treedef.node_data()
@@ -217,35 +194,28 @@ def to_proto(treedef: jax.tree_util.PyTreeDef) -> PyTreeDefProto:
     return proto
 
   node_type, aux_data = node_data
-  kind = _KIND_BY_NODE_TYPE.get(node_type)
+  kind = _KIND_BY_NODE_TYPE.get(node_type, _Kind.CUSTOM)
+  proto.kind = kind
 
-  if kind is None:
-    registration = _registry_by_node_type.get(node_type)
-    if registration is None:
+  if kind == _Kind.CUSTOM:
+    proto.custom_name = default_serialized_name(node_type)
+    try:
+      proto.custom_auxdata = auxdata.serialize(aux_data)
+    except Exception as e:
+      # A node whose auxiliary data cannot be written down simply goes
+      # unrecorded, and the artifact is the one this writer used to produce.
       raise UnsupportedPyTreeDefError(
-          f"PyTree node type `{node_type}` is not registered for"
-          " serialization. Call"
-          " `pytree_proto.register_pytree_node_serialization` for it."
-      )
-    serialized_auxdata = registration.serialize_auxdata(aux_data)
-    if not isinstance(serialized_auxdata, (bytes, bytearray)):
-      raise UnsupportedPyTreeDefError(
-          f"The `serialize_auxdata` registered for `{node_type}` must return"
-          f" bytes, but it returned a {type(serialized_auxdata)}."
-      )
-    proto.kind = _Kind.CUSTOM
-    proto.custom_name = registration.serialized_name
-    proto.custom_auxdata = bytes(serialized_auxdata)
-  else:
-    proto.kind = kind
-    if kind == _Kind.DICT:
-      for key in aux_data:
-        if not isinstance(key, str):
-          raise UnsupportedPyTreeDefError(
-              "Only dictionaries with string keys can be serialized. Found the"
-              f" key {key!r} of type {type(key)}."
-          )
-        proto.children_names.append(key)
+          f"The auxiliary data {aux_data!r} of `{node_type}` cannot be"
+          f" serialized: {e}"
+      ) from e
+  elif kind == _Kind.DICT:
+    for key in aux_data:
+      if not isinstance(key, str):
+        raise UnsupportedPyTreeDefError(
+            "Only dictionaries with string keys can be serialized. Found the"
+            f" key {key!r} of type {type(key)}."
+        )
+      proto.children_names.append(key)
 
   for child in treedef.children():
     proto.children.append(to_proto(child))
@@ -264,6 +234,10 @@ def to_proto(treedef: jax.tree_util.PyTreeDef) -> PyTreeDefProto:
 def from_proto(proto: PyTreeDefProto) -> jax.tree_util.PyTreeDef:
   """Deserializes a `PyTreeDef`.
 
+  Any error JAX raises while rebuilding a node, for example because a custom
+  node's unflatten function rejects the recorded auxiliary data, propagates
+  unchanged.
+
   Args:
     proto: The structure to deserialize.
 
@@ -271,9 +245,10 @@ def from_proto(proto: PyTreeDefProto) -> jax.tree_util.PyTreeDef:
     The deserialized structure.
 
   Raises:
-    ValueError: If the proto is malformed, or refers to a node type that is not
-      registered for deserialization in this process, or refers to a type that
-      is registered here but is not a PyTree node in this process.
+    ValueError: If the proto is malformed, or the recorded auxiliary data
+      cannot be read back.
+    UnresolvedPyTreeNodeError: If the proto refers to a custom node whose type
+      no already imported module defines.
   """
   children = [from_proto(child) for child in proto.children]
   kind = proto.kind
@@ -283,18 +258,15 @@ def from_proto(proto: PyTreeDefProto) -> jax.tree_util.PyTreeDef:
       raise ValueError(f"A LEAF cannot have {len(children)} children.")
     node_data = None
   elif kind == _Kind.CUSTOM:
-    registration = _registry_by_serialized_name.get(proto.custom_name)
-    if registration is None:
+    nodetype = _check_pytree_node_imported(proto.custom_name)
+    try:
+      aux_data = auxdata.deserialize(proto.custom_auxdata)
+    except Exception as e:
       raise ValueError(
-          f"The PyTree node type `{proto.custom_name}` is not registered for"
-          " deserialization in this process. Call"
-          " `pytree_proto.register_pytree_node_serialization` for it before"
-          " loading this model."
-      )
-    node_data = (
-        registration.nodetype,
-        registration.deserialize_auxdata(proto.custom_auxdata),
-    )
+          "Could not read the auxiliary data recorded for"
+          f" `{proto.custom_name}`: {e}"
+      ) from e
+    node_data = (nodetype, aux_data)
   elif kind == _Kind.DICT:
     if len(proto.children_names) != len(children):
       raise ValueError(
@@ -309,25 +281,6 @@ def from_proto(proto: PyTreeDefProto) -> jax.tree_util.PyTreeDef:
   else:
     raise ValueError(f"Unknown PyTreeDef kind: {kind}.")
 
-  return _from_node_data_and_children(node_data, children)
-
-
-def _from_node_data_and_children(
-    node_data: tuple[type[Any], Any] | None,
-    children: Sequence[jax.tree_util.PyTreeDef],
-) -> jax.tree_util.PyTreeDef:
-  """Builds a single `PyTreeDef` node, translating the failure mode."""
-  try:
-    return _FROM_NODE_DATA_AND_CHILDREN(
-        jax.tree_util.default_registry, node_data, children
-    )
-  except Exception as e:
-    # `from_node_data_and_children` resolves the node type through JAX's own
-    # PyTree registry, which raises if the type was never registered as a
-    # PyTree node in this process.
-    raise ValueError(
-        "Could not rebuild a PyTree node for"
-        f" `{None if node_data is None else node_data[0]}`. The type must be"
-        " registered with `jax.tree_util.register_pytree_node` before the"
-        " model is loaded."
-    ) from e
+  return _FROM_NODE_DATA_AND_CHILDREN(
+      jax.tree_util.default_registry, node_data, children
+  )
