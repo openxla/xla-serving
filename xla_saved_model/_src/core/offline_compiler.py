@@ -30,18 +30,8 @@ import jaxlib
 from xla_saved_model._src.core import file_utils
 from xla_saved_model._src.core import manifest_utils
 
-try:
-  from neptune.runtime.python import optimizer as optimizer_ext  # pylint: disable=g-import-not-at-top
-except ImportError:
-  optimizer_ext = None
-
-if optimizer_ext is not None:
-  OptimizerType = (
-      optimizer_ext.StablehloOptimizer
-      | Callable[[bytes, Sequence[int]], bytes]
-  )
-else:
-  OptimizerType = Any
+optimizer_ext = None
+OptimizerType = Callable[[bytes, Sequence[int]], bytes]
 
 _SUPPORTED_PLATFORMS = frozenset({"cpu", "cuda", "tpu"})
 
@@ -82,8 +72,7 @@ class TargetConfig:
   def is_deviceless(self) -> bool:
     """Returns whether compilation is performed without attached devices."""
     return (
-        self.serialized_topology is not None
-        or self.target_topology is not None
+        self.serialized_topology is not None or self.target_topology is not None
     )
 
 

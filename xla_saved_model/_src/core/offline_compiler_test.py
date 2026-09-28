@@ -25,11 +25,6 @@ import jax
 from xla_saved_model._src.core import offline_compiler
 from xla_saved_model._src.core import test_utils
 
-try:
-  from neptune.runtime.python import optimizer as optimizer_ext  # pylint: disable=g-import-not-at-top
-except ImportError:
-  optimizer_ext = None
-
 
 class OfflineCompilerTest(parameterized.TestCase):
   """Unified test suite for XSE offline AOT compiler."""
@@ -244,41 +239,6 @@ class OfflineCompilerTest(parameterized.TestCase):
   # ---------------------------------------------------------------------------
   # 3. Optimizer Integration Tests
   # ---------------------------------------------------------------------------
-
-  def test_offline_compilation_with_stablehlo_optimizer(self):
-    """Verifies compilation with generic StablehloOptimizer instance."""
-    if optimizer_ext is None:
-      self.skipTest("StableHLO optimizer C++ extension not available in OSS.")
-    stablehlo_mlir = test_utils.get_stablehlo_mlir()
-    config = offline_compiler.TargetConfig(
-        target_topology_label="cpu_opt",
-        platform="cpu",
-        optimizer=optimizer_ext.StablehloOptimizer(),
-    )
-    hook = offline_compiler.create_offline_compiler_hook([config])
-    artifacts = list(hook(stablehlo_mlir, [0], 0))
-
-    self.assertLen(artifacts, 1)
-    self.assertNotEmpty(artifacts[0].pjrt_executable_bytes)
-
-  def test_offline_compilation_with_stablehlo_tpu_optimizer(self):
-    """Verifies compilation with StablehloTpuOptimizer instance on TPU."""
-    if optimizer_ext is None:
-      self.skipTest("StableHLO optimizer C++ extension not available in OSS.")
-    test_utils.get_topology_desc("df:2x2", platform="tpu")
-
-    stablehlo_mlir = test_utils.get_stablehlo_mlir()
-    config = offline_compiler.TargetConfig(
-        target_topology_label="tpu_opt",
-        platform="tpu",
-        target_topology="df:2x2",
-        optimizer=optimizer_ext.StablehloTpuOptimizer(),
-    )
-    hook = offline_compiler.create_offline_compiler_hook([config])
-    artifacts = list(hook(stablehlo_mlir, [0], 0))
-
-    self.assertLen(artifacts, 1)
-    self.assertNotEmpty(artifacts[0].pjrt_executable_bytes)
 
   def test_offline_compilation_with_callable_optimizer(self):
     """Verifies compilation with a custom callable optimizer."""
