@@ -15,6 +15,7 @@
 #include "runtime/data_loader/data_loader.h"  // from @xla_serving
 
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
@@ -48,9 +49,16 @@ DataLoaderFactoryRegistry::CreateDataLoader(
   absl::MutexLock lock(mu_);
   const auto it = type_to_factory_.find(loader_type);
   if (it == type_to_factory_.end()) {
-    return absl::NotFoundError(absl::StrCat(
-        "Data loader with name ",
-        xla_saved_model_manifest::LoaderType_Name(loader_type), " not found."));
+    std::string hint;
+    if (loader_type == xla_saved_model_manifest::LOADER_TYPE_DEFAULT) {
+      hint =
+          " Did you forget to link the ':checkpoint_weight_loading' "
+          "build target?";
+    }
+    return absl::NotFoundError(
+        absl::StrCat("Data loader with name ",
+                     xla_saved_model_manifest::LoaderType_Name(loader_type),
+                     " not found.", hint));
   }
   return it->second(std::move(create_options));
 }
