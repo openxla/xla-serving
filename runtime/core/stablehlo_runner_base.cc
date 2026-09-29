@@ -73,6 +73,11 @@ std::atomic<uint32_t> StableHloRunnerBase::launch_id_(1);
 
 namespace {
 
+// Number of distinct IFRT execution stream ids used by Execute(). Kept bounded
+// in case an IFRT backend keeps per-stream-id state that is never released;
+// this is far above any realistic number of concurrent executions.
+constexpr uint32_t kNumExecutionStreams = 1024;
+
 auto* input_transfer_counter =
     ::tsl::monitoring::Counter<1>::New("/xla_serving/input_transfer/dispatched",
                                        "Tracks how many transfers were routed "
@@ -797,6 +802,15 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
           {
               .launch_id = xla_launch_id,
               .fill_status = true,
+              // Executions issued by this runner are independent: data
+              // dependencies are tracked by IFRT array readiness, and Execute()
+              // blocks until completion so chained calls are already ordered.
+              // Use a distinct stream per execution so that backends honoring
+              // `execution_stream_id` (e.g. PjRt CPU, Pathways) do not
+              // serialize concurrent requests on the default stream 0.
+              .execution_stream_id =
+                  1 + static_cast<uint32_t>(xla_launch_id) %
+                          kNumExecutionStreams,
           },
           // IFRT requires an explicit device mapping when executing portable
           //  or unbound executables. If the executable already has
