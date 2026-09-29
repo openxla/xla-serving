@@ -337,7 +337,9 @@ py_wheel(
     name = "xla_serving_data",
     abi = select({
         "@rules_python//python/config_settings:is_python_3.11": "cp311",
-        "@rules_python//python/config_settings:is_python_3.12": "abi3",
+        "@rules_python//python/config_settings:is_python_3.12": "cp312",
+        "@rules_python//python/config_settings:is_python_3.13": "cp313",
+        "@rules_python//python/config_settings:is_python_3.14": "cp314",
     }),
     distribution = "xla_serving_data",
     platform = select({
@@ -347,6 +349,8 @@ py_wheel(
     python_tag = select({
         "@rules_python//python/config_settings:is_python_3.11": "cp311",
         "@rules_python//python/config_settings:is_python_3.12": "cp312",
+        "@rules_python//python/config_settings:is_python_3.13": "cp313",
+        "@rules_python//python/config_settings:is_python_3.14": "cp314",
     }),
     strip_path_prefixes = ["data"],
     tags = ["manual"],
@@ -450,7 +454,9 @@ py_wheel(
     testonly = 1,
     abi = select({
         "@rules_python//python/config_settings:is_python_3.11": "cp311",
-        "@rules_python//python/config_settings:is_python_3.12": "abi3",
+        "@rules_python//python/config_settings:is_python_3.12": "cp312",
+        "@rules_python//python/config_settings:is_python_3.13": "cp313",
+        "@rules_python//python/config_settings:is_python_3.14": "cp314",
     }),
     distribution = "xla_serving_data_test",
     platform = select({
@@ -460,6 +466,8 @@ py_wheel(
     python_tag = select({
         "@rules_python//python/config_settings:is_python_3.11": "cp311",
         "@rules_python//python/config_settings:is_python_3.12": "cp312",
+        "@rules_python//python/config_settings:is_python_3.13": "cp313",
+        "@rules_python//python/config_settings:is_python_3.14": "cp314",
     }),
     strip_path_prefixes = ["data"],
     tags = ["manual"],

@@ -24,7 +24,7 @@ jobs:
       matrix:
         # TODO: Re-enable once the tests are fixed.
         # python-version: ["3.10", "3.11", "3.12"]
-        python-version: ["3.12"]
+        python-version: ["3.12", "3.13", "3.14"]
         jax-version: ["newest"]
         # include:
         #   - python-version: "3.10"
@@ -45,7 +45,7 @@ jobs:
 
       - name: Create virtual environment
         run: |
-          uv venv --clear --python 3.12
+          uv venv --clear --python ${{ matrix.python-version }}
           echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
 
@@ -110,7 +110,13 @@ jobs:
 
       - name: Install Test Dependencies and Run Pytest
         run: |
-          uv pip install ".[test,tf,torch]"
+          EXTRAS="test,torch"
+          # TensorFlow doesn't support Python 3.14 yet, TF tests are skipped
+          # when it's not installed (see conftest.py).
+          if [ "${{ matrix.python-version }}" != "3.14" ]; then
+            EXTRAS="${EXTRAS},tf"
+          fi
+          uv pip install ".[${EXTRAS}]"
           uv pip uninstall triton 2>/dev/null || true
           pytest -v -s --full-trace -n auto xla_saved_model/
 
@@ -118,13 +124,16 @@ jobs:
         # Exports each example model and runs it through ModelRunner. This is
         # the only coverage that exercises the exporter and the runtime
         # together, so it needs the wheels installed above.
+        # `--dist loadfile` keeps tests from the same file on one worker, so
+        # e.g. the ViT tests don't download the same Kaggle preset concurrently
+        # (kagglehub writes to a shared cache file without locking).
         run: |
-          pytest -v -s -n auto examples/
+          pytest -v -s -n auto --dist loadfile examples/
 
       - name: Upload Built Wheels
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: xla-saved-model-wheels
+          name: xla-saved-model-wheels-py${{ matrix.python-version }}
           path: |
             bazel-bin/data/xla_serving_data*.whl
             bazel-bin/runtime/python/xla_saved_model_runner*.whl
@@ -157,14 +166,14 @@ jobs:
 
       - name: Create virtual environment
         run: |
-          uv venv --clear --python 3.12
+          uv venv --clear --python ${{ matrix.python-version }}
           echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
 
       - name: Download Built Wheels
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: xla-saved-model-wheels
+          name: xla-saved-model-wheels-py${{ matrix.python-version }}
           path: wheels
 
       - name: Install Prebuilt Wheels

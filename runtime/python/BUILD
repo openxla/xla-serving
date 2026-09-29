@@ -101,7 +101,9 @@ py_wheel(
     name = "xla_saved_model_runner",
     abi = select({
         "@rules_python//python/config_settings:is_python_3.11": "cp311",
-        "@rules_python//python/config_settings:is_python_3.12": "abi3",
+        "@rules_python//python/config_settings:is_python_3.12": "cp312",
+        "@rules_python//python/config_settings:is_python_3.13": "cp313",
+        "@rules_python//python/config_settings:is_python_3.14": "cp314",
     }),
     distribution = "xla_saved_model_runner",
     platform = select({
@@ -111,6 +113,8 @@ py_wheel(
     python_tag = select({
         "@rules_python//python/config_settings:is_python_3.11": "cp311",
         "@rules_python//python/config_settings:is_python_3.12": "cp312",
+        "@rules_python//python/config_settings:is_python_3.13": "cp313",
+        "@rules_python//python/config_settings:is_python_3.14": "cp314",
     }),
     strip_path_prefixes = ["runtime/python"],
     version = VERSION,

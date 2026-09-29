@@ -16,6 +16,7 @@
 
 from collections.abc import Callable, Mapping
 import dataclasses
+import importlib.util
 from typing import Any
 
 import jaxtyping
@@ -53,6 +54,9 @@ def find_ragged_inputs_indices_if_any(
     input_signature: jaxtyping.PyTree,
 ) -> list[tuple[int, int]]:
   """Finds the indices of ragged inputs in the input signature."""
+  # Ragged inputs are `tf.RaggedTensorSpec`s, so there are none without TF.
+  if importlib.util.find_spec('tensorflow') is None:
+    return []
   return _require_tf2xsm().type_conversion.find_ragged_inputs_indices_if_any(
       input_signature
   )

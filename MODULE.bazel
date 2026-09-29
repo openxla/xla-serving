@@ -87,7 +87,6 @@ archive_override(
     patch_strip = 1,
     patches = [
         "//third_party/xla:xla_bzlmod_llvm.patch",
-        "//third_party/xla:xla_python_3_12.patch",
     ],
     strip_prefix = "xla-94ce0611b17bbfbd8ee69ac3d12d2228f6707039",
     urls = ["https://github.com/openxla/xla/archive/94ce0611b17bbfbd8ee69ac3d12d2228f6707039.tar.gz"],
@@ -137,6 +136,9 @@ single_version_override(
         "//third_party/protobuf:fix_message_lite_incomplete_type.patch",
         # The following patch is needed to fix package loading for `bazel query "deps(//xla/...)"`.
         "//third_party/protobuf:fix_python_dist_package.patch",
+        # Makes `//python:proto_api` use the headers of the selected Python
+        # toolchain instead of Python 3.12. Already fixed in upstream main.
+        "//third_party/protobuf:proto_api_python_headers.patch",
     ],
     version = "32.1",
 )
@@ -282,32 +284,50 @@ single_version_override(
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python.defaults(
     # The environment variable takes precedence if set.
-    python_version = "3.11",
+    python_version = "3.12",
     python_version_env = "HERMETIC_PYTHON_VERSION",
 )
-python.toolchain(python_version = "3.11")
 python.toolchain(python_version = "3.12")
 python.toolchain(python_version = "3.13")
+python.toolchain(python_version = "3.14")
 
 # Python dependencies
 pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
 
 SUPPORTED_PYTHON_VERSIONS = [
-    "3.11",
     "3.12",
     "3.13",
+    "3.14",
 ]
 
 [
     pip.parse(
+        # XLA and TensorFlow depend on `@pypi//numpy_headers`, see override_repo
+        # below.
+        extra_hub_aliases = {
+            "numpy": ["numpy_headers"],
+        },
         hub_name = "xla_serving_pypi",
         python_version = version,
         requirements_lock = "//:requirements_lock_" + version + ".txt",
+        # `pypi_mods` is defined by XLA and adds the numpy_headers target.
+        whl_modifications = {
+            "@pypi_mods//:numpy.json": "numpy",
+        },
     )
     for version in SUPPORTED_PYTHON_VERSIONS
 ]
 
-use_repo(pip, "xla_serving_pypi")
+use_repo(pip, "pypi_mods", "xla_serving_pypi")
+
+# XLA and TensorFlow declare their own pip hubs for a limited set of Python
+# versions (XLA: 3.11, TensorFlow: 3.10-3.13). Point them at our hub so that
+# they build with every Python version we support.
+override_repo(
+    pip,
+    tf_pypi = "xla_serving_pypi",
+    xla_pypi = "xla_serving_pypi",
+)
 
 single_version_override(
     module_name = "highway",

@@ -84,6 +84,7 @@ llm = [
 test = [
     'chex',
     'flax',
+    'grpcio',
     'pytest',
     'pytest-xdist',
     'requests',
