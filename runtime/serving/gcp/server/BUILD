@@ -34,6 +34,7 @@ cc_binary(
     name = "xla_serving_main_cpu",
     srcs = ["main.cc"],
     linkopts = ["-Wl,--allow-multiple-definition"],
+    malloc = "@tcmalloc//tcmalloc",
     deps = [
         ":xla_serving_callback_grpc_server_cpu",
     ] + XLA_SERVING_MAIN_COMMON_DEPS,
@@ -43,6 +44,7 @@ cc_binary(
     name = "xla_serving_main_gpu",
     srcs = ["main.cc"],
     linkopts = ["-Wl,--allow-multiple-definition"],
+    malloc = "@tcmalloc//tcmalloc",
     tags = ["manual"],
     deps = [
         ":xla_serving_callback_grpc_server_gpu",
@@ -53,6 +55,7 @@ cc_binary(
     name = "xla_serving_main_tpu",
     srcs = ["main.cc"],
     linkopts = ["-Wl,--allow-multiple-definition"],
+    malloc = "@tcmalloc//tcmalloc",
     tags = ["manual"],
     deps = [
         ":xla_serving_callback_grpc_server_tpu",
