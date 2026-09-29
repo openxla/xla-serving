@@ -49,6 +49,14 @@ struct OrbaxCallbackGrpcServerOptions {
   int64_t cost_threshold = 10000;
   bool warmup_server = false;
   int thread_pool_num_threads = 0;
+  // CPU only. If true, uses the NanoRt IFRT client instead of the PjRt CPU
+  // client.
+  bool use_nanort_cpu_client = true;
+  // Only used when `use_nanort_cpu_client` is true. If true, NanoRt uses the
+  // server's computation (intra-op) thread pool for intra-op parallelism, so
+  // no extra compute threads are created. Otherwise NanoRt uses its own
+  // process-wide intra-op thread pool.
+  bool nanort_share_computation_thread_pool = true;
 };
 
 class OrbaxCallbackGrpcServer final
@@ -111,6 +119,14 @@ class OrbaxCallbackGrpcServer final
  private:
   static constexpr int kThreadPoolNumThreads = 16;
 
+  // `client_` must be declared before the thread pools so that it is destroyed
+  // after them. Weight loading (`LoadOrbaxCheckpointTask`) runs asynchronously
+  // on `checkpoint_loader_thread_pool_` with a raw pointer to the client and
+  // may still be in flight when the server is destroyed; the pool destructor
+  // waits for it, so the client must still be alive at that point. The NanoRt
+  // client may hold a pointer to `computation_thread_pool_` as its intra-op
+  // pool; that is safe because it does not use the pool once all executions
+  // have finished.
   std::shared_ptr<xla::ifrt::Client> client_;
   std::unique_ptr<tsl::thread::ThreadPool> execute_worker_thread_pool_;
   std::unique_ptr<tsl::thread::ThreadPool> computation_thread_pool_;

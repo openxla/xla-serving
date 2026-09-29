@@ -30,7 +30,7 @@ namespace xla_serving {
 namespace serving {
 
 absl::StatusOr<std::shared_ptr<xla::ifrt::Client>> GetIfrtClient(
-    absl::string_view pjrt_platform) {
+    absl::string_view pjrt_platform, const IfrtClientOptions& options) {
   if (pjrt_platform == "tpu") {
     TF_ASSIGN_OR_RETURN(auto pjrt_client, xla::GetXlaPjrtTpuClient());
     return xla::ifrt::PjRtClient::Create(std::move(pjrt_client));

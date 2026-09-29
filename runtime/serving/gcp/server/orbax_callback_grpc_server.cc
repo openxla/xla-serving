@@ -239,11 +239,12 @@ OrbaxCallbackGrpcServer::Create(const ModelServerConfig& config,
   }
   LOG(INFO) << "PJRT plugin initialized for PJRT platform: '" << pjrt_platform
             << "'. Getting client.";
-  std::shared_ptr<xla::ifrt::Client> client;
-  TF_ASSIGN_OR_RETURN(client, GetIfrtClient(pjrt_platform));
-  LOG(INFO) << "Orbax Server initialized for Orbax platform: " << orbax_platform
-            << " (Device count: " << client->device_count() << ")";
 
+  // `client` is declared before the thread pools so that, like the class
+  // members, the pools are destroyed (and drained) before the client. The pools
+  // are created before the client is assigned because the NanoRt client may use
+  // `computation_thread_pool` as its intra-op pool.
+  std::shared_ptr<xla::ifrt::Client> client;
   int thread_pool_num_threads = options.thread_pool_num_threads > 0
                                     ? options.thread_pool_num_threads
                                     : tsl::port::MaxParallelism();
@@ -257,6 +258,20 @@ OrbaxCallbackGrpcServer::Create(const ModelServerConfig& config,
       std::make_unique<tsl::thread::ThreadPool>(
           tsl::Env::Default(), tsl::ThreadOptions(),
           "OrbaxCheckpointLoaderThreadPool", kThreadPoolNumThreads);
+
+  IfrtClientOptions ifrt_client_options;
+  ifrt_client_options.cpu.use_nanort = options.use_nanort_cpu_client;
+  if (options.use_nanort_cpu_client &&
+      options.nanort_share_computation_thread_pool) {
+    LOG(INFO) << "NanoRt IFRT client will use the computation thread pool as "
+                 "the intra-op thread pool.";
+    ifrt_client_options.cpu.nanort_intra_op_threadpool =
+        computation_thread_pool->AsEigenThreadPool();
+  }
+  TF_ASSIGN_OR_RETURN(client,
+                      GetIfrtClient(pjrt_platform, ifrt_client_options));
+  LOG(INFO) << "Orbax Server initialized for Orbax platform: " << orbax_platform
+            << " (Device count: " << client->device_count() << ")";
 
   absl::flat_hash_map<std::string, std::shared_ptr<ModelEntry>> models;
   for (const auto& model_config : config.model_config_list().configs()) {
