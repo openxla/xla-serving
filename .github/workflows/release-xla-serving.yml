@@ -46,10 +46,12 @@ defaults:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Phase 1: Build Wheels & Run Full Verification Matrix
+  # Phase 0: Resolve Release Version & Target Commit
   # ---------------------------------------------------------------------------
-  build-and-verify:
-    name: Build & Verify XLA Serving Wheels
+  # Kept separate from the build matrix so that version/tag/commit outputs are
+  # produced exactly once (matrix job outputs are last-writer-wins).
+  resolve-version:
+    name: Resolve Release Version
     runs-on: linux-x86-n2-16
     container:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:0ad60e35d5870853c4c463f1c23dff6ed2dbfe3b1f708406c25a7606a5cae078
@@ -120,10 +122,42 @@ jobs:
           echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
           echo "target_commit=${TARGET_COMMIT}" >> $GITHUB_OUTPUT
 
+  # ---------------------------------------------------------------------------
+  # Phase 1: Build Wheels & Run Full Verification Matrix
+  # ---------------------------------------------------------------------------
+  build-and-verify:
+    name: "Build & Verify XLA Serving Wheels (Python ${{ matrix.python-version }})"
+    needs: resolve-version
+    runs-on: linux-x86-n2-16
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:0ad60e35d5870853c4c463f1c23dff6ed2dbfe3b1f708406c25a7606a5cae078
+    strategy:
+      matrix:
+        # Keep in sync with SUPPORTED_PYTHON_VERSIONS in MODULE.bazel.
+        python-version: ["3.12", "3.13", "3.14"]
+    env:
+      # The pure-Python xla_saved_model wheel is identical across Python
+      # versions, so it is only stashed from this leg to avoid duplicate
+      # release assets.
+      PURE_WHEEL_PYTHON: "3.12"
+      BAZEL_PYTHON_FLAG: --@rules_python//python/config_settings:python_version=${{ matrix.python-version }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ needs.resolve-version.outputs.target_commit }}
+
+      - name: Configure Git Safe Directory
+        run: |
+          git config --global --add safe.directory /__w/neptune/neptune || true
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}" || true
+          git config --global --add safe.directory "*" || true
+
       - name: Install uv and Set up Python
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           enable-cache: auto
           cache-dependency-glob: |
             **/pyproject.toml
@@ -131,7 +165,7 @@ jobs:
 
       - name: Create virtual environment
         run: |
-          uv venv --clear --python 3.12
+          uv venv --clear --python ${{ matrix.python-version }}
           echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
 
@@ -146,6 +180,7 @@ jobs:
       - name: Test and Build Data & Runner Wheels
         run: |
           bazel test -c opt --test_output=errors //data/... \
+            ${BAZEL_PYTHON_FLAG} \
             --config=remote_cache_readonly \
             --output_filter=DONT_MATCH_ANYTHING \
             --ui_event_filters=-warning \
@@ -153,6 +188,7 @@ jobs:
             --curses=no
 
           bazel build -c opt //data:xla_serving_data //data:xla_serving_data_test //runtime/python:xla_saved_model_runner \
+            ${BAZEL_PYTHON_FLAG} \
             --config=remote_cache_readonly \
             --output_filter=DONT_MATCH_ANYTHING \
             --ui_event_filters=-warning \
@@ -182,11 +218,19 @@ jobs:
 
       - name: Run Model Unit Tests
         run: |
-          uv pip install ".[test,tf,torch]"
+          EXTRAS="test,torch"
+          # TensorFlow doesn't support Python 3.14 yet, TF tests are skipped
+          # when it's not installed (see conftest.py).
+          if [ "${{ matrix.python-version }}" != "3.14" ]; then
+            EXTRAS="${EXTRAS},tf"
+          fi
+          uv pip install ".[${EXTRAS}]"
           uv pip uninstall triton 2>/dev/null || true
           pytest -v -s --full-trace -n auto xla_saved_model/
 
       - name: Run LLM Module Tests
+        # Matches build-model.yml, which only runs the LLM module on 3.12.
+        if: matrix.python-version == '3.12'
         env:
           VLLM_TARGET_DEVICE: tpu
         run: |
@@ -200,6 +244,7 @@ jobs:
       - name: Run Runtime C++ Tests
         run: |
           bazel test -c opt --test_output=errors //runtime/... \
+            ${BAZEL_PYTHON_FLAG} \
             --config=remote_cache_readonly \
             --output_filter=DONT_MATCH_ANYTHING \
             --ui_event_filters=-warning \
@@ -209,7 +254,9 @@ jobs:
       - name: Stash Release Artifacts
         run: |
           mkdir -p release_artifacts
-          cp dist/*.whl release_artifacts/
+          if [ "${{ matrix.python-version }}" = "${PURE_WHEEL_PYTHON}" ]; then
+            cp dist/*.whl release_artifacts/
+          fi
           cp bazel-bin/data/xla_serving_data*.whl release_artifacts/
           cp bazel-bin/runtime/python/xla_saved_model_runner*.whl release_artifacts/
           ls -la release_artifacts/
@@ -217,7 +264,7 @@ jobs:
       - name: Upload Release Wheels Artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: release-wheels
+          name: release-wheels-py${{ matrix.python-version }}
           path: release_artifacts/*.whl
           retention-days: 1
 
@@ -226,7 +273,7 @@ jobs:
   # ---------------------------------------------------------------------------
   publish-release:
     name: Publish Release
-    needs: build-and-verify
+    needs: [resolve-version, build-and-verify]
     runs-on: linux-x86-n2-16
     permissions:
       contents: write # Required to create release & git tag
@@ -237,20 +284,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
-          ref: ${{ needs.build-and-verify.outputs.target_commit }}
+          ref: ${{ needs.resolve-version.outputs.target_commit }}
 
       - name: Download Stashed Wheels
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: release-wheels
+          pattern: release-wheels-*
+          merge-multiple: true
           path: wheels
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ needs.build-and-verify.outputs.tag_name }}
-          VERSION: ${{ needs.build-and-verify.outputs.version }}
-          TARGET_COMMIT: ${{ needs.build-and-verify.outputs.target_commit }}
+          TAG_NAME: ${{ needs.resolve-version.outputs.tag_name }}
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+          TARGET_COMMIT: ${{ needs.resolve-version.outputs.target_commit }}
           IS_DRAFT: ${{ inputs.draft }}
           IS_PRERELEASE: ${{ inputs.prerelease }}
           IS_DRY_RUN: ${{ inputs.dry_run }}
