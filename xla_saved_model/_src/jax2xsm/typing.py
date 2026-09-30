@@ -39,6 +39,16 @@ class ApplyFnBundle:
       available kwargs are platforms, _override_lowering_rules, disabled_checks.
       See
       https://docs.jax.dev/en/latest/_autosummary/jax.export.export.html#jax.export.export.
+    use_input_aliasing: If True, the exported function takes one extra input
+      argument per output, aliased to that output (`tf.aliasing_output`), so
+      that an execution writes its results into the memory passed for those
+      inputs instead of into buffers it allocates itself. This lets a runtime
+      pre-allocate (and reuse) output memory. The extra arguments are appended
+      after `apply_fn`'s own arguments and are derived automatically from the
+      function's outputs; they are not part of the model's caller-facing
+      signature. Only meaningful for AOT serving, so input shapes must be
+      concrete: with `input_polymorphic_shapes`,
+      `input_polymorphic_shape_symbol_values` is required.
   """
 
   apply_fn: ApplyFn
@@ -48,3 +58,4 @@ class ApplyFnBundle:
       None
   )
   jax_export_kwargs: Mapping[str, Any] = dataclasses.field(default_factory=dict)
+  use_input_aliasing: bool = False

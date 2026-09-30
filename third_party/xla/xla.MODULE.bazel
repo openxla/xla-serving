@@ -1,0 +1,22 @@
+# XLA dependency for XLA Serving, included from //:MODULE.bazel.
+#
+# The revision below is updated automatically to the latest green XLA commit.
+# Keep this file limited to the XLA pin: the time of the last change to this
+# file is used to decide whether the pin is older than the latest green commit.
+#
+# To update manually, set the commit in `strip_prefix` and `urls`, and compute
+# `integrity` with:
+#   curl -sL https://github.com/openxla/xla/archive/<commit>.tar.gz \
+#     | openssl dgst -sha256 -binary | openssl base64 -A
+
+bazel_dep(name = "xla")
+archive_override(
+    module_name = "xla",
+    integrity = "sha256-vR9/VeLQrgYPcXOI2UbUz34RUIwJ7QF+8YvbkLeJtSE=",
+    patch_strip = 1,
+    patches = [
+        "//third_party/xla:xla_bzlmod_llvm.patch",
+    ],
+    strip_prefix = "xla-94ce0611b17bbfbd8ee69ac3d12d2228f6707039",
+    urls = ["https://github.com/openxla/xla/archive/94ce0611b17bbfbd8ee69ac3d12d2228f6707039.tar.gz"],
+)
