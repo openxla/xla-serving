@@ -1097,8 +1097,9 @@ absl::Status BatchResourceBase::LookupOrCreateBatcherQueue(
        thread_pool = thread_pool, allocator = allocator]() mutable {
         // TODO: Add input_task status check once the eviction is
         // supported.
-        if (!input_task->status->status().ok()) {
-          input_task->FinishTask(input_task->status->status());
+        absl::Status task_status = input_task->status->status();
+        if (!task_status.ok()) {
+          input_task->FinishTask(task_status);
           return;
         }
         absl::Status final_status = absl::OkStatus();

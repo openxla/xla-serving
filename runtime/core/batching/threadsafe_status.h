@@ -38,7 +38,7 @@ namespace xla_serving {
 //   When updated in a multi-threading setup, only the first error is retained.
 class ThreadSafeStatus {
  public:
-  const absl::Status& status() const& ABSL_LOCKS_EXCLUDED(mutex_);
+  absl::Status status() const& ABSL_LOCKS_EXCLUDED(mutex_);
   absl::Status status() && ABSL_LOCKS_EXCLUDED(mutex_);
 
   // Retains the first error status: replaces the current status with

@@ -20,7 +20,7 @@
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 
 namespace xla_serving {
-const absl::Status& ThreadSafeStatus::status() const& {
+absl::Status ThreadSafeStatus::status() const& {
   absl::MutexLock lock(mutex_);
   return status_;
 }
