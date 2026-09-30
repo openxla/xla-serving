@@ -40,7 +40,7 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "include/dlpack/dlpack.h"  // from @dlpack
-#include "xla/tsl/platform/status_macros.h"
+#include "absl/status/status_macros.h"
 #include "include/nanobind/nanobind.h"  // from @nanobind_bazel
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving

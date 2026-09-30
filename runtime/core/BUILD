@@ -319,7 +319,7 @@ cc_library(
         "@xla//xla/pjrt/proto:compile_options_proto_cc",
         "@xla//xla/python:refine_polymorphic_shapes",
         "@xla//xla/python/ifrt",
-        "@xla//xla/service:computation_placer",
+        "@xla//xla/service:device_assignment",
         "@xla//xla/tsl/concurrency:future",
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:errors",
@@ -498,7 +498,7 @@ cc_library(
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/python/ifrt",
         "@xla//xla/python/ifrt:attribute_map",
-        "@xla//xla/service:computation_placer",
+        "@xla//xla/service:device_assignment",
         "@xla//xla/tsl/platform:statusor",
     ],
 )

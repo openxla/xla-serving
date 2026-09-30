@@ -10,9 +10,9 @@ cc_library(
     defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
-        "@xla//xla/tsl/platform:status_macros",
         "@xla_serving//data/processor/cc/api:value",
         "@xla_serving//data/processor/cc/core:transform",
         "@xla_serving//data/processor/proto:transform_config_cc_proto",
@@ -49,8 +49,8 @@ cc_library(
     deps = [
         ":execution_graph",
         "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
         "@abseil-cpp//absl/strings",
-        "@xla//xla/tsl/platform:status_macros",
     ],
 )
 

@@ -154,6 +154,20 @@ message StableHloFunctionBody {
   // topologies (or platforms). At runtime, the best matching artifact is loaded
   // based on the active hardware configuration.
   repeated CompiledExecutableBody compiled_executables = 6;
+
+  // The number of trailing arguments of this function that are donated output
+  // buffers rather than caller-supplied inputs.
+  //
+  // A model exported for output donation ends its argument list with one extra
+  // argument per output, aliased to that output. Those arguments carry no input
+  // data; they only represent memory that the execution is free to write its
+  // results into, which lets the caller pre-allocate (and reuse) output memory.
+  //
+  // They are ordinary arguments as far as `signature` and `module_kept_var_idx`
+  // are concerned, but they are excluded from the caller-facing orchestration
+  // signatures, and the runtime supplies them itself. Zero means the function
+  // was not exported for output donation.
+  int32 num_input_aliased_output = 7;
 }
 
 message UnstructuredData {
