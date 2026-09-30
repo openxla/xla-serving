@@ -253,15 +253,14 @@ absl::StatusOr<int> VerifyIndexDomainsAndGetReplicas(
 }
 
 // A simple wrapper function to create ifrt array for one single device.
+// `single_device_sharding` must be a sharding over exactly one device.
 absl::StatusOr<xla::ifrt::ArrayRef> CreateArrayFromHostBufferForSingleDevice(
     xla::ifrt::Client& ifrt_client, const HostBuffer& host_buffer,
-    xla::ifrt::Device* device, xla::ifrt::Client::HostBufferSemantics semantics,
-    xla::ifrt::MemoryKind memory_kind) {
+    xla::ifrt::ShardingRef single_device_sharding,
+    xla::ifrt::Client::HostBufferSemantics semantics) {
   VLOG(2) << "Make single device array for buffer slice at "
           << host_buffer.base() << " with semantics "
           << static_cast<int>(semantics);
-  auto single_device_sharding =
-      xla::ifrt::SingleDeviceSharding::Create(device, memory_kind);
 
   return ifrt_client.MakeArrayFromHostBuffer(
       host_buffer.base(), host_buffer.dtype(), host_buffer.shape(),
@@ -425,6 +424,7 @@ absl::StatusOr<tsl::Future<HostBuffer>> MakeHostBufferFromArrayHelper(
         .MapTo(std::move(output_buffer));
   } else if (is_single_device) {
     VLOG(1) << "Fast path for single device";
+
     TF_ASSIGN_OR_RETURN(
         std::vector<xla::ifrt::ArrayRef> disassembled_array,
         input_array.DisassembleIntoSingleDeviceArrays(
@@ -625,9 +625,10 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
                                   /*level=*/3);
   if (xla::ifrt::isa<const xla::ifrt::SingleDeviceSharding>(
           ifrt_sharding.get())) {
+    // Already exactly the sharding the array needs; reusing it avoids
+    // allocating an identical one on every request.
     return CreateArrayFromHostBufferForSingleDevice(
-        ifrt_client, input_host_buffer, ifrt_sharding->devices()->devices()[0],
-        semantics, ifrt_sharding->memory_kind());
+        ifrt_client, input_host_buffer, std::move(ifrt_sharding), semantics);
   }
   const xla::ifrt::HloSharding* ifrt_hlo_sharding =
       xla::ifrt::dyn_cast<const xla::ifrt::HloSharding>(ifrt_sharding.get());
@@ -658,8 +659,10 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
     TF_ASSIGN_OR_RETURN(device, ifrt_client.LookupDevice(
                                     xla::ifrt::DeviceId(unique_device_id)));
     return CreateArrayFromHostBufferForSingleDevice(
-        ifrt_client, input_host_buffer, device, semantics,
-        ifrt_sharding->memory_kind());
+        ifrt_client, input_host_buffer,
+        xla::ifrt::SingleDeviceSharding::Create(device,
+                                                ifrt_sharding->memory_kind()),
+        semantics);
   }
 
   // Fast path for replicated sharding.
