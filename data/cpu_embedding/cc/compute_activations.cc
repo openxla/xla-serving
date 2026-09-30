@@ -36,7 +36,8 @@ namespace {
 
 absl::Status ValidateCustomCombinerInput(
     absl::Span<const int64_t> embedding_ids,
-    const EmbeddingTable& embedding_table) {
+    const EmbeddingTable& embedding_table,
+    size_t start_index = 0) {
   if (embedding_table.GetDType() != DType::kFloat32) {
     return absl::InvalidArgumentError(
         "Custom combiners are only supported for Float32 embedding tables.");
@@ -47,7 +48,7 @@ absl::Status ValidateCustomCombinerInput(
       return absl::InvalidArgumentError(absl::StrFormat(
           "Embedding ID (%d) at index %d is out of bounds [0, %d) for table "
           "%s.",
-          id, index, embedding_table.VocabSize(), embedding_table.Name()));
+          id, start_index + index, embedding_table.VocabSize(), embedding_table.Name()));
     }
   }
   return absl::OkStatus();
