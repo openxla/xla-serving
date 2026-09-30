@@ -222,6 +222,25 @@ TEST_F(MappedCpuEmbeddingResourceTest, InlineAndMappedTablesMatch) {
   EXPECT_TRUE(mapped.assets()[1].content.empty());
 }
 
+TEST_F(MappedCpuEmbeddingResourceTest, LoadsFilesystemsWithoutMappingSupport) {
+  table_path_ = "ram://cpu_embedding_resource_test/table.bin";
+  ASSERT_OK(WriteTable(table_data_));
+  CpuEmbeddingEngineResource resource(Assets());
+  ASSERT_OK(resource.Load());
+  EXPECT_EQ(resource.assets()[1].content, RawBytes(table_data_));
+
+  std::vector<float> output;
+  ASSERT_OK(Execute(resource, &output));
+  EXPECT_THAT(output, testing::ElementsAre(5.0f, 7.0f, 9.0f));
+
+  ASSERT_OK(WriteTable(absl::MakeConstSpan(table_data_).first(3)));
+  CpuEmbeddingEngineResource truncated(Assets());
+  absl::Status status = truncated.Load();
+  EXPECT_FALSE(status.ok());
+  EXPECT_THAT(status.message(), testing::HasSubstr("size mismatch"));
+  ASSERT_OK(tsl::Env::Default()->DeleteFile(table_path_));
+}
+
 // Verify mappings survive path replacement and removal.
 TEST_F(MappedCpuEmbeddingResourceTest,
        MappingSurvivesPathReplacementAndRemoval) {

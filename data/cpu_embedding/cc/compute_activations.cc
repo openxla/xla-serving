@@ -1,4 +1,5 @@
 // Copyright 2026 Google LLC
+// Copyright 2026 Arm Ltd. and affiliates
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +33,25 @@
 
 namespace xla_serving::data::cpu_embedding {
 namespace {
+
+absl::Status ValidateCustomCombinerInput(
+    absl::Span<const int64_t> embedding_ids,
+    const EmbeddingTable& embedding_table) {
+  if (embedding_table.GetDType() != DType::kFloat32) {
+    return absl::InvalidArgumentError(
+        "Custom combiners are only supported for Float32 embedding tables.");
+  }
+  for (size_t index = 0; index < embedding_ids.size(); ++index) {
+    const int64_t id = embedding_ids[index];
+    if (id < 0 || id >= embedding_table.VocabSize()) {
+      return absl::InvalidArgumentError(absl::StrFormat(
+          "Embedding ID (%d) at index %d is out of bounds [0, %d) for table "
+          "%s.",
+          id, index, embedding_table.VocabSize(), embedding_table.Name()));
+    }
+  }
+  return absl::OkStatus();
+}
 
 template <typename T, int Dim = Eigen::Dynamic>
 absl::Status AssembleCombinedEmbeddings(
@@ -231,10 +251,8 @@ absl::StatusOr<Array> ComputeEmbeddingActivations(
   if (embedding_table.GetCustomCombiner() != nullptr) {
     // TODO: Support flexible / generic datatypes in
     // CustomCombiner.
-    if (embedding_table.GetDType() != DType::kFloat32) {
-      return absl::InvalidArgumentError(
-          "Custom combiners are only supported for Float32 embedding tables.");
-    }
+    RETURN_IF_ERROR(ValidateCustomCombinerInput(feature_batch.EmbeddingIds(),
+                                                embedding_table));
     Array activations(0.f,
                       Shape({static_cast<int64_t>(feature_batch.NumSamples()),
                              embedding_table.EmbeddingDim()}));
@@ -290,6 +308,10 @@ absl::Status ComputeEmbeddingActivations(
 
   if (embedding_table.GetCustomCombiner() != nullptr) {
     if constexpr (std::is_same_v<T, float>) {
+      RETURN_IF_ERROR(ValidateCustomCombinerInput(
+          embedding_ids.subspan(row_pointers.front(),
+                                row_pointers.back() - row_pointers.front()),
+          embedding_table));
       embedding_table.GetCustomCombiner()(
           embedding_ids.data(), embedding_ids.size(), row_pointers.data(),
           row_pointers.size(), weights.data(), weights.size(),

@@ -212,7 +212,7 @@ absl::Status CpuEmbeddingEngine::ExecuteBatch(
     }
   }
 
-  std::vector<internal::EmbeddingBagRequest> batch_requests;
+  std::vector<internal::EmbeddingBagInput> batch_requests;
   batch_requests.reserve(requests.size());
   for (size_t index = 0; index < requests.size(); ++index) {
     batch_requests.push_back({

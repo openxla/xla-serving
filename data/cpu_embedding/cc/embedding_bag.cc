@@ -46,7 +46,7 @@ namespace xla_serving::data::cpu_embedding::internal {
 namespace {
 
 absl::StatusOr<EmbeddingBagBackend> ResolveBackend(
-    const EmbeddingBagRequest& request, EmbeddingBagBackend requested) {
+    const EmbeddingBagInput& request, EmbeddingBagBackend requested) {
   switch (requested) {
     case EmbeddingBagBackend::kAuto: {
       const EmbeddingTable& table = *request.embedding_table;
@@ -87,14 +87,17 @@ bool IsStandardF32Bag(const EmbeddingTable& table) {
 }
 
 absl::StatusOr<size_t> ValidateEmbeddingBagInput(
-    const EmbeddingBagRequest& request) {
+    const EmbeddingBagInput& request) {
   if (request.embedding_table == nullptr) {
     return absl::InvalidArgumentError("Embedding table must be non-null.");
   }
   if (!IsStandardF32Bag(*request.embedding_table)) {
+    if (request.embedding_table->GetCustomCombiner() != nullptr) {
+      return absl::UnimplementedError(
+          "Custom combiners are not supported by grouped execution.");
+    }
     return absl::FailedPreconditionError(
-        "Grouped execution requires a non-sequence FP32 SUM, MEAN, or SQRT_N "
-        "table without a custom combiner.");
+        "Grouped execution requires an FP32 SUM, MEAN, or SQRT_N table.");
   }
   if (request.row_pointers.size() < 2 ||
       request.row_pointers.data() == nullptr) {
@@ -143,7 +146,7 @@ absl::StatusOr<size_t> ValidateEmbeddingBagInput(
   return num_bags * dim;
 }
 
-float BagScale(const EmbeddingBagRequest& request, size_t bag) {
+float BagScale(const EmbeddingBagInput& request, size_t bag) {
   const size_t begin = request.row_pointers[bag];
   const size_t end = request.row_pointers[bag + 1];
   const size_t size = end - begin;
@@ -167,7 +170,7 @@ float BagScale(const EmbeddingBagRequest& request, size_t bag) {
 }
 
 // Inputs are validated before worker tasks run.
-void ReducePortable(const EmbeddingBagRequest& request,
+void ReducePortable(const EmbeddingBagInput& request,
                     absl::Span<float> output_buffer, size_t bag_begin,
                     size_t bag_end) {
   const size_t dim = request.embedding_table->EmbeddingDim();
@@ -193,7 +196,7 @@ void ReducePortable(const EmbeddingBagRequest& request,
   }
 }
 
-void ReduceSve(const EmbeddingBagRequest& request,
+void ReduceSve(const EmbeddingBagInput& request,
                absl::Span<float> output_buffer, size_t bag_begin,
                size_t bag_end) {
   const size_t dim = request.embedding_table->EmbeddingDim();
@@ -219,7 +222,7 @@ void ReduceSve(const EmbeddingBagRequest& request,
 }
 
 struct PreparedRequest {
-  const EmbeddingBagRequest* request;
+  const EmbeddingBagInput* request;
   EmbeddingBagBackend backend;
   size_t table_elements;
   size_t output_size;
@@ -233,7 +236,7 @@ absl::Status RequestError(size_t index, const absl::Status& status) {
 }
 
 absl::StatusOr<PreparedRequest> PrepareRequest(
-    const EmbeddingBagRequest& request, size_t index,
+    const EmbeddingBagInput& request, size_t index,
     EmbeddingBagBackend requested) {
   if (request.output_allocator == nullptr || !*request.output_allocator) {
     return absl::InvalidArgumentError(absl::StrFormat(
@@ -309,7 +312,7 @@ absl::Status ValidateOutputIsolation(
   inputs.reserve(requests.size() * 4);
   for (size_t index = 0; index < requests.size(); ++index) {
     const PreparedRequest& prepared = requests[index];
-    const EmbeddingBagRequest& request = *prepared.request;
+    const EmbeddingBagInput& request = *prepared.request;
     RETURN_IF_ERROR(AppendRange(prepared.output.data(), prepared.output.size(),
                                 sizeof(float), index, "output", &outputs));
     RETURN_IF_ERROR(AppendRange(request.embedding_ids.data(),
@@ -356,7 +359,7 @@ struct Task {
   size_t bag_end;
 };
 
-absl::StatusOr<uint64_t> TaskCost(const EmbeddingBagRequest& request,
+absl::StatusOr<uint64_t> TaskCost(const EmbeddingBagInput& request,
                                   size_t bag_begin, size_t bag_end) {
   const uint64_t ids = static_cast<uint64_t>(request.row_pointers[bag_end]) -
                        request.row_pointers[bag_begin];
@@ -378,7 +381,7 @@ absl::StatusOr<std::vector<Task>> BuildTasks(
   constexpr uint64_t kTasksPerThread = 4;
   uint64_t total_cost = 0;
   for (const PreparedRequest& prepared : requests) {
-    const EmbeddingBagRequest& request = *prepared.request;
+    const EmbeddingBagInput& request = *prepared.request;
     ASSIGN_OR_RETURN(uint64_t cost,
                      TaskCost(request, 0, request.row_pointers.size() - 1));
     if (cost > std::numeric_limits<uint64_t>::max() - total_cost) {
@@ -392,10 +395,15 @@ absl::StatusOr<std::vector<Task>> BuildTasks(
       1, total_cost / target_count + (total_cost % target_count != 0));
 
   std::vector<Task> tasks;
+  tasks.reserve(requests.size());
   for (size_t request_index = 0; request_index < requests.size();
        ++request_index) {
-    const EmbeddingBagRequest& request = *requests[request_index].request;
+    const EmbeddingBagInput& request = *requests[request_index].request;
     const size_t num_bags = request.row_pointers.size() - 1;
+    if (pool_threads == 1) {
+      tasks.push_back({request_index, 0, num_bags});
+      continue;
+    }
     size_t tile_begin = 0;
     uint64_t tile_cost = 0;
     for (size_t bag = 0; bag < num_bags; ++bag) {
@@ -434,27 +442,16 @@ void ExecuteTask(absl::Span<const PreparedRequest> requests, const Task& task) {
   }
 }
 
-bool IsEmbeddingBagSveCompiled() {
-#if defined(XLA_SERVING_HAS_SVE_EMBEDDING_BAG)
-  return true;
-#else
-  return false;
-#endif
-}
+}  // namespace
 
-bool CpuSupportsSve() {
-#if defined(__linux__) && defined(__aarch64__) && defined(HWCAP_SVE)
+bool IsEmbeddingBagSveAvailable() {
+#if defined(XLA_SERVING_HAS_SVE_EMBEDDING_BAG) && defined(__linux__) && \
+    defined(__aarch64__) && defined(HWCAP_SVE)
   static const bool available = (getauxval(AT_HWCAP) & HWCAP_SVE) != 0;
   return available;
 #else
   return false;
 #endif
-}
-
-}  // namespace
-
-bool IsEmbeddingBagSveAvailable() {
-  return IsEmbeddingBagSveCompiled() && CpuSupportsSve();
 }
 
 int EmbeddingBagSveVectorLengthBytes() {
@@ -468,7 +465,7 @@ absl::Status ComputeEmbeddingActivationsF32(
     EmbeddingBagBackend requested, EmbeddingBagBackend* selected) {
   absl::AnyInvocable<absl::Span<float>(size_t)> allocator =
       [buffer](size_t) mutable -> absl::Span<float> { return buffer; };
-  EmbeddingBagRequest request{
+  EmbeddingBagInput request{
       .embedding_ids = embedding_ids,
       .row_pointers = row_pointers,
       .embedding_table = &embedding_table,
@@ -486,7 +483,7 @@ absl::Status ComputeEmbeddingActivationsF32(
 }
 
 absl::Status ExecuteEmbeddingBagBatch(
-    absl::Span<const EmbeddingBagRequest> requests,
+    absl::Span<const EmbeddingBagInput> requests,
     EmbeddingBagBackend requested, Eigen::ThreadPoolInterface* thread_pool) {
   if (requests.empty()) {
     return absl::InvalidArgumentError(
@@ -504,13 +501,15 @@ absl::Status ExecuteEmbeddingBagBatch(
                      PrepareRequest(requests[index], index, requested));
     prepared.push_back(std::move(request));
   }
-  ASSIGN_OR_RETURN(
-      std::vector<Task> tasks,
-      BuildTasks(absl::MakeConstSpan(prepared), thread_pool->NumThreads()));
+  const bool run_inline =
+      thread_pool->NumThreads() == 1 || thread_pool->CurrentThreadId() >= 0;
+  ASSIGN_OR_RETURN(std::vector<Task> tasks,
+                   BuildTasks(absl::MakeConstSpan(prepared),
+                              run_inline ? 1 : thread_pool->NumThreads()));
   RETURN_IF_ERROR(AllocateOutputs(absl::MakeSpan(prepared)));
   RETURN_IF_ERROR(ValidateOutputIsolation(absl::MakeConstSpan(prepared)));
 
-  if (thread_pool->NumThreads() == 1 || thread_pool->CurrentThreadId() >= 0) {
+  if (run_inline) {
     for (const Task& task : tasks) {
       ExecuteTask(absl::MakeConstSpan(prepared), task);
     }

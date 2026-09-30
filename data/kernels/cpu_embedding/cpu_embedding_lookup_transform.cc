@@ -340,8 +340,22 @@ CpuEmbeddingLookupTransform::operator()(
     });
   }
 
-  RETURN_IF_ERROR(
-      resource_->Get()->ExecuteBatch(absl::MakeSpan(batch_requests)));
+  absl::Status status =
+      resource_->Get()->ExecuteBatch(absl::MakeSpan(batch_requests));
+  if (absl::IsUnimplemented(status)) {
+    // ExecuteBatch has not allocated outputs. Retain custom-combiner support
+    // through the existing single-feature API.
+    for (auto& request : batch_requests) {
+      RETURN_IF_ERROR(
+          resource_->Get()
+              ->Execute<float>(request.feature_name, request.embedding_ids,
+                               request.row_pointers, request.weights,
+                               std::move(request.output_allocator))
+              .status());
+    }
+  } else {
+    RETURN_IF_ERROR(status);
+  }
   return batch_outputs;
 }
 

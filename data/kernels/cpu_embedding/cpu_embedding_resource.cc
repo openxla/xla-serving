@@ -49,42 +49,40 @@ using cpu_embedding::CpuEmbeddingEngine;
 using transforms::cpu_embedding::CpuEmbeddingManifest;
 
 absl::StatusOr<cpu_embedding::Array> LoadTableArray(
-    const Asset& table_asset, absl::string_view table_name,
+    Asset& table_asset, absl::string_view table_name,
     const cpu_embedding::Shape& shape, size_t expected_bytes) {
-  if (!table_asset.content.empty()) {
-    absl::string_view bytes(table_asset.content);
-    if (bytes.size() != expected_bytes) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "Table asset size mismatch for ", table_name, ". Expected ",
-          expected_bytes, " bytes, but got ", bytes.size()));
+  std::shared_ptr<tsl::ReadOnlyMemoryRegion> owner;
+  absl::string_view bytes(table_asset.content);
+  if (bytes.empty()) {
+    std::unique_ptr<tsl::ReadOnlyMemoryRegion> mapped_region;
+    absl::Status map_status =
+        tsl::Env::Default()->NewReadOnlyMemoryRegionFromFile(table_asset.path,
+                                                             &mapped_region);
+    if (absl::IsUnimplemented(map_status)) {
+      // Preserve loading on filesystems that do not support memory mapping.
+      RETURN_IF_ERROR(table_asset.LoadContent());
+      bytes = table_asset.content;
+    } else {
+      if (!map_status.ok()) {
+        return absl::Status(
+            map_status.code(),
+            absl::StrCat("Failed to map table asset ", table_name, " at ",
+                         table_asset.path, ": ", map_status.message()));
+      }
+      // The table retains the mapping after load. Replacing or unlinking
+      // the path does not invalidate it; in-place file changes are unsupported.
+      owner = std::move(mapped_region);
+      bytes = absl::string_view(static_cast<const char*>(owner->data()),
+                                owner->length());
     }
-
-    const float* raw_table_data = reinterpret_cast<const float*>(bytes.data());
-    return cpu_embedding::Array::Wrap(const_cast<float*>(raw_table_data),
-                                      shape);
   }
-
-  // Keep the mapping alive if the path is replaced or unlinked. Mutating the
-  // mapped file remains unsupported.
-  std::unique_ptr<tsl::ReadOnlyMemoryRegion> mapped_region;
-  absl::Status map_status =
-      tsl::Env::Default()->NewReadOnlyMemoryRegionFromFile(table_asset.path,
-                                                           &mapped_region);
-  if (!map_status.ok()) {
-    return absl::Status(
-        map_status.code(),
-        absl::StrCat("Failed to map table asset ", table_name, " at ",
-                     table_asset.path, ": ", map_status.message()));
-  }
-  if (mapped_region->length() != expected_bytes) {
+  if (bytes.size() != expected_bytes) {
     return absl::InvalidArgumentError(absl::StrCat(
         "Table asset size mismatch for ", table_name, ". Expected ",
-        expected_bytes, " bytes, but got ", mapped_region->length()));
+        expected_bytes, " bytes, but got ", bytes.size()));
   }
 
-  auto owner =
-      std::shared_ptr<tsl::ReadOnlyMemoryRegion>(std::move(mapped_region));
-  const float* raw_table_data = static_cast<const float*>(owner->data());
+  const float* raw_table_data = reinterpret_cast<const float*>(bytes.data());
   return cpu_embedding::Array::Wrap(const_cast<float*>(raw_table_data), shape,
                                     std::move(owner));
 }

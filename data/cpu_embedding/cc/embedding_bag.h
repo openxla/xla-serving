@@ -35,16 +35,20 @@ namespace xla_serving::data::cpu_embedding::internal {
 // Auto-dispatch selects SVE only for the measured 128-bit vector length.
 inline constexpr int kAutoSveVectorLengthBytes = 16;
 
-// Backend selection for standard FP32 embedding-bag reductions.
+// Selects the reducer for standard FP32 embedding-bag reductions.
 enum class EmbeddingBagBackend {
+  // Use SVE for unweighted SUM/D128 when the executing thread uses SVE128;
+  // otherwise use the portable reducer.
   kAuto,
+  // Always use the portable reducer.
   kPortable,
+  // Use SVE for supported FP32 bags; fail if SVE is unavailable.
   kSve,
 };
 
 // Borrowed inputs, the allocator, and allocated output storage must remain
 // valid until the synchronous call returns.
-struct EmbeddingBagRequest {
+struct EmbeddingBagInput {
   absl::Span<const int64_t> embedding_ids;
   absl::Span<const int32_t> row_pointers;
   const EmbeddingTable* embedding_table = nullptr;
@@ -66,7 +70,7 @@ absl::Status ComputeEmbeddingActivationsF32(
 // Executes cost-balanced bag ranges after validating the complete group.
 // Re-entry from the supplied persistent pool executes inline.
 absl::Status ExecuteEmbeddingBagBatch(
-    absl::Span<const EmbeddingBagRequest> requests,
+    absl::Span<const EmbeddingBagInput> requests,
     EmbeddingBagBackend requested, Eigen::ThreadPoolInterface* thread_pool);
 
 }  // namespace xla_serving::data::cpu_embedding::internal

@@ -70,7 +70,8 @@ class CpuEmbeddingEngine final {
 
   // Executes standard non-sequence FP32 bags without custom combiners on the
   // shared pool. Validates request inputs before allocation and allocated
-  // output spans before writing.
+  // output spans before writing. Unsupported sequences and custom combiners
+  // return Unimplemented without invoking any output allocator.
   absl::Status ExecuteBatch(absl::Span<BatchRequest> requests) const;
 
   template <typename T>

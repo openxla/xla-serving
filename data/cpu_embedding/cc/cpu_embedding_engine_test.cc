@@ -266,12 +266,14 @@ INSTANTIATE_TYPED_TEST_SUITE_P(test, CpuEmbeddingEngineTest, MyTypes,
 absl::Status AddFeature(
     CpuEmbeddingEngine* engine, absl::string_view name,
     absl::Span<const float> data, int64_t dimension,
-    EmbeddingTable::CombineMode mode = EmbeddingTable::CombineMode::kSum) {
+    EmbeddingTable::CombineMode mode = EmbeddingTable::CombineMode::kSum,
+    CustomCombinerFn custom_combiner = nullptr) {
   const std::string feature_name(name);
   const std::string table_name = feature_name + "_table";
   Array array(
       data, Shape({static_cast<int64_t>(data.size()) / dimension, dimension}));
-  auto table = EmbeddingTable::Create(table_name, std::move(array), mode);
+  auto table = EmbeddingTable::Create(table_name, std::move(array), mode,
+                                      custom_combiner);
   if (!table.ok()) return table.status();
   absl::Status status = engine->AddLocalTable(table_name, std::move(*table));
   if (!status.ok()) return status;
@@ -324,11 +326,17 @@ TEST(CpuEmbeddingEngineBatchTest, ExecutesMixedDimensionsModesAndWeights) {
                                         11.0f * inv_sqrt_2}));
 }
 
-// Covers whole-group feature resolution before allocation.
-TEST(CpuEmbeddingEngineBatchTest, ResolvesAllRequestsBeforeAllocation) {
+// Covers whole-group validation before allocation.
+TEST(CpuEmbeddingEngineBatchTest, ValidatesAllRequestsBeforeAllocation) {
   CpuEmbeddingEngine engine(CpuEmbeddingEngine::Options{.max_cpu_slots = 2});
   std::vector<float> table_data = {1.0f, 2.0f};
   ASSERT_OK(AddFeature(&engine, "feature", table_data, 2));
+  ASSERT_OK(AddFeature(
+      &engine, "custom", table_data, 2, EmbeddingTable::CombineMode::kSum,
+      [](const int64_t*, int64_t, const int32_t*, int64_t, const float*,
+         int64_t, const float*, int64_t, int64_t, float*) {
+        ADD_FAILURE() << "ExecuteBatch must not invoke custom combiners";
+      }));
   const std::vector<int64_t> ids = {0};
   const std::vector<int32_t> rows = {0, 1};
   std::vector<float> output0(2, 29.0f);
@@ -361,6 +369,10 @@ TEST(CpuEmbeddingEngineBatchTest, ResolvesAllRequestsBeforeAllocation) {
   EXPECT_THAT(engine.ExecuteBatch(absl::MakeSpan(requests)),
               absl_testing::StatusIs(absl::StatusCode::kNotFound,
                                      testing::HasSubstr("missing")));
+  requests[1].feature_name = "custom";
+  EXPECT_THAT(engine.ExecuteBatch(absl::MakeSpan(requests)),
+              absl_testing::StatusIs(absl::StatusCode::kUnimplemented,
+                                     testing::HasSubstr("Custom combiners")));
   EXPECT_EQ(allocation_count, 0);
   EXPECT_THAT(output0, ElementsAre(29.0f, 29.0f));
   EXPECT_THAT(output1, ElementsAre(31.0f, 31.0f));

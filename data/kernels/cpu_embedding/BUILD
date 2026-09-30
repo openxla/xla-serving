@@ -225,6 +225,7 @@ cc_test(
         "@abseil-cpp//absl/status:status_matchers",
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
+        "@eigen_archive//:eigen3",
         "@googletest//:gtest_main",
         "@xla//xla/python/ifrt",
         "@xla_serving//data/cpu_embedding/cc:array",

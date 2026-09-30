@@ -30,6 +30,7 @@
 #include "absl/status/status_matchers.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "Eigen/Core"
 #include "data/cpu_embedding/cc/array.h"  // from @xla_serving
 #include "data/cpu_embedding/cc/cpu_embedding_engine.h"  // from @xla_serving
 #include "data/cpu_embedding/cc/embedding_table.h"  // from @xla_serving
@@ -333,6 +334,96 @@ TEST(CpuEmbeddingLookupTransformTest, MultiLookupSuccess) {
   const float* dataB = reinterpret_cast<const float*>(outB.base());
   std::vector<float> vecB(dataB, dataB + 2);
   EXPECT_THAT(vecB, ElementsAre(FloatEq(9.0), FloatEq(10.0)));
+}
+
+TEST(CpuEmbeddingLookupTransformTest, MixedStandardAndCustomCombiners) {
+  auto resource = std::make_shared<CpuEmbeddingEngineResource>(
+      "engine_res", std::vector<Asset>{}, "CpuEmbeddingEngineResource");
+  ASSERT_OK_AND_ASSIGN(auto transform, CpuEmbeddingLookupTransform::Create(
+                                           resource, {"standard", "custom"},
+                                           /*dense_lookup=*/true));
+
+  // Register after Create so eligibility must be checked on each execution.
+  const std::vector<float> table_data = {1.0f, 2.0f, 3.0f, 4.0f};
+  for (const std::string name : {"standard", "custom"}) {
+    cpu_embedding::CustomCombinerFn custom = nullptr;
+    if (name == "custom") {
+      custom = [](const int64_t* ids, int64_t, const int32_t* rows,
+                  int64_t rows_size, const float*, int64_t, const float* data,
+                  int64_t, int64_t dim, float* output) {
+        // Pick the first row of each bag.
+        for (int64_t bag = 0; bag + 1 < rows_size; ++bag) {
+          for (int64_t column = 0; column < dim; ++column) {
+            output[bag * dim + column] = data[ids[rows[bag]] * dim + column];
+          }
+        }
+      };
+    }
+    ASSERT_OK_AND_ASSIGN(
+        auto table,
+        cpu_embedding::EmbeddingTable::Create(
+            name,
+            cpu_embedding::Array(absl::MakeConstSpan(table_data),
+                                 cpu_embedding::Shape({2, 2})),
+            cpu_embedding::EmbeddingTable::CombineMode::kSum, custom));
+    ASSERT_OK(resource->Get()->AddLocalTable(name, std::move(table)));
+    ASSERT_OK(resource->Get()->RegisterFeatureSpec(
+        {.name = name, .table_name = name}));
+  }
+
+  const std::vector<int32_t> ids = {0, 1, 1, 0};
+  xla_serving::HostBuffer ids_buffer(
+      xla::ifrt::DType(xla::ifrt::DType::Kind::kS32), xla::ifrt::Shape({2, 2}));
+  absl::c_copy(ids, reinterpret_cast<int32_t*>(ids_buffer.base()));
+  ASSERT_OK_AND_ASSIGN(const auto outputs,
+                       (*transform)({ids_buffer, ids_buffer}, {}, {}));
+  ASSERT_EQ(outputs.size(), 2);
+  const auto standard = outputs[0].flat<float>();
+  const auto custom = outputs[1].flat<float>();
+  EXPECT_THAT(absl::MakeConstSpan(standard.data(), standard.size()),
+              ElementsAre(4.0f, 6.0f, 4.0f, 6.0f));
+  EXPECT_THAT(absl::MakeConstSpan(custom.data(), custom.size()),
+              ElementsAre(1.0f, 2.0f, 3.0f, 4.0f));
+}
+
+TEST(CpuEmbeddingLookupTransformTest, RejectsInvalidCustomCombinerInput) {
+  for (bool use_bfloat16 : {false, true}) {
+    auto resource = std::make_shared<CpuEmbeddingEngineResource>(
+        "engine_res", std::vector<Asset>{}, "CpuEmbeddingEngineResource");
+    ASSERT_OK_AND_ASSIGN(auto transform, CpuEmbeddingLookupTransform::Create(
+                                             resource, {"custom"},
+                                             /*dense_lookup=*/true));
+    auto custom = [](const int64_t*, int64_t, const int32_t*, int64_t,
+                     const float*, int64_t, const float*, int64_t, int64_t,
+                     float*) {
+      ADD_FAILURE() << "Invalid input reached combiner";
+    };
+    cpu_embedding::Array array;
+    if (use_bfloat16) {
+      const std::vector<Eigen::bfloat16> data = {Eigen::bfloat16(1.0f),
+                                                 Eigen::bfloat16(2.0f)};
+      array = cpu_embedding::Array(absl::MakeConstSpan(data),
+                                   cpu_embedding::Shape({2, 1}));
+    } else {
+      const std::vector<float> data = {1.0f, 2.0f};
+      array = cpu_embedding::Array(absl::MakeConstSpan(data),
+                                   cpu_embedding::Shape({2, 1}));
+    }
+    ASSERT_OK_AND_ASSIGN(auto table, cpu_embedding::EmbeddingTable::Create(
+                                         "custom", std::move(array),
+                                         cpu_embedding::EmbeddingTable::CombineMode::kSum,
+                                         custom));
+    ASSERT_OK(resource->Get()->AddLocalTable("custom", std::move(table)));
+    ASSERT_OK(resource->Get()->RegisterFeatureSpec(
+        {.name = "custom", .table_name = "custom"}));
+
+    xla_serving::HostBuffer ids_buffer(
+        xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+        xla::ifrt::Shape({1, 1}));
+    *reinterpret_cast<int32_t*>(ids_buffer.base()) = use_bfloat16 ? 0 : 2;
+    EXPECT_THAT((*transform)({ids_buffer}, {}, {}),
+                absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
+  }
 }
 
 TEST(CpuEmbeddingLookupTransformTest, ScalarRowPointersFails) {

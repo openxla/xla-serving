@@ -127,8 +127,8 @@ class CpuEmbeddingResource:
       "max_sequence_length".
     max_cpu_slots: Number of threads in the CPU lookup worker pool.
     block_size: Only legacy single-feature in-place lookups use this setting.
-      Grouped `CpuEmbeddingModule` and `DenseCpuEmbeddingLookupTransform`
-      lookups ignore it.
+      The grouped `CpuEmbeddingModule` path and the legacy
+      `DenseCpuEmbeddingLookupTransform` API ignore it.
 
   Example usage:
 

@@ -60,7 +60,7 @@ absl::AnyInvocable<absl::Span<float>(size_t)> MakeAllocator(
   };
 }
 
-internal::EmbeddingBagRequest MakeRequest(
+internal::EmbeddingBagInput MakeRequest(
     absl::Span<const int64_t> ids, absl::Span<const int32_t> rows,
     const EmbeddingTable* table, absl::Span<const float> weights,
     absl::AnyInvocable<absl::Span<float>(size_t)>* allocator) {
@@ -104,25 +104,27 @@ TEST(EmbeddingBagBatchTest, ExecutesMixedRequestsOnOnePool) {
   const std::vector<int32_t> rows0 = {0, 2, 3};
   const std::vector<int64_t> ids1 = {0, 1};
   const std::vector<int32_t> rows1 = {0, 2};
-  std::vector<float> output0(4, -1.0f);
-  std::vector<float> output1(3, -1.0f);
-  auto allocate0 = MakeAllocator(&output0);
-  auto allocate1 = MakeAllocator(&output1);
-  std::vector<internal::EmbeddingBagRequest> requests = {
-      MakeRequest(ids0, rows0, table2.get(), {}, &allocate0),
-      MakeRequest(ids1, rows1, table3.get(), {}, &allocate1),
-  };
-  Eigen::ThreadPool pool(2);
+  for (int threads : {1, 2}) {
+    SCOPED_TRACE(threads);
+    std::vector<float> output0(4, -1.0f);
+    std::vector<float> output1(3, -1.0f);
+    auto allocate0 = MakeAllocator(&output0);
+    auto allocate1 = MakeAllocator(&output1);
+    std::vector<internal::EmbeddingBagInput> requests = {
+        MakeRequest(ids0, rows0, table2.get(), {}, &allocate0),
+        MakeRequest(ids1, rows1, table3.get(), {}, &allocate1),
+    };
+    Eigen::ThreadPool pool(threads);
+    ASSERT_OK(internal::ExecuteEmbeddingBagBatch(
+        absl::MakeSpan(requests), internal::EmbeddingBagBackend::kPortable,
+        &pool));
 
-  ASSERT_OK(internal::ExecuteEmbeddingBagBatch(
-      absl::MakeSpan(requests), internal::EmbeddingBagBackend::kPortable,
-      &pool));
-
-  EXPECT_THAT(output0, ElementsAre(4.0f, 6.0f, 3.0f, 4.0f));
-  const float inv_sqrt_2 = 1.0f / std::sqrt(2.0f);
-  EXPECT_THAT(output1,
-              Pointwise(Approx(1e-6f), {3.0f * inv_sqrt_2, 7.0f * inv_sqrt_2,
-                                        11.0f * inv_sqrt_2}));
+    EXPECT_THAT(output0, ElementsAre(4.0f, 6.0f, 3.0f, 4.0f));
+    const float inv_sqrt_2 = 1.0f / std::sqrt(2.0f);
+    EXPECT_THAT(output1,
+                Pointwise(Approx(1e-6f), {3.0f * inv_sqrt_2, 7.0f * inv_sqrt_2,
+                                          11.0f * inv_sqrt_2}));
+  }
 }
 
 // Covers whole-group validation before allocation.
@@ -143,7 +145,7 @@ TEST(EmbeddingBagBatchTest, ValidatesWholeGroupBeforeAllocating) {
     ++allocation_count;
     return absl::MakeSpan(output1).subspan(0, size);
   };
-  std::vector<internal::EmbeddingBagRequest> requests = {
+  std::vector<internal::EmbeddingBagInput> requests = {
       MakeRequest(valid_ids, rows, table.get(), {}, &allocate0),
       MakeRequest(invalid_ids, rows, table.get(), {}, &allocate1),
   };
@@ -168,7 +170,7 @@ TEST(EmbeddingBagBatchTest, RejectsAliasedOutputsBeforeWriting) {
   std::vector<float> shared_output(2, 23.0f);
   auto allocate0 = MakeAllocator(&shared_output);
   auto allocate1 = MakeAllocator(&shared_output);
-  std::vector<internal::EmbeddingBagRequest> requests = {
+  std::vector<internal::EmbeddingBagInput> requests = {
       MakeRequest(ids, rows, table.get(), {}, &allocate0),
       MakeRequest(ids, rows, table.get(), {}, &allocate1),
   };
@@ -203,16 +205,15 @@ TEST(EmbeddingBagBatchTest, RejectsOutputInputAliasingBeforeWriting) {
   EXPECT_THAT(weights, ElementsAre(0.25f, 0.75f));
 }
 
-// Covers pool re-entry without deadlock.
+// Covers pool re-entry without deadlock, with enough bags to require tiling.
 TEST(EmbeddingBagBatchTest, PoolReentryExecutesInline) {
   std::vector<float> table_data = {1.0f, 2.0f};
   ASSERT_OK_AND_ASSIGN(auto table, MakeTable(table_data, 2));
-  const std::vector<int64_t> ids = {0};
-  const std::vector<int32_t> rows = {0, 1};
-  std::vector<float> output(2, -1.0f);
+  const std::vector<int64_t> ids = {0, 0};
+  const std::vector<int32_t> rows = {0, 1, 1, 2};
+  std::vector<float> output(6, -1.0f);
   auto allocate = MakeAllocator(&output);
   auto request = MakeRequest(ids, rows, table.get(), {}, &allocate);
-  Eigen::ThreadPool pool(2);
   std::promise<void> blocker_started;
   std::future<void> blocker_ready = blocker_started.get_future();
   std::promise<void> release_blocker;
@@ -220,6 +221,7 @@ TEST(EmbeddingBagBatchTest, PoolReentryExecutesInline) {
       release_blocker.get_future().share();
   std::promise<absl::Status> completion;
   std::future<absl::Status> result = completion.get_future();
+  Eigen::ThreadPool pool(2);
 
   pool.Schedule([&] {
     blocker_started.set_value();
@@ -244,7 +246,7 @@ TEST(EmbeddingBagBatchTest, PoolReentryExecutesInline) {
   ASSERT_EQ(result.wait_for(std::chrono::seconds(5)),
             std::future_status::ready);
   ASSERT_OK(result.get());
-  EXPECT_THAT(output, ElementsAre(1.0f, 2.0f));
+  EXPECT_THAT(output, ElementsAre(1.0f, 2.0f, 0.0f, 0.0f, 1.0f, 2.0f));
 }
 
 // Covers auto gating and exact FP32 addition order across all ID blocks.
