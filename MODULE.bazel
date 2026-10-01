@@ -11,9 +11,9 @@ bazel_dep(name = "boringssl", version = "0.20250818.0")
 bazel_dep(name = "bzip2", version = "1.0.8.bcr.4")
 bazel_dep(name = "googletest", version = "1.17.0.bcr.2")
 bazel_dep(name = "grpc", version = "1.81.0")
-bazel_dep(name = "highway", version = "1.3.0", repo_name = "com_google_highway")
+bazel_dep(name = "highway", version = "1.4.0", repo_name = "com_google_highway")
 bazel_dep(name = "lz4", version = "1.10.0.bcr.1")
-bazel_dep(name = "nanobind_bazel", version = "2.12.0")
+bazel_dep(name = "nanobind_bazel", version = "3.0.1")
 bazel_dep(name = "nlohmann_json", version = "3.12.0.bcr.1")
 bazel_dep(name = "platforms", version = "1.1.0")
 bazel_dep(name = "protobuf", version = "32.1", repo_name = "com_google_protobuf")
@@ -87,8 +87,14 @@ include("//third_party/xla:xla.MODULE.bazel")
 
 xla_third_party = use_extension("@xla//third_party/extensions:third_party.bzl", "third_party_ext")
 
+# Use a single nanobind for XLA and for our own extensions, otherwise both
+# copies get linked into the same extension module.
+nanobind_internal = use_extension("@nanobind_bazel//:internal_configure.bzl", "internal_configure_extension")
+use_repo(nanobind_internal, "nanobind")
+
 override_repo(
     xla_third_party,
+    nanobind = "nanobind",
     riegeli = "riegeli",
 )
 
@@ -100,13 +106,13 @@ override_repo(
 bazel_dep(name = "tensorflow", repo_name = "org_tensorflow")
 archive_override(
     module_name = "tensorflow",
-    integrity = "sha256-QkBtcFrHzbVW8oY+7QQmZtw+LnfiWWCCLWwi30v/lLU=",
+    integrity = "sha256-bqp2flgFQBHP1KZiFcQpanuDF7c9RnSA6RFtH9/n7O8=",
     patch_strip = 1,
     patches = [
         "//third_party/tensorflow:where_op_gpu.patch",
     ],
-    strip_prefix = "tensorflow-1686ec0ae1d71c08f3e38eb92c0f379575c6025f",
-    urls = ["https://github.com/tensorflow/tensorflow/archive/1686ec0ae1d71c08f3e38eb92c0f379575c6025f.zip"],
+    strip_prefix = "tensorflow-34d7ab29960ee6c4f1cc7e857da4d9d47e600208",
+    urls = ["https://github.com/tensorflow/tensorflow/archive/34d7ab29960ee6c4f1cc7e857da4d9d47e600208.zip"],
 )
 
 tf_third_party = use_extension("@org_tensorflow//third_party/extensions:third_party.bzl", "third_party_ext")

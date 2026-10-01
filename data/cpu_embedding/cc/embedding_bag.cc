@@ -30,7 +30,7 @@
 
 #include "absl/functional/any_invocable.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "xla/tsl/platform/status_macros.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/synchronization/blocking_counter.h"  // from @abseil-cpp

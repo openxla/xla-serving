@@ -27,7 +27,7 @@
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "xla/tsl/platform/status_macros.h"
+#include "absl/status/status_macros.h"
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
