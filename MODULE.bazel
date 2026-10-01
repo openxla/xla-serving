@@ -81,17 +81,9 @@ archive_override(
     urls = ["https://github.com/google-ml-infra/rules_ml_toolchain/archive/236a498d8624bef88e35ce2518a833204b0db19f.tar.gz"],
 )
 
-bazel_dep(name = "xla")
-archive_override(
-    module_name = "xla",
-    integrity = "sha256-vR9/VeLQrgYPcXOI2UbUz34RUIwJ7QF+8YvbkLeJtSE=",
-    patch_strip = 1,
-    patches = [
-        "//third_party/xla:xla_bzlmod_llvm.patch",
-    ],
-    strip_prefix = "xla-94ce0611b17bbfbd8ee69ac3d12d2228f6707039",
-    urls = ["https://github.com/openxla/xla/archive/94ce0611b17bbfbd8ee69ac3d12d2228f6707039.tar.gz"],
-)
+# The XLA dependency and its pinned revision live in a separate file so that the
+# revision can be updated automatically without touching this file.
+include("//third_party/xla:xla.MODULE.bazel")
 
 xla_third_party = use_extension("@xla//third_party/extensions:third_party.bzl", "third_party_ext")
 
