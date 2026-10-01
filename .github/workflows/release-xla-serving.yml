@@ -69,7 +69,7 @@ jobs:
 
       - name: Configure Git Safe Directory
         run: |
-          git config --global --add safe.directory /__w/neptune/neptune || true
+          git config --global --add safe.directory /__w/xla-serving/xla-serving || true
           git config --global --add safe.directory "${GITHUB_WORKSPACE}" || true
           git config --global --add safe.directory "*" || true
 
@@ -150,7 +150,7 @@ jobs:
 
       - name: Configure Git Safe Directory
         run: |
-          git config --global --add safe.directory /__w/neptune/neptune || true
+          git config --global --add safe.directory /__w/xla-serving/xla-serving || true
           git config --global --add safe.directory "${GITHUB_WORKSPACE}" || true
           git config --global --add safe.directory "*" || true
 
@@ -303,7 +303,7 @@ jobs:
           IS_PRERELEASE: ${{ inputs.prerelease }}
           IS_DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          git config --global --add safe.directory /__w/neptune/neptune || true
+          git config --global --add safe.directory /__w/xla-serving/xla-serving || true
           git config --global --add safe.directory "${GITHUB_WORKSPACE}" || true
           git config --global --add safe.directory "*" || true
 
