@@ -265,6 +265,106 @@ class MainLibOrchestrationTest(test_utils.XsmTestCase):
         'serving_default_model2_serving_default',
     )
 
+  def test_save_single_jax_model_with_orchestration_names_its_weights(self):
+    """A single-model export must name the weights key its checkpoint uses.
+
+    `save` keeps the flat legacy `weights` key when there is exactly one model,
+    and namespaces per model otherwise. `Component.weights_name` has to follow
+    the same rule: a component naming a key the manifest does not hold fails at
+    interpreter load time, not at export, so nothing here would catch it.
+    """
+    model = jax_model.JaxModel(
+        name='solo',
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=lambda params, inputs: {'y': inputs['x'] * params['w']},
+            jax_export_kwargs={'platforms': ['cpu']},
+        ),
+        params={'w': jnp.array(2.0, dtype=jnp.float32)},
+    )
+
+    cfg = serving_config.ServingConfig(
+        serving_signature='serving_default',
+        input_signature={
+            'x': jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.float32)
+        },
+        orchestration=serving_config.Orchestration(
+            model_calls=[
+                serving_config.ModelCall(
+                    model_name='solo',
+                    method_key='serving_default',
+                    input_keys=['x'],
+                    output_keys=['y'],
+                )
+            ],
+            graph_based=True,
+        ),
+    )
+
+    export_path = pathlib.Path(self.create_tempdir().full_path)
+    main_lib.save(
+        models=model,
+        export_path=str(export_path),
+        serving_configs=[cfg],
+    )
+
+    with open(export_path / 'orchestration.pb', 'rb') as f:
+      pipelines_proto = orchestration_pb2.Pipelines.FromString(f.read())
+    pipeline = pipelines_proto.name_to_pipeline['serving_default']
+    self.assertLen(pipeline.components, 1)
+
+    manifest = persistence_lib.load(str(export_path))
+    self.assertIn(pipeline.components[0].weights_name, manifest.objects)
+
+  def test_save_single_weightless_jax_model_references_no_weights(self):
+    """A model with an empty `weights_name` must not get a weights key.
+
+    An empty `weights_name` opts the model out of a checkpoint, so its component
+    must not reference one either: the interpreter would otherwise fail at load
+    time looking for weights the manifest does not hold.
+    """
+
+    class WeightlessJaxModel(jax_model.JaxModel):
+
+      @property
+      def weights_name(self) -> str:
+        return ''
+
+    model = WeightlessJaxModel(
+        name='weightless',
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=lambda params, inputs: {'y': inputs['x'] + 1.0},
+            jax_export_kwargs={'platforms': ['cpu']},
+        ),
+        params=None,
+    )
+    cfg = serving_config.ServingConfig(
+        serving_signature='serving_default',
+        input_signature={
+            'x': jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.float32)
+        },
+        orchestration=serving_config.Orchestration(
+            model_calls=[
+                serving_config.ModelCall(
+                    model_name='weightless',
+                    method_key='serving_default',
+                )
+            ]
+        ),
+    )
+
+    export_path = pathlib.Path(self.create_tempdir().full_path)
+    main_lib.save(
+        models=model,
+        export_path=str(export_path),
+        serving_configs=[cfg],
+    )
+
+    with open(export_path / 'orchestration.pb', 'rb') as f:
+      pipelines_proto = orchestration_pb2.Pipelines.FromString(f.read())
+    pipeline = pipelines_proto.name_to_pipeline['serving_default']
+    self.assertLen(pipeline.components, 1)
+    self.assertEmpty(pipeline.components[0].weights_name)
+
   def test_duplicate_model_names(self):
     model1 = jax_model.JaxModel(
         name='model1',
