@@ -179,6 +179,10 @@ class StableHloRunnerBase {
     StableHloIOSpec original_io_spec;
     // IOSpec from the StableHLO after optimization (executable IO shapes).
     StableHloIOSpec io_spec;
+    // Maps an index into `io_spec.inputs` to the permutation (from
+    // `kHostTransposeAttr`) that must be applied to that host input before
+    // it is matched against `io_spec`.
+    absl::flat_hash_map<int, std::vector<int64_t>> host_transpose_permutations;
     xla::ifrt::LoadedExecutableRef ifrt_executable;
     // The canonical program fingerprint of the `ifrt_executable` and the
     // timestamp in microseconds. The timestamp is added for uniqueness (e.g.,

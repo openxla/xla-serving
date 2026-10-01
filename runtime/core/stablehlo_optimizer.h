@@ -24,6 +24,13 @@
 
 namespace xla_serving {
 
+// `DenseI64ArrayAttr` that a `StablehloOptimizer` may set on an argument of
+// the `main` function to require that the host input be transposed with the
+// given permutation (output dimension `i` is input dimension `permutation[i]`)
+// before the H2D transfer. `StableHloRunner` performs the transpose on the host
+// and removes the attribute before compilation.
+inline constexpr char kHostTransposeAttr[] = "jsv.host_transpose";
+
 // An interface for optimizing StableHLO models. All implementation must be
 // thread-safe and stateless.
 class StablehloOptimizer {
