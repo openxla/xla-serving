@@ -396,9 +396,11 @@ StableHloRunnerBase::DataConverter::ExecuteDefaultTransfer(
     VLOG(2) << "Converting input of shape " << input_data.shape();
 
     xla::ifrt::ArrayRef array;
-    TF_ASSIGN_OR_RETURN(array, sharding_internal::MakeArrayFromHostBuffer(
-                                   *ifrt_client_, input_data, device_list_,
-                                   shardings_span[i], *thread_pool_));
+    TF_ASSIGN_OR_RETURN(
+        array, sharding_internal::MakeArrayFromHostBuffer(
+                   *ifrt_client_, input_data, device_list_, shardings_span[i],
+                   *thread_pool_,
+                   xla::ifrt::Client::HostBufferSemantics::kImmutableZeroCopy));
 
     converted_inputs.push_back(std::move(array));
   }
