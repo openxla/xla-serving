@@ -50,13 +50,13 @@ cc_library(
         "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/functional:any_invocable",
         "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/types:span",
         "@eigen_archive//:eigen3",
-        "@xla//xla/tsl/platform:status_macros",
     ],
 )
 
@@ -67,11 +67,11 @@ cc_library(
     defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
         "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings:str_format",
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
-        "@xla//xla/tsl/platform:status_macros",
     ],
 )
 
@@ -85,11 +85,11 @@ cc_library(
         ":embedding_table",
         ":feature_batch_csr_input",
         "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings:str_format",
         "@abseil-cpp//absl/types:span",
         "@eigen_archive//:eigen3",
-        "@xla//xla/tsl/platform:status_macros",
     ],
 )
 
@@ -109,12 +109,12 @@ cc_library(
         ":embedding_table",
         "@abseil-cpp//absl/functional:any_invocable",
         "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings:str_format",
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/types:span",
         "@eigen_archive//:eigen3",
-        "@xla//xla/tsl/platform:status_macros",
     ],
 )
 

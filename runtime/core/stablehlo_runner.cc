@@ -26,6 +26,7 @@
 
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/base/optimization.h"  // from @abseil-cpp
+#include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/log/vlog_is_on.h"  // from @abseil-cpp
 #include "absl/memory/memory.h"  // from @abseil-cpp
@@ -35,6 +36,7 @@
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/time/clock.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "llvm/include/llvm/Support/Casting.h"  // from @llvm-project
 #include "mlir/include/mlir/Dialect/Func/IR/FuncOps.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/Attributes.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/Builders.h"  // from @llvm-project
@@ -67,7 +69,7 @@
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
 #include "xla/python/refine_polymorphic_shapes.h"  // from @xla
-#include "xla/service/computation_placer.h"  // from @xla
+#include "xla/service/device_assignment.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
@@ -284,8 +286,26 @@ StableHloRunner::CreateExecutableSynchronously(
                                                      ? &compile_options_.value()
                                                      : nullptr));
 
+  absl::flat_hash_map<int, std::vector<int64_t>> host_transpose_permutations;
   if (optimizer_ != nullptr) {
     TF_RETURN_IF_ERROR(optimizer_->Optimize(args, module_bundle->module.get()));
+  }
+  if (mlir::func::FuncOp main_func =
+          module_bundle->module->lookupSymbol<mlir::func::FuncOp>("main")) {
+    for (int i = 0, e = main_func.getNumArguments(); i < e; ++i) {
+      mlir::Attribute attr = main_func.removeArgAttr(i, kHostTransposeAttr);
+      if (!attr) {
+        continue;
+      }
+      auto permutation = llvm::dyn_cast<mlir::DenseI64ArrayAttr>(attr);
+      if (!permutation) {
+        return absl::InternalError(
+            absl::StrCat(kHostTransposeAttr, " on argument ", i,
+                         " must be a DenseI64ArrayAttr"));
+      }
+      host_transpose_permutations[i].assign(permutation.asArrayRef().begin(),
+                                            permutation.asArrayRef().end());
+    }
   }
 
   if (VLOG_IS_ON(1)) {
@@ -346,6 +366,8 @@ StableHloRunner::CreateExecutableSynchronously(
   executable_bundle->input_offset = module_bundle->input_offset;
   executable_bundle->original_io_spec = original_io_spec;
   executable_bundle->io_spec = io_spec;
+  executable_bundle->host_transpose_permutations =
+      std::move(host_transpose_permutations);
 
   executable_bundle->ifrt_executable = std::move(ifrt_executable);
   executable_bundle->program_fingerprint_with_timestamp =

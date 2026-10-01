@@ -209,6 +209,8 @@ def _build_function(
 
     stable_hlo_body.module_kept_var_idx.extend(fn.module_kept_var_idx)
 
+    stable_hlo_body.num_input_aliased_output = fn.num_input_aliased_output
+
     # Serialize and add all supplementals to the function body proto.
     for supp_name, supp in (fn.supplemental_info or {}).items():
       supp = supp.serializable_to_proto()

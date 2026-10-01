@@ -110,6 +110,32 @@ class PipelineNode:
   use_batching: bool = False
 
 
+def _checkpoint_weights_name(
+    model: jax_model.JaxModel, is_single_model: bool
+) -> str:
+  """Returns the manifest object key a JAX model's checkpoint is saved under.
+
+  A single-model export keeps the flat legacy `weights` key; a multi-model
+  export namespaces the key per model so that the checkpoints stay apart. Both
+  `save` and the `Component` protos have to agree, or the interpreter fails at
+  load time looking for weights the manifest does not hold under that name.
+
+  A model whose `weights_name` is empty has opted out of a checkpoint, so the
+  empty name is kept and its component does not reference any weights.
+
+  Args:
+    model: The JAX model whose checkpoint key is wanted.
+    is_single_model: Whether this export saves exactly one model.
+
+  Returns:
+    The manifest object key for this model's checkpoint, or an empty string if
+    the model has opted out of one.
+  """
+  if not model.weights_name:
+    return model.weights_name
+  return constants.WEIGHTS_NAME if is_single_model else model.weights_name
+
+
 def _build_orchestration_pipeline_nodes(
     models: Sequence[Model],
     serving_signature: str,
@@ -146,7 +172,9 @@ def _build_orchestration_pipeline_nodes(
             name=processor_name,
             apply_fn_bundle=model.apply_fn_bundles[model_call.method_key],
             params=model.params,
-            weights_name=model.weights_name,
+            weights_name=_checkpoint_weights_name(
+                model, is_single_model=len(models) == 1
+            ),
             jax_mesh=model.jax_mesh,
         )
       case tensorflow_model.TensorflowModel():
@@ -246,6 +274,10 @@ def _update_save_bundle_with_pipeline_node(
     A tuple (input_signature, output_signature), where
     input_signature is the input signature of the pipeline node, and
     output_signature is the output signature of the pipeline node.
+
+  Raises:
+    ValueError: If the processor was exported for output donation but the
+      pipeline is not graph based.
   """
 
   suppress_x64_outputs = (
@@ -256,6 +288,24 @@ def _update_save_bundle_with_pipeline_node(
       input_signature,
       suppress_x64_outputs=suppress_x64_outputs,
   )
+
+  # A caller donating output memory addresses its buffers to a component's
+  # outputs by name, and those names reach the artifact only through
+  # `Component.named_signature`, which is written for graph-based pipelines
+  # alone. Exporting a donating component any other way would produce a model
+  # whose donated buffers cannot be addressed at all, so refuse here rather
+  # than at serving time.
+  if prepared_processor.has_donated_output_args and not is_graph_based:
+    raise ValueError(
+        f'Processor {prepared_processor.name!r} was exported for output'
+        ' donation, which requires graph-based orchestration so that the'
+        ' component\'s output names are recorded in the artifact: a caller'
+        ' supplying donated output buffers addresses them by name. Set'
+        ' `ServingConfig.orchestration` to an'
+        ' `Orchestration(..., graph_based=True)`, or export without'
+        ' `ApplyFnBundle(use_input_aliasing=True)`.'
+    )
+
   save_bundle.manifest_objects[prepared_processor.name] = (
       prepared_processor.to_xsm_saveable()
   )
@@ -533,15 +583,15 @@ def save(
     if isinstance(model_inst, jax_model.JaxModel):
       if is_single_model:
         ckpt_path = constants.DEFAULT_CHECKPOINT_SUBDIR
-        w_name = constants.WEIGHTS_NAME
       else:
         ckpt_path = f'{constants.DEFAULT_CHECKPOINT_SUBDIR}/{model_inst.name}'
-        w_name = model_inst.weights_name
       save_module.update(
           model_inst.save_checkpoint(
               export_path,
               checkpoint_path=ckpt_path,
-              weights_name=w_name,
+              weights_name=_checkpoint_weights_name(
+                  model_inst, is_single_model
+              ),
           )
       )
 

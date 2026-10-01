@@ -75,7 +75,7 @@ ABSL_FLAG(bool, warmup_server, false,
           "xla_serving::serving::PredictionLog containing PredictRequests. This file "
           "can be generated automatically during model export by passing "
           "`warmup_examples` to `xla_saved_model.save()`. See "
-          "https://github.com/AI-Hypercomputer/neptune/blob/main/"
+          "https://github.com/AI-Hypercomputer/xla-serving/blob/main/"
           "README.md#server-warmup-on-startup for details.");
 ABSL_FLAG(int, max_receive_message_size,
           16 * 1024 * 1024,  // 16 MiB, up from default 4 MiB

@@ -21,7 +21,7 @@
 #include <type_traits>
 
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "xla/tsl/platform/status_macros.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp

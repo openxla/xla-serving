@@ -17,7 +17,7 @@
 #include <cstddef>
 
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "xla/tsl/platform/status_macros.h"
+#include "absl/status/status_macros.h"
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "data/processor/cc/core/graph/execution_graph.h"  // from @xla_serving
 

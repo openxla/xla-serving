@@ -25,10 +25,10 @@
 #include "absl/base/thread_annotations.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
-#include "xla/tsl/platform/status_macros.h"
+#include "absl/status/status_macros.h"
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
-#include "xla/tsl/platform/status_macros.h"
+#include "absl/status/status_macros.h"
 #include "data/resource_manager/cc/asset.h"  // from @xla_serving
 #include "data/resource_manager/cc/resource_internal.h"  // from @xla_serving
 #include "data/resource_manager/proto/resource_manager.pb.h"  // from @xla_serving

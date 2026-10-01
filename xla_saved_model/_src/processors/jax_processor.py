@@ -74,17 +74,21 @@ def _infer_polymorphic_signature(
 
 def _calculate_jax_model_input_sig(
     apply_fn_input_signature: jaxtyping.PyTree[shlo_type.ShloTensorSpec],
+    has_donated_output_args: bool = False,
 ) -> jaxtyping.PyTree[shlo_type.ShloTensorSpec]:
   """Calculates the input signature for a JAX model function by excluding the model parameters.
 
   Args:
     apply_fn_input_signature: The input signature of the `apply_fn`, which is
       expected to have exactly two positional arguments: the model parameters
-      and the actual inputs.
+      and the actual inputs. When the function was exported for output
+      donation, a third positional argument holds the donated output buffers.
+    has_donated_output_args: Whether a third positional argument holding the
+      donated output buffers is present.
 
   Returns:
-    The input signature excluding the model parameters, structured as
-    `((args,), kwargs)`.
+    The input signature excluding the model parameters and, if present, the
+    donated output buffers, structured as `((args,), kwargs)`.
   """
   if (
       # Already arg-kwarg split if the input signature is a sequence of two
@@ -104,11 +108,17 @@ def _calculate_jax_model_input_sig(
         "The positional-arguments part of apply_fn_input_signature must be a"
         f" sequence. Got: {pos_args}"
     )
-  if len(pos_args) != 2:
+  expected_num_pos_args = 3 if has_donated_output_args else 2
+  if len(pos_args) != expected_num_pos_args:
     raise ValueError(
         "The positional part of apply_fn_input_signature must have exactly"
-        f" two elements. Got: {pos_args}"
+        f" {expected_num_pos_args} elements. Got: {pos_args}"
     )
+  # The donated output buffers, like the model parameters, are not supplied by
+  # whoever calls the model: they carry no data and the runtime fills them in.
+  # Dropping them here keeps them out of every caller-facing signature derived
+  # from this one, while leaving them in the function's own signature, which is
+  # what `module_kept_var_idx` is indexed against.
   return ((pos_args[1],), kwargs)
 
 
@@ -121,6 +131,18 @@ class PreparedJaxProcessor(processor.ProcessorDefaults):
   output_signature: jaxtyping.PyTree
   shlo_fns: Sequence[shlo_function.ShloFunction]
   weights_name: str | None = None
+
+  @property
+  def has_donated_output_args(self) -> bool:
+    """Whether the exported functions end with one donated buffer per output.
+
+    Read off the exported functions rather than off the requested export
+    settings, so that it describes what the artifact actually contains.
+
+    Returns:
+      True if output donation was applied to this processor's functions.
+    """
+    return any(fn.num_input_aliased_output for fn in self.shlo_fns)
 
   def to_xsm_saveable(self) -> saveable.Saveable:
     return self.shlo_fns[0] if len(self.shlo_fns) == 1 else tuple(self.shlo_fns)
@@ -194,12 +216,15 @@ class JaxProcessor:
       raise ValueError("No SHLO functions found for model")
 
     # The internal SHLO function signature includes the model parameters as
-    # the first argument. We exclude them here to create the external-facing
-    # input signature that only contains the actual user inputs.
+    # the first argument, and the donated output buffers (if the model was
+    # exported for output donation) as a trailing argument. We exclude them
+    # here to create the external-facing input signature that only contains the
+    # actual user inputs.
     jax_input_signature = _calculate_jax_model_input_sig(
         _infer_polymorphic_signature(
             [func.input_signature for func in shlo_functions]
-        )
+        ),
+        has_donated_output_args=self.apply_fn_bundle.use_input_aliasing,
     )
     jax_output_signature = _infer_polymorphic_signature(
         [func.output_signature for func in shlo_functions]

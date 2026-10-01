@@ -59,6 +59,11 @@ class ShloFunction(function.Function):
       `input_signature`.
     physical_out_dtypes: physical output dtypes, which (if given) will override
       `output_signature`.
+    num_input_aliased_output: the number of trailing arguments that are donated
+      output buffers rather than caller-supplied inputs. A function exported for
+      output donation ends its argument list with one extra argument per output,
+      aliased to that output; those arguments carry no input data and are
+      supplied by the runtime. Zero means no output donation.
   """
 
   mlir_module_serialized: bytes
@@ -70,3 +75,5 @@ class ShloFunction(function.Function):
 
   physical_in_dtypes: tuple[shlo_type.ShloDType | None, ...]
   physical_out_dtypes: tuple[shlo_type.ShloDType | None, ...]
+
+  num_input_aliased_output: int = 0

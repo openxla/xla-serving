@@ -44,6 +44,10 @@ class PreparedProcessor(Protocol):
   def weights_name(self) -> str | None:
     ...
 
+  @property
+  def has_donated_output_args(self) -> bool:
+    ...
+
   def to_xsm_saveable(self) -> saveable.Saveable:
     ...
 
@@ -82,6 +86,18 @@ class ProcessorDefaults:
       are associated.
     """
     return None
+
+  @property
+  def has_donated_output_args(self) -> bool:
+    """Whether this processor was exported with one donated buffer per output.
+
+    Only JAX processors can be exported for output donation, so the default is
+    False.
+
+    Returns:
+      False.
+    """
+    return False
 
   def on_persist(
       self,

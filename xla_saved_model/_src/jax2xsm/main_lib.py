@@ -15,8 +15,9 @@
 """A converter from JAX to ML Exported Model (EM)."""
 
 # pylint: disable=protected-access
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 import dataclasses
+import re
 from typing import Any, Dict, Sequence
 
 import jax
@@ -69,6 +70,7 @@ def jax_exported_to_shlo_fn(
     model_param_names: Sequence[str] | None = None,
     *,
     model_inputs_layout: Sequence[jax_layout.Layout] | None = None,
+    num_input_aliased_output: int = 0,
 ) -> shlo_function.ShloFunction:
   """Converts a `jax.export.Exported` to an Orbax Model `ShloFunction`.
 
@@ -84,6 +86,8 @@ def jax_exported_to_shlo_fn(
       is executed.
     model_inputs_layout: Optional. A sequence of `jax_layout.Layout` objects
       specifying the layouts for the model inputs.
+    num_input_aliased_output: The number of trailing arguments of `exported`
+      that are donated output buffers rather than caller-supplied inputs.
 
   Returns:
     An Orbax Model `ShloFunction`.
@@ -187,12 +191,173 @@ def jax_exported_to_shlo_fn(
       physical_out_dtypes=tuple(
           utils.get_physical_dtype(utils.aval_dtype(v)) for v in out_avals
       ),
+      num_input_aliased_output=num_input_aliased_output,
   )
   return shlo_func
 
 
+# Matches the `tf.aliasing_output = <result index> : i32` argument attribute
+# that JAX emits for a donated argument it managed to alias to a result.
+_ALIASING_OUTPUT_RE = re.compile(r"tf\.aliasing_output\s*=\s*(\d+)\s*:\s*i32")
+
+
+def _with_donated_output_args(
+    apply_fn: typing.ApplyFn,
+) -> Callable[[Any, Any, Any], Any]:
+  """Wraps `apply_fn` so that it takes donated output buffers as a third arg.
+
+  The extra argument carries no data. It exists only so that `jax.jit` can
+  donate it and XLA can alias it to a result, which is what lets an execution
+  write its outputs into memory chosen by the caller.
+  """
+
+  def fn(params, inputs, donated_outputs):
+    del donated_outputs  # Only represents memory, never read.
+    return apply_fn(params, inputs)
+
+  return fn
+
+
+def _flat_output_specs(
+    apply_fn: typing.ApplyFn, args_spec: Sequence[Any]
+) -> tuple[jax.ShapeDtypeStruct, ...]:
+  """Returns one spec per output leaf of `apply_fn`, in output order.
+
+  The caller uses these as the donated output buffer specs: one donor per
+  output, typed like that output. The flat order matters, because it is the
+  order in which XLA matches donated arguments to results.
+
+  The specs deliberately carry only shape and dtype, matching how the real
+  input specs are built. XLA matches a donor to a result by per-shard shape,
+  dtype and memory kind, so pinning a sharding or layout here that disagreed
+  with the one the jit picks for the result would silently cost us the
+  aliasing.
+
+  Args:
+    apply_fn: The function whose outputs are to be described.
+    args_spec: The specs of `apply_fn`'s own arguments, with concrete shapes.
+
+  Returns:
+    One spec per output leaf, in output order.
+  """
+  out_specs = jax.eval_shape(apply_fn, *args_spec)
+  return tuple(
+      jax.ShapeDtypeStruct(leaf.shape, leaf.dtype)
+      for leaf in jax.tree.leaves(out_specs)
+  )
+
+
+def _assert_outputs_are_aliased(
+    exported: jax_export.Exported, num_input_aliased_output: int
+) -> None:
+  """Checks that every output really was aliased to a donated argument.
+
+  JAX drops donation silently in several situations rather than failing: when
+  the donated argument's shard shape or layout does not match the result it
+  would alias, when `out_shardings` are unspecified on a multi-device mesh, and
+  when `jax_debug_nans` is set. In each case the argument is still reported as
+  donatable by the runtime (`jax.buffer_donor` and `tf.aliasing_output` are
+  indistinguishable there), but nothing is written in place, so the whole point
+  of the export is lost with no diagnostic. Catch it here instead.
+
+  Args:
+    exported: The freshly exported function.
+    num_input_aliased_output: The number of outputs that should be aliased.
+
+  Raises:
+    ValueError: If the exported module does not alias every output.
+  """
+  aliased = {
+      int(match)
+      for match in _ALIASING_OUTPUT_RE.findall(exported.mlir_module())
+  }
+  expected = set(range(num_input_aliased_output))
+  if aliased != expected:
+    raise ValueError(
+        "Output donation was requested, but the exported module aliases"
+        f" outputs {sorted(aliased)} instead of {sorted(expected)}. JAX drops"
+        " donation silently when the donated buffer cannot back the output it"
+        " is matched to. The usual causes are unspecified `out_shardings` on a"
+        " multi-device mesh, a layout the result cannot use, and"
+        " `jax_debug_nans` being enabled."
+    )
+
+
+def _check_args_specs_are_concrete(
+    args_specs_list: Sequence[Sequence[Any]],
+) -> None:
+  """Rejects output donation over symbolic input shapes.
+
+  Donation is only served from AOT executables, and the AOT compiler compiles
+  the exported StableHLO as-is: a module with symbolic dimensions fails there
+  with an XLA error that says nothing about why. The JIT path, which could
+  refine the shapes, rejects donating models. So a donating model exported with
+  symbolic shapes could not be served at all, and it is rejected here with a
+  message that says what to do instead.
+
+  Args:
+    args_specs_list: One `(params_spec, inputs_spec)` per function to export.
+
+  Raises:
+    ValueError: If any spec has a symbolic dimension.
+  """
+  for args_spec in args_specs_list:
+    for path, leaf in jax.tree_util.tree_leaves_with_path(args_spec):
+      shape = getattr(leaf, "shape", ())
+      if any(jax_export.is_symbolic_dim(d) for d in shape):
+        raise ValueError(
+            "Output donation requires concrete input shapes, but"
+            f" {jax.tree_util.keystr(path)} has shape {shape}. Donation is"
+            " only served from AOT executables, which are compiled for"
+            " concrete shapes. Set `input_polymorphic_shape_symbol_values` to"
+            " export one concrete function per value."
+        )
+
+
+def prepare_output_donation(
+    apply_fn: typing.ApplyFn,
+    args_specs_list: Sequence[Sequence[Any]],
+) -> tuple[Callable[[Any, Any, Any], Any], list[tuple[Any, ...]], int]:
+  """Sets up `apply_fn` to be exported with its outputs in donated buffers.
+
+  Donation is per positional argument, so the donated buffers go in an argument
+  of their own: one donor per output leaf, typed like that output. That is what
+  keeps `jax.jit` from matching a real input to an output and leaving a donated
+  buffer unaliased. `keep_unused` is required because the function never reads
+  them, and JAX would otherwise prune them away along with their aliasing.
+
+  Pass the results to `convert` as `fun_jax`, `args_spec` (one call per entry)
+  and `num_input_aliased_output`.
+
+  Args:
+    apply_fn: The `(params, inputs)` function to be exported.
+    args_specs_list: One `(params_spec, inputs_spec)` per function to export,
+      e.g. one per concretized input shape. Every shape must be concrete:
+      polymorphic shapes must be concretized first.
+
+  Returns:
+    The function to export, `args_specs_list` with the donated output specs
+    appended to each entry, and the number of donated output arguments.
+
+  Raises:
+    ValueError: If any input shape is symbolic.
+  """
+  _check_args_specs_are_concrete(args_specs_list)
+  donating_args_specs_list = [
+      (*args_spec, _flat_output_specs(apply_fn, args_spec))
+      for args_spec in args_specs_list
+  ]
+  num_input_aliased_output = len(donating_args_specs_list[0][-1])
+  donating_fn = jax.jit(
+      _with_donated_output_args(apply_fn),
+      donate_argnums=2,
+      keep_unused=True,
+  )
+  return donating_fn, donating_args_specs_list, num_input_aliased_output
+
+
 def convert(
-    fun_jax: typing.ApplyFn,
+    fun_jax: Callable[..., Any],
     args_spec: Sequence[Any],
     kwargs_spec: Dict[str, Any],
     jax_export_kwargs: Mapping[str, Any] | None = None,
@@ -205,6 +370,7 @@ def convert(
     native_serialization_disabled_checks: Sequence[
         jax_export.DisabledSafetyCheck
     ] = (),
+    num_input_aliased_output: int = 0,
 ) -> shlo_function.ShloFunction:
   """Converts a JAX function to an Orbax Model `ShloFunction`.
 
@@ -240,6 +406,9 @@ def convert(
     platforms: Optional sequence of platforms for compatibility.
     native_serialization_disabled_checks: Optional disabled checks for
       compatibility.
+    num_input_aliased_output: The number of trailing entries of `args_spec` that
+      are donated output buffers rather than caller-supplied inputs. `fun_jax`
+      must already be jitted with those arguments donated.
 
   Returns:
     An Orbax Model `ShloFunction`.
@@ -268,11 +437,14 @@ def convert(
   utils.assert_not_in_jax_transformation()
 
   exported = exported_creator(*args_spec, **kwargs_spec)
+  if num_input_aliased_output:
+    _assert_outputs_are_aliased(exported, num_input_aliased_output)
   return jax_exported_to_shlo_fn(
       exported,
       xla_compile_options_per_platform,
       model_param_names=model_param_names,
       model_inputs_layout=model_inputs_layout,
+      num_input_aliased_output=num_input_aliased_output,
   )
 
 
@@ -318,6 +490,13 @@ def convert_apply_fn_bundle_to_shlo(
   else:
     args_specs_list = [args_specs]
 
+  fun_jax = apply_fn_bundle.apply_fn
+  num_input_aliased_output = 0
+  if apply_fn_bundle.use_input_aliasing:
+    fun_jax, args_specs_list, num_input_aliased_output = (
+        prepare_output_donation(apply_fn_bundle.apply_fn, args_specs_list)
+    )
+
   compile_options_per_platform = (
       compile_options_util.generate_xla_compile_options(
           native_serialization_platforms=apply_fn_bundle.jax_export_kwargs.get(
@@ -328,12 +507,13 @@ def convert_apply_fn_bundle_to_shlo(
   )
   return tuple(
       convert(
-          fun_jax=apply_fn_bundle.apply_fn,
+          fun_jax=fun_jax,
           args_spec=args_spec,
           kwargs_spec={},
           jax_export_kwargs=apply_fn_bundle.jax_export_kwargs,
           xla_compile_options_per_platform=compile_options_per_platform,
           model_param_names=model_param_names,
+          num_input_aliased_output=num_input_aliased_output,
       )
       for args_spec in args_specs_list
   )

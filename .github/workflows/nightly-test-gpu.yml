@@ -46,7 +46,7 @@ jobs:
 
       - name: Configure Git Safe Directory
         run: |
-          git config --global --add safe.directory /__w/neptune/neptune
+          git config --global --add safe.directory /__w/xla-serving/xla-serving
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
           git config --global --add safe.directory "*"
 
@@ -106,7 +106,7 @@ jobs:
           RELEASE_TAG: ${{ inputs.release_tag }}
           GH_REPO: ${{ github.repository }}
         run: |
-          git config --global --add safe.directory /__w/neptune/neptune || true
+          git config --global --add safe.directory /__w/xla-serving/xla-serving || true
           git config --global --add safe.directory "${GITHUB_WORKSPACE}" || true
           git config --global --add safe.directory "*" || true
           mkdir -p wheels

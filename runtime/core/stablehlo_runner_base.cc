@@ -35,6 +35,7 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_format.h"  // from @abseil-cpp
+#include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/device_buffer.h"  // from @xla_serving
@@ -50,6 +51,7 @@
 #include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @xla_serving
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/layout.h"  // from @xla
+#include "xla/pjrt/transpose.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
@@ -122,6 +124,63 @@ absl::Status ValidateOutputArray(const xla::ifrt::Array& array_for_copy,
         expected_ifrt_shape, ", but got ", array_for_copy.shape()));
   }
   return absl::OkStatus();
+}
+
+// Transposes a (possibly strided) `input` by `permutation` into a newly
+// allocated buffer whose dim `i` is `input` dim `permutation[i]`. The output
+// buffer has default (dense, major-to-minor) byte strides, which is the layout
+// `TransposePlan` writes.
+absl::StatusOr<HostBuffer> TransposeHostBuffer(
+    const HostBuffer& input, absl::Span<const int64_t> permutation) {
+  const absl::Span<const int64_t> dims = input.shape().dims();
+  if (permutation.size() != dims.size()) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Host transpose permutation [", absl::StrJoin(permutation, ","),
+        "] does not match input shape ", input.shape()));
+  }
+  // The compiled program always expects the permuted order for this input, so
+  // fail instead of silently passing untransposed data through.
+  if (input.dtype() != input.storage_dtype()) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Cannot transpose input with dtype ", input.dtype(),
+                     " stored as ", input.storage_dtype()));
+  }
+  const std::optional<int> byte_size = input.dtype().byte_size();
+  if (!byte_size.has_value()) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Unsupported dtype for host transpose: ", input.dtype()));
+  }
+
+  std::vector<int64_t> transposed_dims(dims.size());
+  for (size_t i = 0; i < permutation.size(); ++i) {
+    if (permutation[i] < 0 ||
+        permutation[i] >= static_cast<int64_t>(dims.size())) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Invalid host transpose permutation: ",
+                       absl::StrJoin(permutation, ",")));
+    }
+    transposed_dims[i] = dims[permutation[i]];
+  }
+  HostBuffer transposed_buffer(input.dtype(),
+                               xla::ifrt::Shape(transposed_dims));
+  if (input.shape().num_elements() == 0) {
+    return transposed_buffer;
+  }
+  xla::TransposePlan::Options options{
+      .elem_size_in_bytes = static_cast<size_t>(*byte_size),
+      .dims = dims,
+      .permutation = permutation,
+      .num_threads = 1,
+  };
+  if (input.byte_strides().has_value()) {
+    options.input_striding =
+        xla::TransposePlan::Striding{*input.byte_strides()};
+  }
+
+  TF_ASSIGN_OR_RETURN(std::unique_ptr<xla::TransposePlan> plan,
+                      xla::TransposePlan::Create(options));
+  plan->Execute(input.base(), transposed_buffer.base());
+  return transposed_buffer;
 }
 
 }  // namespace
@@ -337,9 +396,11 @@ StableHloRunnerBase::DataConverter::ExecuteDefaultTransfer(
     VLOG(2) << "Converting input of shape " << input_data.shape();
 
     xla::ifrt::ArrayRef array;
-    TF_ASSIGN_OR_RETURN(array, sharding_internal::MakeArrayFromHostBuffer(
-                                   *ifrt_client_, input_data, device_list_,
-                                   shardings_span[i], *thread_pool_));
+    TF_ASSIGN_OR_RETURN(
+        array, sharding_internal::MakeArrayFromHostBuffer(
+                   *ifrt_client_, input_data, device_list_, shardings_span[i],
+                   *thread_pool_,
+                   xla::ifrt::Client::HostBufferSemantics::kImmutableZeroCopy));
 
     converted_inputs.push_back(std::move(array));
   }
@@ -739,6 +800,13 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
       final_used_inputs[i] = std::move(device_buffer.ifrt_array);
     } else if (original_input_value.IsType<HostBuffer>()) {
       auto& original_input = original_input_value.Get<HostBuffer>();
+      if (auto it = executable_bundle->host_transpose_permutations.find(
+              idx_in_stablehlo_spec);
+          it != executable_bundle->host_transpose_permutations.end()) {
+        // The optimized module expects this input transposed on the host.
+        TF_ASSIGN_OR_RETURN(original_input,
+                            TransposeHostBuffer(original_input, it->second));
+      }
       const xla::ifrt::Shape target_shape =
           executable_bundle->io_spec.inputs[idx_in_stablehlo_spec]
               .GetIfrtShape();
