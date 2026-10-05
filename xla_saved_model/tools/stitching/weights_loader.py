@@ -1,0 +1,259 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Tools for loading the weights of an XLA SavedModel function back to JAX."""
+
+from collections.abc import Sequence
+import os
+import pathlib
+from typing import Any
+
+import jax
+import jaxtyping
+import orbax.checkpoint as ocp
+
+from xla_saved_model.protos import manifest_pb2
+from xla_saved_model.protos import orchestration_pb2
+from xla_saved_model._src.core import constants as core_constants
+from xla_saved_model._src.core import manifest_utils
+from xla_saved_model._src.core import persistence_lib
+from xla_saved_model._src.export import constants as export_constants
+
+# Orbax export writes the same `Pipelines` message under its own type name.
+_PIPELINES_MIME_TYPES = frozenset((
+    core_constants.ORCHESTRATION_MULTI_PIPELINE_MIME_TYPE,
+    "application/protobuf; type=orbax_export_orchestration.Pipelines",
+))
+
+# How many offending leaves an error message lists.
+_MAX_REPORTED = 5
+
+
+def _read_pipelines(
+    model_dir: str, manifest: manifest_pb2.Manifest
+) -> list[orchestration_pb2.Pipelines]:
+  """Returns every `Pipelines` supplemental of the manifest."""
+  return [
+      orchestration_pb2.Pipelines.FromString(
+          manifest_utils.read_unstructured_data_bytes(
+              data, model_dir, manifest
+          )
+      )
+      for data in manifest.supplemental_info.values()
+      if data.mime_type in _PIPELINES_MIME_TYPES
+  ]
+
+
+def _bound_weights_name(
+    pipelines: Sequence[orchestration_pb2.Pipelines], function_name: str
+) -> str | None:
+  """Returns the name of the weights the pipelines bind to a function, if any.
+
+  A function is bound to at most one weights object, so the first binding found
+  is returned.
+  """
+  for multi_pipeline in pipelines:
+    for pipeline in multi_pipeline.name_to_pipeline.values():
+      for component in pipeline.components:
+        if (
+            component.function_name == function_name
+            and component.HasField("weights_name")
+        ):
+          return component.weights_name
+      # Pipelines written before `components` existed.
+      for model_function in pipeline.model_functions:
+        if (
+            model_function.model_function_name == function_name
+            and model_function.HasField("weights_name")
+        ):
+          return model_function.weights_name
+  return None
+
+
+def find_checkpoint_path(
+    model_dir: pathlib.Path | str,
+    function_name: str,
+) -> str:
+  """Returns the path of the Orbax checkpoint holding a function's weights.
+
+  The weights are the ones the model's orchestration pipelines bind to the
+  function.
+
+  Args:
+    model_dir: Directory where the XLA SavedModel was saved.
+    function_name: Name of the function in the model manifest.
+
+  Returns:
+    The checkpoint path.
+
+  Raises:
+    ValueError: If the model has no orchestration pipelines, none of them binds
+      weights to the function, or the weights do not name an Orbax checkpoint
+      on the file system.
+  """
+  model_dir = str(model_dir)
+  manifest = persistence_lib.load(model_dir)
+
+  pipelines = _read_pipelines(model_dir, manifest)
+  if not pipelines:
+    raise ValueError("The model has no orchestration pipelines.")
+  weights_name = _bound_weights_name(pipelines, function_name)
+  if weights_name is None:
+    raise ValueError(f"No pipeline binds weights to '{function_name}'.")
+
+  obj = manifest.objects.get(weights_name)
+  if obj is None or obj.WhichOneof("case") != "value":
+    raise ValueError(f"The weights '{weights_name}' are not in the manifest.")
+  data = obj.value.external.data
+  if data.mime_type != export_constants.ORBAX_CHECKPOINT_MIME_TYPE:
+    raise ValueError(
+        f"The weights '{weights_name}' are not an Orbax checkpoint (MIME type"
+        f" '{data.mime_type}')."
+    )
+  if data.WhichOneof("data") != "file_system_location":
+    raise ValueError(
+        f"The weights '{weights_name}' do not name a file system location."
+    )
+  path = manifest_utils.resolve_relative_path(
+      data.file_system_location, manifest
+  )
+  if ".." in pathlib.PurePath(path).parts:
+    raise ValueError(f"The checkpoint path cannot contain '..': {path}")
+  # A model may reference a checkpoint outside of its own directory.
+  return path if os.path.isabs(path) else os.path.join(model_dir, path)
+
+
+def _key_name(entry: Any) -> str:
+  """Returns the name of one step of a key path, whatever the node type."""
+  match entry:
+    case jax.tree_util.DictKey(key=key):
+      return str(key)
+    case jax.tree_util.GetAttrKey(name=name):
+      return name
+    case jax.tree_util.SequenceKey(idx=idx):
+      return str(idx)
+    case jax.tree_util.FlattenedIndexKey(key=key):
+      return str(key)
+    case _:
+      return str(entry)
+
+
+def _leaf_names(path: Sequence[Any]) -> tuple[str, ...]:
+  return tuple(_key_name(entry) for entry in path)
+
+
+def _shapes_agree(shape: Sequence[Any], expected: Sequence[Any]) -> bool:
+  """Returns whether a concrete shape fits one that may be symbolic."""
+  if len(shape) != len(expected):
+    return False
+  return all(
+      not isinstance(want, int) or have == want
+      for have, want in zip(shape, expected)
+  )
+
+
+def restructure_params(
+    restored: jaxtyping.PyTree, expected: jaxtyping.PyTree
+) -> jaxtyping.PyTree:
+  """Rebuilds restored parameters with the structure a function expects.
+
+  A checkpoint restored without a target comes back as nested containers keyed
+  by name, even where the function was traced with custom nodes such as
+  `qwix.QArray`. Leaves are matched by the names along their key paths, not by
+  position, so a difference in flattening order between the two cannot bind an
+  array to the wrong parameter.
+
+  Args:
+    restored: The restored parameters.
+    expected: The parameters the function expects, as abstract values.
+
+  Returns:
+    The restored arrays, arranged in the expected structure.
+
+  Raises:
+    ValueError: If a leaf is missing, has the wrong shape or dtype, or the
+      checkpoint holds leaves the function does not take.
+  """
+  by_name = {
+      _leaf_names(path): leaf
+      for path, leaf in jax.tree.leaves_with_path(restored)
+  }
+  expected_with_path, treedef = jax.tree.flatten_with_path(expected)
+
+  leaves = []
+  missing = []
+  mismatched = []
+  for path, want in expected_with_path:
+    name = _leaf_names(path)
+    if name not in by_name:
+      missing.append("/".join(name))
+      continue
+    leaf = by_name.pop(name)
+    if leaf.dtype != want.dtype or not _shapes_agree(leaf.shape, want.shape):
+      mismatched.append(
+          f"{'/'.join(name)}: {leaf.dtype}{list(leaf.shape)}, expected"
+          f" {want.dtype}{list(want.shape)}"
+      )
+    leaves.append(leaf)
+
+  problems = []
+  if missing:
+    problems.append(f"missing {missing[:_MAX_REPORTED]}")
+  if mismatched:
+    problems.append(f"mismatched {mismatched[:_MAX_REPORTED]}")
+  if by_name:
+    unexpected = ["/".join(name) for name in sorted(by_name)]
+    problems.append(f"unexpected {unexpected[:_MAX_REPORTED]}")
+  if problems:
+    raise ValueError(
+        "The checkpoint does not match the function's parameters: "
+        + "; ".join(problems)
+        + "."
+    )
+  return jax.tree.unflatten(treedef, leaves)
+
+
+def load_params(
+    model_dir: pathlib.Path | str,
+    function_name: str,
+    params_structure: jaxtyping.PyTree,
+) -> jaxtyping.PyTree:
+  """Loads the weights of an XLA SavedModel function.
+
+  Args:
+    model_dir: Directory where the XLA SavedModel was saved.
+    function_name: Name of the function in the model manifest.
+    params_structure: The parameters the function expects, with any custom
+      nodes such as `qwix.QArray` in place. Its leaves only need `shape` and
+      `dtype`, so `jax.ShapeDtypeStruct`s (e.g. from `jax.eval_shape`) or
+      concrete arrays both work.
+
+  Returns:
+    The restored weights, arranged in the structure of `params_structure`.
+
+  Raises:
+    ValueError: If no pipeline binds a checkpoint to the function, or the
+      checkpoint does not match `params_structure`.
+  """
+  checkpoint_path = find_checkpoint_path(model_dir, function_name)
+  with ocp.StandardCheckpointer() as checkpointer:
+    restored = checkpointer.restore(checkpoint_path)
+  return restructure_params(restored, params_structure)
+
+
+__all__ = [
+    "find_checkpoint_path",
+    "load_params",
+    "restructure_params",
+]

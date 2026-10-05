@@ -423,7 +423,7 @@ class ExportedApplyFn:
 def xsm_fn_to_apply_fn(
     manifest_function: xsm.manifest_pb2.Function,
     jax_supplemental_function: jax_supplemental_pb2.Function,
-) -> ApplyFn:
+) -> ExportedApplyFn:
   """Converts an XSE function and its supplemental to a JAX `ApplyFn`.
 
   Note that Jax `effects` only for things like debug printing and debug

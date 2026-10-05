@@ -16,6 +16,9 @@
 
 import pathlib
 
+import jax
+import jaxtyping
+
 from xla_saved_model.protos import jax_supplemental_pb2
 from xla_saved_model._src import xsm2jax
 from xla_saved_model._src.core import manifest_utils
@@ -26,7 +29,7 @@ from xla_saved_model._src.jax2xsm import constants as jax2xsm_constants
 def load_apply_fn(
     model_dir: pathlib.Path | str,
     function_name: str,
-) -> xsm2jax.ApplyFn:
+) -> xsm2jax.ExportedApplyFn:
   """Loads an XLA SavedModel function from a model directory as a JAX ApplyFn.
 
   Args:
@@ -93,6 +96,36 @@ def load_apply_fn(
   return xsm2jax.xsm_fn_to_apply_fn(manifest_function, jax_supplemental_proto)
 
 
+def get_params_structure(
+    apply_fn: xsm2jax.ExportedApplyFn,
+) -> jaxtyping.PyTree:
+  """Returns the structure of a loaded function's `params` argument.
+
+  A loaded function is called as `apply_fn(params, inputs)`; this returns the
+  pytree structure of its first positional argument, `params`, with each leaf
+  as a `jax.ShapeDtypeStruct`. `inputs` is not included.
+
+  The structure comes from the function's recorded input signature, so custom
+  nodes such as `qwix.QArray` are rebuilt only if the model recorded them and
+  the module defining each one is imported before `load_apply_fn` is called.
+  Otherwise they appear as plain lists.
+
+  Args:
+    apply_fn: The function as returned by `load_apply_fn`.
+
+  Returns:
+    The `params` pytree, with each leaf a `jax.ShapeDtypeStruct`. Shapes may
+    contain symbolic dimensions.
+  """
+  exported = apply_fn.exported
+  structs = [
+      jax.ShapeDtypeStruct(aval.shape, aval.dtype) for aval in exported.in_avals
+  ]
+  (params, _), _ = jax.tree.unflatten(exported.in_tree, structs)
+  return params
+
+
 __all__ = [
+    "get_params_structure",
     "load_apply_fn",
 ]
