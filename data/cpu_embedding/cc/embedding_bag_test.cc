@@ -115,7 +115,8 @@ TEST(EmbeddingBagBatchTest, ExecutesMixedRequestsOnOnePool) {
   Eigen::ThreadPool pool(2);
 
   ASSERT_OK(internal::ExecuteEmbeddingBagBatch(
-      absl::MakeSpan(inputs), internal::EmbeddingBagBackend::kPortable, &pool));
+      absl::MakeSpan(inputs), internal::EmbeddingBagBackend::kPortable, &pool,
+      /*inline_work_threshold=*/0));
 
   EXPECT_THAT(output0, ElementsAre(4.0f, 6.0f, 3.0f, 4.0f));
   const float inv_sqrt_2 = 1.0f / std::sqrt(2.0f);
@@ -232,7 +233,7 @@ TEST(EmbeddingBagBatchTest, PoolReentryExecutesInline) {
   pool.Schedule([&] {
     completion.set_value(internal::ExecuteEmbeddingBagBatch(
         absl::MakeSpan(&request, 1), internal::EmbeddingBagBackend::kPortable,
-        &pool));
+        &pool, /*inline_work_threshold=*/0));
   });
 
   const bool completed_while_other_worker_blocked =
@@ -244,6 +245,51 @@ TEST(EmbeddingBagBatchTest, PoolReentryExecutesInline) {
             std::future_status::ready);
   ASSERT_OK(result.get());
   EXPECT_THAT(output, ElementsAre(1.0f, 2.0f));
+}
+
+// Covers small groups running on the caller thread while every pool worker is
+// busy.
+TEST(EmbeddingBagBatchTest, SmallGroupExecutesInlineOnCaller) {
+  std::vector<float> table_data = {1.0f, 2.0f, 3.0f, 4.0f};
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<EmbeddingTable> table,
+                       MakeTable(table_data, 2));
+  const std::vector<int64_t> ids = {0, 1};
+  const std::vector<int32_t> rows = {0, 1, 2};
+  std::vector<float> output(4, -1.0f);
+  auto allocate = MakeAllocator(&output);
+  auto request = MakeRequest(ids, rows, table.get(), {}, &allocate);
+  constexpr int kThreads = 2;
+  Eigen::ThreadPool pool(kThreads);
+  std::promise<void> release_workers;
+  std::shared_future<void> workers_release =
+      release_workers.get_future().share();
+  std::vector<std::promise<void>> worker_started(kThreads);
+  for (int worker = 0; worker < kThreads; ++worker) {
+    pool.Schedule([&, worker] {
+      worker_started[worker].set_value();
+      workers_release.wait();
+    });
+  }
+  for (auto& started : worker_started) {
+    if (started.get_future().wait_for(std::chrono::seconds(5)) !=
+        std::future_status::ready) {
+      release_workers.set_value();
+      FAIL() << "Thread-pool blockers did not start";
+    }
+  }
+
+  std::future<absl::Status> result = std::async(std::launch::async, [&] {
+    return internal::ExecuteEmbeddingBagBatch(
+        absl::MakeSpan(&request, 1), internal::EmbeddingBagBackend::kPortable,
+        &pool);
+  });
+  const bool completed_while_workers_blocked =
+      result.wait_for(std::chrono::seconds(5)) == std::future_status::ready;
+  release_workers.set_value();
+
+  EXPECT_TRUE(completed_while_workers_blocked);
+  ASSERT_OK(result.get());
+  EXPECT_THAT(output, ElementsAre(1.0f, 2.0f, 3.0f, 4.0f));
 }
 
 // Covers auto gating and exact FP32 addition order across all ID blocks.
@@ -389,10 +435,11 @@ TEST(EmbeddingBagSveTest, ForcedBatchCoversThreadedNonzeroBagRanges) {
 
   ASSERT_OK(internal::ExecuteEmbeddingBagBatch(
       absl::MakeSpan(&portable_request, 1),
-      internal::EmbeddingBagBackend::kPortable, &pool));
+      internal::EmbeddingBagBackend::kPortable, &pool,
+      /*inline_work_threshold=*/0));
   const absl::Status status = internal::ExecuteEmbeddingBagBatch(
       absl::MakeSpan(&forced_request, 1), internal::EmbeddingBagBackend::kSve,
-      &pool);
+      &pool, /*inline_work_threshold=*/0);
 
   if (internal::IsEmbeddingBagSveAvailable()) {
     ASSERT_OK(status);

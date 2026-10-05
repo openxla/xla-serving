@@ -487,7 +487,7 @@ absl::Status ComputeEmbeddingActivationsF32(
 
 absl::Status ExecuteEmbeddingBagBatch(
     absl::Span<const EmbeddingBagInput> inputs, EmbeddingBagBackend requested,
-    Eigen::ThreadPoolInterface* thread_pool) {
+    Eigen::ThreadPoolInterface* thread_pool, size_t inline_work_threshold) {
   if (inputs.empty()) {
     return absl::InvalidArgumentError(
         "Embedding-bag batch requires at least one request.");
@@ -504,18 +504,28 @@ absl::Status ExecuteEmbeddingBagBatch(
                      PrepareRequest(inputs[index], index, requested));
     prepared.push_back(std::move(request));
   }
-  ASSIGN_OR_RETURN(
-      std::vector<Task> tasks,
-      BuildTasks(absl::MakeConstSpan(prepared), thread_pool->NumThreads()));
   RETURN_IF_ERROR(AllocateOutputs(absl::MakeSpan(prepared)));
   RETURN_IF_ERROR(ValidateOutputIsolation(absl::MakeConstSpan(prepared)));
 
-  if (thread_pool->NumThreads() == 1 || thread_pool->CurrentThreadId() >= 0) {
-    for (const Task& task : tasks) {
-      ExecuteTask(absl::MakeConstSpan(prepared), task);
+  size_t total_output_size = 0;
+  for (const PreparedRequest& request : prepared) {
+    total_output_size += request.output_size;
+  }
+  // Small groups run inline: scheduling and waking pool threads would cost
+  // more than the lookups themselves.
+  if (total_output_size <= inline_work_threshold ||
+      thread_pool->NumThreads() == 1 || thread_pool->CurrentThreadId() >= 0) {
+    for (size_t index = 0; index < prepared.size(); ++index) {
+      const size_t num_bags =
+          prepared[index].request->row_pointers.size() - 1;
+      ExecuteTask(absl::MakeConstSpan(prepared), Task{index, 0, num_bags});
     }
     return absl::OkStatus();
   }
+
+  ASSIGN_OR_RETURN(
+      std::vector<Task> tasks,
+      BuildTasks(absl::MakeConstSpan(prepared), thread_pool->NumThreads()));
 
   const int worker_count = static_cast<int>(std::min<size_t>(
       static_cast<size_t>(thread_pool->NumThreads()), tasks.size()));

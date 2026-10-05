@@ -47,18 +47,6 @@
 #include "data/cpu_embedding/cc/feature_spec.h"  // from @xla_serving
 
 namespace xla_serving::data::cpu_embedding {
-namespace {
-
-// Work threshold (in float32 elements / bytes equivalent) below which
-// thread-pool task scheduling overhead dominates compute time. Empirically
-// determined via DLRM CPU benchmark sweeps (Dim=16..128, BS=1..4096): for
-// workloads <= 64K elements (256 KB, matching private CPU L2 cache size),
-// sequential execution avoids mutex, thread wake, and interconnect
-// synchronization latency.
-constexpr size_t kWorkThreshold = 65536;
-
-}  // namespace
-
 CpuEmbeddingEngine::CpuEmbeddingEngine() : CpuEmbeddingEngine(Options{}) {}
 
 CpuEmbeddingEngine::CpuEmbeddingEngine(Options options) : options_(options) {
@@ -230,8 +218,8 @@ absl::Status CpuEmbeddingEngine::ExecuteBatch(
 }
 
 // The in-place path retains custom-combiner support and block_size tuning.
-// TODO: Consider routing standard FP32 calls through ExecuteBatch after its
-// small-workload and block-size behavior is matched.
+// TODO: Consider routing standard FP32 calls through
+// ExecuteBatch after its block-size behavior is matched.
 template <typename T>
 absl::StatusOr<absl::Span<T>> CpuEmbeddingEngine::Execute(
     absl::string_view feature_name, absl::Span<const int64_t> embedding_ids,
@@ -278,7 +266,7 @@ absl::StatusOr<absl::Span<T>> CpuEmbeddingEngine::Execute(
 
   // Optimize: Avoid thread pool overhead for small workloads or single-thread
   // configs.
-  if (slots <= 1 || num_samples * dim <= kWorkThreshold) {
+  if (slots <= 1 || num_samples * dim <= internal::kInlineWorkThreshold) {
     RETURN_IF_ERROR(ComputeEmbeddingActivations(
         embedding_ids, row_pointers, weights, *embedding_table, buffer));
     return buffer;
