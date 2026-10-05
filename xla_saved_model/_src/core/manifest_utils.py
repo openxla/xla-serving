@@ -71,29 +71,57 @@ def get_functions(
         yield f"{name}_{i}" if num_fns > 1 else name, fn
 
 
-def extract_stablehlo_payload(
-    shlo_proto: manifest_pb2.UnstructuredData,
-    manifest: manifest_pb2.Manifest,
+def read_unstructured_data_bytes(
+    data: manifest_pb2.UnstructuredData,
     source_dir: str,
+    manifest: manifest_pb2.Manifest | None = None,
     recorded_external_paths: set[str] | None = None,
 ) -> bytes:
-  """Extracts StableHLO payload bytes and optionally records external paths."""
-  if shlo_proto.inlined_bytes:
-    return shlo_proto.inlined_bytes
-  if not shlo_proto.HasField("file_system_location"):
-    raise ValueError(
-        "Cannot recompile model: StableHLO payload was stripped in a prior"
-        " AOT-only export."
-    )
+  """Reads the payload of an `UnstructuredData`, inlined or on file.
 
-  fsl = shlo_proto.file_system_location
-  rel_path = resolve_relative_path(fsl, manifest)
+  Args:
+    data: The data to read.
+    source_dir: Directory the data's file system location is relative to.
+    manifest: The manifest holding `data`, needed to resolve a
+      `frequent_path_idx`.
+    recorded_external_paths: If given, the relative path of a file read is
+      added to it.
+
+  Returns:
+    The payload bytes.
+
+  Raises:
+    ValueError: If the data is unset, or its path is absolute, contains '..' or
+      cannot be resolved.
+    FileNotFoundError: If the referenced file does not exist.
+  """
+  match data.WhichOneof("data"):
+    case "inlined_bytes":
+      return data.inlined_bytes
+    case "inlined_string":
+      return data.inlined_string.encode("utf-8")
+    case "file_system_location":
+      pass
+    case case_name:
+      raise ValueError(f"Unsupported UnstructuredData data field: {case_name}")
+
+  fsl = data.file_system_location
+  if fsl.HasField("frequent_path_idx") and manifest is None:
+    raise ValueError("A manifest is needed to resolve frequent_path_idx.")
+  rel_path = resolve_relative_path(fsl, manifest or manifest_pb2.Manifest())
+  if pathlib.PurePath(rel_path).is_absolute():
+    raise ValueError(
+        f'File system location must be relative, got "{rel_path}"'
+    )
+  if ".." in pathlib.PurePath(rel_path).parts:
+    raise ValueError(f"File system location cannot contain '..': {rel_path}")
+  path = str(pathlib.Path(source_dir) / rel_path)
+  if not file_utils.exists(path):
+    raise FileNotFoundError(f'Referenced file does not exist: "{path}"')
   if recorded_external_paths is not None:
     recorded_external_paths.add(rel_path)
 
-  with file_utils.open_file(
-      str(pathlib.Path(source_dir) / rel_path), "rb"
-  ) as f:
+  with file_utils.open_file(path, "rb") as f:
     if fsl.offset_in_byte:
       f.seek(
           fsl.offset_in_byte,
@@ -102,6 +130,23 @@ def extract_stablehlo_payload(
     return (
         f.read(fsl.size_in_byte) if fsl.HasField("size_in_byte") else f.read()
     )
+
+
+def extract_stablehlo_payload(
+    shlo_proto: manifest_pb2.UnstructuredData,
+    manifest: manifest_pb2.Manifest,
+    source_dir: str,
+    recorded_external_paths: set[str] | None = None,
+) -> bytes:
+  """Extracts StableHLO payload bytes and optionally records external paths."""
+  if shlo_proto.WhichOneof("data") is None:
+    raise ValueError(
+        "Cannot recompile model: StableHLO payload was stripped in a prior"
+        " AOT-only export."
+    )
+  return read_unstructured_data_bytes(
+      shlo_proto, source_dir, manifest, recorded_external_paths
+  )
 
 
 # Note: Single-device portable executables decouple binary from host device IDs.

@@ -566,6 +566,57 @@ class ManifestUtilsTest(absltest.TestCase):
     self.assertEqual(payload, b'external_bytes')
     self.assertEqual(recorded_paths, {'external.shlo'})
 
+  def test_extract_stablehlo_payload_stripped(self):
+    with self.assertRaisesRegex(ValueError, 'stripped'):
+      manifest_utils.extract_stablehlo_payload(
+          manifest_pb2.UnstructuredData(), manifest_pb2.Manifest(), '/tmp'
+      )
+
+  def test_read_unstructured_data_bytes_inlined_string(self):
+    data = manifest_pb2.UnstructuredData(inlined_string='text')
+    self.assertEqual(
+        manifest_utils.read_unstructured_data_bytes(data, '/unused'), b'text'
+    )
+
+  def test_read_unstructured_data_bytes_frequent_path_and_range(self):
+    tmp_dir = self.create_tempdir()
+    tmp_dir.create_file('blob', content='0123456789')
+    manifest = manifest_pb2.Manifest(frequent_paths=['blob'])
+    data = manifest_pb2.UnstructuredData(
+        file_system_location=manifest_pb2.FileSystemLocation(
+            frequent_path_idx=0, offset_in_byte=2, size_in_byte=3
+        )
+    )
+    self.assertEqual(
+        manifest_utils.read_unstructured_data_bytes(
+            data, tmp_dir.full_path, manifest
+        ),
+        b'234',
+    )
+    with self.assertRaisesRegex(ValueError, 'manifest is needed'):
+      manifest_utils.read_unstructured_data_bytes(data, tmp_dir.full_path)
+
+  def test_read_unstructured_data_bytes_rejects_bad_locations(self):
+    tmp_dir = self.create_tempdir().full_path
+    for path, error, regex in (
+        ('/abs/blob', ValueError, 'must be relative'),
+        ('../blob', ValueError, "cannot contain '..'"),
+        ('missing', FileNotFoundError, 'does not exist'),
+    ):
+      data = manifest_pb2.UnstructuredData(
+          file_system_location=manifest_pb2.FileSystemLocation(
+              string_path=path
+          )
+      )
+      with self.subTest(path), self.assertRaisesRegex(error, regex):
+        manifest_utils.read_unstructured_data_bytes(data, tmp_dir)
+
+  def test_read_unstructured_data_bytes_unset(self):
+    with self.assertRaisesRegex(ValueError, 'Unsupported'):
+      manifest_utils.read_unstructured_data_bytes(
+          manifest_pb2.UnstructuredData(), '/unused'
+      )
+
 
 if __name__ == '__main__':
   absltest.main()

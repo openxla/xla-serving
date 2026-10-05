@@ -17,47 +17,10 @@
 import pathlib
 
 from xla_saved_model.protos import jax_supplemental_pb2
-from xla_saved_model.protos import manifest_pb2
 from xla_saved_model._src import xsm2jax
-from xla_saved_model._src.core import file_utils
+from xla_saved_model._src.core import manifest_utils
 from xla_saved_model._src.core import persistence_lib
 from xla_saved_model._src.jax2xsm import constants as jax2xsm_constants
-
-
-def _read_unstructured_data_bytes(
-    model_dir: pathlib.Path | str,
-    data: manifest_pb2.UnstructuredData,
-) -> bytes:
-  """Reads raw bytes from an UnstructuredData proto."""
-  model_dir = pathlib.Path(model_dir)
-  match data.WhichOneof("data"):
-    case "file_system_location":
-      rel_path = pathlib.Path(data.file_system_location.string_path)
-      if rel_path.is_absolute():
-        raise ValueError(
-            f"File system location must be relative, got: {rel_path}"
-        )
-      if ".." in rel_path.parts:
-        raise ValueError(
-            f"File system location cannot contain '..': {rel_path}"
-        )
-      full_path = model_dir / rel_path
-      try:
-        full_path.resolve().relative_to(model_dir.resolve())
-      except ValueError:
-        raise ValueError(
-            f"File system location resolves outside model directory: {rel_path}"
-        ) from None
-      with file_utils.open_file(str(full_path), "rb") as f:
-        return f.read()
-    case "inlined_bytes":
-      return data.inlined_bytes
-    case "inlined_string":
-      return data.inlined_string.encode("utf-8")
-    case case_name:
-      raise ValueError(
-          f"Unsupported or unset UnstructuredData data field: {case_name}"
-      )
 
 
 def load_apply_fn(
@@ -122,7 +85,9 @@ def load_apply_fn(
         f" '{jax2xsm_constants.CURRENT_JAX_SUPPLEMENTAL_MIME_TYPE}'."
     )
 
-  raw_bytes = _read_unstructured_data_bytes(model_dir, jax_supplemental_data)
+  raw_bytes = manifest_utils.read_unstructured_data_bytes(
+      jax_supplemental_data, str(model_dir), manifest
+  )
   jax_supplemental_proto = jax_supplemental_pb2.Function.FromString(raw_bytes)
 
   return xsm2jax.xsm_fn_to_apply_fn(manifest_function, jax_supplemental_proto)

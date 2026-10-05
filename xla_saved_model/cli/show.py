@@ -15,7 +15,6 @@
 """XSM CLI `show` command."""
 
 import itertools
-import os
 from typing import List, NoReturn
 
 from google.protobuf import message
@@ -31,6 +30,7 @@ from xla_saved_model.protos import manifest_pb2
 from xla_saved_model.protos import orchestration_pb2
 from xla_saved_model.protos import tf_concrete_function_handle_pb2
 from xla_saved_model._src.core import file_utils
+from xla_saved_model._src.core import manifest_utils
 from xla_saved_model._src.core import persistence_lib
 from xla_saved_model.cli import constants
 from xla_saved_model.cli import printer
@@ -381,23 +381,12 @@ def _read_proto_from_data(
     proto: message.Message,
 ) -> None:
   """Reads a proto from the given UnstructuredData."""
-  if data.HasField('file_system_location'):
-    if os.path.isabs(data.file_system_location.string_path):
-      _bail(
-          'File system location must be relative, got'
-          f' "{data.file_system_location.string_path}"'
-      )
-    with file_utils.open_file(
-        os.path.join(model_base_dir, data.file_system_location.string_path),
-        'rb',
-    ) as f:
-      proto.ParseFromString(f.read())
-  elif data.HasField('inlined_bytes'):
-    proto.ParseFromString(data.inlined_bytes)
-  elif data.HasField('inlined_string'):
-    proto.ParseFromString(data.inlined_string.encode('utf-8'))
-  else:
-    _bail(f'Unsupported data type: {data.mime_type}')
+  try:
+    proto.ParseFromString(
+        manifest_utils.read_unstructured_data_bytes(data, model_base_dir)
+    )
+  except (ValueError, FileNotFoundError) as e:
+    _bail(str(e))
 
 
 def _show_pipelines(

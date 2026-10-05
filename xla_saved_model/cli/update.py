@@ -34,6 +34,7 @@ from xla_saved_model._src.core import (
     constants as core_constants,
 )
 from xla_saved_model._src.core import file_utils
+from xla_saved_model._src.core import manifest_utils
 from xla_saved_model._src.core import persistence_lib
 from xla_saved_model.cli import constants
 
@@ -58,25 +59,12 @@ def _read_proto_from_data(
     proto: message.Message,
 ) -> None:
   """Reads a proto from the given UnstructuredData."""
-  if data.HasField('file_system_location'):
-    if os.path.isabs(data.file_system_location.string_path):
-      _bail(
-          'File system location must be relative, got'
-          f' "{data.file_system_location.string_path}"'
-      )
-    proto_path = os.path.join(
-        model_base_dir, data.file_system_location.string_path
+  try:
+    proto.ParseFromString(
+        manifest_utils.read_unstructured_data_bytes(data, model_base_dir)
     )
-    if not file_utils.exists(proto_path):
-      _bail(f'Referenced proto file does not exist: "{proto_path}"')
-    with file_utils.open_file(proto_path, 'rb') as f:
-      proto.ParseFromString(f.read())
-  elif data.HasField('inlined_bytes'):
-    proto.ParseFromString(data.inlined_bytes)
-  elif data.HasField('inlined_string'):
-    proto.ParseFromString(data.inlined_string.encode('utf-8'))
-  else:
-    _bail(f'Unsupported data type: {data.mime_type}')
+  except (ValueError, FileNotFoundError) as e:
+    _bail(str(e))
 
 
 def _backup_file(file_path: str) -> None:
