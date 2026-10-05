@@ -37,14 +37,26 @@ inline constexpr int kAutoSveVectorLengthBytes = 16;
 
 // Backend selection for standard FP32 embedding-bag reductions.
 enum class EmbeddingBagBackend {
+  // Uses SVE only when every condition below holds, and the portable backend
+  // otherwise:
+  //   - SVE is available (see IsEmbeddingBagSveAvailable()).
+  //   - The table's embedding dimension is 128.
+  //   - The input is unweighted and the table combine mode is kSum.
+  //   - The executing thread's SVE vector length equals
+  //     kAutoSveVectorLengthBytes. This is checked per worker thread at
+  //     execution time because the vector length is thread-local.
   kAuto,
+  // Always uses the portable Eigen implementation.
   kPortable,
+  // Always uses SVE. Fails with FailedPrecondition if SVE was not compiled in
+  // or is unavailable on the running CPU.
   kSve,
 };
 
-// Borrowed inputs, the allocator, and allocated output storage must remain
-// valid until the synchronous call returns.
-struct EmbeddingBagRequest {
+// A single table lookup: a borrowed CSR view over one feature's ids plus the
+// table to reduce against. Borrowed inputs, the allocator, and allocated
+// output storage must remain valid until the synchronous call returns.
+struct EmbeddingBagInput {
   absl::Span<const int64_t> embedding_ids;
   absl::Span<const int32_t> row_pointers;
   const EmbeddingTable* embedding_table = nullptr;
@@ -66,8 +78,8 @@ absl::Status ComputeEmbeddingActivationsF32(
 // Executes cost-balanced bag ranges after validating the complete group.
 // Re-entry from the supplied persistent pool executes inline.
 absl::Status ExecuteEmbeddingBagBatch(
-    absl::Span<const EmbeddingBagRequest> requests,
-    EmbeddingBagBackend requested, Eigen::ThreadPoolInterface* thread_pool);
+    absl::Span<const EmbeddingBagInput> inputs, EmbeddingBagBackend requested,
+    Eigen::ThreadPoolInterface* thread_pool);
 
 }  // namespace xla_serving::data::cpu_embedding::internal
 

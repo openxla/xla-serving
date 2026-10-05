@@ -293,8 +293,8 @@ TEST(CpuEmbeddingEngineBatchTest, ExecutesMixedDimensionsModesAndWeights) {
   const std::vector<float> weights = {0.25f, 0.75f};
   std::vector<float> mean_output(2, -11.0f);
   std::vector<float> sqrt_output(3, -13.0f);
-  std::vector<CpuEmbeddingEngine::BatchRequest> requests;
-  requests.push_back({
+  std::vector<CpuEmbeddingEngine::FeatureBatchInput> inputs;
+  inputs.push_back({
       .feature_name = "mean",
       .embedding_ids = ids,
       .row_pointers = rows,
@@ -304,7 +304,7 @@ TEST(CpuEmbeddingEngineBatchTest, ExecutesMixedDimensionsModesAndWeights) {
             return absl::MakeSpan(mean_output).subspan(0, size);
           },
   });
-  requests.push_back({
+  inputs.push_back({
       .feature_name = "sqrt",
       .embedding_ids = ids,
       .row_pointers = rows,
@@ -315,7 +315,7 @@ TEST(CpuEmbeddingEngineBatchTest, ExecutesMixedDimensionsModesAndWeights) {
           },
   });
 
-  ASSERT_OK(engine.ExecuteBatch(absl::MakeSpan(requests)));
+  ASSERT_OK(engine.ExecuteBatch(absl::MakeSpan(inputs)));
 
   EXPECT_THAT(mean_output, ElementsAre(2.5f, 3.5f));
   const float inv_sqrt_2 = 1.0f / std::sqrt(2.0f);
@@ -334,8 +334,8 @@ TEST(CpuEmbeddingEngineBatchTest, ResolvesAllRequestsBeforeAllocation) {
   std::vector<float> output0(2, 29.0f);
   std::vector<float> output1(2, 31.0f);
   int allocation_count = 0;
-  std::vector<CpuEmbeddingEngine::BatchRequest> requests;
-  requests.push_back({
+  std::vector<CpuEmbeddingEngine::FeatureBatchInput> inputs;
+  inputs.push_back({
       .feature_name = "feature",
       .embedding_ids = ids,
       .row_pointers = rows,
@@ -346,7 +346,7 @@ TEST(CpuEmbeddingEngineBatchTest, ResolvesAllRequestsBeforeAllocation) {
             return absl::MakeSpan(output0).subspan(0, size);
           },
   });
-  requests.push_back({
+  inputs.push_back({
       .feature_name = "missing",
       .embedding_ids = ids,
       .row_pointers = rows,
@@ -358,7 +358,7 @@ TEST(CpuEmbeddingEngineBatchTest, ResolvesAllRequestsBeforeAllocation) {
           },
   });
 
-  EXPECT_THAT(engine.ExecuteBatch(absl::MakeSpan(requests)),
+  EXPECT_THAT(engine.ExecuteBatch(absl::MakeSpan(inputs)),
               absl_testing::StatusIs(absl::StatusCode::kNotFound,
                                      testing::HasSubstr("missing")));
   EXPECT_EQ(allocation_count, 0);
@@ -375,8 +375,8 @@ TEST(CpuEmbeddingEngineBatchTest, SnapshotSurvivesClearDuringAllocation) {
   const std::vector<int32_t> rows = {0, 1};
   std::vector<float> output(2, -1.0f);
   int allocation_count = 0;
-  std::vector<CpuEmbeddingEngine::BatchRequest> requests;
-  requests.push_back({
+  std::vector<CpuEmbeddingEngine::FeatureBatchInput> inputs;
+  inputs.push_back({
       .feature_name = "feature",
       .embedding_ids = ids,
       .row_pointers = rows,
@@ -389,10 +389,10 @@ TEST(CpuEmbeddingEngineBatchTest, SnapshotSurvivesClearDuringAllocation) {
           },
   });
 
-  ASSERT_OK(engine.ExecuteBatch(absl::MakeSpan(requests)));
+  ASSERT_OK(engine.ExecuteBatch(absl::MakeSpan(inputs)));
 
   EXPECT_THAT(output, ElementsAre(1.0f, 2.0f));
-  EXPECT_THAT(engine.ExecuteBatch(absl::MakeSpan(requests)),
+  EXPECT_THAT(engine.ExecuteBatch(absl::MakeSpan(inputs)),
               absl_testing::StatusIs(absl::StatusCode::kNotFound));
   EXPECT_EQ(allocation_count, 1);
 }

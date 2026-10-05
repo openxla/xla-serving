@@ -46,7 +46,7 @@ namespace xla_serving::data::cpu_embedding::internal {
 namespace {
 
 absl::StatusOr<EmbeddingBagBackend> ResolveBackend(
-    const EmbeddingBagRequest& request, EmbeddingBagBackend requested) {
+    const EmbeddingBagInput& request, EmbeddingBagBackend requested) {
   switch (requested) {
     case EmbeddingBagBackend::kAuto: {
       const EmbeddingTable& table = *request.embedding_table;
@@ -87,7 +87,7 @@ bool IsStandardF32Bag(const EmbeddingTable& table) {
 }
 
 absl::StatusOr<size_t> ValidateEmbeddingBagInput(
-    const EmbeddingBagRequest& request) {
+    const EmbeddingBagInput& request) {
   if (request.embedding_table == nullptr) {
     return absl::InvalidArgumentError("Embedding table must be non-null.");
   }
@@ -143,7 +143,7 @@ absl::StatusOr<size_t> ValidateEmbeddingBagInput(
   return num_bags * dim;
 }
 
-float BagScale(const EmbeddingBagRequest& request, size_t bag) {
+float BagScale(const EmbeddingBagInput& request, size_t bag) {
   const size_t begin = request.row_pointers[bag];
   const size_t end = request.row_pointers[bag + 1];
   const size_t size = end - begin;
@@ -167,7 +167,7 @@ float BagScale(const EmbeddingBagRequest& request, size_t bag) {
 }
 
 // Inputs are validated before worker tasks run.
-void ReducePortable(const EmbeddingBagRequest& request,
+void ReducePortable(const EmbeddingBagInput& request,
                     absl::Span<float> output_buffer, size_t bag_begin,
                     size_t bag_end) {
   const size_t dim = request.embedding_table->EmbeddingDim();
@@ -193,7 +193,7 @@ void ReducePortable(const EmbeddingBagRequest& request,
   }
 }
 
-void ReduceSve(const EmbeddingBagRequest& request,
+void ReduceSve(const EmbeddingBagInput& request,
                absl::Span<float> output_buffer, size_t bag_begin,
                size_t bag_end) {
   const size_t dim = request.embedding_table->EmbeddingDim();
@@ -219,7 +219,7 @@ void ReduceSve(const EmbeddingBagRequest& request,
 }
 
 struct PreparedRequest {
-  const EmbeddingBagRequest* request;
+  const EmbeddingBagInput* request;
   EmbeddingBagBackend backend;
   size_t table_elements;
   size_t output_size;
@@ -232,9 +232,9 @@ absl::Status RequestError(size_t index, const absl::Status& status) {
                                      status.message()));
 }
 
-absl::StatusOr<PreparedRequest> PrepareRequest(
-    const EmbeddingBagRequest& request, size_t index,
-    EmbeddingBagBackend requested) {
+absl::StatusOr<PreparedRequest> PrepareRequest(const EmbeddingBagInput& request,
+                                               size_t index,
+                                               EmbeddingBagBackend requested) {
   if (request.output_allocator == nullptr || !*request.output_allocator) {
     return absl::InvalidArgumentError(absl::StrFormat(
         "FP32 embedding-bag request %d requires an output allocator.", index));
@@ -309,7 +309,7 @@ absl::Status ValidateOutputIsolation(
   inputs.reserve(requests.size() * 4);
   for (size_t index = 0; index < requests.size(); ++index) {
     const PreparedRequest& prepared = requests[index];
-    const EmbeddingBagRequest& request = *prepared.request;
+    const EmbeddingBagInput& request = *prepared.request;
     RETURN_IF_ERROR(AppendRange(prepared.output.data(), prepared.output.size(),
                                 sizeof(float), index, "output", &outputs));
     RETURN_IF_ERROR(AppendRange(request.embedding_ids.data(),
@@ -356,7 +356,7 @@ struct Task {
   size_t bag_end;
 };
 
-absl::StatusOr<uint64_t> TaskCost(const EmbeddingBagRequest& request,
+absl::StatusOr<uint64_t> TaskCost(const EmbeddingBagInput& request,
                                   size_t bag_begin, size_t bag_end) {
   const uint64_t ids = static_cast<uint64_t>(request.row_pointers[bag_end]) -
                        request.row_pointers[bag_begin];
@@ -378,7 +378,7 @@ absl::StatusOr<std::vector<Task>> BuildTasks(
   constexpr uint64_t kTasksPerThread = 4;
   uint64_t total_cost = 0;
   for (const PreparedRequest& prepared : requests) {
-    const EmbeddingBagRequest& request = *prepared.request;
+    const EmbeddingBagInput& request = *prepared.request;
     ASSIGN_OR_RETURN(uint64_t cost,
                      TaskCost(request, 0, request.row_pointers.size() - 1));
     if (cost > std::numeric_limits<uint64_t>::max() - total_cost) {
@@ -394,7 +394,7 @@ absl::StatusOr<std::vector<Task>> BuildTasks(
   std::vector<Task> tasks;
   for (size_t request_index = 0; request_index < requests.size();
        ++request_index) {
-    const EmbeddingBagRequest& request = *requests[request_index].request;
+    const EmbeddingBagInput& request = *requests[request_index].request;
     const size_t num_bags = request.row_pointers.size() - 1;
     size_t tile_begin = 0;
     uint64_t tile_cost = 0;
@@ -468,7 +468,7 @@ absl::Status ComputeEmbeddingActivationsF32(
     EmbeddingBagBackend requested, EmbeddingBagBackend* selected) {
   absl::AnyInvocable<absl::Span<float>(size_t)> allocator =
       [buffer](size_t) mutable -> absl::Span<float> { return buffer; };
-  EmbeddingBagRequest request{
+  EmbeddingBagInput request{
       .embedding_ids = embedding_ids,
       .row_pointers = row_pointers,
       .embedding_table = &embedding_table,
@@ -486,9 +486,9 @@ absl::Status ComputeEmbeddingActivationsF32(
 }
 
 absl::Status ExecuteEmbeddingBagBatch(
-    absl::Span<const EmbeddingBagRequest> requests,
-    EmbeddingBagBackend requested, Eigen::ThreadPoolInterface* thread_pool) {
-  if (requests.empty()) {
+    absl::Span<const EmbeddingBagInput> inputs, EmbeddingBagBackend requested,
+    Eigen::ThreadPoolInterface* thread_pool) {
+  if (inputs.empty()) {
     return absl::InvalidArgumentError(
         "Embedding-bag batch requires at least one request.");
   }
@@ -498,10 +498,10 @@ absl::Status ExecuteEmbeddingBagBatch(
   }
 
   std::vector<PreparedRequest> prepared;
-  prepared.reserve(requests.size());
-  for (size_t index = 0; index < requests.size(); ++index) {
+  prepared.reserve(inputs.size());
+  for (size_t index = 0; index < inputs.size(); ++index) {
     ASSIGN_OR_RETURN(PreparedRequest request,
-                     PrepareRequest(requests[index], index, requested));
+                     PrepareRequest(inputs[index], index, requested));
     prepared.push_back(std::move(request));
   }
   ASSIGN_OR_RETURN(

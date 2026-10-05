@@ -179,24 +179,24 @@ absl::StatusOr<std::vector<Array>> CpuEmbeddingEngine::Execute(
 }
 
 absl::Status CpuEmbeddingEngine::ExecuteBatch(
-    absl::Span<BatchRequest> requests) const {
-  if (requests.empty()) {
+    absl::Span<FeatureBatchInput> inputs) const {
+  if (inputs.empty()) {
     return absl::InvalidArgumentError(
         "Embedding batch requires at least one request.");
   }
 
   // Resolve specs and tables under the same lock order as Clear.
   std::vector<std::shared_ptr<const EmbeddingTable>> resolved_tables;
-  resolved_tables.reserve(requests.size());
+  resolved_tables.reserve(inputs.size());
   {
     absl::MutexLock spec_lock(feature_specs_mu_);
     absl::MutexLock table_lock(local_tables_mu_);
-    for (size_t index = 0; index < requests.size(); ++index) {
-      const BatchRequest& request = requests[index];
-      auto spec_it = feature_specs_.find(request.feature_name);
+    for (size_t index = 0; index < inputs.size(); ++index) {
+      const FeatureBatchInput& input = inputs[index];
+      auto spec_it = feature_specs_.find(input.feature_name);
       if (spec_it == feature_specs_.end()) {
         return absl::NotFoundError(
-            absl::StrCat("Feature spec not found for: ", request.feature_name));
+            absl::StrCat("Feature spec not found for: ", input.feature_name));
       }
       if (spec_it->second.max_sequence_length != 0) {
         return absl::UnimplementedError(
@@ -212,20 +212,20 @@ absl::Status CpuEmbeddingEngine::ExecuteBatch(
     }
   }
 
-  std::vector<internal::EmbeddingBagRequest> batch_requests;
-  batch_requests.reserve(requests.size());
-  for (size_t index = 0; index < requests.size(); ++index) {
-    batch_requests.push_back({
-        .embedding_ids = requests[index].embedding_ids,
-        .row_pointers = requests[index].row_pointers,
+  std::vector<internal::EmbeddingBagInput> batch_inputs;
+  batch_inputs.reserve(inputs.size());
+  for (size_t index = 0; index < inputs.size(); ++index) {
+    batch_inputs.push_back({
+        .embedding_ids = inputs[index].embedding_ids,
+        .row_pointers = inputs[index].row_pointers,
         .embedding_table = resolved_tables[index].get(),
-        .weights = requests[index].weights,
-        .output_allocator = &requests[index].output_allocator,
+        .weights = inputs[index].weights,
+        .output_allocator = &inputs[index].output_allocator,
     });
   }
 
   return internal::ExecuteEmbeddingBagBatch(
-      absl::MakeSpan(batch_requests), internal::EmbeddingBagBackend::kAuto,
+      absl::MakeSpan(batch_inputs), internal::EmbeddingBagBackend::kAuto,
       thread_pool_.get());
 }
 

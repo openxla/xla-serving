@@ -321,12 +321,13 @@ CpuEmbeddingLookupTransform::operator()(
     }
   }
 
-  using Engine = cpu_embedding::CpuEmbeddingEngine;
+  using FeatureBatchInput =
+      cpu_embedding::CpuEmbeddingEngine::FeatureBatchInput;
   std::vector<xla_serving::HostBuffer> batch_outputs(feature_names_.size());
-  std::vector<Engine::BatchRequest> batch_requests;
-  batch_requests.reserve(feature_names_.size());
+  std::vector<FeatureBatchInput> batch_inputs;
+  batch_inputs.reserve(feature_names_.size());
   for (size_t i = 0; i < feature_names_.size(); ++i) {
-    batch_requests.push_back({
+    batch_inputs.push_back({
         .feature_name = feature_names_[i],
         .embedding_ids = prepared[i].embedding_ids,
         .row_pointers = prepared[i].row_pointers,
@@ -340,8 +341,7 @@ CpuEmbeddingLookupTransform::operator()(
     });
   }
 
-  RETURN_IF_ERROR(
-      resource_->Get()->ExecuteBatch(absl::MakeSpan(batch_requests)));
+  RETURN_IF_ERROR(resource_->Get()->ExecuteBatch(absl::MakeSpan(batch_inputs)));
   return batch_outputs;
 }
 

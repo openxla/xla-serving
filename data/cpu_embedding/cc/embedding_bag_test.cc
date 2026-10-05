@@ -60,7 +60,7 @@ absl::AnyInvocable<absl::Span<float>(size_t)> MakeAllocator(
   };
 }
 
-internal::EmbeddingBagRequest MakeRequest(
+internal::EmbeddingBagInput MakeRequest(
     absl::Span<const int64_t> ids, absl::Span<const int32_t> rows,
     const EmbeddingTable* table, absl::Span<const float> weights,
     absl::AnyInvocable<absl::Span<float>(size_t)>* allocator) {
@@ -108,15 +108,14 @@ TEST(EmbeddingBagBatchTest, ExecutesMixedRequestsOnOnePool) {
   std::vector<float> output1(3, -1.0f);
   auto allocate0 = MakeAllocator(&output0);
   auto allocate1 = MakeAllocator(&output1);
-  std::vector<internal::EmbeddingBagRequest> requests = {
+  std::vector<internal::EmbeddingBagInput> inputs = {
       MakeRequest(ids0, rows0, table2.get(), {}, &allocate0),
       MakeRequest(ids1, rows1, table3.get(), {}, &allocate1),
   };
   Eigen::ThreadPool pool(2);
 
   ASSERT_OK(internal::ExecuteEmbeddingBagBatch(
-      absl::MakeSpan(requests), internal::EmbeddingBagBackend::kPortable,
-      &pool));
+      absl::MakeSpan(inputs), internal::EmbeddingBagBackend::kPortable, &pool));
 
   EXPECT_THAT(output0, ElementsAre(4.0f, 6.0f, 3.0f, 4.0f));
   const float inv_sqrt_2 = 1.0f / std::sqrt(2.0f);
@@ -143,14 +142,14 @@ TEST(EmbeddingBagBatchTest, ValidatesWholeGroupBeforeAllocating) {
     ++allocation_count;
     return absl::MakeSpan(output1).subspan(0, size);
   };
-  std::vector<internal::EmbeddingBagRequest> requests = {
+  std::vector<internal::EmbeddingBagInput> inputs = {
       MakeRequest(valid_ids, rows, table.get(), {}, &allocate0),
       MakeRequest(invalid_ids, rows, table.get(), {}, &allocate1),
   };
   Eigen::ThreadPool pool(2);
 
   EXPECT_THAT(internal::ExecuteEmbeddingBagBatch(
-                  absl::MakeSpan(requests),
+                  absl::MakeSpan(inputs),
                   internal::EmbeddingBagBackend::kPortable, &pool),
               absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
                                      testing::HasSubstr("request 1")));
@@ -168,14 +167,14 @@ TEST(EmbeddingBagBatchTest, RejectsAliasedOutputsBeforeWriting) {
   std::vector<float> shared_output(2, 23.0f);
   auto allocate0 = MakeAllocator(&shared_output);
   auto allocate1 = MakeAllocator(&shared_output);
-  std::vector<internal::EmbeddingBagRequest> requests = {
+  std::vector<internal::EmbeddingBagInput> inputs = {
       MakeRequest(ids, rows, table.get(), {}, &allocate0),
       MakeRequest(ids, rows, table.get(), {}, &allocate1),
   };
   Eigen::ThreadPool pool(2);
 
   EXPECT_THAT(internal::ExecuteEmbeddingBagBatch(
-                  absl::MakeSpan(requests),
+                  absl::MakeSpan(inputs),
                   internal::EmbeddingBagBackend::kPortable, &pool),
               absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
                                      testing::HasSubstr("overlap")));

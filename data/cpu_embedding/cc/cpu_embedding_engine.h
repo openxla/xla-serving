@@ -46,9 +46,12 @@ class CpuEmbeddingEngine final {
     size_t block_size = 64;
   };
 
-  // Borrowed inputs and allocator-owned outputs must remain valid until
-  // ExecuteBatch() returns.
-  struct BatchRequest {
+  // Borrowed CSR view of one feature's batch for ExecuteBatch(). Unlike the
+  // owning FeatureBatchCsrInput used by Execute(), this struct does not copy
+  // ids, row pointers, or weights, and writes results into storage returned by
+  // `output_allocator` instead of returning an Array. Borrowed inputs and
+  // allocator-owned outputs must remain valid until ExecuteBatch() returns.
+  struct FeatureBatchInput {
     absl::string_view feature_name;
     absl::Span<const int64_t> embedding_ids;
     absl::Span<const int32_t> row_pointers;
@@ -69,9 +72,9 @@ class CpuEmbeddingEngine final {
       absl::Span<const FeatureBatchCsrInput> feature_batches) const;
 
   // Executes standard non-sequence FP32 bags without custom combiners on the
-  // shared pool. Validates request inputs before allocation and allocated
-  // output spans before writing.
-  absl::Status ExecuteBatch(absl::Span<BatchRequest> requests) const;
+  // shared pool. Validates inputs before allocation and allocated output spans
+  // before writing.
+  absl::Status ExecuteBatch(absl::Span<FeatureBatchInput> inputs) const;
 
   template <typename T>
   absl::StatusOr<absl::Span<T>> Execute(
