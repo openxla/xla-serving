@@ -16,7 +16,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <limits>
 #include <memory>
 #include <string>
@@ -31,7 +30,7 @@
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "data/cpu_embedding/cc/array.h"  // from @xla_serving
+#include "data/cpu_embedding/cc/cpu_embedding_engine.h"  // from @xla_serving
 #include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @xla_serving
 #include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @xla_serving
 #include "data/kernels/cpu_embedding/dense_cpu_embedding_lookup.pb.h"  // from @xla_serving
@@ -233,24 +232,38 @@ DenseCpuEmbeddingLookupTransform::operator()(
     feature_batches.push_back(std::move(batch_input));
   }
 
-  ASSIGN_OR_RETURN(std::vector<cpu_embedding::Array> arrays,
-                   resource_->Get()->Execute(feature_batches));
-
-  std::vector<xla_serving::HostBuffer> output_buffers;
-  output_buffers.reserve(arrays.size());
-  for (size_t f = 0; f < arrays.size(); ++f) {
-    const auto& arr = arrays[f];
-    int64_t batch_size = dense_ids_list[f].shape().dims()[0];
+  // Borrow the CSR built above and have the engine write each feature's
+  // [batch_size, emb_dim] result directly into its output HostBuffer.
+  using FeatureBatchInput =
+      cpu_embedding::CpuEmbeddingEngine::FeatureBatchInput;
+  std::vector<xla_serving::HostBuffer> output_buffers(feature_names_.size());
+  std::vector<FeatureBatchInput> batch_inputs;
+  batch_inputs.reserve(feature_names_.size());
+  for (size_t f = 0; f < feature_names_.size(); ++f) {
+    const int64_t batch_size = dense_ids_list[f].shape().dims()[0];
     ASSIGN_OR_RETURN(int32_t emb_dim,
                      resource_->GetEmbeddingDim(feature_names_[f]));
-    xla_serving::HostBuffer hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
-                       xla::ifrt::Shape({batch_size, emb_dim}));
-    size_t byte_size = batch_size * emb_dim * sizeof(float);
-    if (byte_size > 0) {
-      std::memcpy(hb.base(), arr.Data(), byte_size);
-    }
-    output_buffers.push_back(std::move(hb));
+    const cpu_embedding::FeatureBatchCsrInput& batch = feature_batches[f];
+    batch_inputs.push_back({
+        .feature_name = feature_names_[f],
+        .embedding_ids = batch.EmbeddingIds(),
+        .row_pointers = batch.RowPointers(),
+        .weights = {},
+        .output_allocator =
+            [&output_buffers, f, batch_size,
+             emb_dim](size_t /*requested_elements*/) {
+              // The engine rejects the span if its size differs from the
+              // requested size.
+              output_buffers[f] = xla_serving::HostBuffer(
+                  xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+                  xla::ifrt::Shape({batch_size, emb_dim}));
+              auto output = output_buffers[f].flat<float>();
+              return absl::MakeSpan(output.data(), output.size());
+            },
+    });
   }
+
+  RETURN_IF_ERROR(resource_->Get()->ExecuteBatch(absl::MakeSpan(batch_inputs)));
   return output_buffers;
 }
 

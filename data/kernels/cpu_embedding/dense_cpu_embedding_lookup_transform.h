@@ -43,6 +43,11 @@ namespace xla_serving::data::composite {
 // shape [batch_size, embedding_dim]. If a sequence consists entirely of
 // padding tokens, a single pad_value token is retained to ensure valid CSR
 // bounds.
+//
+// Lookups go through CpuEmbeddingEngine::ExecuteBatch(), which writes
+// directly into the output tensors. Features registered with a non-zero
+// max_sequence_length or backed by a custom-combiner table are rejected with
+// an error status.
 class DenseCpuEmbeddingLookupTransform : public TransformBase {
  public:
   static absl::StatusOr<std::unique_ptr<DenseCpuEmbeddingLookupTransform>>

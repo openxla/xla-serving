@@ -24,6 +24,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/algorithm/container.h"  // from @abseil-cpp
+#include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_matchers.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
@@ -433,6 +434,67 @@ TEST(DenseCpuEmbeddingLookupTransformTest, ErrorHandling) {
   EXPECT_THAT(
       (*transform)(std::move(overflow_inputs)),
       absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+// Registers a 3x2 table and feature "feat1" on `resource` and returns a
+// transform over it with pad_value=0.
+std::unique_ptr<DenseCpuEmbeddingLookupTransform> CreateSingleFeatureTransform(
+    const std::shared_ptr<TestCpuEmbeddingEngineResource>& resource,
+    int32_t max_sequence_length,
+    cpu_embedding::CustomCombinerFn custom_combiner) {
+  auto* engine = resource->Get();
+  std::vector<float> table_data = {0.0f, 0.0f, 1.0f, 1.0f, 2.0f, 2.0f};
+  auto table_array = cpu_embedding::Array(absl::MakeConstSpan(table_data),
+                                          cpu_embedding::Shape({3, 2}));
+  auto table = cpu_embedding::EmbeddingTable::Create(
+      "table1", std::move(table_array),
+      cpu_embedding::EmbeddingTable::CombineMode::kSum, custom_combiner);
+  CHECK_OK(table.status());
+  CHECK_OK(engine->AddLocalTable("table1", std::move(*table)));
+  cpu_embedding::FeatureSpec spec;
+  spec.name = "feat1";
+  spec.table_name = "table1";
+  spec.max_sequence_length = max_sequence_length;
+  CHECK_OK(engine->RegisterFeatureSpec(spec));
+  resource->RegisterEmbeddingDim("feat1", 2);
+  auto transform = DenseCpuEmbeddingLookupTransform::CreateForFeature(
+      resource, "feat1", /*pad_value=*/0);
+  CHECK_OK(transform.status());
+  return std::move(*transform);
+}
+
+std::vector<xla_serving::HostBuffer> MakeIdsInput() {
+  static constexpr int32_t kIds[] = {1, 2, 2, 0};
+  xla_serving::HostBuffer ids_hb(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+                         xla::ifrt::Shape({2, 2}));
+  absl::c_copy(kIds, ids_hb.flat<int32_t>().data());
+  std::vector<xla_serving::HostBuffer> inputs;
+  inputs.push_back(std::move(ids_hb));
+  return inputs;
+}
+
+TEST(DenseCpuEmbeddingLookupTransformTest, SequenceFeatureIsUnimplemented) {
+  auto resource = std::make_shared<TestCpuEmbeddingEngineResource>(
+      "engine_res", std::vector<Asset>{}, "CpuEmbeddingEngineResource");
+  auto transform = CreateSingleFeatureTransform(
+      resource, /*max_sequence_length=*/2, /*custom_combiner=*/nullptr);
+  EXPECT_THAT((*transform)(MakeIdsInput()),
+              absl_testing::StatusIs(absl::StatusCode::kUnimplemented,
+                                     testing::HasSubstr("non-sequence")));
+}
+
+void NoOpCombiner(const int64_t*, int64_t, const int32_t*, int64_t,
+                  const float*, int64_t, const float*, int64_t, int64_t,
+                  float*) {}
+
+TEST(DenseCpuEmbeddingLookupTransformTest, CustomCombinerIsRejected) {
+  auto resource = std::make_shared<TestCpuEmbeddingEngineResource>(
+      "engine_res", std::vector<Asset>{}, "CpuEmbeddingEngineResource");
+  auto transform = CreateSingleFeatureTransform(
+      resource, /*max_sequence_length=*/0, &NoOpCombiner);
+  EXPECT_THAT((*transform)(MakeIdsInput()),
+              absl_testing::StatusIs(absl::StatusCode::kFailedPrecondition,
+                                     testing::HasSubstr("custom combiner")));
 }
 
 }  // namespace
