@@ -2,7 +2,8 @@ load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(default_visibility = [
-    "@xla_serving//runtime/interpreter:__pkg__",
+    # TODO: Revert to :__pkg__ once the migration to QueueBase is complete.
+    "@xla_serving//runtime/interpreter:__subpackages__",
     "@xla_serving//runtime/kernel/batching:__subpackages__",
 ])
 
