@@ -14,4 +14,4 @@
 
 """Single source of truth version for XLA Serving packages."""
 
-VERSION = "0.0.11"
+VERSION = "0.0.12"
