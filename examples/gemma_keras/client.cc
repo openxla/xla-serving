@@ -204,9 +204,16 @@ int main(int argc, char* argv[]) {
   }
   // Batch is 1, so the whole [1, max_new_tokens] buffer is row 0.
   absl::string_view raw = it->second.raw_data();
-  const int32_t* data = reinterpret_cast<const int32_t*>(raw.data());
+  if (raw.size() % sizeof(int32_t) != 0) {
+    LOG(ERROR) << "'generated_ids' raw_data size (" << raw.size()
+               << ") is not a multiple of sizeof(int32_t).";
+    return 1;
+  }
+  // Copy: protobuf strings aren't guaranteed 4-byte aligned.
+  std::vector<int32_t> data(raw.size() / sizeof(int32_t));
+  std::memcpy(data.data(), raw.data(), raw.size());
   std::vector<int32_t> tokens;
-  for (size_t i = 0; i < raw.size() / sizeof(int32_t); ++i) {
+  for (size_t i = 0; i < data.size(); ++i) {
     if (data[i] == eos_token_id || (data[i] == 0 && i > 0)) break;  // EOS/pad
     tokens.push_back(data[i]);
   }

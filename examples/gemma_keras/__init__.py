@@ -24,3 +24,6 @@ if _backend != 'jax':
       "examples.gemma_keras requires KERAS_BACKEND=jax; got "
       f"KERAS_BACKEND={_backend!r}."
   )
+
+# Here, not in export.py, so tests can read it without importing keras.
+DEFAULT_MODEL_PRESET = 'gemma3_instruct_4b'

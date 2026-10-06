@@ -25,6 +25,7 @@ Import via ``examples.gemma_keras`` so ``KERAS_BACKEND=jax`` is set first.
 """
 
 import os
+import re
 import tempfile
 
 import jax
@@ -34,12 +35,12 @@ import keras_hub
 import numpy as np
 from orbax import checkpoint as ocp
 
+from examples.gemma_keras import DEFAULT_MODEL_PRESET
 from xla_saved_model._src.export import jax_model
 from xla_saved_model._src.export import main_lib
 from xla_saved_model._src.export import serving_config
 
 
-DEFAULT_MODEL_PRESET = 'gemma3_instruct_4b'
 DEFAULT_MAX_SEQ_LEN = 128
 DEFAULT_MAX_NEW_TOKENS = 64
 
@@ -51,8 +52,13 @@ def _empty_kv_cache(batch_size, num_layers, total_len, num_kv_heads, head_dim):
   [batch, layers, 2, len, heads, head_dim] tensor with a tuple of per-layer
   (key, value) pairs, each [batch, len, heads, head_dim].
   """
-  version = tuple(int(p) for p in keras_hub.__version__.split('.')[:2])
-  if version < (0, 32):
+  # Tolerates suffixes like '0.32.0rc0'.
+  match = re.match(r'(\d+)\.(\d+)', keras_hub.__version__)
+  if not match:
+    raise ValueError(
+        f'Cannot parse keras_hub version: {keras_hub.__version__!r}'
+    )
+  if (int(match.group(1)), int(match.group(2))) < (0, 32):
     return jnp.zeros(
         (batch_size, num_layers, 2, total_len, num_kv_heads, head_dim),
         dtype=jnp.float32,
@@ -82,6 +88,9 @@ def export_model(
     preset: keras_hub preset name or local path.
     max_seq_len: Padded prompt length; longer prompts need a re-export.
     max_new_tokens: Max tokens to generate; decode stops early at EOS.
+
+  Limitation: `prompt_len` and `eos_token_id` come from row 0 (the cache index
+  is a scalar), so batched requests must share them; else use batch size 1.
   """
   if dtype not in ('fp32', 'bf16'):
     raise ValueError(f"Unsupported dtype: {dtype}. Expected 'fp32' or 'bf16'.")
@@ -107,6 +116,7 @@ def export_model(
 
     def apply_fn(params, inputs):
       token_ids = inputs['token_ids']            # [batch, max_seq_len] int32
+      # Row 0 applies to the whole batch (see docstring).
       # Clamp so bad values can't read padding or unwritten cache slots.
       prompt_len = jnp.clip(inputs['prompt_len'][0], 1, max_seq_len)
       eos_token_id = inputs['eos_token_id'][0]

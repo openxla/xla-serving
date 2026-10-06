@@ -26,14 +26,15 @@ from absl import logging
 from absl.testing import absltest
 from absl.testing import parameterized
 import numpy as np
-# Importing `examples.gemma_keras` sets KERAS_BACKEND=jax before keras is imported.
-from examples.gemma_keras import export
+# Sets KERAS_BACKEND=jax. `export` is imported in the test, not here: importing
+# Keras 3 at collection breaks TF_USE_LEGACY_KERAS for other examples (nnx_tf).
+from examples import gemma_keras
 
 _MODEL_PRESET = flags.DEFINE_string(
     'model_preset',
-    export.DEFAULT_MODEL_PRESET,
+    gemma_keras.DEFAULT_MODEL_PRESET,
     'keras_hub preset name or local path for Gemma3CausalLM. Defaults to '
-    f'{export.DEFAULT_MODEL_PRESET!r}; the test skips if the preset is not '
+    f'{gemma_keras.DEFAULT_MODEL_PRESET!r}; the test skips if the preset is not '
     'resolvable (e.g. not downloaded in a CI environment).',
 )
 
@@ -79,6 +80,7 @@ class ExportTest(parameterized.TestCase):
     preset = _MODEL_PRESET.value
     if not _preset_available(preset):
       self.skipTest(f'Preset {preset!r} not resolvable; this test is opt-in.')
+    from examples.gemma_keras import export  # pylint: disable=g-import-not-at-top
 
     export_path = self.create_tempdir().full_path
     try:
