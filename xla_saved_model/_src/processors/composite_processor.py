@@ -21,7 +21,6 @@ from typing import Any
 
 import jax
 import jaxtyping
-import numpy as np
 
 from xla_serving_data.processor.proto import transform_config_pb2
 from xla_serving_data.processor.python import composite_processor_pybind
@@ -30,7 +29,7 @@ from xla_saved_model._src import assets2xsm
 from xla_saved_model._src.core import persistence_lib
 from xla_saved_model._src.core import saveable
 from xla_saved_model._src.core import serializable_function
-from xla_saved_model._src.core import shlo_type
+from xla_saved_model._src.core import type_conversions
 from xla_saved_model._src.core import unstructured_data
 from xla_saved_model._src.processors import processor
 
@@ -132,19 +131,6 @@ COMPOSITE_PROCESSOR_MIME_TYPE = (
 )
 COMPOSITE_PROCESSOR_VERSION = "0.0.1"
 SERVING_DEFAULT_KEY = "serving_default"
-
-
-def _convert_jd_type_to_shlo_type(dtype: Any) -> shlo_type.ShloDType:
-  if isinstance(dtype, shlo_type.ShloDType):
-    return dtype
-  if not isinstance(dtype, np.dtype):
-    raise ValueError(
-        f"Expected a numpy.dtype or ShloDType, got {dtype!r} of type"
-        f" {type(dtype)}"
-    )
-  if dtype.kind in ("U", "S", "O"):
-    return shlo_type.ShloDType.str
-  return shlo_type.np_dtype_to_shlo_dtype(dtype)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -306,17 +292,10 @@ class CompositeProcessor:
     else:
       jd_output_signature = self._get_output_signature(input_signature)
 
-    def _to_shlo_spec(x: Any) -> shlo_type.ShloTensorSpec:
-      shape = (
-          tuple(d if (d is not None and d >= 0) else None for d in x.shape)
-          if hasattr(x, "shape") and x.shape is not None
-          else None
-      )
-      dtype = _convert_jd_type_to_shlo_type(x.dtype)
-      return shlo_type.ShloTensorSpec(shape=shape, dtype=dtype)
-
-    xsm_input_signature = jax.tree.map(_to_shlo_spec, input_signature)
-    xsm_output_signature = jax.tree.map(_to_shlo_spec, jd_output_signature)
+    xsm_input_signature = type_conversions.to_shlo_tensor_spec(input_signature)
+    xsm_output_signature = type_conversions.to_shlo_tensor_spec(
+        jd_output_signature
+    )
 
     return PreparedCompositeProcessor(
         self._name,

@@ -24,6 +24,7 @@ import chex
 import jax
 import tensorflow as tf
 
+from xla_saved_model._src.core import shlo_type
 from xla_saved_model._src.core import test_utils
 from xla_saved_model._src.tf2xsm import converter
 from tensorflow.core.protobuf import saved_model_pb2  # pylint: disable=g-direct-tensorflow-import
@@ -801,6 +802,45 @@ class Tf2XsmConverterTest(
     # Total = 3.
     self.assertLen(leaves, 3)
     self.assertLen(names, 3)
+
+  def test_xsm_signature_from_tf_signature_conversions(self):
+    tf_sig = {
+        'unknown_rank': tf.TensorSpec(shape=None, dtype=tf.float32),
+        'ragged': tf.RaggedTensorSpec(shape=(None, None), dtype=tf.int32),
+        'bf16': tf.TensorSpec(shape=(2, 3), dtype=tf.bfloat16),
+        'str': tf.TensorSpec(shape=(5,), dtype=tf.string),
+        'i64': tf.TensorSpec(shape=(), dtype=tf.int64),
+    }
+    xsm_sig = converter._xsm_signature_from_tf_signature(tf_sig)
+
+    expected = {
+        'unknown_rank': shlo_type.ShloTensorSpec(
+            shape=None, dtype=shlo_type.ShloDType.f32, name='unknown_rank'
+        ),
+        'ragged': (
+            shlo_type.ShloTensorSpec(
+                shape=(None,), dtype=shlo_type.ShloDType.i32, name='ragged'
+            ),
+            shlo_type.ShloTensorSpec(
+                shape=(None,), dtype=shlo_type.ShloDType.i64, name='ragged_1'
+            ),
+        ),
+        'bf16': shlo_type.ShloTensorSpec(
+            shape=(2, 3), dtype=shlo_type.ShloDType.bf16, name='bf16'
+        ),
+        'str': shlo_type.ShloTensorSpec(
+            shape=(5,), dtype=shlo_type.ShloDType.str, name='str'
+        ),
+        'i64': shlo_type.ShloTensorSpec(
+            shape=(), dtype=shlo_type.ShloDType.i64, name='i64'
+        ),
+    }
+    self.assertEqual(xsm_sig, expected)
+
+  def test_xsm_signature_from_tf_signature_unsupported_dtype(self):
+    tf_sig = {'bad': tf.TensorSpec(shape=(), dtype=tf.resource)}
+    with self.assertRaises(TypeError):
+      converter._xsm_signature_from_tf_signature(tf_sig)
 
 
 if __name__ == '__main__':

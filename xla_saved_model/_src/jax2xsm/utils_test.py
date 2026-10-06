@@ -270,26 +270,6 @@ class UtilsTest(parameterized.TestCase):
         type_pb2.HOST,
     )
 
-  def test_to_shlo_tensor_spec_with_pinned_host(self):
-    mesh = jax.sharding.Mesh(np.array(jax.devices()[:1]), ('x',))
-    host_sharding = jax.sharding.NamedSharding(
-        mesh, jax.sharding.PartitionSpec('x'), memory_kind='pinned_host'
-    )
-    struct = jax.ShapeDtypeStruct((4, 4), jnp.float32, sharding=host_sharding)
-    shlo_spec = utils.to_shlo_tensor_spec(struct)
-    self.assertEqual(shlo_spec.placement, type_pb2.HOST)
-    self.assertEqual(shlo_spec.shape, (4, 4))
-
-  def test_to_shlo_tensor_spec_with_device_sharding(self):
-    mesh = jax.sharding.Mesh(np.array(jax.devices()[:1]), ('x',))
-    device_sharding = jax.sharding.NamedSharding(
-        mesh, jax.sharding.PartitionSpec('x')
-    )
-    struct = jax.ShapeDtypeStruct((4, 4), jnp.float32, sharding=device_sharding)
-    shlo_spec = utils.to_shlo_tensor_spec(struct)
-    self.assertIsNone(shlo_spec.placement)
-    self.assertEqual(shlo_spec.shape, (4, 4))
-
 
 if __name__ == '__main__':
   absltest.main()

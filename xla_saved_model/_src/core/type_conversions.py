@@ -52,15 +52,17 @@ def _to_shlo_dtype(raw_dt: Any) -> shlo_type.ShloDType:
   if isinstance(raw_dt, shlo_type.ShloDType):
     return raw_dt
 
-  if hasattr(raw_dt, "as_numpy_dtype"):
-    attr = getattr(raw_dt, "as_numpy_dtype")
-    raw_dt = (
-        attr()
-        if callable(attr) and not isinstance(attr, (type, np.dtype))
-        else attr
-    )
-
   try:
+    # tf.resource / tf.variant have no NumPy equivalent; resolving
+    # .as_numpy_dtype raises KeyError out of TF's dtype table. Resolve it
+    # inside the try so callers always see TypeError.
+    if hasattr(raw_dt, "as_numpy_dtype"):
+      attr = getattr(raw_dt, "as_numpy_dtype")
+      raw_dt = (
+          attr()
+          if callable(attr) and not isinstance(attr, (type, np.dtype))
+          else attr
+      )
     np_dt = np.dtype(raw_dt)
     return shlo_type.np_dtype_to_shlo_dtype(np_dt)
   except KeyError as e:
@@ -85,11 +87,16 @@ def _to_shlo_shape(raw_shape: Sequence[Any] | None) -> shlo_type.ShloShape:
   """Converts a shape sequence to a tuple of (int | None)."""
   if raw_shape is None:
     return None
+  # tf.TensorShape has rank=None when the rank is unknown (e.g. from an
+  # unranked TensorSpec). Iterating over an unranked shape raises ValueError.
+  # We treat unranked shapes as None (unknown rank in ShloShape).
+  if getattr(raw_shape, "rank", 0) is None:
+    return None
   if isinstance(raw_shape, (str, bytes)):
     raise TypeError("raw_shape must be an iterable of dimension sizes or None.")
   try:
     return tuple(_to_dim(d) for d in raw_shape)
-  except TypeError as e:
+  except (TypeError, ValueError) as e:
     raise TypeError("raw_shape must be an iterable or None.") from e
 
 

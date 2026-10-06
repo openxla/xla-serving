@@ -38,6 +38,30 @@ class DuckTypedSpec:
   default_val: Any = None
 
 
+class UnknownRankShape:
+  """Mimics tf.TensorShape(None): not None, but raises when iterated."""
+
+  rank = None
+
+  def __iter__(self):
+    raise ValueError("Cannot iterate over a shape with unknown rank.")
+
+
+class RaisingShape:
+  """A shape-like object that raises ValueError on iteration."""
+
+  def __iter__(self):
+    raise ValueError("boom")
+
+
+class RaisingDType:
+  """Mimics tf.resource: `.as_numpy_dtype` raises KeyError."""
+
+  @property
+  def as_numpy_dtype(self):
+    raise KeyError("no numpy equivalent")
+
+
 @jax.tree_util.register_pytree_node_class
 @dataclasses.dataclass
 class CustomPyTreeNode:
@@ -156,6 +180,12 @@ class TypeConversionsTest(parameterized.TestCase):
       (
           "unspecified_none_shape",
           DuckTypedSpec(shape=None, dtype=np.float32),
+          shlo_type.ShloTensorSpec(shape=None, dtype=shlo_type.ShloDType.f32),
+          {},
+      ),
+      (
+          "unknown_rank_shape",
+          DuckTypedSpec(shape=UnknownRankShape(), dtype=np.float32),
           shlo_type.ShloTensorSpec(shape=None, dtype=shlo_type.ShloDType.f32),
           {},
       ),
@@ -488,6 +518,18 @@ class TypeConversionsTest(parameterized.TestCase):
           "raw_string",
           TypeError,
           r"Cannot convert object .* missing \.shape",
+      ),
+      (
+          "shape_raises_on_iteration",
+          DuckTypedSpec(RaisingShape(), np.float32),
+          TypeError,
+          "raw_shape must be an iterable or None",
+      ),
+      (
+          "dtype_without_numpy_equivalent",
+          DuckTypedSpec((2,), RaisingDType()),
+          TypeError,
+          r"NumPy dtype .* cannot be mapped to ShloDType",
       ),
   )
   def test_to_shlo_tensor_spec_invalid_inputs_raise(
