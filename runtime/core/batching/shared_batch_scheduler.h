@@ -47,6 +47,7 @@
 #include "runtime/core/batching/batch_scheduler_utils.h"  // from @xla_serving
 #include "runtime/core/batching/fifo_queue.h"  // from @xla_serving
 #include "runtime/core/batching/periodic_function.h"  // from @xla_serving
+#include "runtime/core/batching/priority_aware_queue.h"  // from @xla_serving
 #include "runtime/core/batching/queue_base.h"  // from @xla_serving
 #include "runtime/core/batching/queue_options.h"  // from @xla_serving
 #include "xla/tsl/platform/criticality.h"  // from @xla
@@ -673,6 +674,7 @@ absl::Status SharedBatchScheduler<TaskType>::AddQueueAfterRewritingOptions(
 
   // TODO: Clean up once the migration to QueueBase is complete.
   if (!absl::GetFlag(FLAGS_jsv_use_queue_base)) {
+    LOG(INFO) << "SharedBatchScheduler creating legacy internal::Queue.";
     auto internal_queue = std::unique_ptr<internal::Queue<TaskType>>(
         new internal::Queue<TaskType>(options, options_.env,
                                       process_batch_callback,
@@ -693,28 +695,32 @@ absl::Status SharedBatchScheduler<TaskType>::AddQueueAfterRewritingOptions(
 
   typename internal::QueueBase<TaskType>::ProcessBatchCallback
       queue_base_callback;
-  if (std::holds_alternative<
-          std::function<void(BatchTaskUniquePtr)>>(
+  if (std::holds_alternative<std::function<void(BatchTaskUniquePtr)>>(
           process_batch_callback)) {
-    queue_base_callback = std::get<
-        std::function<void(BatchTaskUniquePtr)>>(
+    queue_base_callback = std::get<std::function<void(BatchTaskUniquePtr)>>(
         process_batch_callback);
   } else {
-    auto& callback_with_padding = std::get<
-        std::function<void(BatchTaskUniquePtr,
-                           std::vector<std::unique_ptr<TaskType>>)>>(
+    auto& callback_with_padding = std::get<std::function<void(
+        BatchTaskUniquePtr, std::vector<std::unique_ptr<TaskType>>)>>(
         process_batch_callback);
     queue_base_callback = [callback_with_padding](BatchTaskUniquePtr batch) {
       callback_with_padding(std::move(batch), {});
     };
   }
 
-  // TODO: Instantiate the appropriate queue (FifoQueue or
-  // PriorityAwareQueue) based on options.priority_batching_policy instead of
-  // hardcoding FifoQueue.
-  auto internal_queue = std::make_unique<internal::FifoQueue<TaskType>>(
-      options, options_.env, std::move(queue_base_callback),
-      schedulable_batch_callback);
+  std::unique_ptr<internal::QueueBase<TaskType>> internal_queue;
+  if (options.priority_batching_policy ==
+      PriorityBatchingPolicy::kPriorityAware) {
+    LOG(INFO) << "SharedBatchScheduler creating internal::PriorityAwareQueue.";
+    internal_queue = std::make_unique<internal::PriorityAwareQueue<TaskType>>(
+        options, options_.env, std::move(queue_base_callback),
+        schedulable_batch_callback);
+  } else {
+    LOG(INFO) << "SharedBatchScheduler creating internal::FifoQueue.";
+    internal_queue = std::make_unique<internal::FifoQueue<TaskType>>(
+        options, options_.env, std::move(queue_base_callback),
+        schedulable_batch_callback);
+  }
   auto handle = std::make_unique<internal::QueueHandle<TaskType>>(
       this->shared_from_this(), internal_queue.get());
   {

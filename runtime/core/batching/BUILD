@@ -109,6 +109,7 @@ cc_library(
         ":batch_scheduler_utils",
         ":fifo_queue",
         ":periodic_function",
+        ":priority_aware_queue",
         ":queue_base",
         ":queue_options",
         "@abseil-cpp//absl/base:core_headers",
