@@ -15,11 +15,14 @@
 #ifndef XLA_SERVING_DATA_PROCESSOR_CC_CORE_TRANSFORM_H_
 #define XLA_SERVING_DATA_PROCESSOR_CC_CORE_TRANSFORM_H_
 
+#include <atomic>
 #include <memory>
 #include <ostream>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
@@ -34,8 +37,9 @@ namespace composite {
 namespace core {
 
 // Forward declarations.
-class TransformRegistry;
 class DynamicDispatchTransform;
+class TransformFactoryHolder;
+class TransformRegistry;
 
 }  // namespace core
 
@@ -57,6 +61,13 @@ class DynamicDispatchTransform;
 class TransformBase {
  public:
   virtual ~TransformBase() = default;
+
+  // Returns the TransformFactoryHolder for this transform, retrieving and
+  // caching it from TransformRegistry if not already cached. The
+  // TransformFactoryHolder must outlive this transform instance.
+  absl::StatusOr<const core::TransformFactoryHolder* absl_nonnull>
+  GetTransformFactoryHolder() const;
+
   // Executes the transform.
   //
   // The transform should populate `context.outputs` with the results of the
@@ -121,6 +132,34 @@ class TransformBase {
       absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources);
 
  protected:
+  TransformBase() = default;
+
+  TransformBase(const TransformBase& other)
+      : default_debug_string_(other.default_debug_string_),
+        holder_(other.holder_.load(std::memory_order_acquire)) {}
+
+  TransformBase& operator=(const TransformBase& other) {
+    if (this != &other) {
+      default_debug_string_ = other.default_debug_string_;
+      holder_.store(other.holder_.load(std::memory_order_acquire),
+                    std::memory_order_release);
+    }
+    return *this;
+  }
+
+  TransformBase(TransformBase&& other) noexcept
+      : default_debug_string_(std::move(other.default_debug_string_)),
+        holder_(other.holder_.load(std::memory_order_acquire)) {}
+
+  TransformBase& operator=(TransformBase&& other) noexcept {
+    if (this != &other) {
+      default_debug_string_ = std::move(other.default_debug_string_);
+      holder_.store(other.holder_.load(std::memory_order_acquire),
+                    std::memory_order_release);
+    }
+    return *this;
+  }
+
   virtual absl::Status PropagateSignatureImpl(
       api::ShapeInferenceContext& context) const;
 
@@ -129,10 +168,19 @@ class TransformBase {
   }
 
  private:
-  std::string default_debug_string_;
+  // Sets the cached TransformFactoryHolder. `holder` must outlive this
+  // transform instance.
+  void SetTransformFactoryHolder(
+      const core::TransformFactoryHolder* absl_nonnull holder) {
+    holder_.store(holder, std::memory_order_release);
+  }
 
-  friend class core::TransformRegistry;
+  std::string default_debug_string_;
+  mutable std::atomic<const core::TransformFactoryHolder*> holder_{nullptr};
+
   friend class core::DynamicDispatchTransform;
+  friend class core::TransformFactoryHolder;
+  friend class core::TransformRegistry;
 };
 
 }  // namespace composite

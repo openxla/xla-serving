@@ -168,6 +168,11 @@ struct FunctionTraits<ReturnType (ClassType::*)(Args...) const>
   using class_type = ClassType;
 };
 
+// Holds factory, deserializer, and executor metadata for a transform type.
+// A TransformFactoryHolder instance must outlive all transforms created or
+// deserialized by it. However, callers should prefer using TransformRegistry
+// (which manages holder lifetimes automatically) instead of creating and
+// managing TransformFactoryHolder instances manually.
 class TransformFactoryHolder {
  public:
   using TransformFactory = absl::AnyInvocable<std::unique_ptr<TransformBase>(
@@ -185,7 +190,11 @@ class TransformFactoryHolder {
 
   std::unique_ptr<TransformBase> CreateTransform(
       const std::vector<api::Value>& args) const {
-    return factory_(args);
+    std::unique_ptr<TransformBase> transform = factory_(args);
+    if (transform != nullptr) {
+      transform->SetTransformFactoryHolder(this);
+    }
+    return transform;
   }
 
   void SetDeserializer(TransformDeserializer deserializer) {
@@ -202,7 +211,12 @@ class TransformFactoryHolder {
       return absl::UnimplementedError(
           "Deserializer not registered for transform.");
     }
-    return deserializer_(config, resources);
+    ASSIGN_OR_RETURN(std::unique_ptr<TransformBase> transform,
+                     deserializer_(config, resources));
+    if (transform != nullptr) {
+      transform->SetTransformFactoryHolder(this);
+    }
+    return transform;
   }
 
   void SetExecutorInfo(std::vector<api::TypeInfo> input_types,

@@ -1207,9 +1207,8 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
            })
       .def("input_constraints",
            [](const TransformBase& self) -> py::list {
-             auto holder =
-                 core::TransformRegistry::Instance().GetTransformFactoryHolder(
-                     typeid(self));
+             absl::StatusOr<const core::TransformFactoryHolder* absl_nonnull>
+                 holder = self.GetTransformFactoryHolder();
              if (!holder.ok()) {
                return py::list();
              }

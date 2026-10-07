@@ -679,6 +679,150 @@ TEST(DynamicDispatchTransformTest, ConcurrentAccessAndInitialization) {
   }
 }
 
+TEST_F(TransformRegistryTest, HolderCachingOnCreate) {
+  const std::string name = "local_holder_caching_on_create";
+  ASSERT_OK(registry_.RegisterTransformFactory(
+      name, std::type_index(typeid(AppendFooTransform)),
+      [](const std::vector<api::Value>&) {
+        return std::make_unique<AppendFooTransform>();
+      }));
+
+  // AppendFooTransform is not registered in the global TransformRegistry, so
+  // lazy lookup on a directly constructed instance fails with kNotFound.
+  AppendFooTransform uncached_transform;
+  EXPECT_THAT(uncached_transform.GetTransformFactoryHolder(),
+              absl_testing::StatusIs(absl::StatusCode::kNotFound));
+
+  // Creating via registry_ eagerly caches the local registry's holder.
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<TransformBase> transform,
+                       registry_.CreateTransform(name));
+  ASSERT_NE(transform, nullptr);
+
+  ASSERT_OK_AND_ASSIGN(
+      const TransformFactoryHolder* expected_holder,
+      registry_.GetTransformFactoryHolder(typeid(AppendFooTransform)));
+  EXPECT_THAT(transform->GetTransformFactoryHolder(),
+              absl_testing::IsOkAndHolds(expected_holder));
+  // Subsequent calls return the same cached holder.
+  EXPECT_THAT(transform->GetTransformFactoryHolder(),
+              absl_testing::IsOkAndHolds(expected_holder));
+}
+
+TEST_F(TransformRegistryTest, HolderCachingOnDeserialize) {
+  const std::string name = "local_holder_caching_on_deserialize";
+  ASSERT_OK(registry_.RegisterTransformFactory(
+      name, std::type_index(typeid(AppendFooTransform)),
+      [](const std::vector<api::Value>&) {
+        return std::make_unique<AppendFooTransform>();
+      }));
+  ASSERT_OK(registry_.RegisterTransformDeserializer(
+      name, std::type_index(typeid(AppendFooTransform)),
+      [](const TransformConfig&,
+         absl::Span<const std::shared_ptr<xla_serving::data::Resource>>)
+          -> absl::StatusOr<std::unique_ptr<TransformBase>> {
+        return std::make_unique<AppendFooTransform>();
+      }));
+  ASSERT_OK_AND_ASSIGN(
+      const TransformFactoryHolder* expected_holder,
+      registry_.GetTransformFactoryHolder(typeid(AppendFooTransform)));
+
+  TransformConfig config;
+  config.set_op_name(name);
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<TransformBase> transform,
+                       registry_.DeserializeTransform(config));
+  ASSERT_NE(transform, nullptr);
+
+  EXPECT_THAT(transform->GetTransformFactoryHolder(),
+              absl_testing::IsOkAndHolds(expected_holder));
+}
+
+TEST_F(TransformRegistryTest, HolderPreservedOnCopyAndMove) {
+  const std::string name = "local_holder_copy_and_move";
+  ASSERT_OK(registry_.RegisterTransformFactory(
+      name, std::type_index(typeid(AppendFooTransform)),
+      [](const std::vector<api::Value>&) {
+        return std::make_unique<AppendFooTransform>();
+      }));
+  ASSERT_OK_AND_ASSIGN(
+      const TransformFactoryHolder* expected_holder,
+      registry_.GetTransformFactoryHolder(typeid(AppendFooTransform)));
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<TransformBase> base_transform,
+                       registry_.CreateTransform(name));
+  const auto& original =
+      static_cast<const AppendFooTransform&>(*base_transform);
+
+  AppendFooTransform copy_constructed(original);
+  EXPECT_THAT(copy_constructed.GetTransformFactoryHolder(),
+              absl_testing::IsOkAndHolds(expected_holder));
+
+  AppendFooTransform copy_assigned;
+  ASSERT_THAT(copy_assigned.GetTransformFactoryHolder(),
+              absl_testing::StatusIs(absl::StatusCode::kNotFound));
+  copy_assigned = original;
+  EXPECT_THAT(copy_assigned.GetTransformFactoryHolder(),
+              absl_testing::IsOkAndHolds(expected_holder));
+
+  AppendFooTransform move_constructed(std::move(copy_constructed));
+  EXPECT_THAT(move_constructed.GetTransformFactoryHolder(),
+              absl_testing::IsOkAndHolds(expected_holder));
+
+  AppendFooTransform move_assigned;
+  ASSERT_THAT(move_assigned.GetTransformFactoryHolder(),
+              absl_testing::StatusIs(absl::StatusCode::kNotFound));
+  move_assigned = std::move(copy_assigned);
+  EXPECT_THAT(move_assigned.GetTransformFactoryHolder(),
+              absl_testing::IsOkAndHolds(expected_holder));
+}
+
+TEST(TransformBaseTest, HolderLazyCachingDirectInstantiation) {
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<CustomExecutorTransform> transform,
+                       CustomExecutorTransform::Create());
+  ASSERT_NE(transform, nullptr);
+
+  // Directly created instance will lazily populate holder on first call.
+  ASSERT_OK_AND_ASSIGN(const TransformFactoryHolder* expected_holder,
+                       TransformRegistry::Instance().GetTransformFactoryHolder(
+                           typeid(CustomExecutorTransform)));
+  EXPECT_THAT(transform->GetTransformFactoryHolder(),
+              absl_testing::IsOkAndHolds(expected_holder));
+
+  // Subsequent executions use the cached holder without locking registry.
+  api::ExecuteContext context;
+  std::vector<api::Value> inputs = {api::Value(1.5f), api::Value(2)};
+  context.inputs = inputs;
+  EXPECT_OK(transform->Execute(context));
+  ASSERT_EQ(context.outputs.size(), 1);
+  EXPECT_EQ(context.outputs[0].Get<float>(), 3.5f);
+}
+
+TEST(TransformBaseTest, HolderCachingConcurrentExecution) {
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<CustomExecutorTransform> transform,
+                       CustomExecutorTransform::Create());
+  ASSERT_NE(transform, nullptr);
+
+  constexpr int kNumThreads = 8;
+  constexpr int kIterations = 100;
+  std::vector<std::thread> threads;
+  threads.reserve(kNumThreads);
+
+  for (int i = 0; i < kNumThreads; ++i) {
+    threads.emplace_back([&transform]() {
+      for (int iter = 0; iter < kIterations; ++iter) {
+        api::ExecuteContext context;
+        std::vector<api::Value> inputs = {api::Value(1.0f), api::Value(iter)};
+        context.inputs = inputs;
+        EXPECT_OK(transform->Execute(context));
+        ASSERT_EQ(context.outputs.size(), 1);
+        EXPECT_EQ(context.outputs[0].Get<float>(), 1.0f + iter);
+      }
+    });
+  }
+
+  for (std::thread& t : threads) {
+    t.join();
+  }
+}
+
 }  // namespace
 }  // namespace core
 }  // namespace composite

@@ -14,6 +14,7 @@
 
 #include "data/processor/cc/core/transform.h"  // from @xla_serving
 
+#include <atomic>
 #include <cstddef>
 #include <memory>
 #include <vector>
@@ -42,11 +43,27 @@ absl::StatusOr<std::unique_ptr<TransformBase>> TransformBase::FromProto(
                                                                   resources);
 }
 
-absl::Status TransformBase::Execute(api::ExecuteContext& context) {
+absl::StatusOr<const core::TransformFactoryHolder* absl_nonnull>
+TransformBase::GetTransformFactoryHolder() const {
+  const core::TransformFactoryHolder* holder =
+      holder_.load(std::memory_order_acquire);
+  if (holder != nullptr) {
+    return holder;
+  }
+  // TransformRegistry::GetTransformFactoryHolder() returns the same stable
+  // pointer for a given transform type on every call, so caching it in an
+  // atomic member avoids repeated registry mutex acquisitions on subsequent
+  // calls.
   ASSIGN_OR_RETURN(
-      const core::TransformFactoryHolder* absl_nonnull holder,
-      core::TransformRegistry::Instance().GetTransformFactoryHolder(
-          typeid(*this)));
+      holder, core::TransformRegistry::Instance().GetTransformFactoryHolder(
+                  typeid(*this)));
+  holder_.store(holder, std::memory_order_release);
+  return holder;
+}
+
+absl::Status TransformBase::Execute(api::ExecuteContext& context) {
+  ASSIGN_OR_RETURN(const core::TransformFactoryHolder* absl_nonnull holder,
+                   GetTransformFactoryHolder());
   if (!holder->HasExecutor()) {
     return absl::UnimplementedError(
         "Executor not registered for this transform. Did you forget to call "
@@ -58,8 +75,7 @@ absl::Status TransformBase::Execute(api::ExecuteContext& context) {
 
 absl::Span<const api::TypeInfo> TransformBase::InputTypes() const {
   absl::StatusOr<const core::TransformFactoryHolder* absl_nonnull> holder =
-      core::TransformRegistry::Instance().GetTransformFactoryHolder(
-          typeid(*this));
+      GetTransformFactoryHolder();
   if (!holder.ok()) {
     return {};
   }
@@ -68,8 +84,7 @@ absl::Span<const api::TypeInfo> TransformBase::InputTypes() const {
 
 absl::Span<const api::TypeInfo> TransformBase::OutputTypes() const {
   absl::StatusOr<const core::TransformFactoryHolder* absl_nonnull> holder =
-      core::TransformRegistry::Instance().GetTransformFactoryHolder(
-          typeid(*this));
+      GetTransformFactoryHolder();
   if (!holder.ok()) {
     return {};
   }
@@ -78,10 +93,8 @@ absl::Span<const api::TypeInfo> TransformBase::OutputTypes() const {
 
 absl::Status TransformBase::PropagateSignature(
     api::ShapeInferenceContext& context) const {
-  ASSIGN_OR_RETURN(
-      const core::TransformFactoryHolder* absl_nonnull holder,
-      core::TransformRegistry::Instance().GetTransformFactoryHolder(
-          typeid(*this)));
+  ASSIGN_OR_RETURN(const core::TransformFactoryHolder* absl_nonnull holder,
+                   GetTransformFactoryHolder());
   RETURN_IF_ERROR(holder->ValidateInputs(context.inputs));
   return PropagateSignatureImpl(context);
 }
