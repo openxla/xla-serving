@@ -1,0 +1,384 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include "runtime/core/h2d_transfer_plan.h"  // from @xla_serving
+
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <numeric>
+#include <optional>
+#include <utility>
+#include <vector>
+
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/sharding_utils.h"  // from @xla_serving
+#include "xla/layout_util.h"  // from @xla
+#include "xla/pjrt/transpose.h"  // from @xla
+#include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/python/ifrt/device.h"  // from @xla
+#include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/python/ifrt/index.h"  // from @xla
+#include "xla/python/ifrt/index_domain.h"  // from @xla
+#include "xla/python/ifrt/rtti.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
+#include "xla/python/ifrt/sharding.h"  // from @xla
+#include "xla/python/pjrt_ifrt/pjrt_dtype.h"  // from @xla
+#include "xla/python/pjrt_ifrt/xla_sharding.h"  // from @xla
+#include "xla/shape.h"  // from @xla
+#include "xla/shape_util.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
+#include "xla/tsl/platform/threadpool.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
+
+namespace xla_serving {
+namespace {
+
+// Inspects partitioned/tiled sharding to determine if it qualifies for batched
+// transfer, disassembles the host buffer, and builds the batch plan.
+absl::StatusOr<BatchPlan> GetShardedBatchPlan(
+    const HostBuffer& input, const xla::ifrt::ShardingRef& sharding,
+    xla::PrimitiveType primitive_type, tsl::thread::ThreadPool& thread_pool) {
+  TF_ASSIGN_OR_RETURN(
+      std::vector<xla::ifrt::IndexDomain> index_domains,
+      sharding->IndexDomains(
+          input.shape(), xla::ifrt::SingleDeviceShardSemantics::kAllShards));
+  if (index_domains.size() <= 1) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Expected multiple index domains for partitioned/tiled sharding, but "
+        "got ",
+        index_domains.size()));
+  }
+
+  // Verify equal rank and shape across all index domains.
+  const xla::ifrt::Shape& first_shard_shape = index_domains[0].shape();
+  if (first_shard_shape.dims().size() != input.shape().dims().size()) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Rank mismatch between host buffer (", input.shape().dims().size(),
+        ") and shard index domain (", first_shard_shape.dims().size(), ")"));
+  }
+  for (size_t k = 1; k < index_domains.size(); ++k) {
+    if (index_domains[k].shape() != first_shard_shape) {
+      return absl::UnimplementedError(absl::StrCat(
+          "Unequal shard shapes across index domains are not supported: ",
+          first_shard_shape, " vs ", index_domains[k].shape()));
+    }
+  }
+
+  // Calculate partitions along each axis and verify even divisibility.
+  std::vector<int32_t> num_partitions_per_axis;
+  int total_num_partitions = 1;
+  num_partitions_per_axis.reserve(input.shape().dims().size());
+  for (int dim = 0; dim < input.shape().dims().size(); ++dim) {
+    int64_t target_size = first_shard_shape.dims()[dim];
+    int64_t dim_size = input.shape().dims()[dim];
+    if (target_size <= 0 || dim_size % target_size != 0) {
+      return absl::FailedPreconditionError(absl::StrCat(
+          "Only support even sharding, but input buffer dimension ", dim,
+          " of size ", dim_size, " is not evenly divisible by shard size ",
+          target_size));
+    }
+    int num_partitions = dim_size / target_size;
+    total_num_partitions *= num_partitions;
+    num_partitions_per_axis.push_back(num_partitions);
+  }
+
+  absl::Span<xla::ifrt::Device* const> sharding_devices =
+      sharding->devices()->devices();
+  if (total_num_partitions <= 0 ||
+      sharding_devices.size() < total_num_partitions ||
+      sharding_devices.size() % total_num_partitions != 0) {
+    return absl::UnimplementedError(absl::StrCat(
+        "Number of devices ", sharding_devices.size(),
+        " not a multiple of number of partitions ", total_num_partitions));
+  }
+  int num_replicas = sharding_devices.size() / total_num_partitions;
+
+  // Pairs each IndexDomain with its corresponding device and tracks its
+  // original shard index so we can sort them lexicographically by origin (from
+  // major to minor dimension) to match the disassembled slice order, while
+  // retaining the ability to map shards back to their logical positions.
+  struct IndexDomainDevice {
+    // Index domain defining the spatial sub-region and origin for this shard.
+    const xla::ifrt::IndexDomain* index_domain;
+    // Target device assigned to receive this shard.
+    xla::ifrt::Device* device;
+    // The index of this `device`/`index_domain` in the
+    // sharding.devices/index_domains.
+    int original_shard_index;
+  };
+  std::vector<IndexDomainDevice> index_domain_devices;
+  index_domain_devices.reserve(index_domains.size());
+  for (int i = 0; i < index_domains.size(); ++i) {
+    index_domain_devices.push_back({&index_domains[i], sharding_devices[i], i});
+  }
+  std::sort(index_domain_devices.begin(), index_domain_devices.end(),
+            [](const IndexDomainDevice& a, const IndexDomainDevice& b) {
+              return std::lexicographical_compare(
+                  a.index_domain->origin().elements().begin(),
+                  a.index_domain->origin().elements().end(),
+                  b.index_domain->origin().elements().begin(),
+                  b.index_domain->origin().elements().end());
+            });
+
+  // Verify each slice has identical origins across its replicas.
+  if (num_replicas > 1) {
+    for (int s = 0; s < total_num_partitions; ++s) {
+      const xla::ifrt::Index& expected_origin =
+          index_domain_devices[s * num_replicas].index_domain->origin();
+      for (int r = 1; r < num_replicas; ++r) {
+        if (index_domain_devices[s * num_replicas + r].index_domain->origin() !=
+            expected_origin) {
+          return absl::FailedPreconditionError(
+              "Replicas of slice do not have identical index domain origins");
+        }
+      }
+    }
+  }
+
+  // Disassemble input buffer into slices.
+  TF_ASSIGN_OR_RETURN(std::vector<HostBuffer> split_buffers,
+                      sharding_internal::DisassembleHostBuffer(
+                          input, num_partitions_per_axis, thread_pool));
+  if (split_buffers.size() != total_num_partitions) {
+    return absl::InternalError(
+        absl::StrCat("Disassembled slices count mismatch: expected ",
+                     total_num_partitions, " but got ", split_buffers.size()));
+  }
+
+  xla::Shape shard_xla_shape =
+      xla::ShapeUtil::MakeShape(primitive_type, first_shard_shape.dims());
+
+  std::vector<ShardTarget> shard_targets(sharding_devices.size());
+
+  for (int slice_idx = 0; slice_idx < total_num_partitions; ++slice_idx) {
+    for (int r = 0; r < num_replicas; ++r) {
+      int sorted_idx = slice_idx * num_replicas + r;
+      const IndexDomainDevice& item = index_domain_devices[sorted_idx];
+      const bool is_last_replica = (r == num_replicas - 1);
+      const bool is_last_shard = (sorted_idx == sharding_devices.size() - 1);
+      shard_targets[item.original_shard_index] = ShardTarget{
+          .device = item.device,
+          .shape = is_last_shard ? std::move(shard_xla_shape) : shard_xla_shape,
+          .source_buffer = is_last_replica ? std::move(split_buffers[slice_idx])
+                                           : split_buffers[slice_idx],
+      };
+    }
+  }
+
+  return BatchPlan{
+      .shard_targets = std::move(shard_targets),
+      .effective_sharding = sharding,
+  };
+}
+
+// Returns true if the buffer has standard dense major-to-minor byte strides.
+bool HasDefaultByteStrides(const HostBuffer& buffer,
+                           xla::PrimitiveType primitive_type) {
+  // Any tensor with 0 or 1 element has no gaps between elements, so its
+  // representation at buffer.base() is already contiguous.
+  if (buffer.shape().num_elements() <= 1) {
+    return true;
+  }
+  if (!buffer.byte_strides().has_value()) {
+    return true;
+  }
+  const auto& strides = *buffer.byte_strides();
+  const auto& dims = buffer.shape().dims();
+  if (strides.size() != dims.size()) {
+    return false;
+  }
+  return xla::LayoutUtil::ByteStridesIsMajorToMinor(strides, dims,
+                                                    primitive_type);
+}
+
+// Linearizes a strided or transposed HostBuffer into a new C-contiguous
+// HostBuffer.
+absl::StatusOr<HostBuffer> MakeContiguousHostBuffer(
+    const HostBuffer& input, xla::PrimitiveType primitive_type,
+    tsl::thread::ThreadPool& thread_pool) {
+  if (input.shape().num_elements() <= 1) {
+    return input;
+  }
+
+  HostBuffer contiguous_buffer(input.dtype(), input.shape());
+
+  std::vector<int64_t> permutation(input.shape().dims().size());
+  std::iota(permutation.begin(), permutation.end(), 0);
+  // Cap max threads per transpose (matching ConcatCPUImpl in host_buffer.h) to
+  // avoid saturating the shared pool under high concurrency; TransposePlan also
+  // enforces a 1MB/64MB per-thread minimum and runs smaller buffers inline.
+  constexpr int kMaxTransposeThreads = 4;
+  xla::TransposePlan::Options options{
+      .elem_size_in_bytes = static_cast<size_t>(
+          xla::ShapeUtil::ByteSizeOfPrimitiveType(primitive_type)),
+      .dims = input.shape().dims(),
+      .permutation = permutation,
+      .input_striding =
+          input.byte_strides().has_value()
+              ? std::optional<
+                    xla::TransposePlan::Striding>{*input.byte_strides()}
+              : std::nullopt,
+      .num_threads = std::min(kMaxTransposeThreads, thread_pool.NumThreads()),
+  };
+
+  TF_ASSIGN_OR_RETURN(std::unique_ptr<xla::TransposePlan> plan,
+                      xla::TransposePlan::Create(options));
+  plan->Execute(input.base(), contiguous_buffer.base(),
+                [&thread_pool](std::function<void()> fn) {
+                  thread_pool.Schedule(std::move(fn));
+                });
+  return contiguous_buffer;
+}
+
+}  // namespace
+
+absl::StatusOr<std::optional<HostBuffer>> CompactHostBufferIfStrided(
+    const HostBuffer& input, tsl::thread::ThreadPool& thread_pool) {
+  if (input.dtype().kind() == xla::ifrt::DType::kString ||
+      input.dtype() != input.storage_dtype() ||
+      input.shape().num_elements() <= 1 || !input.byte_strides().has_value()) {
+    return std::nullopt;
+  }
+  TF_ASSIGN_OR_RETURN(xla::PrimitiveType primitive_type,
+                      xla::ifrt::ToPrimitiveType(input.dtype()));
+  if (HasDefaultByteStrides(input, primitive_type)) {
+    return std::nullopt;
+  }
+  TF_ASSIGN_OR_RETURN(
+      HostBuffer contiguous_buffer,
+      MakeContiguousHostBuffer(input, primitive_type, thread_pool));
+  return contiguous_buffer;
+}
+
+absl::StatusOr<std::optional<BatchPlan>> GetBatchPlanIfEligible(
+    const HostBuffer& original_input, const xla::ifrt::ShardingRef& sharding,
+    xla::ifrt::Client* client, tsl::thread::ThreadPool& thread_pool) {
+  // Disqualify strings, packed storage (sub-byte types), and 0-element tensors.
+  if (original_input.dtype().kind() == xla::ifrt::DType::kString ||
+      original_input.dtype() != original_input.storage_dtype() ||
+      original_input.shape().num_elements() == 0) {
+    return std::nullopt;
+  }
+
+  // TODO: Support batching non-default memory_kind (e.g.,
+  // pinned_host) by resolving PjRtMemorySpace* from sharding->memory_kind() and
+  // grouping batches by PjRtMemorySpace* instead of defaulting to
+  // default_memory_space().
+  if (!sharding->memory_kind().is_default()) {
+    return std::nullopt;
+  }
+
+  TF_ASSIGN_OR_RETURN(xla::PrimitiveType primitive_type,
+                      xla::ifrt::ToPrimitiveType(original_input.dtype()));
+
+  TF_ASSIGN_OR_RETURN(std::optional<HostBuffer> contiguous_input,
+                      CompactHostBufferIfStrided(original_input, thread_pool));
+  const HostBuffer& input =
+      contiguous_input.has_value() ? *contiguous_input : original_input;
+
+  // Case 1: SingleDeviceSharding (tensor targeted to 1 device)
+  if (const auto* single_device_sharding =
+          xla::ifrt::dyn_cast_or_null<xla::ifrt::SingleDeviceSharding>(
+              sharding.get())) {
+    absl::Span<xla::ifrt::Device* const> devices =
+        single_device_sharding->devices()->devices();
+    if (devices.empty()) {
+      return std::nullopt;
+    }
+    xla::Shape xla_shape =
+        xla::ShapeUtil::MakeShape(primitive_type, input.shape().dims());
+    return BatchPlan{
+        .shard_targets = {ShardTarget{
+            .device = devices[0],
+            .shape = std::move(xla_shape),
+            .source_buffer = contiguous_input.has_value()
+                                 ? std::move(*contiguous_input)
+                                 : input,
+        }},
+        .effective_sharding = sharding,
+    };
+  }
+
+  // Case 2: Tile-Maximal HloSharding (assigns an entire, unpartitioned tensor
+  // to 1 specific device within a multi-device mesh)
+  if (const auto* hlo_sharding =
+          xla::ifrt::dyn_cast_or_null<xla::ifrt::HloSharding>(sharding.get())) {
+    if (hlo_sharding->xla_hlo_sharding().IsSingleDevice()) {
+      int unique_device_id = hlo_sharding->xla_hlo_sharding().GetUniqueDevice();
+      TF_ASSIGN_OR_RETURN(
+          xla::ifrt::Device * target_device,
+          client->LookupDevice(xla::ifrt::DeviceId(unique_device_id)));
+      if (!target_device) {
+        return std::nullopt;
+      }
+      xla::Shape xla_shape =
+          xla::ShapeUtil::MakeShape(primitive_type, input.shape().dims());
+      return BatchPlan{
+          .shard_targets = {ShardTarget{
+              .device = target_device,
+              .shape = std::move(xla_shape),
+              .source_buffer = contiguous_input.has_value()
+                                   ? std::move(*contiguous_input)
+                                   : input,
+          }},
+          .effective_sharding = xla::ifrt::SingleDeviceSharding::Create(
+              target_device, sharding->memory_kind()),
+      };
+    }
+  }
+
+  // Case 3: Fully Replicated Sharding (covers HloSharding::Replicate() and any
+  // sharding where the entire tensor is cloned across all target devices)
+  if (sharding->IsFullyReplicated()) {
+    absl::Span<xla::ifrt::Device* const> devices =
+        sharding->devices()->devices();
+    if (devices.empty()) {
+      return std::nullopt;
+    }
+    xla::Shape xla_shape =
+        xla::ShapeUtil::MakeShape(primitive_type, input.shape().dims());
+    std::vector<ShardTarget> shard_targets;
+    shard_targets.reserve(devices.size());
+    for (int dev_idx = 0; dev_idx < devices.size(); ++dev_idx) {
+      const bool is_last = (dev_idx == devices.size() - 1);
+      shard_targets.push_back(ShardTarget{
+          .device = devices[dev_idx],
+          .shape = is_last ? std::move(xla_shape) : xla_shape,
+          .source_buffer = (is_last && contiguous_input.has_value())
+                               ? std::move(*contiguous_input)
+                               : input,
+      });
+    }
+    return BatchPlan{
+        .shard_targets = std::move(shard_targets),
+        .effective_sharding = sharding,
+    };
+  }
+
+  // Case 4: Partitioned / Tiled Sharding (shards sliced and distributed across
+  // devices)
+  TF_ASSIGN_OR_RETURN(
+      BatchPlan plan,
+      GetShardedBatchPlan(input, sharding, primitive_type, thread_pool));
+  return plan;
+}
+
+}  // namespace xla_serving
