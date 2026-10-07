@@ -15,6 +15,7 @@
 #include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @xla_serving
 
 #include <cstddef>
+#include <string>
 
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
@@ -40,6 +41,19 @@ static auto* core_selection_counter_by_device_id_only = Counter<1>::New(
     "down by device ID only.",
     "device_id");
 
+void ServingCoreSelector::RecordCoreSelection(
+    absl::string_view program_fingerprint, int device_index) {
+  const std::string device_id = absl::StrCat(device_index);
+  // The program fingerprint is a raw binary digest in production, which is not
+  // a valid streamz label value, so this counter is only used when explicitly
+  // requested (e.g. by tests).
+  if (record_core_selection_by_fingerprint_) {
+    core_selection_counter->GetCell(program_fingerprint, device_id)
+        ->IncrementBy(1);
+  }
+  core_selection_counter_by_device_id_only->GetCell(device_id)->IncrementBy(1);
+}
+
 tsl::DeviceReservation ServingCoreSelector::ReserveDevice(
     absl::string_view program_fingerprint) {
   const size_t execution_count = [this, program_fingerprint]() {
@@ -51,23 +65,13 @@ tsl::DeviceReservation ServingCoreSelector::ReserveDevice(
     // `execution_count` as device index to iterate through all the TPU cores
     // for the given program. The null `selector` indicates that this
     // `DeviceReservation` isn't made through any selector.
-    core_selection_counter
-        ->GetCell(program_fingerprint, absl::StrCat(execution_count))
-        ->IncrementBy(1);
-    core_selection_counter_by_device_id_only
-        ->GetCell(absl::StrCat(execution_count))
-        ->IncrementBy(1);
+    RecordCoreSelection(program_fingerprint, execution_count);
     return tsl::DeviceReservation(/*device_index=*/execution_count,
                                   /*selector=*/nullptr);
   }
   tsl::DeviceReservation reservation =
       device_selector_->ReserveDevice(program_fingerprint);
-  core_selection_counter
-      ->GetCell(program_fingerprint, absl::StrCat(reservation.device_index()))
-      ->IncrementBy(1);
-  core_selection_counter_by_device_id_only
-      ->GetCell(absl::StrCat(reservation.device_index()))
-      ->IncrementBy(1);
+  RecordCoreSelection(program_fingerprint, reservation.device_index());
   return reservation;
 }
 

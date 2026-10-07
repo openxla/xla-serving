@@ -31,17 +31,31 @@ namespace xla_serving {
 // during IFRT TPU execution.
 class ServingCoreSelector {
  public:
+  // If `record_core_selection_by_fingerprint` is true, device reservations are
+  // also recorded in the `/xla_serving/runtime/core_selection_count` streamz
+  // counter, which is labeled by the program fingerprint. This is intended for
+  // tests only: in production the fingerprint is a raw binary digest, which is
+  // not valid UTF-8 and breaks consumers of streamz snapshots such as XProf.
   ServingCoreSelector(tsl::ServingDeviceSelector* absl_nonnull device_selector,
-                      size_t num_cores)
-      : device_selector_(device_selector), num_cores_(num_cores) {}
+                      size_t num_cores,
+                      bool record_core_selection_by_fingerprint = false)
+      : device_selector_(device_selector),
+        num_cores_(num_cores),
+        record_core_selection_by_fingerprint_(
+            record_core_selection_by_fingerprint) {}
 
   // Reserves a device for the given `program_fingerprint`. Returns a
   // RAII object that represents the reservation.
   tsl::DeviceReservation ReserveDevice(absl::string_view program_fingerprint);
 
  private:
+  // Records a device reservation in the core selection streamz counters.
+  void RecordCoreSelection(absl::string_view program_fingerprint,
+                           int device_index);
+
   tsl::ServingDeviceSelector* absl_nonnull device_selector_;  // Not owned.
   const size_t num_cores_;
+  const bool record_core_selection_by_fingerprint_;
 
   absl::Mutex execution_counter_mu_;
   // Key: the program fingerprint. Value: the number of times
