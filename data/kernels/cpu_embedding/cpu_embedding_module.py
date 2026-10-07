@@ -381,11 +381,11 @@ class CpuEmbeddingModule:
       if not resolved_shapes:
         self._output_shapes = [[]]
       elif isinstance(resolved_shapes[0], int):
-        self._output_shapes = [list(resolved_shapes)]  # pytype: disable=wrong-arg-types
+        self._output_shapes = [list(resolved_shapes)]
       else:
-        self._output_shapes = [list(s) for s in resolved_shapes]  # pytype: disable=wrong-arg-types
+        self._output_shapes = [list(s) for s in resolved_shapes]
     else:
-      self._output_shapes = [list(s) for s in resolved_shapes]  # pytype: disable=wrong-arg-types
+      self._output_shapes = [list(s) for s in resolved_shapes]  # pyrefly: ignore[bad-argument-type]
 
     # Assert sequence lengths are equal
     if len(self._feature_names) != len(self._output_feature_names) or len(
