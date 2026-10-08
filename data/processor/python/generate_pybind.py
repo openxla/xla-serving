@@ -235,6 +235,18 @@ def generate_pyi(output_file, registrations, all_code):
       )
       if cls_block:
         target_code = cls_block.group(1)
+      elif re.search(
+          rf'(?:ND|JD)_DECLARE_BINARY_OP\s*\(\s*{short_cls}',
+          all_code,
+      ):
+        target_code = (
+            'Create() operator()(::jsv::HostBuffer a, ::jsv::HostBuffer b)'
+        )
+      elif re.search(
+          rf'(?:ND|JD)_DECLARE_UNARY_OP\s*\(\s*{short_cls}',
+          all_code,
+      ):
+        target_code = 'Create() operator()(::jsv::HostBuffer a)'
       else:
         target_code = all_code
 
@@ -293,12 +305,14 @@ def main():
   # 3. { (generic open brace)
   # 4. } (generic close brace)
   # 5. ND_REGISTER_TRANSFORM(Type, "Name")
+  # 6. ND_REGISTER_BINARY_OP(Type, ...) or ND_REGISTER_UNARY_OP(Type, ...)
   token_re = re.compile(
       r'(?P<str>"([^"\\]|\\.)*")|'
       r'(?P<ns>namespace\s+(?P<ns_name>[a-zA-Z_][a-zA-Z0-9_:]*)\s*\{)|'
       r'(?P<lcb>\{)|'
       r'(?P<rcb>\})|'
       r'(?P<reg>(?:ND|JD)_REGISTER_TRANSFORM\s*\(\s*(?P<type>[^,]+)\s*,\s*"(?P<name>[^"]+)"\s*\))|'
+      r'(?P<reg_op>(?:ND|JD)_REGISTER_(?:BINARY|UNARY)_OP\s*\(\s*(?P<op_type>[a-zA-Z0-9_:]+))'
   )
 
   all_code = ''
@@ -322,6 +336,28 @@ def main():
           elif match.group('reg'):
             type_name = match.group('type').strip()
             py_name = match.group('name').strip()
+
+            # Fully qualify the C++ type name if relative
+            if not type_name.startswith('::'):
+              if '::' in type_name:
+                type_name = '::' + type_name
+              else:
+                prefix = ''
+                for ns in namespace_stack:
+                  if ns is not None:
+                    prefix += ns + '::'
+                type_name = '::' + prefix + type_name
+
+            assert type_name not in registrations, (
+                'generate_pybind.py: Warning: Duplicate registration for'
+                f' {type_name} in {src}'
+            )
+            registrations[type_name] = py_name
+          elif match.group('reg_op'):
+            type_name = match.group('op_type').strip()
+            if type_name in ('ClassName', 'type'):
+              continue
+            py_name = type_name.split('::')[-1]
 
             # Fully qualify the C++ type name if relative
             if not type_name.startswith('::'):
