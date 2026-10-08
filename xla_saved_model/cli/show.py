@@ -15,13 +15,14 @@
 """XSM CLI `show` command."""
 
 import itertools
-from typing import List, NoReturn
+from typing import Any, List, NoReturn
 
 from google.protobuf import message
 from google.protobuf import text_format
 import jax.extend as jex
 from jax.interpreters import mlir
 import rich
+import rich.markup
 import rich.table
 import typer
 from typing_extensions import Annotated
@@ -34,6 +35,20 @@ from xla_saved_model._src.core import manifest_utils
 from xla_saved_model._src.core import persistence_lib
 from xla_saved_model.cli import constants
 from xla_saved_model.cli import printer
+
+# `transform_config_pb2` ships in the `xla-serving-data` wheel, which is a
+# separate, optional install from the pure-Python `xla-saved-model` wheel that
+# ships `xsm-cli`. Keep this import optional so the CLI keeps working without
+# it; CompositeProcessor details are then omitted with a hint.
+try:
+  from xla_serving_data.processor.proto import transform_config_pb2  # pylint: disable=g-import-not-at-top
+except ImportError:
+  transform_config_pb2 = None
+
+_COMPOSITE_UNAVAILABLE_HINT = (
+    'Install the `xla-serving-data` package to decode CompositeProcessor'
+    ' details.'
+)
 
 
 def _bail(msg: str) -> NoReturn:
@@ -262,10 +277,201 @@ def _show_object_details(
     rich.print('Unknown object type')
 
 
+def _type_leaf_names(type_proto: Any, prefix: str = '') -> list[str]:
+  """Returns leaf path names for a manifest Type in flattened PyTree order."""
+  if type_proto.HasField('leaf'):
+    return [prefix]
+  if type_proto.HasField('dict'):
+    names: list[str] = []
+    for name, child_type in sorted(type_proto.dict.string_to_type.items()):
+      child = f'{prefix}.{name}' if prefix else name
+      names.extend(_type_leaf_names(child_type, child))
+    return names
+  if type_proto.HasField('string_type_pairs'):
+    names = []
+    for pair in type_proto.string_type_pairs.elements:
+      child = f'{prefix}.{pair.fst}' if prefix else pair.fst
+      names.extend(_type_leaf_names(pair.snd, child))
+    return names
+  if type_proto.HasField('tuple') or type_proto.HasField('list'):
+    elements = (
+        type_proto.tuple.elements
+        if type_proto.HasField('tuple')
+        else type_proto.list.elements
+    )
+    names = []
+    for i, elem in enumerate(elements):
+      child = f'{prefix}[{i}]' if prefix else ''
+      names.extend(_type_leaf_names(elem, child))
+    return names
+  return []
+
+
+def _transform_label(transform: Any, index: int) -> str:
+  """Returns a markup-safe label for a transform; `node[i]` if unnamed."""
+  if transform.name:
+    return rich.markup.escape(transform.name)
+  return f'node[{index}]'
+
+
+def _resource_label(resource: Any, index: int) -> str:
+  """Returns a human-readable label for a ResourceProto."""
+  if resource.name and resource.name != str(resource.id):
+    return rich.markup.escape(resource.name)
+  return f'resource[{index}]'
+
+
+def _any_type_name(any_proto: Any) -> str:
+  """Returns the short message name from a google.protobuf.Any type_url."""
+  short_name = any_proto.type_url.rsplit('/', 1)[-1].rsplit('.', 1)[-1]
+  return rich.markup.escape(short_name)
+
+
+def _composite_edge(
+    edge: Any, transform_names: list[str], input_names: list[str]
+) -> str:
+  """Renders an EdgeProto as `<source>.<kind>[<index>]`."""
+  pb2 = transform_config_pb2
+  assert pb2 is not None
+  edge_proto = pb2.EdgeProto
+  match edge.type:
+    case edge_proto.GRAPH_INPUT:
+      idx = edge.source_index
+      if 0 <= idx < len(input_names) and input_names[idx]:
+        return f'graph.input[{idx}]:{input_names[idx]}'
+      return f'graph.input[{idx}]'
+    case edge_proto.NODE_OUTPUT:
+      if 0 <= edge.source_index < len(transform_names):
+        name = transform_names[edge.source_index]
+      else:
+        name = f'node[{edge.source_index}]'
+      return f'{name}.output[{edge.port_index}]'
+    case edge_proto.CONSTANT:
+      return f'const.{_any_type_name(edge.constant_value)}'
+    case _:
+      return f'<invalid edge {edge.source_index}>'
+
+
+def _composite_asset(asset: Any) -> str:
+  """Renders an AssetProto as `name: source`."""
+  match asset.WhichOneof('source'):
+    case 'path':
+      source = rich.markup.escape(asset.path)
+    case 'content':
+      source = f'<inline, {len(asset.content)} characters>'
+    case _:
+      source = '<unset>'
+  return f'{rich.markup.escape(asset.name)}: {source}'
+
+
+def _composite_transforms(
+    config: Any, input_names: list[str], verbose: bool
+) -> str:
+  """Renders the transforms of a CompositeProcessorConfig."""
+  pb2 = transform_config_pb2
+  assert pb2 is not None
+  names = [
+      _transform_label(transform, i)
+      for i, transform in enumerate(config.transforms)
+  ]
+  resource_labels = {
+      resource.id: _resource_label(resource, i)
+      for i, resource in enumerate(config.resources)
+  }
+  lines = [f'{len(config.transforms)} total:']
+  for i, transform in enumerate(config.transforms):
+    label = names[i]
+    if transform.op_name:
+      label = f'{label} ({rich.markup.escape(transform.op_name)})'
+    lines.append(f' - {label}')
+    if not verbose:
+      continue
+    if transform.input_edges:
+      sources = ', '.join(
+          _composite_edge(edge, names, input_names)
+          for edge in transform.input_edges
+      )
+      lines.append(f'     inputs: {sources}')
+    if transform.resource_ids:
+      resources = ', '.join(
+          resource_labels.get(resource_id, str(resource_id))
+          for resource_id in transform.resource_ids
+      )
+      lines.append(f'     resources: {resources}')
+    if transform.device != pb2.DEVICE_UNSPECIFIED:
+      device = pb2.DeviceProto.Name(transform.device)
+      lines.append(f'     device: {device}')
+    if transform.detail.type_url:
+      lines.append(f'     extra_args: {_any_type_name(transform.detail)}')
+  return '\n'.join(lines)
+
+
+def _composite_resources(config: Any) -> str:
+  """Renders the resources of a CompositeProcessorConfig."""
+  lines = [f'{len(config.resources)} total:']
+  for i, resource in enumerate(config.resources):
+    label = _resource_label(resource, i)
+    if resource.class_name:
+      label = f'{label} ({rich.markup.escape(resource.class_name)})'
+    lines.append(f' - {label}')
+    if resource.module_name:
+      lines.append(f'     module: {rich.markup.escape(resource.module_name)}')
+    if resource.assets:
+      lines.append('     assets:')
+      for asset in resource.assets:
+        lines.append(f'       {_composite_asset(asset)}')
+  return '\n'.join(lines)
+
+
+def _add_composite_processor_rows(
+    table: rich.table.Table,
+    config: Any,
+    input_type: Any,
+    verbose: bool,
+) -> None:
+  """Adds CompositeProcessorConfig detail rows to the function table."""
+  input_names = [
+      rich.markup.escape(name) for name in _type_leaf_names(input_type)
+  ]
+  if config.transforms:
+    table.add_row(
+        'Transforms',
+        printer.collapse(
+            _composite_transforms(config, input_names, verbose),
+            verbose_mode=verbose,
+        ),
+    )
+  if verbose and config.output_edges:
+    names = [
+        _transform_label(transform, i)
+        for i, transform in enumerate(config.transforms)
+    ]
+    table.add_row(
+        'Outputs',
+        '\n'.join(
+            f' - {_composite_edge(edge, names, input_names)}'
+            for edge in config.output_edges
+        ),
+    )
+  if config.resources:
+    if verbose:
+      table.add_row('Resources', _composite_resources(config))
+    else:
+      table.add_row(
+          'Resources',
+          f'{len(config.resources)} total (`[green]--verbose[/green]` to'
+          ' expand)',
+      )
+  if config.custom_asset_path:
+    table.add_row(
+        'Custom asset path', rich.markup.escape(config.custom_asset_path)
+    )
+
+
 def _show_function_details(
     model_base_dir: str, name: str, fn: manifest_pb2.Function, verbose: bool
 ) -> None:
-  """Shows the function details (StableHLO or TF ConcreteFunction handle)."""
+  """Shows the function details (StableHLO, TF handle, or CompositeProcessor)."""
 
   table = rich.table.Table('Function', name, padding=(0, 1, 1, 1))
 
@@ -329,6 +535,29 @@ def _show_function_details(
         table.add_row('Name', handle.fn_name)
         table.add_row('Inputs', '\n'.join(handle.input_names))
         table.add_row('Outputs', '\n'.join(handle.output_names))
+      case constants.MIME_TYPE_COMPOSITE_PROCESSOR:
+        table.add_row('Type', 'CompositeProcessor')
+        table.add_row(
+            'Input signature',
+            printer.collapse(
+                printer.xsm_type(fn.signature.input), verbose_mode=verbose
+            ),
+        )
+        table.add_row(
+            'Output signature',
+            printer.collapse(
+                printer.xsm_type(fn.signature.output), verbose_mode=verbose
+            ),
+        )
+        pb2 = transform_config_pb2
+        if pb2 is None:
+          table.add_row('Details', _COMPOSITE_UNAVAILABLE_HINT)
+        else:
+          config = pb2.CompositeProcessorConfig()
+          _read_proto_from_data(model_base_dir, fn.body.other, config)
+          _add_composite_processor_rows(
+              table, config, fn.signature.input, verbose
+          )
       case _:
         table.add_row('Type', printer.unstructured_data(fn.body.other))
   else:

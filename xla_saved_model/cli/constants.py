@@ -53,6 +53,10 @@ MIME_TYPE_ORBAX_JAX_SUPPLEMENTAL = (
     'application/protobuf; type=orbax_model_jax_supplemental.Function'
 )
 
+MIME_TYPE_COMPOSITE_PROCESSOR = (
+    'application/protobuf; type=xla_serving.data.composite.CompositeProcessorConfig'
+)
+
 
 WELL_KNOWN_MIME_TYPE_DESCRIPTIONS = {
     MIME_TYPE_MLIR_STABLEHLO: 'MLIR StableHLO',
@@ -61,7 +65,7 @@ WELL_KNOWN_MIME_TYPE_DESCRIPTIONS = {
     MIME_TYPE_TF_CONCRETE_FUNCTION: 'TensorFlow ConcreteFunction',
     MIME_TYPE_TF_SAVED_MODEL: 'TensorFlow SavedModel',
     MIME_TYPE_XLA_COMPILE_OPTIONS: 'XLA Compile Options',
-
+    MIME_TYPE_COMPOSITE_PROCESSOR: 'CompositeProcessor',
     # Types for the legacy Orbax Model format.
     MIME_TYPE_ORBAX_PIPELINES: 'Orchestration Pipelines',
     MIME_TYPE_ORBAX_TF_CONCRETE_FUNCTION: 'TensorFlow ConcreteFunction',
