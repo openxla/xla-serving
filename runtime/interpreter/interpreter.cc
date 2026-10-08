@@ -27,9 +27,11 @@
 #include <variant>
 #include <vector>
 
+#include "absl/algorithm/container.h"  // from @abseil-cpp
 #include "absl/base/no_destructor.h"  // from @abseil-cpp
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
+#include "absl/container/flat_hash_set.h"  // from @abseil-cpp
 #include "absl/flags/flag.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
@@ -634,6 +636,8 @@ absl::StatusOr<std::unique_ptr<StableHlo>> BuildStableHloFromFunctions(
         .target_platforms =
             {func->body().stable_hlo_body().lowering_platforms().begin(),
              func->body().stable_hlo_body().lowering_platforms().end()},
+        .num_input_aliased_output = static_cast<int>(
+            func->body().stable_hlo_body().num_input_aliased_output()),
     });
   }
   return StableHlo::Create(stablehlo_specs);
@@ -808,6 +812,8 @@ absl::StatusOr<BucketAotData> LoadAotExecutableForBucket(
   spec.inputs = std::move(input_specs);
   spec.outputs = std::move(output_specs);
   spec.mlir_module_kept_var_idx = std::move(aot_kept_var_idx);
+  spec.num_input_aliased_output = static_cast<int>(
+      func.body().stable_hlo_body().num_input_aliased_output());
   spec.target_platforms.reserve(
       func.body().stable_hlo_body().lowering_platforms().size());
   for (const auto& platform :
@@ -898,6 +904,102 @@ absl::StatusOr<std::optional<BatchIndices>> FindBatchIndices(
     }
   }
   return indices;
+}
+
+// Whether the StableHLO function(s) behind `function_name` were exported with
+// input-aliased output arguments. A polymorphic function is concretized into
+// several functions, which are exported alike, so any one of them decides.
+bool ComponentUsesInputAliasing(
+    const absl::flat_hash_map<std::string,
+                              const xla_saved_model_manifest::TopLevelObject*>&
+        manifest_objects,
+    absl::string_view function_name) {
+  absl::StatusOr<std::vector<const xla_saved_model_manifest::Function*>>
+      functions =
+          GetStableHloFunctionsByObjectName(manifest_objects, function_name);
+  if (!functions.ok()) {
+    return false;
+  }
+  return absl::c_any_of(
+      *functions, [](const xla_saved_model_manifest::Function* function) {
+        return function->body().has_stable_hlo_body() &&
+               function->body().stable_hlo_body().num_input_aliased_output() >
+                   0;
+      });
+}
+
+// `RunOptions::input_aliased_output_arrays` is keyed by component output name,
+// and each kernel claims only the entries naming its own outputs. An entry
+// that no kernel claims would simply never be read: the execution would
+// allocate its own output memory and the caller would be handed results that
+// are not in the memory it asked for, with nothing to show that its buffers
+// went unused. So resolve every name to the component producing it here, and
+// fail the request on any name that cannot be honoured.
+absl::Status ValidateInputAliasedOutputArrays(
+    absl::string_view pipeline_name,
+    const xla_saved_model_orchestration::Pipeline& pipeline,
+    const absl::flat_hash_map<std::string,
+                              const xla_saved_model_manifest::TopLevelObject*>&
+        manifest_objects,
+    const absl::flat_hash_map<std::string, xla::ifrt::ArrayRef>&
+        input_aliased_output_arrays) {
+  if (input_aliased_output_arrays.empty()) {
+    return absl::OkStatus();
+  }
+  // Only a keyword-arguments based pipeline hands its components their named
+  // signatures, and without them there is no output name to address.
+  if (!pipeline.keyword_arguments_based()) {
+    return absl::FailedPreconditionError(absl::StrCat(
+        "Pipeline \"", pipeline_name,
+        "\" is not keyword-arguments based, so its component outputs have no "
+        "names to address input-aliased output buffers to. Input aliasing "
+        "requires a graph-based export."));
+  }
+
+  // Every value of a keyword-arguments based run lives in one name-keyed map,
+  // so a pipeline whose components share an output name cannot run anyway.
+  // Still, a buffer addressed to such a name could land on either output, so
+  // reject it here with a precise error rather than rely on that.
+  absl::flat_hash_map<absl::string_view, absl::string_view> producers;
+  absl::flat_hash_set<absl::string_view> ambiguous_names;
+  for (const xla_saved_model_orchestration::Component& component :
+       pipeline.components()) {
+    if (!component.has_named_signature()) {
+      continue;
+    }
+    for (const xla_saved_model_orchestration::NamedTensorType& output :
+         component.named_signature().outputs().named_tensor_types()) {
+      if (!producers.try_emplace(output.name(), component.function_name())
+               .second) {
+        ambiguous_names.insert(output.name());
+      }
+    }
+  }
+
+  for (const auto& [output_name, unused_array] : input_aliased_output_arrays) {
+    absl::flat_hash_map<absl::string_view, absl::string_view>::const_iterator
+        producer = producers.find(output_name);
+    if (producer == producers.end()) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "`input_aliased_output_arrays` has an entry for \"", output_name,
+          "\", which is not an output of any component of pipeline \"",
+          pipeline_name, "\"."));
+    }
+    if (ambiguous_names.contains(output_name)) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "`input_aliased_output_arrays` has an entry for \"", output_name,
+          "\", which is an output of more than one component of pipeline \"",
+          pipeline_name, "\"."));
+    }
+    if (!ComponentUsesInputAliasing(manifest_objects, producer->second)) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "`input_aliased_output_arrays` has an entry for \"", output_name,
+          "\", which is an output of component \"", producer->second,
+          "\" of pipeline \"", pipeline_name,
+          "\", but that component was not exported for input aliasing."));
+    }
+  }
+  return absl::OkStatus();
 }
 }  // namespace
 
@@ -1554,6 +1656,9 @@ absl::StatusOr<std::vector<Value>> Interpreter::Run(
                  run_options]() -> absl::StatusOr<std::vector<Value>> {
     TF_ASSIGN_OR_RETURN(GraphBundle * graph_bundle,
                         GetGraphBundle(pipeline_name));
+    TF_RETURN_IF_ERROR(ValidateInputAliasedOutputArrays(
+        pipeline_name, graph_bundle->pipeline, manifest_objects_,
+        run_options.input_aliased_output_arrays));
     TF_ASSIGN_OR_RETURN(const KernelGraph* graph,
                         GetOrCreateGraph(*graph_bundle));
     std::vector<Placement> resolved_placements =
@@ -1656,6 +1761,14 @@ tsl::Future<std::vector<Value>> Interpreter::RunAsync(
     absl::StatusOr<GraphBundle*> graph_bundle = GetGraphBundle(pipeline_name);
     if (!graph_bundle.ok()) {
       return tsl::Future<std::vector<Value>>(graph_bundle.status());
+    }
+
+    absl::Status input_aliased_output_arrays_valid =
+        ValidateInputAliasedOutputArrays(
+            pipeline_name, (*graph_bundle)->pipeline, manifest_objects_,
+            run_options.input_aliased_output_arrays);
+    if (!input_aliased_output_arrays_valid.ok()) {
+      return tsl::Future<std::vector<Value>>(input_aliased_output_arrays_valid);
     }
 
     absl::StatusOr<const KernelGraph*> graph = GetOrCreateGraph(**graph_bundle);

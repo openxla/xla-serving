@@ -73,6 +73,16 @@ class StableHlo {
     // A list of target platforms for which the MLIR module is lowered to
     // (e.g cpu, tpu, cuda, rocm)
     std::vector<std::string> target_platforms;
+
+    // The number of trailing entries of `inputs` that are input-aliased output
+    // buffers rather than user inputs.
+    //
+    // A model exported for input aliasing ends its argument list with one
+    // extra argument per output, aliased to that output. The caller never
+    // supplies the real data for them: they denote memory for the execution to
+    // write its results into, and the runner fills them in itself right before
+    // dispatching. Because they come last, no other argument index is affected.
+    int num_input_aliased_output = 0;
   };
 
   // Creates an StableHlo object from one or multiple `Function`s.

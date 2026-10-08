@@ -46,6 +46,7 @@
 #include "runtime/interpreter/context.h"  // from @xla_serving
 #include "runtime/interpreter/manifest_utils.h"  // from @xla_serving
 #include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @xla_serving
+#include "xla/pjrt/pjrt_layout.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
@@ -128,6 +129,17 @@ class StableHloRunnerBase {
       return ExecuteOptions{
           .placements = std::vector<Placement>(num_outputs, Placement::kHost)};
     }
+
+    // Pre-allocated device memory that the execution writes its results into,
+    // one array per output, in output order. Only usable when the model was
+    // exported for input aliasing; leaving it empty lets the runner allocate
+    // the output memory itself.
+    //
+    // Each array must match the dtype, shape and sharding of the output it
+    // backs, and must be solely owned by the caller: the arrays are donated to
+    // the execution, so they are consumed (deleted) by it. The results are
+    // returned as usual by `Execute`, backed by this same memory.
+    std::vector<xla::ifrt::ArrayRef> output_arrays;
   };
 
   // Executes the computation.
@@ -178,11 +190,28 @@ class StableHloRunnerBase {
     // IOSpec from the StableHLO before optimization (user-facing IO shapes).
     StableHloIOSpec original_io_spec;
     // IOSpec from the StableHLO after optimization (executable IO shapes).
+    // When input aliasing is enabled, `inputs` ends with one entry per output
+    // describing the aliased argument that backs it.
     StableHloIOSpec io_spec;
     // Maps an index into `io_spec.inputs` to the permutation (from
     // `kHostTransposeAttr`) that must be applied to that host input before
     // it is matched against `io_spec`.
     absl::flat_hash_map<int, std::vector<int64_t>> host_transpose_permutations;
+
+    // Number of trailing arguments of the executable that are input-aliased
+    // output buffers rather than user inputs. Either 0, or the number of
+    // outputs. Because they come last, all other argument indices are
+    // unaffected.
+    int num_input_aliased_output = 0;
+
+    // Layouts the executable expects for those aliased arguments, in output
+    // order. Buffers allocated for them must use exactly these layouts: an
+    // executable parameter is not obliged to use the default layout for its
+    // shape, and on TPU it routinely does not. Empty iff
+    // `num_input_aliased_output` is 0.
+    std::vector<std::shared_ptr<const xla::PjRtLayout>>
+        input_aliased_output_arg_layouts;
+
     xla::ifrt::LoadedExecutableRef ifrt_executable;
     // The canonical program fingerprint of the `ifrt_executable` and the
     // timestamp in microseconds. The timestamp is added for uniqueness (e.g.,
@@ -414,6 +443,20 @@ class StableHloRunnerBase {
   absl::Status Init(tsl::thread::ThreadPool* absl_nonnull thread_pool);
   // Returns true if the executable is portable.
   bool IsPortableExecutable() const;
+
+  // Returns the arrays to pass as the executable's input-aliased output
+  // arguments.
+  //
+  // `caller_provided` is `ExecuteOptions::output_arrays`: when non-empty it is
+  // validated against the executable's outputs and handed through, and when
+  // empty the runner allocates uninitialized device memory instead. Either
+  // way the returned arrays are donated to the execution, which writes the
+  // results into them.
+  absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
+  ResolveInputAliasedOutputArrays(
+      const CachedExecutableBundle& executable_bundle,
+      const xla::ifrt::DeviceListRef& device_list,
+      std::vector<xla::ifrt::ArrayRef> caller_provided);
 
   const ModelIoMetadata model_io_metadata_;
   const xla::ifrt::DeviceListRef assigned_device_list_;

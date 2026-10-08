@@ -254,6 +254,21 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
         "`num_weights` should be non-negative when creating "
         "`LoadedStableHlo`");
   }
+  // Input aliasing is only supported from AOT-compiled executables
+  // (`AotStableHloRunner`). Compiling an input-aliasing module here would
+  // otherwise fail obscurely, e.g. in shape refinement, which has no shapes for
+  // the aliased arguments, or at execution, which would count them as user
+  // inputs.
+  for (const auto& spec : stablehlo->specs()) {
+    if (spec.num_input_aliased_output > 0) {
+      return absl::FailedPreconditionError(absl::StrCat(
+          "The model was exported for input aliasing (",
+          spec.num_input_aliased_output,
+          " input-aliased output arguments), which is only supported with an "
+          "AOT-compiled executable, but it is being JIT-compiled. Serve it "
+          "with an AOT executable for this topology."));
+    }
+  }
 
   TF_ASSIGN_OR_RETURN(std::vector<std::optional<ArgSpec>> weight_specs,
                       GetWeightSpecs(stablehlo, num_weights));

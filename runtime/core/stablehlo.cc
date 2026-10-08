@@ -60,6 +60,8 @@ absl::StatusOr<StableHlo::Spec> BuildSpec(
            stable_hlo_body.module_kept_var_idx().end()},
       .target_platforms = {stable_hlo_body.lowering_platforms().begin(),
                            stable_hlo_body.lowering_platforms().end()},
+      .num_input_aliased_output =
+          static_cast<int>(stable_hlo_body.num_input_aliased_output()),
   };
 }
 

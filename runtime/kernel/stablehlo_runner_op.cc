@@ -21,10 +21,12 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/memory/memory.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/flat_signature.h"  // from @xla_serving
@@ -38,6 +40,7 @@
 #include "runtime/kernel/kernel.h"  // from @xla_serving
 #include "runtime/kernel/kernel_builder_constants.h"  // from @xla_serving
 #include "runtime/kernel/kernel_builder_context.h"  // from @xla_serving
+#include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/executable.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
@@ -76,6 +79,59 @@ StableHloRunnerFactoryRegistry::Create(
   }
   return it->second(context, std::move(stablehlo), std::move(base_options));
 }
+
+namespace {
+
+// Takes, out of the caller's name-keyed aliased buffers, those naming this
+// component's outputs, in the order the executable expects: the order of
+// `output_signature`. The executable's aliases are compiled against argument
+// positions, so the names have to be resolved before the arrays reach it.
+//
+// Returns an empty vector when none of this component's outputs are named, in
+// which case the runner allocates the output memory itself. The interpreter has
+// already checked that every name in the map belongs to exactly one component
+// that uses input aliasing, so entries left behind belong to other components.
+absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ClaimInputAliasedOutputArrays(
+    const FlatSignature* output_signature,
+    absl::flat_hash_map<std::string, xla::ifrt::ArrayRef>& by_name) {
+  if (by_name.empty() || output_signature == nullptr ||
+      !output_signature->IsAllSpecWithName()) {
+    return std::vector<xla::ifrt::ArrayRef>();
+  }
+  const std::vector<MetaArgSpec>& specs = output_signature->specs();
+
+  std::vector<xla::ifrt::ArrayRef> claimed(specs.size());
+  int num_claimed = 0;
+  for (int i = 0; i < specs.size(); ++i) {
+    absl::flat_hash_map<std::string, xla::ifrt::ArrayRef>::iterator it =
+        by_name.find(*specs[i].name);
+    if (it != by_name.end()) {
+      claimed[i] = std::move(it->second);
+      by_name.erase(it);
+      ++num_claimed;
+    }
+  }
+  if (num_claimed == 0) {
+    return std::vector<xla::ifrt::ArrayRef>();
+  }
+
+  // Input aliasing is all-or-nothing: rather than quietly allocating the
+  // outputs the caller left out, which would put an allocation back on a path
+  // the caller is trying to keep free of them, reject the request.
+  for (int i = 0; i < specs.size(); ++i) {
+    if (claimed[i] == nullptr) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "No input-aliased output buffer was supplied for output \"",
+          *specs[i].name,
+          "\", although buffers were supplied for this component's other "
+          "outputs. Every output of a component must be given a buffer, or "
+          "none."));
+    }
+  }
+  return claimed;
+}
+
+}  // namespace
 
 absl::StatusOr<std::unique_ptr<Kernel>> StableHloRunnerOp::Create(
     const KernelBuilderContext& context) {
@@ -187,6 +243,14 @@ absl::Status StableHloRunnerOp::RunInternal(ExecuteContext& context) {
 
   StableHloRunnerBase::ExecuteOptions execute_options;
   execute_options.placements = context.run_context.placements;
+  // Take only the buffers naming this component's outputs. Moving them out of
+  // our own copy of the run context leaves the other kernels' copies
+  // untouched, and makes it impossible to hand the same arrays to a second
+  // execution.
+  TF_ASSIGN_OR_RETURN(
+      execute_options.output_arrays,
+      ClaimInputAliasedOutputArrays(
+          output_signature(), context.run_context.input_aliased_output_arrays));
   TF_ASSIGN_OR_RETURN(
       std::vector<Value> output_values,
       stablehlo_runner_->Execute(inputs_span, std::move(execute_options),

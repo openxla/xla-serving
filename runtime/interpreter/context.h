@@ -28,6 +28,7 @@
 #include "runtime/core/stablehlo_utils.h"  // from @xla_serving
 #include "runtime/interpreter/clock.h"  // from @xla_serving
 #include "runtime/interpreter/run_options.h"  // from @xla_serving
+#include "xla/python/ifrt/array.h"  // from @xla
 
 namespace xla_serving {
 
@@ -52,6 +53,17 @@ struct RunContext {
   std::vector<int32_t> request_ids;
   std::optional<int64_t> callback_id;
   std::vector<Placement> placements;
+  // Pre-allocated output memory supplied by the caller, keyed by component
+  // output name. See `RunOptions::input_aliased_output_arrays`. A kernel takes
+  // the entries naming its own outputs, and leaves the rest alone.
+  //
+  // `RunContext` is copied once per kernel, so each kernel holds its own
+  // handles and can move its entries out without disturbing anyone else. The
+  // copies other kernels hold keep the (by then donated, and so deleted) array
+  // shells alive until the request ends, which costs nothing: donation has
+  // already handed the device memory itself to the execution.
+  absl::flat_hash_map<std::string, xla::ifrt::ArrayRef>
+      input_aliased_output_arrays;
 
   static RunContext Create(const RunOptions& run_options,
                            std::vector<Placement> resolved_placements = {},
@@ -61,7 +73,8 @@ struct RunContext {
         .streamed_output_callback = run_options.streamed_output_callback,
         .request_id = run_options.request_id,
         .callback_id = callback_id,
-        .placements = std::move(resolved_placements)};
+        .placements = std::move(resolved_placements),
+        .input_aliased_output_arrays = run_options.input_aliased_output_arrays};
   }
 };
 

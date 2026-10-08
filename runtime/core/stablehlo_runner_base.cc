@@ -17,6 +17,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
@@ -51,6 +52,8 @@
 #include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @xla_serving
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/layout.h"  // from @xla
+#include "xla/pjrt/pjrt_client.h"  // from @xla
+#include "xla/pjrt/pjrt_layout.h"  // from @xla
 #include "xla/pjrt/transpose.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
@@ -58,10 +61,18 @@
 #include "xla/python/ifrt/device_list.h"  // from @xla
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/executable.h"  // from @xla
+#include "xla/python/ifrt/memory.h"  // from @xla
+#include "xla/python/ifrt/rtti.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
+#include "xla/python/pjrt_ifrt/pjrt_array.h"  // from @xla
+#include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
+#include "xla/python/pjrt_ifrt/pjrt_dtype.h"  // from @xla
+#include "xla/python/pjrt_ifrt/pjrt_memory.h"  // from @xla
+#include "xla/shape_util.h"  // from @xla
 #include "xla/status_macros.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
+#include "xla/tsl/concurrency/ref_count.h"  // from @xla
 #include "xla/tsl/framework/serving_device_selector.h"  // from @xla
 #include "xla/tsl/lib/monitoring/counter.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
@@ -183,6 +194,98 @@ absl::StatusOr<HostBuffer> TransposeHostBuffer(
   return transposed_buffer;
 }
 
+// Returns the PjRt memory space that `sharding` places `device` shards in.
+absl::StatusOr<xla::PjRtMemorySpace*> GetPjRtMemorySpace(
+    xla::ifrt::Device& device, xla::ifrt::MemoryKind memory_kind) {
+  xla::ifrt::Memory* memory = nullptr;
+  if (memory_kind.memory_kind().has_value()) {
+    for (xla::ifrt::Memory* candidate : device.Memories()) {
+      if (candidate->Kind() == memory_kind) {
+        memory = candidate;
+        break;
+      }
+    }
+    if (memory == nullptr) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Device ", device.DebugString(),
+                       " has no memory of kind ", memory_kind));
+    }
+  } else {
+    TF_ASSIGN_OR_RETURN(memory, device.DefaultMemory());
+  }
+
+  auto* pjrt_memory =
+      xla::ifrt::dyn_cast<xla::ifrt::PjRtCompatibleMemory>(memory);
+  if (pjrt_memory == nullptr) {
+    return absl::UnimplementedError(
+        absl::StrCat("Memory ", *memory, " is not PjRt-backed"));
+  }
+
+  return pjrt_memory->pjrt_memory();
+}
+
+// Allocates device memory for one output of the executable, shaped, sharded
+// and laid out the way the executable wants the argument that backs that
+// output. The memory is left uninitialized on purpose: it is handed to the
+// execution as an aliased argument, whose only job is to be written into, so
+// initializing it would only cost a transfer.
+//
+// `layout` is the layout the executable declares for that argument. It is not
+// necessarily the default layout for the shape -- on TPU it routinely is not,
+// and allocating with the default layout yields a buffer of the wrong size --
+// so it is applied rather than inferred.
+absl::StatusOr<xla::ifrt::ArrayRef> MakeUninitializedOutputArray(
+    xla::ifrt::Client& client, const ArgSpec& output_spec,
+    const xla::ifrt::ShardingRef& sharding,
+    std::shared_ptr<const xla::PjRtLayout> layout) {
+  auto* pjrt_client =
+      xla::ifrt::dyn_cast<xla::ifrt::PjRtCompatibleClient>(&client);
+  if (pjrt_client == nullptr) {
+    return absl::UnimplementedError(
+        "Input aliasing can only allocate output buffers on a PjRt-backed "
+        "IFRT client. Pass the buffers in `ExecuteOptions::output_arrays` "
+        "instead.");
+  }
+
+  const xla::ifrt::Shape shape = output_spec.GetIfrtShape();
+  TF_ASSIGN_OR_RETURN(const xla::PrimitiveType primitive_type,
+                      xla::ifrt::ToPrimitiveType(output_spec.dtype));
+  using ShardList =
+      std::vector<std::pair<xla::ifrt::Shape, xla::ifrt::ShardingRef>>;
+  TF_ASSIGN_OR_RETURN(
+      const ShardList shards,
+      sharding->Disassemble(
+          shape, xla::ifrt::SingleDeviceShardSemantics::kAddressableShards));
+
+  xla::ifrt::PjRtArray::PjRtBuffers buffers;
+  buffers.reserve(shards.size());
+  for (const auto& [shard_shape, shard_sharding] : shards) {
+    const absl::Span<xla::ifrt::Device* const> shard_devices =
+        shard_sharding->devices()->devices();
+    TF_RET_CHECK(shard_devices.size() == 1)
+        << "Expected a single-device shard, but got " << shard_devices.size()
+        << " devices";
+    TF_ASSIGN_OR_RETURN(xla::PjRtMemorySpace * memory_space,
+                        GetPjRtMemorySpace(*shard_devices.front(),
+                                           shard_sharding->memory_kind()));
+    xla::Shape shard_xla_shape =
+        xla::ShapeUtil::MakeShape(primitive_type, shard_shape.dims());
+    if (layout != nullptr) {
+      *shard_xla_shape.mutable_layout() = layout->xla_layout();
+    }
+    TF_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtBuffer> buffer,
+                        pjrt_client->pjrt_client()->CreateUninitializedBuffer(
+                            shard_xla_shape, memory_space));
+    buffers.push_back(std::shared_ptr<xla::PjRtBuffer>(std::move(buffer)));
+  }
+
+  TF_ASSIGN_OR_RETURN(tsl::RCReference<xla::ifrt::PjRtArray> array,
+                      xla::ifrt::PjRtArray::Create(
+                          pjrt_client, output_spec.dtype, shape, sharding,
+                          std::move(buffers), std::move(layout)));
+  return xla::ifrt::ArrayRef(std::move(array));
+}
+
 }  // namespace
 
 absl::StatusOr<ModelIoMetadata> ModelIoMetadata::CreateFromStableHlo(
@@ -204,7 +307,23 @@ absl::StatusOr<ModelIoMetadata> ModelIoMetadata::CreateFromStableHlo(
         "weights (%d)",
         stablehlo.specs()[0].inputs.size(), num_weights));
   }
-  int num_user_inputs = stablehlo.specs()[0].inputs.size() - num_weights;
+  // A model exported for input aliasing ends its argument list with one
+  // aliased buffer per output. The caller does not supply those, so they must
+  // not be counted as user inputs.
+  const auto num_user_inputs_of = [&](int i) -> absl::StatusOr<int> {
+    const StableHlo::Spec& spec = stablehlo.specs()[i];
+    const int num_non_weight_args = spec.inputs.size() - num_weights;
+    if (spec.num_input_aliased_output < 0 ||
+        num_non_weight_args < spec.num_input_aliased_output) {
+      return absl::InvalidArgumentError(absl::StrFormat(
+          "StableHLO module #%d has %d arguments left after its %d weights, "
+          "which does not fit the %d input-aliased output buffers it was "
+          "declared to have",
+          i, num_non_weight_args, num_weights, spec.num_input_aliased_output));
+    }
+    return num_non_weight_args - spec.num_input_aliased_output;
+  };
+  TF_ASSIGN_OR_RETURN(int num_user_inputs, num_user_inputs_of(0));
   int num_outputs = stablehlo.specs()[0].outputs.size();
 
   // Verifies that all StableHLO modules (shape buckets) have a consistent
@@ -217,7 +336,7 @@ absl::StatusOr<ModelIoMetadata> ModelIoMetadata::CreateFromStableHlo(
           "weights (%d)",
           stablehlo.specs()[i].inputs.size(), num_weights));
     }
-    int cur_user_inputs = stablehlo.specs()[i].inputs.size() - num_weights;
+    TF_ASSIGN_OR_RETURN(int cur_user_inputs, num_user_inputs_of(i));
     int cur_outputs = stablehlo.specs()[i].outputs.size();
 
     if (cur_user_inputs != num_user_inputs) {
@@ -667,6 +786,105 @@ StableHloRunnerBase::LookupWeights(std::optional<size_t> device_id) {
   return arrays;
 }
 
+absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
+StableHloRunnerBase::ResolveInputAliasedOutputArrays(
+    const CachedExecutableBundle& executable_bundle,
+    const xla::ifrt::DeviceListRef& device_list,
+    std::vector<xla::ifrt::ArrayRef> caller_provided) {
+  const int num_outputs = executable_bundle.num_input_aliased_output;
+  TF_RET_CHECK(num_outputs == executable_bundle.io_spec.outputs.size())
+      << "Input-aliased output argument count (" << num_outputs
+      << ") does not match output count ("
+      << executable_bundle.io_spec.outputs.size() << ")";
+  TF_RET_CHECK(!device_list->devices().empty())
+      << "Device list cannot be empty";
+  TF_ASSIGN_OR_RETURN(
+      const absl::Span<const xla::ifrt::ShardingRef> output_shardings,
+      executable_bundle.GetOutputShardings(device_list->devices()[0]->Id()));
+
+  TF_RET_CHECK(executable_bundle.input_aliased_output_arg_layouts.size() ==
+               num_outputs)
+      << "Input-aliased output argument layout count ("
+      << executable_bundle.input_aliased_output_arg_layouts.size()
+      << ") does not match output count (" << num_outputs << ")";
+
+  if (caller_provided.empty()) {
+    std::vector<xla::ifrt::ArrayRef> allocated;
+    allocated.reserve(num_outputs);
+    for (int i = 0; i < num_outputs; ++i) {
+      TF_ASSIGN_OR_RETURN(
+          xla::ifrt::ArrayRef array,
+          MakeUninitializedOutputArray(
+              *ifrt_client_, executable_bundle.io_spec.outputs[i],
+              output_shardings[i],
+              executable_bundle.input_aliased_output_arg_layouts[i]));
+      allocated.push_back(std::move(array));
+    }
+    return allocated;
+  }
+
+  // Verify the caller-provided arrays match the executable's outputs.
+  if (caller_provided.size() != num_outputs) {
+    return absl::InvalidArgumentError(absl::StrCat("Expected ", num_outputs,
+                                                   " output arrays, but got ",
+                                                   caller_provided.size()));
+  }
+  for (int i = 0; i < num_outputs; ++i) {
+    const xla::ifrt::ArrayRef& array = caller_provided[i];
+    if (array == nullptr) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Output array #", i, " is null"));
+    }
+    const ArgSpec& output_spec = executable_bundle.io_spec.outputs[i];
+    if (array->dtype() != output_spec.dtype) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Output array #", i, " has dtype ", array->dtype(),
+                       ", but output ", i, " has dtype ", output_spec.dtype));
+    }
+    if (array->shape() != output_spec.GetIfrtShape()) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Output array #", i, " has shape ", array->shape(), ", but output ",
+          i, " has shape ", output_spec.GetIfrtShape()));
+    }
+    // Resharding here would reintroduce exactly the copies this feature
+    // exists to avoid, so an array sharded differently from the output it
+    // backs is an error rather than something to fix up.
+    if (!array->sharding().HasSamePartitioning(*output_shardings[i])) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Output array #", i, " has sharding ", array->sharding(),
+          ", but output ", i, " has sharding ", *output_shardings[i]));
+    }
+    // PjRt only compares byte sizes when validating execution arguments, so a
+    // layout mismatch that preserves the byte count (any permutation of
+    // `minor_to_major`) is not caught there. Because the alias is compiled
+    // into the executable, such a buffer is still used to back the output and
+    // is written using the layout the executable expects, silently producing
+    // wrong data. Reject it here instead.
+    //
+    // An array that reports no layout is using the default layout for its
+    // shape on its device rather than having none, so read the concrete layout
+    // off the underlying buffer instead of treating null as a mismatch.
+    TF_ASSIGN_OR_RETURN(std::shared_ptr<const xla::PjRtLayout> layout,
+                        array->pjrt_layout());
+    if (layout == nullptr) {
+      if (auto* pjrt_array =
+              xla::ifrt::dyn_cast<xla::ifrt::PjRtCompatibleArray>(array.get());
+          pjrt_array != nullptr && !pjrt_array->pjrt_buffers().empty()) {
+        layout = pjrt_array->pjrt_buffers().front()->layout();
+      }
+    }
+    const std::shared_ptr<const xla::PjRtLayout>& expected_layout =
+        executable_bundle.input_aliased_output_arg_layouts[i];
+    if (layout != nullptr && expected_layout != nullptr &&
+        *layout != *expected_layout) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Output array #", i, " has layout ", layout->ToString(),
+          ", but output ", i, " has layout ", expected_layout->ToString()));
+    }
+  }
+  return caller_provided;
+}
+
 absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
     absl::Span<const xla_serving::Value> inputs, ExecuteOptions options,
     const RunContext& run_context) {
@@ -774,6 +992,20 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
       used_input_indices.push_back(idx - weights_array.size());
     }
   }
+  // A model exported for input aliasing ends its argument list with one
+  // aliased buffer per output. Those arguments are not supplied by the caller;
+  // they are resolved and appended after the user inputs below.
+  if (executable_bundle->num_input_aliased_output > 0) {
+    if (static_cast<int>(used_input_indices.size()) <
+        executable_bundle->num_input_aliased_output) {
+      return absl::InternalError(absl::StrCat(
+          "Executable aliases ", executable_bundle->num_input_aliased_output,
+          " outputs, but only ", used_input_indices.size(),
+          " non-weight arguments are kept in its signature."));
+    }
+    used_input_indices.resize(used_input_indices.size() -
+                              executable_bundle->num_input_aliased_output);
+  }
 
   std::vector<HostBuffer> host_buffers_to_convert;
   std::vector<int> host_buffers_stablehlo_indices;
@@ -860,6 +1092,25 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
   // at the end of the list.
   for (auto& arr : final_used_inputs) {
     inputs_with_weights.push_back(std::move(*arr));
+  }
+
+  // The memory the results are written into is passed in like any other
+  // argument, at the very end, and donated to the execution. The caller either
+  // supplied it or the runner just allocated it; either way the executable
+  // aliases output `i` onto argument `num_inputs + i`.
+  if (executable_bundle->num_input_aliased_output > 0) {
+    TF_ASSIGN_OR_RETURN(
+        std::vector<xla::ifrt::ArrayRef> input_aliased_outputs,
+        ResolveInputAliasedOutputArrays(*executable_bundle, device_list,
+                                        std::move(options.output_arrays)));
+    inputs_with_weights.insert(
+        inputs_with_weights.end(),
+        std::make_move_iterator(input_aliased_outputs.begin()),
+        std::make_move_iterator(input_aliased_outputs.end()));
+  } else if (!options.output_arrays.empty()) {
+    return absl::InvalidArgumentError(
+        "`ExecuteOptions::output_arrays` requires a model exported for input "
+        "aliasing, but this model was not.");
   }
 
   TF_ASSIGN_OR_RETURN(
