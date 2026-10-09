@@ -10,15 +10,16 @@
 #include <utility>
 #include <vector>
 
-#include "data/kernels/math/reduction_ops_common.h"  // from @xla_serving
-#include "data/kernels/math/scan_ops.h"  // from @xla_serving
-#include "data/kernels/test_utils.h"  // from @xla_serving
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_macros.h"
+#include "absl/status/status_matchers.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "Eigen/Core"
+#include "data/kernels/math/reduction_ops_common.h"  // from @xla_serving
+#include "data/kernels/math/scan_ops.h"  // from @xla_serving
+#include "data/kernels/test_utils.h"  // from @xla_serving
 #include "data/test_utils/status_macros.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
@@ -2032,6 +2033,284 @@ TEST(NumericalTransformsTest, XdivyXlog1pyXlogyTransforms) {
   EXPECT_EQ(xlogy_bcast.shape(), Shape({2, 3}));
   EXPECT_EQ(GetData<float>(xlogy_bcast),
             std::vector<float>({0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}));
+}
+
+TEST(NumericalTransformsTest, MultiplyNoNanTransformBasicAndSpecialCases) {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  auto a = CreateBuffer<float>({5}, {3.0f, nan, inf, -inf, 0.0f});
+  auto b = CreateBuffer<float>({5}, {2.0f, 0.0f, 0.0f, 0.0f, nan});
+
+  ASSERT_OK_AND_ASSIGN(auto transform, MultiplyNoNanTransform::Create());
+  ASSERT_OK_AND_ASSIGN(auto out, (*transform)(std::move(a), std::move(b)));
+
+  EXPECT_EQ(out.dtype(), DType(DType::kF32));
+  auto data = GetData<float>(out);
+  EXPECT_FLOAT_EQ(data[0], 6.0f);
+  EXPECT_FLOAT_EQ(data[1], 0.0f);
+  EXPECT_FLOAT_EQ(data[2], 0.0f);
+  EXPECT_FLOAT_EQ(data[3], 0.0f);
+  EXPECT_TRUE(std::isnan(data[4]));  // 0 * NaN -> NaN (non-commutative)
+}
+
+TEST(NumericalTransformsTest, MultiplyNoNanTransformBroadcasting) {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  auto a = CreateBuffer<float>({2, 1}, {2.0f, nan});
+  auto b = CreateBuffer<float>({1, 3}, {0.0f, 3.0f, 4.0f});
+
+  ASSERT_OK_AND_ASSIGN(auto transform, MultiplyNoNanTransform::Create());
+  ASSERT_OK_AND_ASSIGN(auto out, (*transform)(std::move(a), std::move(b)));
+
+  EXPECT_EQ(out.dtype(), DType(DType::kF32));
+  EXPECT_EQ(out.shape(), Shape({2, 3}));
+  auto data = GetData<float>(out);
+  EXPECT_FLOAT_EQ(data[0], 0.0f);
+  EXPECT_FLOAT_EQ(data[1], 6.0f);
+  EXPECT_FLOAT_EQ(data[2], 8.0f);
+  EXPECT_FLOAT_EQ(data[3], 0.0f);
+  EXPECT_TRUE(std::isnan(data[4]));
+  EXPECT_TRUE(std::isnan(data[5]));
+}
+
+TEST(NumericalTransformsTest, TrueDivTransformFloatAndComplex) {
+  auto a_f32 = CreateBuffer<float>({2}, {3.0f, -7.0f});
+  auto b_f32 = CreateBuffer<float>({2}, {2.0f, 2.0f});
+  ASSERT_OK_AND_ASSIGN(auto transform, TrueDivTransform::Create());
+  ASSERT_OK_AND_ASSIGN(auto out_f32,
+                       (*transform)(std::move(a_f32), std::move(b_f32)));
+  EXPECT_EQ(out_f32.dtype(), DType(DType::kF32));
+  EXPECT_EQ(GetData<float>(out_f32), std::vector<float>({1.5f, -3.5f}));
+
+  using c64 = std::complex<float>;
+  auto a_c64 = CreateBuffer<c64>({1}, {c64(4.0f, 2.0f)});
+  auto b_c64 = CreateBuffer<c64>({1}, {c64(2.0f, 0.0f)});
+  ASSERT_OK_AND_ASSIGN(auto out_c64,
+                       (*transform)(std::move(a_c64), std::move(b_c64)));
+  EXPECT_EQ(out_c64.dtype(), DType(DType::kC64));
+  EXPECT_EQ(GetData<c64>(out_c64), std::vector<c64>({c64(2.0f, 1.0f)}));
+}
+
+TEST(NumericalTransformsTest, TrueDivTransformBroadcasting) {
+  auto a = CreateBuffer<float>({2, 1}, {12.0f, 24.0f});
+  auto b = CreateBuffer<float>({1, 3}, {2.0f, 3.0f, 4.0f});
+
+  ASSERT_OK_AND_ASSIGN(auto transform, TrueDivTransform::Create());
+  ASSERT_OK_AND_ASSIGN(auto out, (*transform)(std::move(a), std::move(b)));
+
+  EXPECT_EQ(out.dtype(), DType(DType::kF32));
+  EXPECT_EQ(out.shape(), Shape({2, 3}));
+  EXPECT_EQ(GetData<float>(out),
+            std::vector<float>({6.0f, 4.0f, 3.0f, 12.0f, 8.0f, 6.0f}));
+}
+
+TEST(NumericalTransformsTest, TrueDivTransformIntegersPromoteToFloat) {
+  ASSERT_OK_AND_ASSIGN(auto transform, TrueDivTransform::Create());
+
+  // 8-bit and 16-bit integers promote to float32
+  auto a_i8 = CreateBuffer<int8_t>({2}, {3, -7});
+  auto b_i8 = CreateBuffer<int8_t>({2}, {2, 2});
+  ASSERT_OK_AND_ASSIGN(auto out_i8,
+                       (*transform)(std::move(a_i8), std::move(b_i8)));
+  EXPECT_EQ(out_i8.dtype(), DType(DType::kF32));
+  EXPECT_EQ(GetData<float>(out_i8), std::vector<float>({1.5f, -3.5f}));
+
+  auto a_u16 = CreateBuffer<uint16_t>({2}, {3, 7});
+  auto b_u16 = CreateBuffer<uint16_t>({2}, {2, 2});
+  ASSERT_OK_AND_ASSIGN(auto out_u16,
+                       (*transform)(std::move(a_u16), std::move(b_u16)));
+  EXPECT_EQ(out_u16.dtype(), DType(DType::kF32));
+  EXPECT_EQ(GetData<float>(out_u16), std::vector<float>({1.5f, 3.5f}));
+
+  // 32-bit and 64-bit integers promote to float64 (including broadcasting)
+  auto a_i32 = CreateBuffer<int32_t>({2, 1}, {2, -7});
+  auto b_i32 = CreateBuffer<int32_t>({1, 2}, {1, 4});
+  ASSERT_OK_AND_ASSIGN(auto out_i32,
+                       (*transform)(std::move(a_i32), std::move(b_i32)));
+  EXPECT_EQ(out_i32.dtype(), DType(DType::kF64));
+  EXPECT_EQ(out_i32.shape(), Shape({2, 2}));
+  EXPECT_EQ(GetData<double>(out_i32),
+            std::vector<double>({2.0, 0.5, -7.0, -1.75}));
+
+  auto a_i64 = CreateBuffer<int64_t>({2}, {3, -7});
+  auto b_i64 = CreateBuffer<int64_t>({2}, {2, 2});
+  ASSERT_OK_AND_ASSIGN(auto out_i64,
+                       (*transform)(std::move(a_i64), std::move(b_i64)));
+  EXPECT_EQ(out_i64.dtype(), DType(DType::kF64));
+  EXPECT_EQ(GetData<double>(out_i64), std::vector<double>({1.5, -3.5}));
+}
+
+TEST(NumericalTransformsTest, DivideNoNanTransformBasicAndComplexUnderflow) {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  auto a = CreateBuffer<float>({4}, {10.0f, 5.0f, nan, inf});
+  auto b = CreateBuffer<float>({4}, {2.0f, 0.0f, 0.0f, 0.0f});
+
+  ASSERT_OK_AND_ASSIGN(auto transform, DivideNoNanTransform::Create());
+  ASSERT_OK_AND_ASSIGN(auto out, (*transform)(std::move(a), std::move(b)));
+  EXPECT_EQ(out.dtype(), DType(DType::kF32));
+  EXPECT_EQ(GetData<float>(out), std::vector<float>({5.0f, 0.0f, 0.0f, 0.0f}));
+
+  // Complex underflow where |b|^2 underflows to zero and numerator == 0
+  using c64 = std::complex<float>;
+  auto a_c64 = CreateBuffer<c64>({2}, {c64(0.0f, 0.0f), c64(4.0f, 2.0f)});
+  auto b_c64 = CreateBuffer<c64>({2}, {c64(1e-25f, 1e-25f), c64(0.0f, 0.0f)});
+  ASSERT_OK_AND_ASSIGN(auto out_c64,
+                       (*transform)(std::move(a_c64), std::move(b_c64)));
+  EXPECT_EQ(out_c64.dtype(), DType(DType::kC64));
+  EXPECT_EQ(GetData<c64>(out_c64),
+            std::vector<c64>({c64(0.0f, 0.0f), c64(0.0f, 0.0f)}));
+}
+
+TEST(NumericalTransformsTest, DivideNoNanTransformBroadcasting) {
+  auto a = CreateBuffer<float>({2, 1}, {12.0f, 24.0f});
+  auto b = CreateBuffer<float>({1, 3}, {0.0f, 3.0f, 4.0f});
+
+  ASSERT_OK_AND_ASSIGN(auto transform, DivideNoNanTransform::Create());
+  ASSERT_OK_AND_ASSIGN(auto out, (*transform)(std::move(a), std::move(b)));
+
+  EXPECT_EQ(out.dtype(), DType(DType::kF32));
+  EXPECT_EQ(out.shape(), Shape({2, 3}));
+  EXPECT_EQ(GetData<float>(out),
+            std::vector<float>({0.0f, 4.0f, 3.0f, 0.0f, 8.0f, 6.0f}));
+}
+
+TEST(NumericalTransformsTest, FloorDivTransformIntAndFloat) {
+  auto a = CreateBuffer<int32_t>(
+      {5}, {7, -7, 7, -7, std::numeric_limits<int32_t>::min()});
+  auto b = CreateBuffer<int32_t>({5}, {2, 2, -2, -2, -1});
+
+  ASSERT_OK_AND_ASSIGN(auto transform, FloorDivTransform::Create());
+  ASSERT_OK_AND_ASSIGN(auto out, (*transform)(std::move(a), std::move(b)));
+  EXPECT_EQ(out.dtype(), DType(DType::kS32));
+  EXPECT_EQ(GetData<int32_t>(out),
+            std::vector<int32_t>(
+                {3, -4, -4, 3, std::numeric_limits<int32_t>::min()}));
+
+  // Division by zero error
+  auto a_err = CreateBuffer<int32_t>({1}, {7});
+  auto b_err = CreateBuffer<int32_t>({1}, {0});
+  EXPECT_FALSE((*transform)(std::move(a_err), std::move(b_err)).ok());
+
+  // Float floor division
+  auto af = CreateBuffer<float>({2}, {7.5f, -7.5f});
+  auto bf = CreateBuffer<float>({2}, {2.0f, 2.0f});
+  ASSERT_OK_AND_ASSIGN(auto outf, (*transform)(std::move(af), std::move(bf)));
+  EXPECT_EQ(GetData<float>(outf), std::vector<float>({3.0f, -4.0f}));
+}
+
+TEST(NumericalTransformsTest, FloorDivTransformBroadcasting) {
+  auto a = CreateBuffer<int32_t>({2, 1}, {7, -7});
+  auto b = CreateBuffer<int32_t>({1, 3}, {2, 3, 4});
+
+  ASSERT_OK_AND_ASSIGN(auto transform, FloorDivTransform::Create());
+  ASSERT_OK_AND_ASSIGN(auto out, (*transform)(std::move(a), std::move(b)));
+
+  EXPECT_EQ(out.dtype(), DType(DType::kS32));
+  EXPECT_EQ(out.shape(), Shape({2, 3}));
+  EXPECT_EQ(GetData<int32_t>(out), std::vector<int32_t>({3, 2, 1, -4, -3, -2}));
+}
+
+TEST(NumericalTransformsTest, FloorModTransformIntAndFloat) {
+  auto a = CreateBuffer<int32_t>(
+      {5}, {7, -7, 7, -7, std::numeric_limits<int32_t>::min()});
+  auto b = CreateBuffer<int32_t>({5}, {3, 3, -3, -3, -1});
+
+  ASSERT_OK_AND_ASSIGN(auto transform, FloorModTransform::Create());
+  ASSERT_OK_AND_ASSIGN(auto out, (*transform)(std::move(a), std::move(b)));
+  EXPECT_EQ(out.dtype(), DType(DType::kS32));
+  EXPECT_EQ(GetData<int32_t>(out), std::vector<int32_t>({1, 2, -2, -1, 0}));
+
+  // Division by zero error
+  auto a_err = CreateBuffer<int32_t>({1}, {7});
+  auto b_err = CreateBuffer<int32_t>({1}, {0});
+  EXPECT_FALSE((*transform)(std::move(a_err), std::move(b_err)).ok());
+
+  // Float floor modulo
+  auto af = CreateBuffer<float>({2}, {7.5f, -7.5f});
+  auto bf = CreateBuffer<float>({2}, {3.0f, 3.0f});
+  ASSERT_OK_AND_ASSIGN(auto outf, (*transform)(std::move(af), std::move(bf)));
+  EXPECT_EQ(GetData<float>(outf), std::vector<float>({1.5f, 1.5f}));
+}
+
+TEST(NumericalTransformsTest, FloorModTransformBroadcasting) {
+  auto a = CreateBuffer<int32_t>({2, 1}, {7, -7});
+  auto b = CreateBuffer<int32_t>({1, 3}, {2, 3, 4});
+
+  ASSERT_OK_AND_ASSIGN(auto transform, FloorModTransform::Create());
+  ASSERT_OK_AND_ASSIGN(auto out, (*transform)(std::move(a), std::move(b)));
+
+  EXPECT_EQ(out.dtype(), DType(DType::kS32));
+  EXPECT_EQ(out.shape(), Shape({2, 3}));
+  EXPECT_EQ(GetData<int32_t>(out), std::vector<int32_t>({1, 1, 3, 1, 2, 1}));
+}
+
+TEST(NumericalTransformsTest, PowTransformSignedIntAndFloat) {
+  auto a = CreateBuffer<int32_t>({3}, {2, -3, 5});
+  auto b = CreateBuffer<int32_t>({3}, {3, 2, 0});
+
+  ASSERT_OK_AND_ASSIGN(auto transform, PowTransform::Create());
+  ASSERT_OK_AND_ASSIGN(auto out, (*transform)(std::move(a), std::move(b)));
+  EXPECT_EQ(out.dtype(), DType(DType::kS32));
+  EXPECT_EQ(GetData<int32_t>(out), std::vector<int32_t>({8, 9, 1}));
+
+  // Negative integer exponent returns InvalidArgumentError
+  auto a_neg = CreateBuffer<int32_t>({1}, {2});
+  auto b_neg = CreateBuffer<int32_t>({1}, {-2});
+  auto status_or = (*transform)(std::move(a_neg), std::move(b_neg));
+  EXPECT_FALSE(status_or.ok());
+  EXPECT_EQ(status_or.status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST(NumericalTransformsTest, PowTransformBroadcasting) {
+  auto a = CreateBuffer<int32_t>({2, 1}, {2, 3});
+  auto b = CreateBuffer<int32_t>({1, 3}, {1, 2, 3});
+
+  ASSERT_OK_AND_ASSIGN(auto transform, PowTransform::Create());
+  ASSERT_OK_AND_ASSIGN(auto out, (*transform)(std::move(a), std::move(b)));
+
+  EXPECT_EQ(out.dtype(), DType(DType::kS32));
+  EXPECT_EQ(out.shape(), Shape({2, 3}));
+  EXPECT_EQ(GetData<int32_t>(out), std::vector<int32_t>({2, 4, 8, 3, 9, 27}));
+}
+
+TEST(NumericalTransformsTest, Atan2TransformFloatAndDouble) {
+  auto y_f32 = CreateBuffer<float>({3}, {0.0f, 1.0f, -1.0f});
+  auto x_f32 = CreateBuffer<float>({3}, {1.0f, 1.0f, -1.0f});
+
+  ASSERT_OK_AND_ASSIGN(auto transform, Atan2Transform::Create());
+  ASSERT_OK_AND_ASSIGN(auto out_f32,
+                       (*transform)(std::move(y_f32), std::move(x_f32)));
+  EXPECT_EQ(out_f32.dtype(), DType(DType::kF32));
+  EXPECT_EQ(out_f32.shape(), Shape({3}));
+  auto data_f32 = GetData<float>(out_f32);
+  EXPECT_NEAR(data_f32[0], std::atan2(0.0f, 1.0f), 1e-5f);
+  EXPECT_NEAR(data_f32[1], std::atan2(1.0f, 1.0f), 1e-5f);
+  EXPECT_NEAR(data_f32[2], std::atan2(-1.0f, -1.0f), 1e-5f);
+
+  auto y_f64 = CreateBuffer<double>({2}, {1.0, -1.0});
+  auto x_f64 = CreateBuffer<double>({2}, {0.0, 0.0});
+  ASSERT_OK_AND_ASSIGN(auto out_f64,
+                       (*transform)(std::move(y_f64), std::move(x_f64)));
+  EXPECT_EQ(out_f64.dtype(), DType(DType::kF64));
+  auto data_f64 = GetData<double>(out_f64);
+  EXPECT_NEAR(data_f64[0], std::atan2(1.0, 0.0), 1e-7);
+  EXPECT_NEAR(data_f64[1], std::atan2(-1.0, 0.0), 1e-7);
+}
+
+TEST(NumericalTransformsTest, Atan2TransformBroadcasting) {
+  auto y = CreateBuffer<float>({2, 1}, {0.0f, 1.0f});
+  auto x = CreateBuffer<float>({1, 2}, {1.0f, -1.0f});
+
+  ASSERT_OK_AND_ASSIGN(auto transform, Atan2Transform::Create());
+  ASSERT_OK_AND_ASSIGN(auto out, (*transform)(std::move(y), std::move(x)));
+
+  EXPECT_EQ(out.dtype(), DType(DType::kF32));
+  EXPECT_EQ(out.shape(), Shape({2, 2}));
+  auto data = GetData<float>(out);
+  EXPECT_NEAR(data[0], std::atan2(0.0f, 1.0f), 1e-5f);
+  EXPECT_NEAR(data[1], std::atan2(0.0f, -1.0f), 1e-5f);
+  EXPECT_NEAR(data[2], std::atan2(1.0f, 1.0f), 1e-5f);
+  EXPECT_NEAR(data[3], std::atan2(1.0f, -1.0f), 1e-5f);
 }
 
 }  // namespace

@@ -2,6 +2,7 @@ import types
 from typing import Any
 import unittest
 
+from absl.testing import parameterized
 import jax
 import ml_dtypes
 import numpy as np
@@ -158,6 +159,368 @@ class RoundTest(unittest.TestCase):
       y_jd = round_fn(x_np)
       y_np = np.round(x_np)
       np.testing.assert_allclose(y_jd, y_np, atol=1e-2)
+
+
+class ModTest(unittest.TestCase):
+
+  def testFloat(self):
+    x = [0.5, 0.7, 0.3]
+    for dtype in [np.float32, np.double]:
+      # Test scalar and vector versions.
+      for denom in [x[0], [x[0]] * 3]:
+        x_np = np.array(x, dtype=dtype)
+        denom_np = np.array(denom, dtype=dtype)
+
+        @jd.function
+        def mod_fn(a, b):
+          return jd.math.floormod(a, b)
+
+        y_jd = mod_fn(x_np, denom_np)
+        y_np = np.fmod(x_np, denom_np)
+        np.testing.assert_allclose(y_jd, y_np, atol=1e-2)
+
+  def testFixed(self):
+    x = [5, 10, 23]
+    for dtype in [np.int32, np.int64]:
+      # Test scalar and vector versions.
+      for denom in [x[0], x]:
+        x_np = np.array(x, dtype=dtype)
+        denom_np = np.array(denom, dtype=dtype)
+
+        @jd.function
+        def mod_fn(a, b):
+          return jd.math.floormod(a, b)
+
+        y_jd = mod_fn(x_np, denom_np)
+        y_np = np.mod(x_np, denom_np)
+        np.testing.assert_allclose(y_jd, y_np)
+
+
+class DivAndModTest(unittest.TestCase):
+
+  def _int_test_data(self):
+    nums = np.arange(-10, 10, 1).reshape(20, 1)
+    divs = np.arange(-3, 4, 2).reshape(1, 4)
+    return nums, divs
+
+  def _float_test_data(self):
+    nums = np.arange(-10, 10, 0.25).reshape(80, 1)
+    divs = np.arange(-3, 0, 0.25).reshape(1, 12)
+    return nums, divs
+
+  def _numpy_safe_floor_div_int(self, x, y):
+    z = x // y
+    # Numpy produces 0 for INT_MIN/-1, but we expect an overflow to INT_MIN
+    # so that (INT_MIN/-1) + (INT_MIN % -1) = INT_MIN + 0 = INT_MIN.
+    z[(x == np.iinfo(x.dtype).min) & (y == -1)] = np.iinfo(x.dtype).min
+    return z
+
+  def _numpy_safe_floor_mod_int(self, x, y):
+    # Numpy crashes with a FPE for INT_MIN % -1.
+    z = self._numpy_safe_floor_div_int(x, y)
+    return x - z * y
+
+  def testFloorModInt(self):
+    nums, divs = self._int_test_data()
+    for dtype in [np.int32, np.int64]:
+      x = nums.astype(dtype)
+      y = divs.astype(dtype)
+
+      @jd.function
+      def floormod_fn(a, b):
+        return jd.math.floormod(a, b)
+
+      @jd.function
+      def mod_op_fn(a, b):
+        return a % b
+
+      jd_result = floormod_fn(x, y)
+      np_result = self._numpy_safe_floor_mod_int(x, y)
+      np.testing.assert_array_equal(jd_result, np_result)
+      jd2_result = mod_op_fn(x, y)
+      np.testing.assert_array_equal(jd2_result, jd_result)
+
+  def testFloorModFloat(self):
+    nums, divs = self._float_test_data()
+    for dtype in [np.float16, np.float32, np.float64]:
+      x = nums.astype(dtype)
+      y = divs.astype(dtype)
+
+      @jd.function
+      def floormod_fn(a, b):
+        return jd.math.floormod(a, b)
+
+      @jd.function
+      def mod_op_fn(a, b):
+        return a % b
+
+      jd_result = floormod_fn(x, y)
+      np_result = x % y
+      np.testing.assert_array_equal(jd_result, np_result)
+      jd2_result = mod_op_fn(x, y)
+      np.testing.assert_array_equal(jd2_result, jd_result)
+
+  def testFloorModBfloat16(self):
+    nums, divs = self._float_test_data()
+    x = nums.astype(ml_dtypes.bfloat16)
+    y = divs.astype(ml_dtypes.bfloat16)
+
+    @jd.function
+    def floormod_fn(a, b):
+      return jd.math.floormod(a, b)
+
+    jd_result = floormod_fn(x, y)
+    np_result = (nums % divs).astype(ml_dtypes.bfloat16)
+    np.testing.assert_array_equal(jd_result, np_result)
+
+  def testFloorDivideInt(self):
+    nums, divs = self._int_test_data()
+
+    @jd.function
+    def floordiv_fn(a, b):
+      return jd.math.floordiv(a, b)
+
+    @jd.function
+    def floordiv_op_fn(a, b):
+      return a // b
+
+    jd_result = floordiv_fn(nums, divs)
+    np_result = self._numpy_safe_floor_div_int(nums, divs)
+    np.testing.assert_array_equal(jd_result, np_result)
+    jd2_result = floordiv_op_fn(nums, divs)
+    np.testing.assert_array_equal(jd2_result, jd_result)
+
+  def testRealDiv(self):
+    nums, divs = self._float_test_data()
+
+    @jd.function
+    def truediv_fn(a, b):
+      return jd.math.truediv(a, b)
+
+    jd_result = truediv_fn(nums, divs)
+    np_result = np.divide(nums, divs)
+    np.testing.assert_allclose(jd_result, np_result)
+
+  def testDivideType(self):
+    for op in [jd.math.divide, jd.math.truediv]:
+
+      @jd.function
+      def div_fn(x, y, jd_op=op):
+        return jd_op(x, y)
+
+      a = np.array([2], dtype=np.int32)
+      # Since __future__.division is in effect, 32/64-bit ints upgrade to
+      # float64.
+      b = div_fn(a, np.array(1, dtype=np.int32))
+      self.assertEqual(b.dtype, np.float64)
+      self.assertEqual(2.0, b[0])
+      c = div_fn(a, np.array(4, dtype=np.int32))
+      self.assertEqual(c.dtype, np.float64)
+      self.assertEqual(0.5, c[0])
+
+      # 8/16-bit ints upgrade to float32 matching TensorFlow's _TRUEDIV_TABLE.
+      for dtype in [np.int8, np.uint8, np.int16, np.uint16]:
+        res = div_fn(np.array([2], dtype=dtype), np.array([4], dtype=dtype))
+        self.assertEqual(res.dtype, np.float32)
+        self.assertEqual(0.5, res[0])
+
+  def testComplexDiv(self):
+    foo = np.array([1.0 + 3.0j], dtype=np.complex64)
+
+    @jd.function
+    def div_fn(a, b):
+      return jd.math.divide(a, b), jd.math.truediv(a, b)
+
+    _ = div_fn(foo, np.array([1.0 + 0.0j], dtype=np.complex64))
+    _ = div_fn(foo, np.array([2.0 + 0.0j], dtype=np.complex64))
+
+  def testConsistent(self):
+    nums, divs = self._int_test_data()
+
+    @jd.function
+    def fn1(a, b):
+      return jd.math.floordiv(a, b) * b + jd.math.floormod(a, b)
+
+    @jd.function
+    def fn2(a, b):
+      return a // b * b + a % b
+
+    jd_result = fn1(nums, divs)
+    jd2_result = fn2(nums, divs)
+    np_result = (nums // divs) * divs + (nums % divs)
+    # Consistent with numpy
+    np.testing.assert_array_equal(jd_result, np_result)
+    # Consistent with two forms of divide
+    np.testing.assert_array_equal(jd_result, jd2_result)
+    expanded_nums = np.reshape(
+        np.tile(nums, divs.shape[1]), (nums.shape[0], divs.shape[1])
+    )
+    # Consistent with desire to get numerator
+    np.testing.assert_array_equal(jd_result, expanded_nums)
+
+  def _int_edge_test_data(self, dtype):
+    """Edge-case test data for integer types."""
+    # INT_MIN/-1 will produce signed-integer overflow, so we instead test
+    # (INT_MIN + 1) / -1.
+    nums = np.array(
+        [
+            [np.iinfo(dtype).min, -1, 1, np.iinfo(dtype).max],
+            [np.iinfo(dtype).min + 1, -1, 1, np.iinfo(dtype).max],
+            [np.iinfo(dtype).min, -1, 1, np.iinfo(dtype).max],
+            [np.iinfo(dtype).min, -1, 1, np.iinfo(dtype).max],
+        ],
+        dtype=dtype,
+    )
+    divs = np.array(
+        [
+            [
+                np.iinfo(dtype).min,
+                np.iinfo(dtype).min,
+                np.iinfo(dtype).min,
+                np.iinfo(dtype).min,
+            ],
+            [-1, -1, -1, -1],
+            [1, 1, 1, 1],
+            [
+                np.iinfo(dtype).max,
+                np.iinfo(dtype).max,
+                np.iinfo(dtype).max,
+                np.iinfo(dtype).max,
+            ],
+        ],
+        dtype=dtype,
+    )
+    return nums, divs
+
+  def testFloorDivModIntEdges(self):
+    for dtype in [np.int32, np.int64]:
+      x, y = self._int_edge_test_data(dtype)
+
+      @jd.function
+      def floordiv_fn(a, b):
+        return jd.math.floordiv(a, b)
+
+      @jd.function
+      def floormod_fn(a, b):
+        return jd.math.floormod(a, b)
+
+      jd_floor_div = floordiv_fn(x, y)
+      np_floor_div = self._numpy_safe_floor_div_int(x, y)
+      np.testing.assert_array_equal(jd_floor_div, np_floor_div)
+      jd_floor_mod = floormod_fn(x, y)
+      np_floor_mod = self._numpy_safe_floor_mod_int(x, y)
+      np.testing.assert_array_equal(jd_floor_mod, np_floor_mod)
+
+
+class DivNoNanTest(parameterized.TestCase):
+
+  _SUPPORTED_DTYPES = [
+      ml_dtypes.bfloat16,
+      np.float16,
+      np.float32,
+      np.float64,
+      np.complex64,
+      np.complex128,
+  ]
+
+  @parameterized.parameters(*_SUPPORTED_DTYPES)
+  def testBasic(self, dtype):
+    nums = np.arange(-10, 10, 0.25).reshape(80, 1)
+    divs = np.arange(-3, 3, 0.25).reshape(1, 24)
+    assert 0 in divs, "Bad test set-up"
+
+    np_nums = nums.astype(dtype)
+    np_divs = divs.astype(dtype)
+    with np.errstate(divide="ignore", invalid="ignore"):
+      if dtype == ml_dtypes.bfloat16:
+        np_result = np.true_divide(
+            np_nums.astype(np.float32), np_divs.astype(np.float32)
+        ).astype(dtype)
+      else:
+        np_result = np.true_divide(np_nums, np_divs)
+    np_result[:, np_divs[0] == 0] = 0
+
+    @jd.function
+    def div_no_nan_fn(a, b):
+      return jd.math.divide_no_nan(a, b)
+
+    jd_result = div_no_nan_fn(np_nums, np_divs)
+    if dtype == ml_dtypes.bfloat16:
+      np.testing.assert_allclose(
+          jd_result.astype(np.float32),
+          np_result.astype(np.float32),
+          rtol=1e-2,
+          atol=1e-2,
+      )
+    elif dtype == np.float16:
+      np.testing.assert_allclose(jd_result, np_result, rtol=1e-3, atol=1e-3)
+    elif dtype in (np.float32, np.complex64):
+      np.testing.assert_allclose(jd_result, np_result, rtol=1e-6, atol=1e-6)
+    else:
+      np.testing.assert_allclose(jd_result, np_result)
+
+  @parameterized.parameters(*_SUPPORTED_DTYPES)
+  def testSmall(self, dtype):
+    # Choose values whose squared magnitude underflows to zero/subnormal.
+    zero = np.array([0, 0, 0, 0], dtype=dtype)
+    divs = np.array([1e-25, -1e-20, 1e-165, -1e-160], dtype=dtype)
+
+    @jd.function
+    def div_no_nan_fn(a, b):
+      return jd.math.divide_no_nan(a, b)
+
+    jd_result = div_no_nan_fn(zero, divs)
+
+    # Results should always be exactly zero.
+    np.testing.assert_array_equal(jd_result, zero)
+
+  @parameterized.parameters(*_SUPPORTED_DTYPES)
+  def testNonFiniteInNumerator(self, dtype):
+    nums = np.array([np.nan, np.inf, -np.inf], dtype=dtype)
+    zeros = np.array([0, 0, 0], dtype=dtype)
+    ones = np.array([1, 1, 1], dtype=dtype)
+
+    @jd.function
+    def div_no_nan_fn(a, b):
+      return jd.math.divide_no_nan(a, b)
+
+    jd_result_zeros = div_no_nan_fn(nums, zeros)
+    np.testing.assert_array_equal(zeros, jd_result_zeros)
+    jd_result_ones = div_no_nan_fn(nums, ones)
+    with np.errstate(divide="ignore", invalid="ignore"):
+      if dtype == ml_dtypes.bfloat16:
+        expected_ones = (
+            nums.astype(np.float32) / ones.astype(np.float32)
+        ).astype(dtype)
+        np.testing.assert_array_equal(
+            expected_ones.astype(np.float32), jd_result_ones.astype(np.float32)
+        )
+      else:
+        np.testing.assert_array_equal(nums / ones, jd_result_ones)
+
+
+class MultiplyNoNanTest(unittest.TestCase):
+
+  def testBasic(self):
+    for dtype in [np.float32, np.float64]:
+      values = [0, 1, np.nan, np.inf, -np.inf]
+      x = np.array(values, dtype=dtype)
+      zeros = np.zeros((5,), dtype=dtype)
+      ones = np.ones((5,), dtype=dtype)
+
+      @jd.function
+      def mul_no_nan_fn(a, b):
+        return jd.math.multiply_no_nan(a, b)
+
+      jd_result_zeros = mul_no_nan_fn(x, zeros)
+      np.testing.assert_array_equal(jd_result_zeros, zeros)
+      jd_result_ones = mul_no_nan_fn(x, ones)
+      np.testing.assert_array_equal(jd_result_ones, x)
+      # Normal floating point arithmetic if nonfinite values are in the
+      # second argument.
+      with np.errstate(invalid="ignore"):
+        jd_result_reverseargs = mul_no_nan_fn(zeros, x)
+        np.testing.assert_array_equal(zeros * x, jd_result_reverseargs)
 
 
 class BinaryOpsTest(unittest.TestCase):

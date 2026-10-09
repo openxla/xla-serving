@@ -18,7 +18,8 @@ limitations under the License.
 #include "data/kernels/op_common.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 
-// This file implements the DivideTransform operator.
+// This file implements the DivideTransform, TrueDivTransform, and
+// DivideNoNanTransform operators.
 // It is branched from
 // /third_party/tensorflow/core/kernels/cwise_op_div.cc.
 namespace xla_serving::data::kernel {
@@ -32,6 +33,20 @@ ND_REGISTER_BINARY_OP(DivideTransform,
                        xla::ifrt::DType::kU8, xla::ifrt::DType::kU16,
                        xla::ifrt::DType::kU32, xla::ifrt::DType::kU64,
                        xla::ifrt::DType::kF16, xla::ifrt::DType::kBF16,
+                       xla::ifrt::DType::kF32, xla::ifrt::DType::kF64,
+                       xla::ifrt::DType::kC64, xla::ifrt::DType::kC128});
+
+ND_REGISTER_BINARY_OP(TrueDivTransform,
+                      {xla::ifrt::DType::kS8, xla::ifrt::DType::kS16,
+                       xla::ifrt::DType::kS32, xla::ifrt::DType::kS64,
+                       xla::ifrt::DType::kU8, xla::ifrt::DType::kU16,
+                       xla::ifrt::DType::kU32, xla::ifrt::DType::kU64,
+                       xla::ifrt::DType::kF16, xla::ifrt::DType::kBF16,
+                       xla::ifrt::DType::kF32, xla::ifrt::DType::kF64,
+                       xla::ifrt::DType::kC64, xla::ifrt::DType::kC128});
+
+ND_REGISTER_BINARY_OP(DivideNoNanTransform,
+                      {xla::ifrt::DType::kF16, xla::ifrt::DType::kBF16,
                        xla::ifrt::DType::kF32, xla::ifrt::DType::kF64,
                        xla::ifrt::DType::kC64, xla::ifrt::DType::kC128});
 

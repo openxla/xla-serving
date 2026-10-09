@@ -18,6 +18,7 @@
 namespace xla_serving::data::kernel {
 
 // Binary Transforms.
+ND_DECLARE_BINARY_OP(PowTransform, ::xla_serving::data::kernel::functor::pow);
 ND_DECLARE_BINARY_OP(IgammaTransform, ::xla_serving::data::kernel::functor::igamma);
 ND_DECLARE_BINARY_OP(IgammacTransform, ::xla_serving::data::kernel::functor::igammac);
 ND_DECLARE_BINARY_OP(MaximumTransform, ::xla_serving::data::kernel::functor::maximum);
@@ -37,7 +38,18 @@ ND_DECLARE_BINARY_OP(LogicalXorTransform,
 ND_DECLARE_BINARY_OP(AddTransform, ::xla_serving::data::kernel::functor::add);
 ND_DECLARE_BINARY_OP(SubtractTransform, ::xla_serving::data::kernel::functor::sub);
 ND_DECLARE_BINARY_OP(MultiplyTransform, ::xla_serving::data::kernel::functor::mul);
+ND_DECLARE_BINARY_OP(MultiplyNoNanTransform,
+                     ::xla_serving::data::kernel::functor::mul_no_nan);
 ND_DECLARE_BINARY_OP(DivideTransform, ::xla_serving::data::kernel::functor::div);
+ND_DECLARE_BINARY_OP(DivideNoNanTransform,
+                     ::xla_serving::data::kernel::functor::div_no_nan);
+ND_DECLARE_BINARY_OP(TrueDivTransform,
+                     ::xla_serving::data::kernel::functor::true_div);
+ND_DECLARE_BINARY_OP(FloorDivTransform,
+                     ::xla_serving::data::kernel::functor::floor_div);
+ND_DECLARE_BINARY_OP(FloorModTransform,
+                     ::xla_serving::data::kernel::functor::floor_mod);
+ND_DECLARE_BINARY_OP(Atan2Transform, ::xla_serving::data::kernel::functor::atan2);
 
 // Unary Transforms.
 ND_DECLARE_UNARY_OP(LogicalNotTransform,

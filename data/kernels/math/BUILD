@@ -66,6 +66,7 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@eigen_archive//:eigen3",
         "@tsl//tsl/platform:tstring",
+        "@xla_serving//data/kernels:bounds_check",
     ],
 )
 

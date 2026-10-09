@@ -23,18 +23,298 @@ limitations under the License.
 // NOLINTBEGIN(misc-include-cleaner)
 
 #include <complex>
+#include <cstdint>
 #include <limits>
 #include <type_traits>
 
-#include "data/kernels/math/special_math_impl.h"  // from @xla_serving
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "Eigen/Core"
 #include "unsupported/Eigen/SpecialFunctions"
+#include "data/kernels/bounds_check.h"  // from @xla_serving
+#include "data/kernels/math/special_math_impl.h"  // from @xla_serving
 #include "tsl/platform/tstring.h"  // from @tsl
 
 namespace Eigen {
 namespace internal {
+
+// Adapted from /third_party/tensorflow/core/kernels/cwise_ops.h to
+// return absl::StatusOr instead of setting a bool* error flag.
+template <typename Scalar, typename Exponent>
+struct safe_scalar_binary_pow_op {
+  static_assert(std::is_integral_v<Scalar>, "Integer type expected");
+  static_assert(std::is_integral_v<Exponent> && std::is_signed_v<Exponent>,
+                "Signed integer type expected");
+
+  EIGEN_DEVICE_FUNC absl::StatusOr<Scalar> operator()(const Scalar& a,
+                                                      const Exponent& b) const {
+    const Exponent safe_b =
+        ::xla_serving::data::kernel::internal::SubtleMustCopy(b);
+    if (safe_b >= 0) [[likely]] {
+      return static_cast<Scalar>(numext::pow(a, safe_b));
+    } else {
+      return absl::InvalidArgumentError(
+          "Integers to negative integer powers are not allowed");
+    }
+  }
+};
+
+// Eigen evaluates complex powers as exp(exponent * log(base)), which yields
+// NaN for 0^0. IEEE 754 requires z^0 == 1, which TensorFlow follows,
+// including non-finite bases. Handle zero exponents before the logarithm as a
+// local workaround, without depending on an upstream Eigen change.
+template <typename T, bool IsComplex = NumTraits<T>::IsComplex>
+struct jd_scalar_pow_op;
+
+template <typename T>
+struct jd_scalar_pow_op<T, /*IsComplex=*/false> : scalar_pow_op<T, T> {};
+
+template <typename T>
+struct functor_traits<jd_scalar_pow_op<T, /*IsComplex=*/false>>
+    : functor_traits<scalar_pow_op<T, T>> {};
+
+template <typename T>
+struct jd_scalar_pow_op<T, /*IsComplex=*/true> : scalar_pow_op<T, T> {
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T operator()(const T& base,
+                                                     const T& exponent) const {
+    if (Eigen::numext::is_exactly_zero(exponent)) [[unlikely]] {
+      return T(1);
+    }
+    return scalar_pow_op<T, T>::operator()(base, exponent);
+  }
+};
+
+template <typename T>
+struct functor_traits<jd_scalar_pow_op<T, /*IsComplex=*/true>> {
+  enum {
+    Cost = functor_traits<scalar_pow_op<T, T>>::Cost + NumTraits<T>::AddCost,
+    PacketAccess = false,
+  };
+};
+
+// Adapted from /third_party/tensorflow/core/kernels/cwise_ops.h to
+// return absl::StatusOr instead of setting a bool* error flag.
+template <typename T, typename DivOrMod>
+struct safe_div_or_mod_op {
+  static_assert(std::is_integral_v<T>, "Integer type expected");
+
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE absl::StatusOr<T> operator()(
+      const T& a, const T& b) const {
+    const T safe_b = ::xla_serving::data::kernel::internal::SubtleMustCopy(b);
+    if (safe_b != 0) [[likely]] {
+      // Avoid FPE for INT_MIN/-1.
+      const T safe_a = ::xla_serving::data::kernel::internal::SubtleMustCopy(a);
+      if (std::is_signed_v<T> && safe_a == std::numeric_limits<T>::min() &&
+          safe_b == T(-1)) [[unlikely]] {
+        // Prefer to overflow 'a' instead of crashing.
+        const T neg_a =
+            static_cast<T>(0U - static_cast<std::make_unsigned_t<T>>(safe_a));
+        return DivOrMod()(neg_a, T(1));
+      }
+      return DivOrMod()(safe_a, safe_b);
+    } else {
+      return absl::InvalidArgumentError("Integer division by zero");
+    }
+  }
+};
+
+// Copied over from /third_party/tensorflow/core/kernels/cwise_ops.h
+template <typename T, typename Binary>
+struct no_nan_op {
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T operator()(const T& a,
+                                                     const T& b) const {
+    if (b != T(0)) {
+      return Binary()(a, b);
+    } else {
+      return T(0);
+    }
+  }
+  template <typename Packet>
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Packet packetOp(const Packet& a,
+                                                        const Packet& b) const {
+    const Packet mask = pcmp_eq(b, pzero(b));
+    const Packet quotient = Binary().packetOp(a, b);
+    return pandnot(quotient, mask);
+  }
+};
+
+// Copied over from /third_party/tensorflow/core/kernels/cwise_ops.h
+template <typename T, bool IsComplex = Eigen::NumTraits<T>::IsComplex>
+struct div_no_nan_op;
+
+template <typename T>
+struct div_no_nan_op<T, /*IsComplex=*/false>
+    : public no_nan_op<T, scalar_quotient_op<T>> {};
+
+template <typename T>
+struct functor_traits<div_no_nan_op<T, /*IsComplex=*/false>> {
+  enum {
+    Cost = functor_traits<scalar_quotient_op<T>>::Cost + NumTraits<T>::AddCost,
+    PacketAccess = true,
+  };
+};
+
+// Whether or not complex division produces a NaN depends on the underlying
+// implementation. Some compilers (e.g. gcc) use a simple method that divides
+// by |b|^2, which may underflow to 0 for b != 0.
+template <typename T>
+struct div_no_nan_op<T, /*IsComplex=*/true> {
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T operator()(const T& a,
+                                                     const T& b) const {
+    if (b == T(0)) {
+      return T(0);
+    } else {
+      // If the numerator is zero, then the result must be zero even if |b|^2
+      // underflows to zero.
+      const T numerator =
+          scalar_product_op<T>()(a, scalar_conjugate_op<T>()(b));
+      if (numerator == T(0)) {
+        return T(0);
+      }
+    }
+    return scalar_quotient_op<T>()(a, b);
+  }
+  template <typename Packet>
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Packet packetOp(const Packet& a,
+                                                        const Packet& b) const {
+    const Packet numerator = pmul(a, pconj(b));
+    const Packet mask = por(pcmp_eq(b, pzero(a)), pcmp_eq(numerator, pzero(a)));
+    const Packet quotient = pdiv(a, b);
+    return pandnot(quotient, mask);
+  }
+};
+
+template <typename T>
+struct functor_traits<div_no_nan_op<T, /*IsComplex=*/true>> {
+  enum {
+    Cost = functor_traits<scalar_quotient_op<T>>::Cost + NumTraits<T>::MulCost,
+    PacketAccess = packet_traits<T>::HasMul && packet_traits<T>::HasDiv &&
+        packet_traits<T>::HasConj,
+  };
+};
+
+// Copied over from /third_party/tensorflow/core/kernels/cwise_ops.h
+template <typename T>
+struct mul_no_nan_op : public no_nan_op<T, scalar_product_op<T>> {};
+
+template <typename T>
+struct functor_traits<mul_no_nan_op<T>> {
+  enum {
+    Cost = functor_traits<scalar_product_op<T>>::Cost + NumTraits<T>::AddCost,
+    PacketAccess = true,
+  };
+};
+
+// Copied over from /third_party/tensorflow/core/kernels/cwise_ops.h
+template <typename T, typename Enable = void>
+struct google_floor_div {
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T operator()(const T& x,
+                                                     const T& y) const {
+    const T z = x / y;
+    // Subtract one if there is a remainder and if the inputs have opposite
+    // signs. This approach avoids unnecessary overflows.
+    return z * y != x && (x < T(0) != y < T(0)) ? z - T(1) : z;
+  }
+  template <typename Packet>
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Packet packetOp(const Packet& x,
+                                                        const Packet& y) const {
+    Packet zeros = pzero(x);
+    Packet x_mask = pcmp_lt(x, zeros);
+    Packet y_mask = pcmp_lt(y, zeros);
+    Packet x_div_y = pdiv(x, y);
+    Packet x_div_y_times_y = pmul(x_div_y, y);
+    return pselect(por(peq(x_div_y_times_y, x), peq(x_mask, y_mask)), x_div_y,
+                   psub(x_div_y, pones(x)));
+  }
+};
+
+template <typename T>
+struct google_floor_div<T, std::enable_if_t<std::is_unsigned_v<T>>> {
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T operator()(const T& x,
+                                                     const T& y) const {
+    return x / y;
+  }
+  template <typename Packet>
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Packet packetOp(const Packet& x,
+                                                        const Packet& y) const {
+    return pdiv(x, y);
+  }
+};
+
+template <typename Scalar>
+struct functor_traits<google_floor_div<Scalar>> {
+  enum {
+    Cost = 2 * Eigen::internal::scalar_div_cost<
+                   Scalar, packet_traits<Scalar>::HasDiv>::value +
+        NumTraits<Scalar>::AddCost,
+    PacketAccess = packet_traits<Scalar>::HasDiv
+  };
+};
+
+// Copied over from /third_party/tensorflow/core/kernels/cwise_ops.h
+template <typename T, typename Enable = void>
+struct google_floor_div_real {
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T operator()(const T& x,
+                                                     const T& y) const {
+    return Eigen::numext::floor(x / y);
+  }
+  template <typename Packet>
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Packet packetOp(const Packet& x,
+                                                        const Packet& y) const {
+    return pfloor(pdiv(x, y));
+  }
+};
+
+template <typename Scalar>
+struct functor_traits<google_floor_div_real<Scalar>> {
+  enum {
+    Cost = 2 * Eigen::internal::scalar_div_cost<
+                   Scalar, packet_traits<Scalar>::HasDiv>::value +
+        2 * NumTraits<Scalar>::AddCost,
+    PacketAccess = packet_traits<Scalar>::HasDiv &&
+        packet_traits<Scalar>::HasRound
+  };
+};
+
+// Copied over from /third_party/tensorflow/core/kernels/cwise_ops.h
+template <typename T>
+struct google_floor_fmod {
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T operator()(const T& x,
+                                                     const T& y) const {
+    T trunc_mod = scalar_fmod_op<T>()(x, y);
+    return trunc_mod != T(0) && (y < T(0) != trunc_mod < T(0)) ? trunc_mod + y
+                                                               : trunc_mod;
+  }
+};
+
+template <typename Scalar>
+struct functor_traits<google_floor_fmod<Scalar>> {
+  enum {
+    Cost = functor_traits<Eigen::internal::scalar_fmod_op<Scalar>>::Cost +
+        NumTraits<Scalar>::AddCost,
+    PacketAccess = false
+  };
+};
+
+// Copied over from /third_party/tensorflow/core/kernels/cwise_ops.h
+template <typename T>
+struct google_floor_mod {
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T operator()(const T& x,
+                                                     const T& y) const {
+    T trunc_mod = Eigen::internal::scalar_mod2_op<T>()(x, y);
+    return trunc_mod != T(0) && (y < T(0) != trunc_mod < T(0)) ? trunc_mod + y
+                                                               : trunc_mod;
+  }
+};
+
+template <typename Scalar>
+struct functor_traits<google_floor_mod<Scalar>> {
+  enum {
+    Cost = functor_traits<Eigen::internal::scalar_mod2_op<Scalar>>::Cost +
+        NumTraits<Scalar>::AddCost,
+    PacketAccess = false
+  };
+};
 
 // Copied over from /third_party/tensorflow/core/kernels/cwise_ops.h
 template <typename T>
@@ -269,14 +549,29 @@ struct functor_traits<xdivy_op<Scalar>> {
 }  // namespace internal
 }  // namespace Eigen
 
-namespace xla_serving::data::kernel::functor {
+namespace xla_serving::data {
+namespace kernel {
+namespace functor {
+
+// Helper to check if a type T matches any candidate type.
+template <typename T, typename... Ts>
+inline constexpr bool is_one_of_v = (std::is_same_v<T, Ts> || ...);
 
 template <typename T>
-struct is_complex : std::false_type {};
+inline constexpr bool is_signed_int_v =
+    is_one_of_v<T, int8_t, int16_t, int32_t, int64_t>;
+
 template <typename T>
-struct is_complex<std::complex<T>> : std::true_type {};
+inline constexpr bool is_unsigned_int_v =
+    is_one_of_v<T, uint8_t, uint16_t, uint32_t, uint64_t>;
+
 template <typename T>
-inline constexpr bool is_complex_v = is_complex<std::decay_t<T>>::value;
+inline constexpr bool is_float_v =
+    is_one_of_v<T, Eigen::half, Eigen::bfloat16, float, double>;
+
+template <typename T>
+inline constexpr bool is_complex_v =
+    is_one_of_v<T, std::complex<float>, std::complex<double>>;
 
 // Helper to check if a template Op matches any candidate template.
 template <template <typename...> class Target,
@@ -317,7 +612,7 @@ inline constexpr bool is_integer_exact_op_v = is_one_of_op_v<
 template <template <typename...> class EigenOp>
 struct polymorphic_unary_op {
   template <typename T>
-    requires(!std::is_same_v<T, bool> && !std::is_same_v<T, tsl::tstring> &&
+    requires(!is_one_of_v<T, bool, tsl::tstring> &&
              (!is_complex_v<T> || is_complex_supported_op_v<EigenOp>))
   auto operator()(T x) const {
     if constexpr (is_complex_v<T>) {
@@ -418,32 +713,90 @@ using add = polymorphic_binary_op<Eigen::internal::scalar_sum_op>;
 using sub = polymorphic_binary_op<Eigen::internal::scalar_difference_op>;
 using mul = polymorphic_binary_op<Eigen::internal::scalar_product_op>;
 
-// Safe division matching TensorFlow's safe_div for integers (returns
-// InvalidArgumentError on division by zero and avoids SIGFPE on INT_MIN / -1).
+struct mul_no_nan {
+  template <typename T>
+    requires(is_float_v<T> || is_complex_v<T>)
+  T operator()(T a, T b) const {
+    return Eigen::internal::mul_no_nan_op<T>()(a, b);
+  }
+};
+
+struct div_no_nan {
+  template <typename T>
+    requires(is_float_v<T> || is_complex_v<T>)
+  T operator()(T a, T b) const {
+    return Eigen::internal::div_no_nan_op<T>()(a, b);
+  }
+};
+
+// Safe division matching TensorFlow's safe_div for integers and div for
+// floating-point and complex types.
 struct div {
   template <typename T>
-    requires(!std::is_same_v<T, bool> && !std::is_same_v<T, tsl::tstring>)
-  // Return type is absl::StatusOr<T> for integral types and T for floating
-  // point types.
+    requires(is_signed_int_v<T> || is_unsigned_int_v<T> || is_float_v<T> ||
+             is_complex_v<T>)
   std::conditional_t<std::is_integral_v<T>, absl::StatusOr<T>, T> operator()(
       T a, T b) const {
     if constexpr (std::is_integral_v<T>) {
-      if (b == T(0)) [[unlikely]] {
-        return absl::InvalidArgumentError("Integer division by zero");
-      }
-      if constexpr (std::is_signed_v<T>) {
-        // Avoid overflow for INT_MIN / -1. Standard C++ would otherwise throw a
-        // SIGFPE as it overflows the value when dividing INT_MIN by -1.
-        if (a == std::numeric_limits<T>::min() && b == T(-1)) [[unlikely]] {
-          return a;
-        }
-      }
-      return static_cast<T>(a / b);
+      return Eigen::internal::safe_div_or_mod_op<
+          T, Eigen::internal::scalar_quotient_op<T>>()(a, b);
     } else {
       return Eigen::internal::scalar_quotient_op<T>()(a, b);
     }
   }
 };
+
+// Python 3 true division matching TensorFlow's _truediv_python3 (_TRUEDIV_TABLE
+// in math_ops.py): promotes 8/16-bit integers to float32 and 32/64-bit integers
+// to float64 before dividing, while preserving floating-point and complex
+// types.
+struct true_div {
+  template <typename T>
+    requires(is_signed_int_v<T> || is_unsigned_int_v<T> || is_float_v<T> ||
+             is_complex_v<T>)
+  auto operator()(T a, T b) const {
+    if constexpr (std::is_integral_v<T>) {
+      using OutT = std::conditional_t<sizeof(T) <= 2, float, double>;
+      return Eigen::internal::scalar_quotient_op<OutT>()(static_cast<OutT>(a),
+                                                         static_cast<OutT>(b));
+    } else {
+      return Eigen::internal::scalar_quotient_op<T>()(a, b);
+    }
+  }
+};
+
+// Safe floor division matching TensorFlow's safe_floor_div for integers and
+// floor_div_real for floating-point types.
+struct floor_div {
+  template <typename T>
+    requires(is_signed_int_v<T> || is_unsigned_int_v<T> || is_float_v<T>)
+  std::conditional_t<std::is_integral_v<T>, absl::StatusOr<T>, T> operator()(
+      T a, T b) const {
+    if constexpr (std::is_integral_v<T>) {
+      return Eigen::internal::safe_div_or_mod_op<
+          T, Eigen::internal::google_floor_div<T>>()(a, b);
+    } else {
+      return Eigen::internal::google_floor_div_real<T>()(a, b);
+    }
+  }
+};
+
+// Safe floor modulo matching TensorFlow's safe_floor_mod for integers and
+// floor_fmod for floating-point types.
+struct floor_mod {
+  template <typename T>
+    requires(is_signed_int_v<T> || is_unsigned_int_v<T> || is_float_v<T>)
+  std::conditional_t<std::is_integral_v<T>, absl::StatusOr<T>, T> operator()(
+      T a, T b) const {
+    if constexpr (std::is_integral_v<T>) {
+      return Eigen::internal::safe_div_or_mod_op<
+          T, Eigen::internal::google_floor_mod<T>>()(a, b);
+    } else {
+      return Eigen::internal::google_floor_fmod<T>()(a, b);
+    }
+  }
+};
+
 using exp = polymorphic_unary_op<Eigen::internal::scalar_exp_op>;
 using maximum = polymorphic_binary_op<scalar_max_nan_op>;
 using minimum = polymorphic_binary_op<scalar_min_nan_op>;
@@ -469,23 +822,36 @@ struct logical_xor {
     return Eigen::internal::scalar_boolean_xor_op<bool>()(a, b);
   }
 };
+// Safe exponentiation matching TensorFlow's safe_pow for signed integers and
+// pow for floating-point and complex types.
 struct custom_pow_op {
   template <typename T>
-    requires(!std::is_same_v<T, bool> && !std::is_same_v<T, tsl::tstring>)
-  T operator()(T a, T b) const {
-    return Eigen::numext::pow(a, b);
+    requires(is_signed_int_v<T> || is_float_v<T> || is_complex_v<T>)
+  std::conditional_t<std::is_integral_v<T>, absl::StatusOr<T>, T> operator()(
+      T a, T b) const {
+    if constexpr (std::is_integral_v<T>) {
+      return Eigen::internal::safe_scalar_binary_pow_op<T, T>()(a, b);
+    } else {
+      return Eigen::internal::jd_scalar_pow_op<T>()(a, b);
+    }
   }
 };
 using pow = custom_pow_op;
+
+struct atan2 {
+  template <typename T>
+    requires(is_float_v<T>)
+  T operator()(T a, T b) const {
+    return Eigen::internal::scalar_atan2_op<T, T>()(a, b);
+  }
+};
 
 // Logical functors
 struct isfinite {
   template <typename T>
     requires(!std::is_same_v<T, tsl::tstring>)
   bool operator()(T x) const {
-    if constexpr (std::is_floating_point_v<T> ||
-                  std::is_same_v<T, Eigen::half> ||
-                  std::is_same_v<T, Eigen::bfloat16>) {
+    if constexpr (is_float_v<T>) {
       return (Eigen::numext::isfinite)(x);
     } else {
       return true;
@@ -497,9 +863,7 @@ struct isinf {
   template <typename T>
     requires(!std::is_same_v<T, tsl::tstring>)
   bool operator()(T x) const {
-    if constexpr (std::is_floating_point_v<T> ||
-                  std::is_same_v<T, Eigen::half> ||
-                  std::is_same_v<T, Eigen::bfloat16>) {
+    if constexpr (is_float_v<T>) {
       return (Eigen::numext::isinf)(x);
     } else {
       return false;
@@ -511,9 +875,7 @@ struct isnan {
   template <typename T>
     requires(!std::is_same_v<T, tsl::tstring>)
   bool operator()(T x) const {
-    if constexpr (std::is_floating_point_v<T> ||
-                  std::is_same_v<T, Eigen::half> ||
-                  std::is_same_v<T, Eigen::bfloat16>) {
+    if constexpr (is_float_v<T>) {
       return (Eigen::numext::isnan)(x);
     } else {
       return false;
@@ -528,7 +890,7 @@ using erf = polymorphic_unary_op<Eigen::internal::scalar_erf_op>;
 using erfc = polymorphic_unary_op<Eigen::internal::scalar_erfc_op>;
 struct erfinv {
   template <typename T>
-    requires(std::is_same_v<T, float> || std::is_same_v<T, double>)
+    requires(is_one_of_v<T, float, double>)
   T operator()(T x) const {
     if constexpr (std::is_same_v<T, float>) {
       return Eigen::internal::scalar_erfinv_op<float>()(x);
@@ -558,7 +920,9 @@ using bessel_j1 = polymorphic_unary_op<Eigen::internal::scalar_bessel_j1_op>;
 using bessel_y0 = polymorphic_unary_op<Eigen::internal::scalar_bessel_y0_op>;
 using bessel_y1 = polymorphic_unary_op<Eigen::internal::scalar_bessel_y1_op>;
 
-}  // namespace xla_serving::data::kernel::functor
+}  // namespace functor
+}  // namespace kernel
+}  // namespace xla_serving::data
 
 // NOLINTEND(misc-include-cleaner)
 

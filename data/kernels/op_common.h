@@ -49,6 +49,9 @@ namespace xla_serving::data::kernel {
 #define ND_EXPORT_SYMBOL
 #endif
 
+template <typename Functor>
+xla::ifrt::DType GetBinaryOutputDType(xla::ifrt::DType in_dtype);
+
 // Shared base class providing common element-wise validation and signature
 // propagation logic, mirroring TensorFlow's BinaryOpShared.
 class ND_EXPORT_SYMBOL BinaryOpShared
@@ -71,6 +74,7 @@ class ND_EXPORT_SYMBOL BinaryOpShared
     return absl::OkStatus();
   }
 
+  template <typename Functor = void>
   static absl::Status PropagateBinarySignature(
       xla_serving::data::composite::api::ShapeInferenceContext& context,
       absl::string_view op_name) {
@@ -95,6 +99,9 @@ class ND_EXPORT_SYMBOL BinaryOpShared
           b.shape));
     }
     auto out_spec = a;
+    if constexpr (!std::is_void_v<Functor>) {
+      out_spec.dtype = GetBinaryOutputDType<Functor>(out_spec.dtype);
+    }
     out_spec.shape = BCast::ToShape(bcast.output_shape());
     context.outputs.push_back(out_spec);
     return absl::OkStatus();
@@ -184,6 +191,32 @@ xla::ifrt::DType GetUnaryOutputDType(xla::ifrt::DType in_dtype) {
   }
 }
 
+template <typename Functor>
+xla::ifrt::DType GetBinaryOutputDType(xla::ifrt::DType in_dtype) {
+  if constexpr (std::is_void_v<Functor>) {
+    return in_dtype;
+  } else {
+    switch (in_dtype.kind()) {
+#define CHECK_OUT_DTYPE(T, KIND)                                             \
+  case KIND:                                                                 \
+    if constexpr (std::is_invocable_v<Functor, T, T>) {                      \
+      using Ret =                                                            \
+          internal::status_or_value_type_t<decltype(std::declval<Functor>()( \
+              std::declval<T>(), std::declval<T>()))>;                       \
+      return xla::ifrt::DType(NativeAsDTypeKind<Ret>::value);                \
+    }                                                                        \
+    break;
+      ND_APPLY_ALL_NUMBER_CASE(CHECK_OUT_DTYPE)
+      CHECK_OUT_DTYPE(bool, xla::ifrt::DType::Kind::kPred)
+      CHECK_OUT_DTYPE(tsl::tstring, xla::ifrt::DType::Kind::kString)
+#undef CHECK_OUT_DTYPE
+      default:
+        break;
+    }
+    return in_dtype;
+  }
+}
+
 template <typename T, typename Functor>
 absl::Status ApplyUnaryOp(const xla_serving::HostBuffer& in, xla_serving::HostBuffer* out,
                           Functor functor, absl::string_view op_name) {
@@ -220,26 +253,36 @@ template <typename T, typename Functor>
 absl::Status ApplyBinaryOp(const xla_serving::HostBuffer& in1,
                            const xla_serving::HostBuffer& in2, xla_serving::HostBuffer* out,
                            Functor functor, absl::string_view op_name) {
-  const xla::ifrt::DType expected_dtype(NativeAsDTypeKind<T>::value);
-  if (in1.dtype() != expected_dtype || in2.dtype() != expected_dtype ||
-      out->dtype() != expected_dtype) {
-    return absl::InvalidArgumentError(absl::StrCat(
-        "Operator '", op_name, "' dtype mismatch: expected ", expected_dtype,
-        ", but got input 1 as ", in1.dtype(), ", and input 2 as ", in2.dtype(),
-        ", and output as ", out->dtype()));
-  }
   if constexpr (!std::is_invocable_v<Functor, T, T>) {
+    const xla::ifrt::DType expected_dtype(NativeAsDTypeKind<T>::value);
+    if (in1.dtype() != expected_dtype || in2.dtype() != expected_dtype ||
+        out->dtype() != expected_dtype) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Operator '", op_name, "' dtype mismatch: expected ", expected_dtype,
+          ", but got input 1 as ", in1.dtype(), ", and input 2 as ",
+          in2.dtype(), ", and output as ", out->dtype()));
+    }
     return absl::UnimplementedError(absl::StrCat(
         "Operator '", op_name,
         "' does not provide an implementation for dtype: ", in1.dtype()));
   } else {  // Required by C++17 `if constexpr` to discard the body below.
     using ReturnType = decltype(functor(std::declval<T>(), std::declval<T>()));
+    using OutT = internal::status_or_value_type_t<ReturnType>;
+    const xla::ifrt::DType expected_in_dtype(NativeAsDTypeKind<T>::value);
+    const xla::ifrt::DType expected_out_dtype(NativeAsDTypeKind<OutT>::value);
+    if (in1.dtype() != expected_in_dtype || in2.dtype() != expected_in_dtype ||
+        out->dtype() != expected_out_dtype) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Operator '", op_name, "' dtype mismatch: expected ",
+          expected_in_dtype, ", but got input 1 as ", in1.dtype(),
+          ", and input 2 as ", in2.dtype(), ", and output as ", out->dtype()));
+    }
     auto src1_flat = in1.flat<T>();
     auto src2_flat = in2.flat<T>();
-    auto dst_flat = out->flat<T>();
+    auto dst_flat = out->flat<OutT>();
     const T* src1 = src1_flat.data();
     const T* src2 = src2_flat.data();
-    T* dst = dst_flat.data();
+    OutT* dst = dst_flat.data();
 
     // Fast path: identical shapes. Bypasses BCast construction/coalescing and
     // guarantees compile-time unit stride (+1) for SIMD auto-vectorization.
@@ -253,9 +296,9 @@ absl::Status ApplyBinaryOp(const xla_serving::HostBuffer& in1,
       for (int64_t i = 0; i < n; ++i) {
         if constexpr (internal::is_status_or_v<ReturnType>) {
           ASSIGN_OR_RETURN(auto val, functor(src1[i], src2[i]));
-          dst[i] = static_cast<T>(val);
+          dst[i] = static_cast<OutT>(val);
         } else {
-          dst[i] = static_cast<T>(functor(src1[i], src2[i]));
+          dst[i] = static_cast<OutT>(functor(src1[i], src2[i]));
         }
       }
       return absl::OkStatus();
@@ -321,10 +364,10 @@ absl::Status ApplyBinaryOp(const xla_serving::HostBuffer& in1,
         if constexpr (internal::is_status_or_v<ReturnType>) {
           ASSIGN_OR_RETURN(auto val,
                            functor(p1[j * inner_s1], p2[j * inner_s2]));
-          dst[dst_idx++] = static_cast<T>(val);
+          dst[dst_idx++] = static_cast<OutT>(val);
         } else {
           dst[dst_idx++] =
-              static_cast<T>(functor(p1[j * inner_s1], p2[j * inner_s2]));
+              static_cast<OutT>(functor(p1[j * inner_s1], p2[j * inner_s2]));
         }
       }
 
@@ -396,7 +439,8 @@ class ND_EXPORT_SYMBOL BinaryOp : public BinaryOpShared {
                                              xla_serving::HostBuffer b) {
     RETURN_IF_ERROR(ValidateBinaryInputs(a, b, Derived::kOpName));
     BCast bcast(a.shape(), b.shape());
-    xla_serving::HostBuffer out(a.dtype(), BCast::ToShape(bcast.output_shape()));
+    xla_serving::HostBuffer out(GetBinaryOutputDType<Functor>(a.dtype()),
+                        BCast::ToShape(bcast.output_shape()));
     RETURN_IF_ERROR(DispatchBinary(a, b, &out, Functor{}, Derived::kOpName));
     return out;
   }
@@ -412,7 +456,7 @@ class ND_EXPORT_SYMBOL BinaryOp : public BinaryOpShared {
   absl::Status PropagateSignatureImpl(
       xla_serving::data::composite::api::ShapeInferenceContext& context)
       const override {
-    return PropagateBinarySignature(context, Derived::kOpName);
+    return PropagateBinarySignature<Functor>(context, Derived::kOpName);
   }
 };
 

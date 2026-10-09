@@ -18,8 +18,8 @@ limitations under the License.
 #include "data/kernels/op_common.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 
-// This file implements the MultiplyTransform operator.
-// It is branched from
+// This file implements the MultiplyTransform and MultiplyNoNanTransform
+// operators. It is branched from
 // /third_party/tensorflow/core/kernels/cwise_op_mul_1.cc and
 // /third_party/tensorflow/core/kernels/cwise_op_mul_2.cc.
 namespace xla_serving::data::kernel {
@@ -33,6 +33,14 @@ ND_REGISTER_BINARY_OP(MultiplyTransform,
                        xla::ifrt::DType::kU8, xla::ifrt::DType::kU16,
                        xla::ifrt::DType::kU32, xla::ifrt::DType::kU64,
                        xla::ifrt::DType::kF16, xla::ifrt::DType::kBF16,
+                       xla::ifrt::DType::kF32, xla::ifrt::DType::kF64,
+                       xla::ifrt::DType::kC64, xla::ifrt::DType::kC128});
+
+// MultiplyNoNanTransform performs element-wise multiplication returning 0 if y
+// is 0, even if x is NaN or Inf.
+
+ND_REGISTER_BINARY_OP(MultiplyNoNanTransform,
+                      {xla::ifrt::DType::kF16, xla::ifrt::DType::kBF16,
                        xla::ifrt::DType::kF32, xla::ifrt::DType::kF64,
                        xla::ifrt::DType::kC64, xla::ifrt::DType::kC128});
 

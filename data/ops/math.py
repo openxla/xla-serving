@@ -7,6 +7,7 @@ from data.kernels.numerical_transforms_module import add
 from data.kernels.numerical_transforms_module import asin
 from data.kernels.numerical_transforms_module import asinh
 from data.kernels.numerical_transforms_module import atan
+from data.kernels.numerical_transforms_module import atan2
 from data.kernels.numerical_transforms_module import atanh
 from data.kernels.numerical_transforms_module import besseli0 as bessel_i0
 from data.kernels.numerical_transforms_module import besseli0e as bessel_i0e
@@ -27,7 +28,7 @@ from data.kernels.numerical_transforms_module import cos
 from data.kernels.numerical_transforms_module import cosh
 from data.kernels.numerical_transforms_module import dawsn
 from data.kernels.numerical_transforms_module import digamma
-from data.kernels.numerical_transforms_module import divide
+from data.kernels.numerical_transforms_module import dividenonan as divide_no_nan
 from data.kernels.numerical_transforms_module import erf
 from data.kernels.numerical_transforms_module import erfc
 from data.kernels.numerical_transforms_module import erfinv
@@ -35,6 +36,8 @@ from data.kernels.numerical_transforms_module import exp
 from data.kernels.numerical_transforms_module import expint
 from data.kernels.numerical_transforms_module import expm1
 from data.kernels.numerical_transforms_module import floor
+from data.kernels.numerical_transforms_module import floordiv
+from data.kernels.numerical_transforms_module import floormod
 from data.kernels.numerical_transforms_module import fresnelcos as fresnel_cos
 from data.kernels.numerical_transforms_module import fresnelsin as fresnel_sin
 from data.kernels.numerical_transforms_module import igamma
@@ -52,9 +55,11 @@ from data.kernels.numerical_transforms_module import logicalxor as logical_xor
 from data.kernels.numerical_transforms_module import maximum
 from data.kernels.numerical_transforms_module import minimum
 from data.kernels.numerical_transforms_module import multiply
+from data.kernels.numerical_transforms_module import multiplynonan as multiply_no_nan
 from data.kernels.numerical_transforms_module import ndtri
 from data.kernels.numerical_transforms_module import negative
 from data.kernels.numerical_transforms_module import polygamma
+from data.kernels.numerical_transforms_module import pow  # pylint: disable=redefined-builtin
 from data.kernels.numerical_transforms_module import reciprocal
 from data.kernels.numerical_transforms_module import rint
 from data.kernels.numerical_transforms_module import round  # pylint: disable=redefined-builtin
@@ -69,6 +74,7 @@ from data.kernels.numerical_transforms_module import square
 from data.kernels.numerical_transforms_module import subtract
 from data.kernels.numerical_transforms_module import tan
 from data.kernels.numerical_transforms_module import tanh
+from data.kernels.numerical_transforms_module import truediv
 from data.kernels.numerical_transforms_module import xdivy
 from data.kernels.numerical_transforms_module import xlog1py
 from data.kernels.numerical_transforms_module import xlogy
@@ -89,6 +95,8 @@ from data.ops.scan_ops import cumulative_logsumexp
 
 # Alias for backwards compatibility
 neg = negative
+# TensorFlow Python 3 division parity.
+divide = truediv
 
 
 # Export the following ops under the jd.math namespace.
@@ -101,6 +109,7 @@ __all__ = [
     "asin",
     "asinh",
     "atan",
+    "atan2",
     "atanh",
     "bessel_i0",
     "bessel_i0e",
@@ -125,6 +134,7 @@ __all__ = [
     "dawsn",
     "digamma",
     "divide",
+    "divide_no_nan",
     "erf",
     "erfc",
     "erfinv",
@@ -132,6 +142,8 @@ __all__ = [
     "expint",
     "expm1",
     "floor",
+    "floordiv",
+    "floormod",
     "fresnel_cos",
     "fresnel_sin",
     "igamma",
@@ -149,10 +161,12 @@ __all__ = [
     "maximum",
     "minimum",
     "multiply",
+    "multiply_no_nan",
     "ndtri",
     "neg",
     "negative",
     "polygamma",
+    "pow",
     "reciprocal",
     "reduce_all",
     "reduce_any",
@@ -177,6 +191,7 @@ __all__ = [
     "subtract",
     "tan",
     "tanh",
+    "truediv",
     "xdivy",
     "xlog1py",
     "xlogy",
