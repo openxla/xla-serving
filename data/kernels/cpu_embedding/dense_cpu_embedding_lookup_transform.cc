@@ -31,7 +31,6 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "data/cpu_embedding/cc/cpu_embedding_engine.h"  // from @xla_serving
-#include "data/cpu_embedding/cc/feature_batch_csr_input.h"  // from @xla_serving
 #include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @xla_serving
 #include "data/kernels/cpu_embedding/dense_cpu_embedding_lookup.pb.h"  // from @xla_serving
 #include "data/kernels/cpu_embedding/safe_int_utils.h"  // from @xla_serving
@@ -46,6 +45,14 @@
 #include "xla/python/ifrt/shape.h"  // from @xla
 
 namespace xla_serving::data::composite {
+namespace {
+
+struct PreparedLookup {
+  std::vector<int64_t> active_ids;
+  std::vector<int32_t> row_pointers;
+};
+
+}  // namespace
 
 DenseCpuEmbeddingLookupTransform::DenseCpuEmbeddingLookupTransform(
     std::shared_ptr<CpuEmbeddingEngineResource> resource,
@@ -146,8 +153,7 @@ DenseCpuEmbeddingLookupTransform::operator()(
         " inputs, got ", dense_ids_list.size()));
   }
 
-  std::vector<cpu_embedding::FeatureBatchCsrInput> feature_batches;
-  feature_batches.reserve(feature_names_.size());
+  std::vector<PreparedLookup> prepared(feature_names_.size());
 
   for (size_t f = 0; f < feature_names_.size(); ++f) {
     const auto& dense_ids = dense_ids_list[f];
@@ -181,9 +187,9 @@ DenseCpuEmbeddingLookupTransform::operator()(
           " exceeds INT32_MAX: ", sequence_length));
     }
 
-    std::vector<int64_t> active_ids;
+    std::vector<int64_t>& active_ids = prepared[f].active_ids;
     active_ids.reserve(num_elements);
-    std::vector<int32_t> row_pointers;
+    std::vector<int32_t>& row_pointers = prepared[f].row_pointers;
     row_pointers.reserve(batch_size + 1);
     row_pointers.push_back(0);
 
@@ -224,18 +230,12 @@ DenseCpuEmbeddingLookupTransform::operator()(
           " must be kS64 or kS32, got kind: ",
           static_cast<int>(dense_ids.dtype().kind())));
     }
-
-    ASSIGN_OR_RETURN(cpu_embedding::FeatureBatchCsrInput batch_input,
-                     cpu_embedding::FeatureBatchCsrInput::Create(
-                         feature_names_[f], std::move(active_ids),
-                         std::move(row_pointers), /*weights=*/{}));
-    feature_batches.push_back(std::move(batch_input));
   }
 
   // Borrow the CSR built above and have the engine write each feature's
   // [batch_size, emb_dim] result directly into its output HostBuffer.
   using FeatureBatchInput =
-      cpu_embedding::CpuEmbeddingEngine::FeatureBatchInput;
+      cpu_embedding::CpuEmbeddingEngine::FeatureBatchInput<float>;
   std::vector<xla_serving::HostBuffer> output_buffers(feature_names_.size());
   std::vector<FeatureBatchInput> batch_inputs;
   batch_inputs.reserve(feature_names_.size());
@@ -243,11 +243,10 @@ DenseCpuEmbeddingLookupTransform::operator()(
     const int64_t batch_size = dense_ids_list[f].shape().dims()[0];
     ASSIGN_OR_RETURN(int32_t emb_dim,
                      resource_->GetEmbeddingDim(feature_names_[f]));
-    const cpu_embedding::FeatureBatchCsrInput& batch = feature_batches[f];
     batch_inputs.push_back({
         .feature_name = feature_names_[f],
-        .embedding_ids = batch.EmbeddingIds(),
-        .row_pointers = batch.RowPointers(),
+        .embedding_ids = prepared[f].active_ids,
+        .row_pointers = prepared[f].row_pointers,
         .weights = {},
         .output_allocator =
             [&output_buffers, f, batch_size,

@@ -322,7 +322,7 @@ CpuEmbeddingLookupTransform::operator()(
   }
 
   using FeatureBatchInput =
-      cpu_embedding::CpuEmbeddingEngine::FeatureBatchInput;
+      cpu_embedding::CpuEmbeddingEngine::FeatureBatchInput<float>;
   std::vector<xla_serving::HostBuffer> batch_outputs(feature_names_.size());
   std::vector<FeatureBatchInput> batch_inputs;
   batch_inputs.reserve(feature_names_.size());

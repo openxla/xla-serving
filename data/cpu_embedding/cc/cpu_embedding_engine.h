@@ -46,17 +46,19 @@ class CpuEmbeddingEngine final {
     size_t block_size = 64;
   };
 
-  // Borrowed CSR view of one feature's batch for ExecuteBatch(). Unlike the
-  // owning FeatureBatchCsrInput used by Execute(), this struct does not copy
-  // ids, row pointers, or weights, and writes results into storage returned by
-  // `output_allocator` instead of returning an Array. Borrowed inputs and
-  // allocator-owned outputs must remain valid until ExecuteBatch() returns.
+  // Borrowed CSR view of one feature's batch for ExecuteBatch() and
+  // Execute<T>(). Unlike the owning FeatureBatchCsrInput used by Execute(),
+  // this struct does not copy ids, row pointers, or weights, and writes results
+  // into storage returned by `output_allocator` instead of returning an Array.
+  // Borrowed inputs and allocator-owned outputs must remain valid until the
+  // call returns.
+  template <typename T = float>
   struct FeatureBatchInput {
     absl::string_view feature_name;
     absl::Span<const int64_t> embedding_ids;
     absl::Span<const int32_t> row_pointers;
-    absl::Span<const float> weights;
-    absl::AnyInvocable<absl::Span<float>(size_t)> output_allocator;
+    absl::Span<const float> weights = {};
+    absl::AnyInvocable<absl::Span<T>(size_t)> output_allocator = nullptr;
   };
 
   CpuEmbeddingEngine();
@@ -74,13 +76,10 @@ class CpuEmbeddingEngine final {
   // Executes standard non-sequence FP32 bags without custom combiners on the
   // shared pool. Validates inputs before allocation and allocated output spans
   // before writing.
-  absl::Status ExecuteBatch(absl::Span<FeatureBatchInput> inputs) const;
+  absl::Status ExecuteBatch(absl::Span<FeatureBatchInput<float>> inputs) const;
 
-  template <typename T>
-  absl::StatusOr<absl::Span<T>> Execute(
-      absl::string_view feature_name, absl::Span<const int64_t> embedding_ids,
-      absl::Span<const int32_t> row_pointers, absl::Span<const float> weights,
-      absl::AnyInvocable<absl::Span<T>(size_t)> allocator) const;
+  template <typename T = float>
+  absl::StatusOr<absl::Span<T>> Execute(FeatureBatchInput<T> input) const;
 
   void Clear();
 

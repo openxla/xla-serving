@@ -153,21 +153,21 @@ TYPED_TEST_P(CpuEmbeddingEngineTest, ExecuteWithProvidedBuffer) {
   ASSERT_OK(engine.RegisterFeatureSpec(
       FeatureSpec{.name = "test_feature", .table_name = "test_table"}));
 
-  // Create feature batches. Each has two samples, with different valency.
+  // Create feature batch with three samples of different valency.
   std::vector<int32_t> row_splits = {0, 2, 3, 7};
   std::vector<int64_t> embedding_ids = {0, 1, 2, 4, 6, 8, 4};
-  ASSERT_OK_AND_ASSIGN(
-      FeatureBatchCsrInput batch,
-      FeatureBatchCsrInput::Create("test_feature", embedding_ids, row_splits,
-                                   /*weights=*/{}));
 
   // Execute
   std::vector<T> buffer(3 * 4);  // 3 samples * 4 embedding_dim
-  ASSERT_OK(engine.Execute<T>(
-      batch.Name(), batch.EmbeddingIds(), batch.RowPointers(), batch.Weights(),
-      [&buffer](size_t size) -> absl::Span<T> {
+  ASSERT_OK(engine.Execute<T>({
+      .feature_name = "test_feature",
+      .embedding_ids = embedding_ids,
+      .row_pointers = row_splits,
+      .weights = {},
+      .output_allocator = [&buffer](size_t size) -> absl::Span<T> {
         return absl::MakeSpan(buffer.data(), buffer.size()).subspan(0, size);
-      }));
+      },
+  }));
   // Feature:
   // Sample 0: ID [0, 1] -> ([0.1, 0.2, 0.3, 0.4] + [0.5, 0.6, 0.7, 0.8]) / 2 =
   // [0.3, 0.4, 0.5, 0.6]
@@ -202,38 +202,52 @@ TYPED_TEST_P(CpuEmbeddingEngineTest, ExecuteWithInvalidRowPointersFails) {
   // Create invalid row pointers.
   std::vector<int64_t> embedding_ids = {0, 1, 2, 4};
   std::vector<T> buffer(3 * 4);
-  auto allocator = [&buffer](size_t size) -> absl::Span<T> {
-    return absl::MakeSpan(buffer.data(), buffer.size()).subspan(0, size);
+  auto run_execute = [&](absl::Span<const int32_t> row_pointers,
+                         absl::Span<const float> weights = {}) {
+    return engine.Execute<T>({
+        .feature_name = "test_feature",
+        .embedding_ids = embedding_ids,
+        .row_pointers = row_pointers,
+        .weights = weights,
+        .output_allocator = [&buffer](size_t size) -> absl::Span<T> {
+          return absl::MakeSpan(buffer.data(), buffer.size()).subspan(0, size);
+        },
+    });
   };
 
-  // 1. Non-monotonic row pointers
+  // Non-monotonic row pointers
   std::vector<int32_t> rp_non_monotonic = {0, 2, 1, 4};
-  EXPECT_FALSE(engine
-                   .Execute<T>("test_feature", embedding_ids, rp_non_monotonic,
-                               {}, allocator)
-                   .ok());
+  EXPECT_THAT(run_execute(rp_non_monotonic),
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
+                                     testing::HasSubstr("monotonic")));
 
-  // 2. Negative row pointers
+  // Negative row pointers
   std::vector<int32_t> rp_negative = {-1, 1, 3, 4};
-  EXPECT_FALSE(
-      engine
-          .Execute<T>("test_feature", embedding_ids, rp_negative, {}, allocator)
-          .ok());
+  EXPECT_THAT(run_execute(rp_negative),
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
+                                     testing::HasSubstr("non-negative")));
 
-  // 3. Out of bounds row pointers (final element > embedding_ids.size())
+  // Out of bounds row pointers (final element > embedding_ids.size())
   std::vector<int32_t> rp_out_of_bounds = {0, 1, 3, 5};
-  EXPECT_FALSE(engine
-                   .Execute<T>("test_feature", embedding_ids, rp_out_of_bounds,
-                               {}, allocator)
-                   .ok());
+  EXPECT_THAT(run_execute(rp_out_of_bounds),
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
+                                     testing::HasSubstr("exceeds")));
 
-  // 4. Weights size mismatch (too small)
+  // Weights size mismatch (too small)
   std::vector<int32_t> rp_ok = {0, 1, 3, 4};
   std::vector<float> weights_small = {1.0, 0.5};  // needs 4 elements
-  EXPECT_FALSE(engine
-                   .Execute<T>("test_feature", embedding_ids, rp_ok,
-                               weights_small, allocator)
-                   .ok());
+  EXPECT_THAT(run_execute(rp_ok, weights_small),
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
+                                     testing::HasSubstr("Weights size")));
+
+  // Null output allocator
+  EXPECT_THAT(engine.Execute<T>({
+                  .feature_name = "test_feature",
+                  .embedding_ids = embedding_ids,
+                  .row_pointers = rp_ok,
+              }),
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
+                                     testing::HasSubstr("output allocator")));
 }
 
 REGISTER_TYPED_TEST_SUITE_P(CpuEmbeddingEngineTest, BasicExecute,
@@ -293,7 +307,7 @@ TEST(CpuEmbeddingEngineBatchTest, ExecutesMixedDimensionsModesAndWeights) {
   const std::vector<float> weights = {0.25f, 0.75f};
   std::vector<float> mean_output(2, -11.0f);
   std::vector<float> sqrt_output(3, -13.0f);
-  std::vector<CpuEmbeddingEngine::FeatureBatchInput> inputs;
+  std::vector<CpuEmbeddingEngine::FeatureBatchInput<float>> inputs;
   inputs.push_back({
       .feature_name = "mean",
       .embedding_ids = ids,
@@ -334,7 +348,7 @@ TEST(CpuEmbeddingEngineBatchTest, ResolvesAllRequestsBeforeAllocation) {
   std::vector<float> output0(2, 29.0f);
   std::vector<float> output1(2, 31.0f);
   int allocation_count = 0;
-  std::vector<CpuEmbeddingEngine::FeatureBatchInput> inputs;
+  std::vector<CpuEmbeddingEngine::FeatureBatchInput<float>> inputs;
   inputs.push_back({
       .feature_name = "feature",
       .embedding_ids = ids,
@@ -375,7 +389,7 @@ TEST(CpuEmbeddingEngineBatchTest, SnapshotSurvivesClearDuringAllocation) {
   const std::vector<int32_t> rows = {0, 1};
   std::vector<float> output(2, -1.0f);
   int allocation_count = 0;
-  std::vector<CpuEmbeddingEngine::FeatureBatchInput> inputs;
+  std::vector<CpuEmbeddingEngine::FeatureBatchInput<float>> inputs;
   inputs.push_back({
       .feature_name = "feature",
       .embedding_ids = ids,

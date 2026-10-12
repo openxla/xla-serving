@@ -128,7 +128,6 @@ cc_library(
         "@abseil-cpp//absl/types:span",
         "@xla//xla/python/ifrt",
         "@xla_serving//data/cpu_embedding/cc:cpu_embedding_engine",
-        "@xla_serving//data/cpu_embedding/cc:feature_batch_csr_input",
         "@xla_serving//data/processor/cc/api:registry",
         "@xla_serving//data/processor/cc/api:transform_context",
         "@xla_serving//data/processor/cc/api:type_info",

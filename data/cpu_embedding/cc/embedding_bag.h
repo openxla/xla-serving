@@ -75,12 +75,10 @@ struct EmbeddingBagInput {
 bool IsEmbeddingBagSveAvailable();
 int EmbeddingBagSveVectorLengthBytes();
 
-// Executes one request and optionally reports the selected backend.
+// Executes one input and optionally reports the selected backend.
 absl::Status ComputeEmbeddingActivationsF32(
-    absl::Span<const int64_t> embedding_ids,
-    absl::Span<const int32_t> row_pointers, absl::Span<const float> weights,
-    const EmbeddingTable& embedding_table, absl::Span<float> buffer,
-    EmbeddingBagBackend requested, EmbeddingBagBackend* selected = nullptr);
+    const EmbeddingBagInput& input, EmbeddingBagBackend requested,
+    EmbeddingBagBackend* selected = nullptr);
 
 // Executes cost-balanced bag ranges after validating the complete group.
 // Runs inline on the calling thread when the total output size across all

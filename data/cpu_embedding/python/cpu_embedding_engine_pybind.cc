@@ -191,13 +191,17 @@ PYBIND11_MODULE(cpu_embedding_engine_pybind, m) {
             auto buffer = std::make_unique<std::vector<float>>();
             std::vector<float>* buffer_ptr = buffer.get();
 
-            auto result = self.Execute<float>(
-                feature_name, absl::MakeConstSpan(embedding_ids),
-                absl::MakeConstSpan(row_pointers), absl::MakeConstSpan(weights),
-                [buffer_ptr](size_t size) {
-                  buffer_ptr->resize(size);
-                  return absl::MakeSpan(*buffer_ptr);
-                });
+            absl::StatusOr<absl::Span<float>> result = self.Execute<float>({
+                .feature_name = feature_name,
+                .embedding_ids = absl::MakeConstSpan(embedding_ids),
+                .row_pointers = absl::MakeConstSpan(row_pointers),
+                .weights = absl::MakeConstSpan(weights),
+                .output_allocator =
+                    [buffer_ptr](size_t size) {
+                      buffer_ptr->resize(size);
+                      return absl::MakeSpan(*buffer_ptr);
+                    },
+            });
             if (!result.ok()) {
               return result.status();
             }

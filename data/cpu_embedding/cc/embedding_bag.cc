@@ -461,27 +461,16 @@ int EmbeddingBagSveVectorLengthBytes() {
   return IsEmbeddingBagSveAvailable() ? sve::VectorLengthBytes() : 0;
 }
 
-absl::Status ComputeEmbeddingActivationsF32(
-    absl::Span<const int64_t> embedding_ids,
-    absl::Span<const int32_t> row_pointers, absl::Span<const float> weights,
-    const EmbeddingTable& embedding_table, absl::Span<float> buffer,
-    EmbeddingBagBackend requested, EmbeddingBagBackend* selected) {
-  absl::AnyInvocable<absl::Span<float>(size_t)> allocator =
-      [buffer](size_t) mutable -> absl::Span<float> { return buffer; };
-  EmbeddingBagInput request{
-      .embedding_ids = embedding_ids,
-      .row_pointers = row_pointers,
-      .embedding_table = &embedding_table,
-      .weights = weights,
-      .output_allocator = &allocator,
-  };
+absl::Status ComputeEmbeddingActivationsF32(const EmbeddingBagInput& input,
+                                            EmbeddingBagBackend requested,
+                                            EmbeddingBagBackend* selected) {
   ASSIGN_OR_RETURN(PreparedRequest prepared,
-                   PrepareRequest(request, 0, requested));
+                   PrepareRequest(input, 0, requested));
   RETURN_IF_ERROR(AllocateOutputs(absl::MakeSpan(&prepared, 1)));
   RETURN_IF_ERROR(ValidateOutputIsolation(absl::MakeConstSpan(&prepared, 1)));
   if (selected != nullptr) *selected = BackendForCurrentThread(prepared);
   ExecuteTask(absl::MakeConstSpan(&prepared, 1),
-              Task{0, 0, row_pointers.size() - 1});
+              Task{0, 0, input.row_pointers.size() - 1});
   return absl::OkStatus();
 }
 

@@ -147,8 +147,13 @@ TEST(CpuEmbeddingEngineResourceTest, LoadFromAssets) {
   };
 
   // Perform dynamic lookup query on JCE engine using logical feature "table1"
-  ASSERT_OK(resource.Get()->Execute<float>("table1", ids, row_pointers, weights,
-                                           std::move(allocator)));
+  ASSERT_OK(resource.Get()->Execute<float>({
+      .feature_name = "table1",
+      .embedding_ids = ids,
+      .row_pointers = row_pointers,
+      .weights = weights,
+      .output_allocator = std::move(allocator),
+  }));
 
   // Expected output (BatchSize=2, EmbeddingDim=3):
   // Row 0: 1.0 * [1.0, 2.0, 3.0] = [1.0, 2.0, 3.0]
@@ -191,12 +196,17 @@ class MappedCpuEmbeddingResourceTest : public ::testing::Test {
     const std::vector<int64_t> ids = {0, 1};
     const std::vector<int32_t> rows = {0, 2};
     const std::vector<float> weights = {1.0f, 1.0f};
-    auto allocator = [output](size_t size) -> absl::Span<float> {
-      output->resize(size);
-      return absl::MakeSpan(*output);
-    };
     return resource.Get()
-        ->Execute<float>("feature1", ids, rows, weights, std::move(allocator))
+        ->Execute<float>({
+            .feature_name = "feature1",
+            .embedding_ids = ids,
+            .row_pointers = rows,
+            .weights = weights,
+            .output_allocator = [output](size_t size) -> absl::Span<float> {
+              output->resize(size);
+              return absl::MakeSpan(*output);
+            },
+        })
         .status();
   }
 

@@ -448,11 +448,16 @@ TEST(CpuEmbeddingLookupTransformTest, NonMonotonicRowPointersFails) {
     return absl::MakeSpan(alloc_buffer);
   };
 
-  EXPECT_THAT(
-      engine->Execute<float>("feature1", ids_vec, rp_vec, w_vec, allocator),
-      absl_testing::StatusIs(
-          absl::StatusCode::kInvalidArgument,
-          testing::HasSubstr("Row pointers must be monotonic.")));
+  EXPECT_THAT(engine->Execute<float>({
+                  .feature_name = "feature1",
+                  .embedding_ids = ids_vec,
+                  .row_pointers = rp_vec,
+                  .weights = w_vec,
+                  .output_allocator = allocator,
+              }),
+              absl_testing::StatusIs(
+                  absl::StatusCode::kInvalidArgument,
+                  testing::HasSubstr("Row pointers must be monotonic.")));
 }
 
 TEST(CpuEmbeddingLookupTransformTest, NegativeRowPointersFails) {
@@ -484,11 +489,16 @@ TEST(CpuEmbeddingLookupTransformTest, NegativeRowPointersFails) {
     return absl::MakeSpan(alloc_buffer);
   };
 
-  EXPECT_THAT(
-      engine->Execute<float>("feature1", ids_vec, rp_vec, w_vec, allocator),
-      absl_testing::StatusIs(
-          absl::StatusCode::kInvalidArgument,
-          testing::HasSubstr("Row pointers must be non-negative.")));
+  EXPECT_THAT(engine->Execute<float>({
+                  .feature_name = "feature1",
+                  .embedding_ids = ids_vec,
+                  .row_pointers = rp_vec,
+                  .weights = w_vec,
+                  .output_allocator = allocator,
+              }),
+              absl_testing::StatusIs(
+                  absl::StatusCode::kInvalidArgument,
+                  testing::HasSubstr("Row pointers must be non-negative.")));
 }
 
 TEST(CpuEmbeddingLookupTransformTest, OutOfBoundsRowPointersFails) {
@@ -521,7 +531,13 @@ TEST(CpuEmbeddingLookupTransformTest, OutOfBoundsRowPointersFails) {
   };
 
   EXPECT_THAT(
-      engine->Execute<float>("feature1", ids_vec, rp_vec, w_vec, allocator),
+      engine->Execute<float>({
+          .feature_name = "feature1",
+          .embedding_ids = ids_vec,
+          .row_pointers = rp_vec,
+          .weights = w_vec,
+          .output_allocator = allocator,
+      }),
       absl_testing::StatusIs(
           absl::StatusCode::kInvalidArgument,
           testing::HasSubstr(
@@ -558,7 +574,13 @@ TEST(CpuEmbeddingLookupTransformTest, WeightsSizeMismatchFails) {
   };
 
   EXPECT_THAT(
-      engine->Execute<float>("feature1", ids_vec, rp_vec, w_vec, allocator),
+      engine->Execute<float>({
+          .feature_name = "feature1",
+          .embedding_ids = ids_vec,
+          .row_pointers = rp_vec,
+          .weights = w_vec,
+          .output_allocator = allocator,
+      }),
       absl_testing::StatusIs(
           absl::StatusCode::kInvalidArgument,
           testing::HasSubstr(

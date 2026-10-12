@@ -27,7 +27,6 @@
 #include <vector>
 
 #include "absl/algorithm/container.h"  // from @abseil-cpp
-#include "absl/functional/any_invocable.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"  // from @abseil-cpp
@@ -167,7 +166,7 @@ absl::StatusOr<std::vector<Array>> CpuEmbeddingEngine::Execute(
 }
 
 absl::Status CpuEmbeddingEngine::ExecuteBatch(
-    absl::Span<FeatureBatchInput> inputs) const {
+    absl::Span<FeatureBatchInput<float>> inputs) const {
   if (inputs.empty()) {
     return absl::InvalidArgumentError(
         "Embedding batch requires at least one request.");
@@ -180,7 +179,7 @@ absl::Status CpuEmbeddingEngine::ExecuteBatch(
     absl::MutexLock spec_lock(feature_specs_mu_);
     absl::MutexLock table_lock(local_tables_mu_);
     for (size_t index = 0; index < inputs.size(); ++index) {
-      const FeatureBatchInput& input = inputs[index];
+      const FeatureBatchInput<float>& input = inputs[index];
       auto spec_it = feature_specs_.find(input.feature_name);
       if (spec_it == feature_specs_.end()) {
         return absl::NotFoundError(
@@ -222,17 +221,22 @@ absl::Status CpuEmbeddingEngine::ExecuteBatch(
 // ExecuteBatch after its block-size behavior is matched.
 template <typename T>
 absl::StatusOr<absl::Span<T>> CpuEmbeddingEngine::Execute(
-    absl::string_view feature_name, absl::Span<const int64_t> embedding_ids,
-    absl::Span<const int32_t> row_pointers, absl::Span<const float> weights,
-    absl::AnyInvocable<absl::Span<T>(size_t)> allocator) const {
+    FeatureBatchInput<T> input) const {
   ASSIGN_OR_RETURN(const FeatureSpec feature_spec,
-                   GetFeatureSpec(feature_name));
+                   GetFeatureSpec(input.feature_name));
   if (feature_spec.max_sequence_length != 0) {
     return absl::UnimplementedError(
         "Sequence assembly is not supported for in-place execution.");
   }
   ASSIGN_OR_RETURN(std::shared_ptr<const EmbeddingTable> embedding_table,
                    GetLocalTable(feature_spec.table_name));
+  if (!input.output_allocator) {
+    return absl::InvalidArgumentError(
+        "In-place execution requires an output allocator.");
+  }
+  const absl::Span<const int64_t> embedding_ids = input.embedding_ids;
+  const absl::Span<const int32_t> row_pointers = input.row_pointers;
+  const absl::Span<const float> weights = input.weights;
   if (row_pointers.size() < 2) {
     return absl::InvalidArgumentError(
         "Row pointers must have at least 2 elements.");
@@ -259,7 +263,7 @@ absl::StatusOr<absl::Span<T>> CpuEmbeddingEngine::Execute(
   }
   const size_t num_samples = row_pointers.size() - 1;
   const size_t dim = embedding_table->EmbeddingDim();
-  absl::Span<T> buffer = allocator(dim * num_samples);
+  absl::Span<T> buffer = input.output_allocator(dim * num_samples);
 
   const size_t block_size = options_.block_size;
   const int slots = options_.max_cpu_slots > 0 ? options_.max_cpu_slots : 8;
@@ -338,15 +342,10 @@ absl::StatusOr<absl::Span<T>> CpuEmbeddingEngine::Execute(
 }
 
 template absl::StatusOr<absl::Span<float>> CpuEmbeddingEngine::Execute(
-    absl::string_view feature_name, absl::Span<const int64_t> embedding_ids,
-    absl::Span<const int32_t> row_pointers, absl::Span<const float> weights,
-    absl::AnyInvocable<absl::Span<float>(size_t)> allocator) const;
+    FeatureBatchInput<float> input) const;
 
 template absl::StatusOr<absl::Span<Eigen::bfloat16>>
-CpuEmbeddingEngine::Execute(
-    absl::string_view feature_name, absl::Span<const int64_t> embedding_ids,
-    absl::Span<const int32_t> row_pointers, absl::Span<const float> weights,
-    absl::AnyInvocable<absl::Span<Eigen::bfloat16>(size_t)> allocator) const;
+CpuEmbeddingEngine::Execute(FeatureBatchInput<Eigen::bfloat16> input) const;
 
 absl::StatusOr<FeatureSpec> CpuEmbeddingEngine::GetFeatureSpec(
     absl::string_view feature_name) const {

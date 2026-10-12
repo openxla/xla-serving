@@ -81,10 +81,11 @@ TEST(EmbeddingBagBatchTest, AutoUsesPortableWithFreshOutputSemantics) {
   const std::vector<int32_t> rows = {0, 2, 2, 3};
   const std::vector<float> weights = {0.5f, 1.5f, 2.0f};
   std::vector<float> output(9, -99.0f);
+  auto alloc = MakeAllocator(&output);
   internal::EmbeddingBagBackend selected = internal::EmbeddingBagBackend::kAuto;
 
   ASSERT_OK(internal::ComputeEmbeddingActivationsF32(
-      ids, rows, weights, *table, absl::MakeSpan(output),
+      MakeRequest(ids, rows, table.get(), weights, &alloc),
       internal::EmbeddingBagBackend::kAuto, &selected));
 
   EXPECT_EQ(selected, internal::EmbeddingBagBackend::kPortable);
@@ -311,13 +312,15 @@ TEST(EmbeddingBagSveTest, AutoDispatchIsGuardedAndPreservesAdditionOrder) {
   const std::vector<int32_t> rows = {0, 31, 37};
   std::vector<float> portable(2 * kEmbeddingDim, -1.0f);
   std::vector<float> automatic(2 * kEmbeddingDim, -2.0f);
+  auto portable_alloc = MakeAllocator(&portable);
+  auto automatic_alloc = MakeAllocator(&automatic);
   internal::EmbeddingBagBackend selected = internal::EmbeddingBagBackend::kAuto;
 
   ASSERT_OK(internal::ComputeEmbeddingActivationsF32(
-      ids, rows, {}, *table, absl::MakeSpan(portable),
+      MakeRequest(ids, rows, table.get(), {}, &portable_alloc),
       internal::EmbeddingBagBackend::kPortable));
   ASSERT_OK(internal::ComputeEmbeddingActivationsF32(
-      ids, rows, {}, *table, absl::MakeSpan(automatic),
+      MakeRequest(ids, rows, table.get(), {}, &automatic_alloc),
       internal::EmbeddingBagBackend::kAuto, &selected));
 
   const internal::EmbeddingBagBackend expected =
@@ -331,8 +334,9 @@ TEST(EmbeddingBagSveTest, AutoDispatchIsGuardedAndPreservesAdditionOrder) {
 
   if (internal::IsEmbeddingBagSveAvailable()) {
     std::vector<float> forced(2 * kEmbeddingDim, -3.0f);
+    auto forced_alloc = MakeAllocator(&forced);
     ASSERT_OK(internal::ComputeEmbeddingActivationsF32(
-        ids, rows, {}, *table, absl::MakeSpan(forced),
+        MakeRequest(ids, rows, table.get(), {}, &forced_alloc),
         internal::EmbeddingBagBackend::kSve));
     EXPECT_EQ(forced, portable);
   }
@@ -361,12 +365,14 @@ TEST(EmbeddingBagSveTest, ForcedUnweightedFastSlicesAndTailMatchPortable) {
   const std::vector<int32_t> rows = {0, 17};
   std::vector<float> portable(embedding_dim, -1.0f);
   std::vector<float> forced(embedding_dim, -2.0f);
+  auto portable_alloc = MakeAllocator(&portable);
+  auto forced_alloc = MakeAllocator(&forced);
 
   ASSERT_OK(internal::ComputeEmbeddingActivationsF32(
-      ids, rows, {}, *table, absl::MakeSpan(portable),
+      MakeRequest(ids, rows, table.get(), {}, &portable_alloc),
       internal::EmbeddingBagBackend::kPortable));
   ASSERT_OK(internal::ComputeEmbeddingActivationsF32(
-      ids, rows, {}, *table, absl::MakeSpan(forced),
+      MakeRequest(ids, rows, table.get(), {}, &forced_alloc),
       internal::EmbeddingBagBackend::kSve));
   EXPECT_EQ(forced, portable);
 }
@@ -386,12 +392,14 @@ TEST(EmbeddingBagSveTest, ForcedBackendIsGuardedAndDimensionAgnostic) {
   const std::vector<float> weights = {0.25f, 1.25f, 0.5f};
   std::vector<float> portable(3 * kEmbeddingDim, -1.0f);
   std::vector<float> forced(3 * kEmbeddingDim, 41.0f);
+  auto portable_alloc = MakeAllocator(&portable);
+  auto forced_alloc = MakeAllocator(&forced);
   ASSERT_OK(internal::ComputeEmbeddingActivationsF32(
-      ids, rows, weights, *table, absl::MakeSpan(portable),
+      MakeRequest(ids, rows, table.get(), weights, &portable_alloc),
       internal::EmbeddingBagBackend::kPortable));
 
   const absl::Status status = internal::ComputeEmbeddingActivationsF32(
-      ids, rows, weights, *table, absl::MakeSpan(forced),
+      MakeRequest(ids, rows, table.get(), weights, &forced_alloc),
       internal::EmbeddingBagBackend::kSve);
   if (internal::IsEmbeddingBagSveAvailable()) {
     ASSERT_OK(status);
