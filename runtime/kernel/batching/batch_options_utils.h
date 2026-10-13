@@ -45,6 +45,19 @@ absl::StatusOr<MixedPriorityBatchingPolicy> GetMixedPriorityBatchingPolicy(
 absl::string_view MixedPriorityBatchingPolicyToString(
     MixedPriorityBatchingPolicy policy);
 
+absl::StatusOr<SchedulerScope> GetSchedulerScope(
+    BatchOptions::SchedulerScope scheduler_scope);
+
+absl::string_view SchedulerScopeToString(SchedulerScope scope);
+
+absl::StatusOr<QueueSelectionPolicy> GetQueueSelectionPolicy(
+    BatchOptions::QueueSelectionPolicy queue_selection_policy);
+
+absl::string_view QueueSelectionPolicyToString(QueueSelectionPolicy policy);
+
+absl::StatusOr<SchedulerConfig> GetSchedulerConfig(
+    const BatchOptions::SchedulerConfig& config);
+
 absl::StatusOr<PriorityBatchingPolicy> GetPriorityBatchingPolicy(
     BatchOptions::PriorityBatchingPolicy priority_batching_policy);
 

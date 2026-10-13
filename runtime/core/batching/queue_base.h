@@ -61,7 +61,8 @@ class QueueBase {
   using SchedulableBatchCallback = std::function<void()>;
 
   // Orderable key representing the priority of a batch. Higher priority batches
-  // will be prioritized for execution first (when using rank_queues=true).
+  // will be prioritized for execution first (when using
+  // QueueSelectionPolicy::kPriorityRanked).
   // - A smaller key value is higher priority than a larger one.
   // - This is a pair formed from <priority, batch_timestamp>. The exact values
   //   used are an implementation detail of PeekBatchPriority().

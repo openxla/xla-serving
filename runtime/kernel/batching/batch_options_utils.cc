@@ -19,11 +19,13 @@
 
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "protos/orchestration.pb.h"  // from @xla_serving
 #include "runtime/core/batching/batch_scheduler.h"  // from @xla_serving
 #include "xla/tsl/platform/criticality.h"  // from @xla
+#include "xla/tsl/platform/statusor.h"  // from @xla
 
 namespace xla_serving {
 
@@ -77,6 +79,67 @@ absl::string_view MixedPriorityBatchingPolicyToString(
       return kPriorityMergeAttrValue;
   }
   return "unknown_mixed_priority_batching_policy";
+}
+
+absl::StatusOr<SchedulerScope> GetSchedulerScope(
+    BatchOptions::SchedulerScope scheduler_scope) {
+  switch (scheduler_scope) {
+    case BatchOptions::SCHEDULER_SCOPE_UNSPECIFIED:
+    case BatchOptions::LOCAL_TO_PIPELINE:
+      return SchedulerScope::kLocalToPipeline;
+    case BatchOptions::SHARED_GLOBAL:
+      return SchedulerScope::kSharedGlobal;
+    default:
+      return absl::InvalidArgumentError(
+          absl::StrCat("Unsupported scheduler scope: ", scheduler_scope));
+  }
+}
+
+absl::string_view SchedulerScopeToString(SchedulerScope scope) {
+  switch (scope) {
+    case SchedulerScope::kLocalToPipeline:
+      return kLocalToPipelineAttrValue;
+    case SchedulerScope::kSharedGlobal:
+      return kSharedGlobalAttrValue;
+  }
+  return "unknown_scheduler_scope";
+}
+
+absl::StatusOr<QueueSelectionPolicy> GetQueueSelectionPolicy(
+    BatchOptions::QueueSelectionPolicy queue_selection_policy) {
+  switch (queue_selection_policy) {
+    case BatchOptions::QUEUE_SELECTION_POLICY_UNSPECIFIED:
+    case BatchOptions::ROUND_ROBIN:
+      return QueueSelectionPolicy::kRoundRobin;
+    case BatchOptions::PRIORITY_RANKED:
+      return QueueSelectionPolicy::kPriorityRanked;
+    default:
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Unsupported queue selection policy: ", queue_selection_policy));
+  }
+}
+
+absl::string_view QueueSelectionPolicyToString(QueueSelectionPolicy policy) {
+  switch (policy) {
+    case QueueSelectionPolicy::kRoundRobin:
+      return kRoundRobinAttrValue;
+    case QueueSelectionPolicy::kPriorityRanked:
+      return kPriorityRankedAttrValue;
+  }
+  return "unknown_queue_selection_policy";
+}
+
+absl::StatusOr<SchedulerConfig> GetSchedulerConfig(
+    const BatchOptions::SchedulerConfig& config) {
+  TF_ASSIGN_OR_RETURN(SchedulerScope scheduler_scope,
+                      GetSchedulerScope(config.scheduler_scope()));
+  TF_ASSIGN_OR_RETURN(
+      QueueSelectionPolicy queue_selection_policy,
+      GetQueueSelectionPolicy(config.queue_selection_policy()));
+  return SchedulerConfig{
+      .scheduler_scope = scheduler_scope,
+      .queue_selection_policy = queue_selection_policy,
+  };
 }
 
 absl::StatusOr<PriorityBatchingPolicy> GetPriorityBatchingPolicy(

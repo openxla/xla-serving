@@ -140,6 +140,7 @@ cc_library(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/strings:string_view",
         "@xla//xla/tsl/platform:criticality",
+        "@xla//xla/tsl/platform:statusor",
         "@xla_serving//protos:orchestration_cc_proto",
         "@xla_serving//runtime/core/batching:batch_scheduler",
     ],

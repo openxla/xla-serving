@@ -125,10 +125,10 @@ static auto* batch_costs_sampler = tsl::monitoring::Sampler<4>::New(
 static auto* request_counter = tsl::monitoring::Counter<8>::New(
     "/orbax/serving/batching/request_count",
     "Counts input requests by batching configuration: model_name, "
-    "model_version, use_global_scheduler, rank_queues, "
+    "model_version, scheduler_scope, queue_selection_policy, "
     "mixed_priority_batching_policy, enable_priority_queue, "
     "batch_padding_policy and request criticality.",
-    "model_name", "model_version", "use_global_scheduler", "rank_queues",
+    "model_name", "model_version", "scheduler_scope", "queue_selection_policy",
     "mixed_priority_batching_policy", "enable_priority_queue",
     "batch_padding_policy", "criticality");
 
@@ -199,14 +199,16 @@ void RecordBatchCosts(const std::string& model_name, int64_t model_version,
 
 void RecordInputBatchConfig(
     absl::string_view model_name, int64_t model_version,
-    bool use_global_scheduler, bool rank_queues,
+    SchedulerScope scheduler_scope,
+    QueueSelectionPolicy queue_selection_policy,
     MixedPriorityBatchingPolicy mixed_priority_batching_policy,
     bool enable_priority_queue, absl::string_view batch_padding_policy,
     tsl::criticality::Criticality criticality) {
   request_counter
       ->GetCell(std::string(model_name), absl::StrCat(model_version),
-                use_global_scheduler ? "true" : "false",
-                rank_queues ? "true" : "false",
+                std::string(SchedulerScopeToString(scheduler_scope)),
+                std::string(
+                    QueueSelectionPolicyToString(queue_selection_policy)),
                 std::string(MixedPriorityBatchingPolicyToString(
                     mixed_priority_batching_policy)),
                 enable_priority_queue ? "true" : "false",
@@ -437,7 +439,7 @@ absl::Status BatchResourceBase::RegisterInput(
 
   RecordInputBatchConfig(
       context->metadata.model_name, context->metadata.model_version,
-      batcher_->use_global_scheduler(), batcher_->rank_queues(),
+      batcher_->scheduler_scope(), batcher_->queue_selection_policy(),
       batcher_queue_options_.mixed_priority_batching_policy,
       batcher_queue_options_.enable_priority_queue,
       batcher_queue_options_.batch_padding_policy,

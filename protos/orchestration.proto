@@ -362,9 +362,10 @@ message BatchOptions {
   enum QueueSelectionPolicy {
     // If unspecified, ROUND_ROBIN will be used.
     QUEUE_SELECTION_POLICY_UNSPECIFIED = 0;
-    // Scheduler threads picks the next queue in a round-robin manner.
+    // Scheduler threads pick the next queue in a round-robin manner.
     ROUND_ROBIN = 1;
-    // Scheduler threads pick the next queue based on priority.
+    // Scheduler threads pick the next queue based on priority, and by the
+    // earliest task arrival time for queues with the same priority.
     PRIORITY_RANKED = 2;
   }
 

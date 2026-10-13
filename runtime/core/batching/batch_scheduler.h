@@ -54,6 +54,49 @@ enum class MixedPriorityBatchingPolicy {
 absl::StatusOr<MixedPriorityBatchingPolicy> GetMixedPriorityBatchingPolicy(
     absl::string_view attr_value);
 
+// String representations of `SchedulerScope`, used by `SchedulerScopeToString`
+// (e.g., for monitoring metrics).
+inline constexpr absl::string_view kLocalToPipelineAttrValue =
+    "local_to_pipeline";
+inline constexpr absl::string_view kSharedGlobalAttrValue = "shared_global";
+
+// Controls whether a pipeline uses a dedicated scheduler or shares a global
+// scheduler instance.
+enum class SchedulerScope {
+  // Uses a dedicated scheduler and thread pool for the pipeline.
+  kLocalToPipeline,
+  // Shares a global scheduler and thread pool across all pipelines.
+  kSharedGlobal,
+};
+
+// String representations of `QueueSelectionPolicy`, used by
+// `QueueSelectionPolicyToString` (e.g., for monitoring metrics).
+inline constexpr absl::string_view kRoundRobinAttrValue = "round_robin";
+inline constexpr absl::string_view kPriorityRankedAttrValue = "priority_ranked";
+
+// Controls how `SharedBatchScheduler` batch threads select the next queue to
+// process when multiple queues have schedulable batches. Applies to all queue
+// types in `SharedBatchScheduler` (`FifoQueue`, `PriorityAwareQueue`, and
+// legacy `Queue`).
+enum class QueueSelectionPolicy {
+  // Selects the next queue in a round-robin manner.
+  kRoundRobin,
+  // Selects the queue whose next schedulable batch has the highest priority
+  // based on `(priority, earliest_task_start_time)` from `PeekBatchPriority()`.
+  kPriorityRanked,
+};
+
+struct SchedulerConfig {
+  SchedulerScope scheduler_scope = SchedulerScope::kLocalToPipeline;
+  QueueSelectionPolicy queue_selection_policy =
+      QueueSelectionPolicy::kRoundRobin;
+
+  bool operator==(const SchedulerConfig& other) const {
+    return scheduler_scope == other.scheduler_scope &&
+           queue_selection_policy == other.queue_selection_policy;
+  }
+};
+
 inline constexpr absl::string_view kStrictFifoAttrValue = "strict_fifo";
 inline constexpr absl::string_view kPriorityAwareAttrValue = "priority_aware";
 

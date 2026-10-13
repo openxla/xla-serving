@@ -146,14 +146,16 @@ class SharedBatchScheduler
     // (Typically only overridden by test code.)
     Env* env = Env::Default();
 
-    // If true, when multiple queues have available batches to process, they
-    // will be prioritized based on a (priority, arrival_time) key.
-    bool rank_queues = false;
+    // If set to kPriorityRanked, when multiple queues have available batches to
+    // process, they will be prioritized based on a (priority, arrival_time)
+    // key.
+    QueueSelectionPolicy queue_selection_policy =
+        QueueSelectionPolicy::kRoundRobin;
 
-    // If true, Create() will return a global instance of the scheduler. Only
-    // the options provided in the first Create() call will be used to
-    // initialize the global scheduler.
-    bool use_global_scheduler = false;
+    // If set to kSharedGlobal, Create() will return a global instance of the
+    // scheduler. Only the options provided in the first Create() call will be
+    // used to initialize the global scheduler.
+    SchedulerScope scheduler_scope = SchedulerScope::kLocalToPipeline;
   };
   // Ownership is shared between the caller of Create() and any queues created
   // via AddQueue().
@@ -177,9 +179,11 @@ class SharedBatchScheduler
       const QueueOptions& options, ProcessBatchCallback process_batch_callback,
       std::unique_ptr<BatchScheduler<TaskType>>* queue);
 
-  bool use_global_scheduler() const { return options_.use_global_scheduler; }
+  SchedulerScope scheduler_scope() const { return options_.scheduler_scope; }
 
-  bool rank_queues() const { return options_.rank_queues; }
+  QueueSelectionPolicy queue_selection_policy() const {
+    return options_.queue_selection_policy;
+  }
 
  protected:
   explicit SharedBatchScheduler(const Options& options);
@@ -286,7 +290,7 @@ class Queue {
       std::vector<std::unique_ptr<TaskType>>* output_tasks)>;
   // Orderable key representing the priority of a batch. Higher priority
   // batches will be prioritized for execution first (when using
-  // rank_queues=true).
+  // QueueSelectionPolicy::kPriorityRanked).
   // - A smaller key value is higher priority than a larger one.
   // - This is a pair formed from <priority, batch_timestamp>. The exact values
   //   used are an implementation detail of PeekBatchPriority().
@@ -577,7 +581,7 @@ absl::Status SharedBatchScheduler<TaskType>::Create(
         "num_batch_threads must be positive; was ", options.num_batch_threads));
   }
 
-  if (options.use_global_scheduler) {
+  if (options.scheduler_scope == SchedulerScope::kSharedGlobal) {
     static std::shared_ptr<SharedBatchScheduler<TaskType>>* global_scheduler =
         [&]() {
           return new std::shared_ptr<SharedBatchScheduler<TaskType>>(
@@ -779,7 +783,8 @@ void SharedBatchScheduler<TaskType>::GetNextWorkItem_Locked(
 
     bool queue_has_work = false;
 
-    if (options_.rank_queues) {
+    if (options_.queue_selection_policy ==
+        QueueSelectionPolicy::kPriorityRanked) {
       auto key = (*next_queue_to_schedule_)->PeekBatchPriority();
       queue_has_work = key.has_value();
       if (key.has_value() && (!batch_priority_key.has_value() ||
@@ -812,7 +817,9 @@ void SharedBatchScheduler<TaskType>::GetNextWorkItem_Locked(
     }
   }
 
-  if (options_.rank_queues && batch_priority_key.has_value()) {
+  if (options_.queue_selection_policy ==
+          QueueSelectionPolicy::kPriorityRanked &&
+      batch_priority_key.has_value()) {
     batch_to_process = queue_for_batch->ScheduleBatch();
   }
 
@@ -842,7 +849,8 @@ void SharedBatchScheduler<TaskType>::GetLegacyNextWorkItem_Locked(
 
     bool queue_has_work = false;
 
-    if (options_.rank_queues) {
+    if (options_.queue_selection_policy ==
+        QueueSelectionPolicy::kPriorityRanked) {
       auto key = (*next_legacy_queue_to_schedule_)->PeekBatchPriority();
       queue_has_work = key.has_value();
       if (key.has_value() && (!batch_priority_key.has_value() ||
@@ -877,7 +885,9 @@ void SharedBatchScheduler<TaskType>::GetLegacyNextWorkItem_Locked(
     }
   }
 
-  if (options_.rank_queues && batch_priority_key.has_value()) {
+  if (options_.queue_selection_policy ==
+          QueueSelectionPolicy::kPriorityRanked &&
+      batch_priority_key.has_value()) {
     batch_to_process = queue_for_batch->ScheduleBatch();
   }
 
