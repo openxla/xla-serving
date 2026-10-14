@@ -166,6 +166,10 @@ XLA_SERVING_CALLBACK_GRPC_SERVER_COMMON_DEPS = [
     "@xla_serving//runtime/interpreter",
     "@xla_serving//runtime/interpreter:run_options",
     "@xla_serving//runtime/kernel:kernel_io_data_type",
+    # Registers the CompositeProcessor function handler and the built-in
+    # transforms (CPU embedding lookup, pack/unpack, bucket pad) so that models
+    # exported with a `CompositeProcessor` preprocessor can be served.
+    "@xla_serving//runtime/xla_serving_data:interpreter_composite_processor_support",  # buildcleaner: keep
     "@xla_serving//protos/grpc:get_model_metadata_cc_proto",
     "@xla_serving//protos/grpc:model_cc_proto",
     "@xla_serving//protos/grpc:predict_cc_proto",
