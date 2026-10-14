@@ -1,0 +1,26 @@
+# Python dependencies for examples/dlrm_benchmark (OSS checkout).
+#
+# Install the xla_saved_model release wheel first (or one built from the
+# checkout with `uv build --wheel`, which needs bazel on PATH to generate the
+# protos; do NOT `pip install -e .` without bazel — the result has no
+# xla_saved_model.protos package), then:
+#   pip install -r examples/dlrm_benchmark/requirements.txt
+#
+# Pick exactly ONE accelerator extra for JAX, matching the VM:
+#   pip install "jax[cuda12]"   # NVIDIA GPU (A100 / L4 / H100)
+#   pip install "jax[tpu]" -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+#   pip install jax             # CPU only (smoke tests)
+#
+# The *same* JAX install is used by the Python baseline server, so both arms
+# see identical XLA versions.
+#
+# The optional xse-tf-* arms ("CompositeProcessor vs TF") additionally need
+# TensorFlow for the export step only (the XSE server ships its own):
+#   pip install tensorflow
+# It is not listed below so that the default arms stay TF-free.
+absl-py
+flax
+grpcio
+numpy
+protobuf
+psutil

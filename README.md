@@ -112,7 +112,29 @@ latency and protect host container memory. See the
 [AOT User Guide](docs/aot_user_guide.md) and
 [AOT Benchmark](examples/aot_benchmark/README.md) for full details.
 
+## XSE vs. pure-Python JAX serving benchmark
+
+[`examples/dlrm_benchmark`](examples/dlrm_benchmark/README.md) is a
+reproducible, single-node comparison of XSE against pure-Python JAX gRPC
+servers on the same GCP GPU/TPU VM (DLRM-DCNv2 with CPU embedding lookup via
+`CompositeProcessor`, identical weights, wire protocol, batching and CPU
+pinning). It runs six arms: XSE with and without server-side batching, and
+four Python designs — single process, single process with dynamic batching,
+and N processes sharing one `SO_REUSEPORT` port (with and without batching)
+— so XSE is compared against the strongest Python server, not the simplest.
+Optional `xse-tf-*` arms serve the same model in the same XSE binary with a
+production-grade **TensorFlow** preprocessor (fused `SparseSegmentSum` lookup
+and the `ResourceGather`+`Sum` variant, run by TFRT; needs a server built with
+`--define=ENABLE_TF=1` or a `*-with-tf` image), isolating the cost of the
+embedding-lookup implementation: `CompositeProcessor` vs. TF.
+
 ## Docker images for GRPC Server
+
+Besides `:latest`, every prebuilt image repository in this section (CPU, GPU
+and TPU) is also pushed nightly at 04:00 UTC from `main` as `:nightly` and
+`:nightly-YYYYMMDD`
+(see [`.github/workflows/push-nightly-serving-images.yml`](.github/workflows/push-nightly-serving-images.yml));
+use a dated tag when you need a reproducible, recent server.
 
 ### CPU
 
@@ -122,6 +144,7 @@ You can use prebuilt images from Artifact Registry here:
 gcr.io/neptune-serving-engine/cpu-jax-only:latest
 gcr.io/neptune-serving-engine/cpu-jax-with-tf:latest
 ```
+
 In order to build the image at head, please run:
 
 ```
@@ -169,14 +192,17 @@ gcr.io/neptune-serving-engine/tpu-jax-only
 ```
 
 
-To build docker image for GPU:
+To build docker image for TPU:
 
 ```
-bazel run -c opt --config=cuda_v12 \
+bazel run -c opt \
 //runtime/serving/gcp/server:xla_serving_pusher_tpu \
 -- --repository="<Path to Artifact registry>" \
 --tag="latest"
 ```
+
+The TPU image is distroless and does **not** contain `libtpu.so`; see
+[Using Docker images → TPU](#tpu-1) for how to provide it at run time.
 
 ## Starting GRPC Servers
 
@@ -222,6 +248,41 @@ command:
 -e NVIDIA_VISIBLE_DEVICES=<mig_id>  # instead of NVIDIA_VISIBLE_DEVICES=all
 ```
 
+#### TPU
+
+The TPU server loads the TPU PJRT plugin (`libtpu.so`) from the path in the
+`TPU_LIBRARY_PATH` environment variable when it starts, and exits immediately
+(`Check failed: RegisterDynamicPjrtPlugin(kTpuPjrtName, "TPU_LIBRARY_PATH")
+is OK (NOT_FOUND: Environment variable TPU_LIBRARY_PATH is not set ...)`) if
+it is unset. The image does not ship `libtpu.so`, so mount the host's copy —
+e.g. the one installed by `pip install "jax[tpu]"` — into the container and
+point the variable at it. `--privileged` gives the container access to the
+TPU devices (`/dev/accel*` / `/dev/vfio`).
+
+On a VM that was **not** created by the Cloud TPU API (`gcloud compute
+instances create --machine-type ct6e-standard-1t ...`) the instance has no
+`tpu-env` metadata; libtpu then retries the metadata server 30 × 1 s per
+lookup and fails with `Failed to fetch URL after 30 tries (http status:
+404)`. Pass the single-host topology explicitly (`TPU_TOPOLOGY` below;
+values per machine type in
+[the Dataflow TPU docs](https://cloud.google.com/dataflow/docs/tpu/use-tpus)).
+
+```bash
+LIBTPU=$(python3 -c "import libtpu; print(libtpu.get_library_path())")
+# Only on a VM without tpu-env metadata (see above); ct6e-standard-1t shown:
+# TPU_TOPOLOGY="-e TPU_SKIP_MDS_QUERY=1 -e TPU_HOST_BOUNDS=1,1,1 -e TPU_WORKER_HOSTNAMES=localhost -e TPU_WORKER_ID=0 -e TPU_ACCELERATOR_TYPE=v6e-1 -e TPU_CHIPS_PER_HOST_BOUNDS=1,1,1"
+docker run --privileged --net=host --ulimit memlock=-1 \
+--mount type=bind,src=<Exported model>,dst=/tmp/model \
+--mount type=bind,src=${LIBTPU},dst=/usr/lib/libtpu.so,readonly \
+-e TPU_LIBRARY_PATH=/usr/lib/libtpu.so ${TPU_TOPOLOGY:-} \
+gcr.io/neptune-serving-engine/tpu-jax-only:latest \
+--model_path /tmp/model \
+--model_name nnx \
+--orbax_grpc_server_platform tpu \
+--port=8500 \
+--use_insecure_grpc_credentials=true
+```
+
 ### Running locally built server
 
 #### CPU
@@ -241,6 +302,12 @@ bazel run //runtime/serving/gcp/server:xla_serving_main_<gpu|tpu> -- \
   --orbax_grpc_server_platform <cpu|cuda|tpu>  \
   --port 8500 --use_insecure_grpc_credentials=<true|false>
 ```
+
+The TPU server loads `libtpu.so` dynamically and must be started with
+`TPU_LIBRARY_PATH` pointing at it, e.g.
+`export TPU_LIBRARY_PATH=$(python3 -c "import libtpu; print(libtpu.get_library_path())")`
+after `pip install "jax[tpu]"` (see the Docker TPU section above for the
+error you get otherwise).
 
 ### Server Warmup on Startup
 

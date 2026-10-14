@@ -49,6 +49,10 @@ struct OrbaxCallbackGrpcServerOptions {
   int64_t cost_threshold = 10000;
   bool warmup_server = false;
   int thread_pool_num_threads = 0;
+  // Only used when built with ENABLE_TF=1: size of the TFRT work queue
+  // (intra- and inter-op threads) that runs TensorFlow preprocessor /
+  // postprocessor functions.
+  int tfrt_num_threads = 8;
   // CPU only. If true, uses the NanoRt IFRT client instead of the PjRt CPU
   // client.
   bool use_nanort_cpu_client = true;

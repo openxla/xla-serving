@@ -85,6 +85,11 @@ ABSL_FLAG(int, max_send_message_size, -1,  // Unlimited, matches gRPC default
 ABSL_FLAG(int, thread_pool_num_threads, 0,
           "Number of threads for server execution thread pool. If 0, defaults "
           "to 4.");
+ABSL_FLAG(int, tfrt_num_threads, 8,
+          "Only used when built with ENABLE_TF=1: number of threads of the "
+          "TFRT work queue that executes TensorFlow preprocessor / "
+          "postprocessor functions (intra-op and inter-op). If <= 0, "
+          "defaults to 8.");
 ABSL_FLAG(bool, use_nanort_cpu_client, true,
           "CPU only. If true, uses the NanoRt IFRT client instead of the PjRt "
           "CPU client.");
@@ -124,6 +129,7 @@ void RunServer() {
   options.warmup_server = absl::GetFlag(FLAGS_warmup_server);
   options.thread_pool_num_threads =
       absl::GetFlag(FLAGS_thread_pool_num_threads);
+  options.tfrt_num_threads = absl::GetFlag(FLAGS_tfrt_num_threads);
   options.use_nanort_cpu_client = absl::GetFlag(FLAGS_use_nanort_cpu_client);
   options.nanort_share_computation_thread_pool =
       absl::GetFlag(FLAGS_nanort_share_computation_thread_pool);

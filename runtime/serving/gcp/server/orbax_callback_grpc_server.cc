@@ -109,11 +109,19 @@ auto* const request_latency_metric = tsl::monitoring::Sampler<3>::New(
 #if ENABLE_TF == 1
 tensorflow::tfrt_stub::SavedModel::Options GetSavedModelOptions(
     const OrbaxCallbackGrpcServerOptions& server_options) {
-  static tensorflow::tfrt_stub::Runtime* default_runtime =
-      tensorflow::tfrt_stub::Runtime::Create(
-          tensorflow::tfrt_stub::WrapDefaultWorkQueue(
-              tfrt::CreateMultiThreadedWorkQueue(8, 8)))
-          .release();
+  // Process-wide runtime; sized by the first caller's options.
+  static tensorflow::tfrt_stub::Runtime* default_runtime = [&] {
+    int num_threads = server_options.tfrt_num_threads > 0
+                          ? server_options.tfrt_num_threads
+                          : 8;
+    LOG(INFO) << "Creating TFRT work queue with " << num_threads
+              << " threads (--tfrt_num_threads).";
+    return tensorflow::tfrt_stub::Runtime::Create(
+               tensorflow::tfrt_stub::WrapDefaultWorkQueue(
+                   tfrt::CreateMultiThreadedWorkQueue(num_threads,
+                                                      num_threads)))
+        .release();
+  }();
   CHECK(default_runtime);
   tensorflow::tfrt_stub::SavedModel::Options options(default_runtime);
   options.enable_lazy_loading = server_options.enable_lazy_loading;
