@@ -34,6 +34,8 @@ cli = typer.Typer(pretty_exceptions_enable=False)
 cli.command(name='show')(show.show)
 cli.command(name='recompile')(recompile.recompile)
 cli.command(name='update')(update.update)
+cli.command(name='history')(update.history)
+cli.command(name='rollback')(update.rollback)
 
 
 @cli.command()

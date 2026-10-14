@@ -60,21 +60,37 @@ configured for a function:
 xsm-cli show /path/to/model --details serving_default --xla_compile_options
 ```
 
-### 5. Update Pipeline Configurations
+### 5. Update, Inspect History, and Rollback Pipeline Configurations
 
 Update configuration options (such as maximum batch size) in an exported model's
 orchestration pipelines:
 
 ```bash
-# Update maximum batch size in-place (creates .orig and .bak backups)
+# Update maximum batch size in-place (backs up the modified config proto to .orig and .bak)
 xsm-cli update /path/to/model --max_batch_size 32
 
 # Clone and update to a new directory (leaves original model untouched)
 xsm-cli update /path/to/model --max_batch_size 64 --output_dir /path/to/updated_model
+
+# View the model's modification audit log (history.txtpb)
+xsm-cli history /path/to/model
+
+# Undo the most recent in-place update (restores config proto from .bak)
+xsm-cli rollback /path/to/model --to=bak
+
+# Reset configuration to the original exported state (restores config proto from .orig)
+xsm-cli rollback /path/to/model --to=orig
 ```
 
-Updates are performed atomically with backup files (`.orig` and `.bak`) and
-appended to the model's `history.txtpb` modification log.
+In-place updates modify the configuration protobuf atomically and create
+lightweight binary protobuf backups alongside the modified file (e.g.,
+`orchestration.pb.orig` for the initial exported state and
+`orchestration.pb.bak` for the immediately preceding state, rather than copying
+the entire model directory). Only a single previous state (`.bak`) and the
+original state (`.orig`) are maintained, so running the same `rollback` command
+repeatedly when the configuration already matches the backup is a no-op. Each
+export, update, and rollback is also appended as a `HistoryRecord` entry in the
+model's `history.txtpb` textproto audit log.
 
 ### 6. Recompile Models Ahead-Of-Time (AOT)
 

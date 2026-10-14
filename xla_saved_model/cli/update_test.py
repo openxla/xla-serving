@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for XSM / OBM CLI `update` command."""
+"""Tests for XSM / OBM CLI `update`, `history`, and `rollback` commands."""
 
 import os
 from unittest import mock
@@ -308,6 +308,144 @@ class UpdateTest(absltest.TestCase):
 
     # Verify .tmp was cleaned up and does not linger on disk
     self.assertFalse(os.path.exists(tmp_path))
+
+  def test_rollback_to_bak_restores_previous_state_bit_for_bit(self):
+    model_dir = self._create_test_model(initial_batch_size=16)
+    pipelines_path = os.path.join(model_dir, 'orchestration.pb')
+
+    # 1st update: 16 -> 32
+    update.update(model_base_dir=model_dir, max_batch_size=32)
+    with open(pipelines_path, 'rb') as f:
+      expected_bak_bytes = f.read()
+
+    # 2nd update: 32 -> 64
+    update.update(model_base_dir=model_dir, max_batch_size=64)
+
+    # Rollback to .bak (default)
+    update.rollback(model_base_dir=model_dir)
+
+    with open(pipelines_path, 'rb') as f:
+      restored_bytes = f.read()
+    self.assertEqual(restored_bytes, expected_bak_bytes)
+
+    pipelines = orchestration_pb2.Pipelines()
+    pipelines.ParseFromString(restored_bytes)
+    self.assertEqual(self._get_batch_size(pipelines), 32)
+
+    # Verify ROLLBACK entry in history.txtpb
+    history_path = os.path.join(model_dir, constants.HISTORY_FILENAME)
+    history_proto = history_pb2.ModelHistory()
+    with open(history_path, 'r') as f:
+      text_format.Parse(f.read(), history_proto)
+    self.assertLen(history_proto.records, 4)
+    self.assertEqual(history_proto.records[3].action, 'ROLLBACK')
+    change = history_proto.records[3].changes['serving_default.max_batch_size']
+    self.assertEqual(change.previous_value, '64')
+    self.assertEqual(change.new_value, '32')
+
+    # Calling rollback a second time is a no-op and does not append to history
+    update.rollback(model_base_dir=model_dir)
+    history_proto_after = history_pb2.ModelHistory()
+    with open(history_path, 'r') as f:
+      text_format.Parse(f.read(), history_proto_after)
+    self.assertLen(history_proto_after.records, 4)
+
+  def test_rollback_to_orig_restores_initial_export_state(self):
+    model_dir = self._create_test_model(initial_batch_size=16)
+    pipelines_path = os.path.join(model_dir, 'orchestration.pb')
+    with open(pipelines_path, 'rb') as f:
+      pristine_bytes = f.read()
+
+    # Multiple updates: 16 -> 32 -> 64
+    update.update(model_base_dir=model_dir, max_batch_size=32)
+    update.update(model_base_dir=model_dir, max_batch_size=64)
+
+    # Rollback to .orig
+    update.rollback(model_base_dir=model_dir, to='orig')
+
+    with open(pipelines_path, 'rb') as f:
+      restored_bytes = f.read()
+    self.assertEqual(restored_bytes, pristine_bytes)
+
+    pipelines = orchestration_pb2.Pipelines()
+    pipelines.ParseFromString(restored_bytes)
+    self.assertEqual(self._get_batch_size(pipelines), 16)
+
+    # Verify ROLLBACK entry in history.txtpb
+    history_path = os.path.join(model_dir, constants.HISTORY_FILENAME)
+    history_proto = history_pb2.ModelHistory()
+    with open(history_path, 'r') as f:
+      text_format.Parse(f.read(), history_proto)
+    self.assertLen(history_proto.records, 4)
+    self.assertEqual(history_proto.records[3].action, 'ROLLBACK')
+    change = history_proto.records[3].changes['serving_default.max_batch_size']
+    self.assertEqual(change.previous_value, '64')
+    self.assertEqual(change.new_value, '16')
+
+  def test_rollback_inlined_pipelines(self):
+    model_dir = self._create_test_model(
+        inlined_pipelines=True, initial_batch_size=16
+    )
+    update.update(model_base_dir=model_dir, max_batch_size=32)
+    update.rollback(model_base_dir=model_dir, to='orig')
+
+    manifest = manifest_pb2.Manifest()
+    manifest_path = os.path.join(model_dir, core_constants.MANIFEST_FILE_PATH)
+    with open(manifest_path, 'rb') as f:
+      manifest.ParseFromString(f.read())
+
+    pipelines = orchestration_pb2.Pipelines()
+    pipelines.ParseFromString(
+        manifest.supplemental_info['orchestration'].inlined_bytes
+    )
+    self.assertEqual(self._get_batch_size(pipelines), 16)
+
+  def test_rollback_fails_gracefully_when_backup_missing_or_invalid(self):
+    model_dir = self._create_test_model(initial_batch_size=16)
+
+    # No backups exist before first in-place update
+    with self.assertRaises(typer.Exit):
+      update.rollback(model_base_dir=model_dir, to='bak')
+
+    with self.assertRaises(typer.Exit):
+      update.rollback(model_base_dir=model_dir, to='orig')
+
+    # Invalid --to target
+    with self.assertRaises(typer.Exit):
+      update.rollback(model_base_dir=model_dir, to='invalid_target')
+
+  def test_history_command_and_cli_runner(self):
+    # Missing history.txtpb raises typer.Exit
+    model_no_history = self._create_test_model(
+        with_history=False, initial_batch_size=16
+    )
+    with self.assertRaises(typer.Exit):
+      update.history(model_base_dir=model_no_history)
+
+    # Full CLI workflow: update -> rollback -> history
+    model_dir = self._create_test_model(initial_batch_size=16)
+    app = typer.Typer()
+    app.command(name='update')(update.update)
+    app.command(name='history')(update.history)
+    app.command(name='rollback')(update.rollback)
+    runner = CliRunner()
+
+    res_update = runner.invoke(
+        app, ['update', model_dir, '--max_batch_size', '32']
+    )
+    self.assertEqual(res_update.exit_code, 0)
+
+    res_rollback = runner.invoke(app, ['rollback', model_dir, '--to', 'orig'])
+    self.assertEqual(res_rollback.exit_code, 0)
+    self.assertIn('Successfully rolled back model', res_rollback.output)
+
+    res_history = runner.invoke(app, ['history', model_dir])
+    self.assertEqual(res_history.exit_code, 0)
+    self.assertIn('EXPORT', res_history.output)
+    self.assertIn('UPDATE', res_history.output)
+    self.assertIn('ROLLBACK', res_history.output)
+    self.assertIn('16 -> 32', res_history.output)
+    self.assertIn('32 -> 16', res_history.output)
 
 
 if __name__ == '__main__':
