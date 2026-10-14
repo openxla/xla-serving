@@ -28,6 +28,7 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "protos/bundle_orchestration.pb.h"  // from @xla_serving
 #include "runtime/core/common_util.h"  // from @xla_serving
+#include "runtime/core/constants.h"  // from @xla_serving
 #include "runtime/core/flat_signature.h"  // from @xla_serving
 #include "runtime/core/value.h"  // from @xla_serving
 #include "runtime/interpreter/interpreter.h"  // from @xla_serving
@@ -48,7 +49,7 @@ absl::StatusOr<xla_serving_bundle_orchestration::BundlePipelines>
 ParseBundleOrchestration(absl::string_view bundle_path) {
   xla_serving_bundle_orchestration::BundlePipelines proto;
   std::string pb_path =
-      tsl::io::JoinPath(bundle_path, "bundle_orchestration.pb");
+      tsl::io::JoinPath(bundle_path, kBundleOrchestrationFileName);
   TF_RETURN_IF_ERROR(
       tsl::ReadBinaryProto(tsl::Env::Default(), pb_path, &proto));
   return proto;
@@ -57,12 +58,7 @@ ParseBundleOrchestration(absl::string_view bundle_path) {
 }  // namespace
 
 bool BundleInterpreter::IsBundle(absl::string_view model_path) {
-  if (!IsOrbaxModelDirectory(model_path).ok()) {
-    return false;
-  }
-  std::string pb_path =
-      tsl::io::JoinPath(model_path, "bundle_orchestration.pb");
-  return tsl::Env::Default()->FileExists(pb_path).ok();
+  return xla_serving::IsBundle(model_path);
 }
 
 BundleInterpreter::BundleInterpreter(

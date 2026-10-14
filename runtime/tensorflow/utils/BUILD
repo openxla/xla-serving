@@ -19,6 +19,7 @@ cc_library(
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",
         "@xla_serving//protos:manifest_cc_proto",
+        "@xla_serving//runtime/core:common_util",
         "@xla_serving//runtime/core:constants",
         "@xla_serving//runtime/interpreter:manifest_utils",
     ],

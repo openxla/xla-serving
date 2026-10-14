@@ -31,7 +31,6 @@ cc_library(
         "@abseil-cpp//absl/strings:string_view",
         "@tsl//tsl/platform:path",
         "@xla//xla/tsl/platform:env",
-        "@xla//xla/tsl/platform:errors",
     ],
 )
 

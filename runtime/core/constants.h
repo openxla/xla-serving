@@ -40,6 +40,9 @@ inline constexpr char kModelManifestVersion[] = "0.0.1";
 inline constexpr char kModelManifestMimeType[] =
     "application/protobuf; type=orbax_model_manifest.Manifest";
 
+// Bundle orchestration proto file name.
+inline constexpr char kBundleOrchestrationFileName[] =
+    "bundle_orchestration.pb";
 // The supplemental_info key for Orbax orchestration pipeline.
 inline constexpr char kOrchestrationSupplementalName[] = "orchestration";
 // Orbax checkpoint mime type expression.

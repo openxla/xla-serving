@@ -17,9 +17,13 @@
 
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
+
 namespace xla_serving {
 
 absl::Status IsOrbaxModelDirectory(absl::string_view path);
+
+// Checks if the given path points to a bundle.
+bool IsBundle(absl::string_view model_path);
 
 }  // namespace xla_serving
 

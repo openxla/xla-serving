@@ -21,6 +21,7 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "protos/manifest.pb.h"  // from @xla_serving
+#include "runtime/core/common_util.h"  // from @xla_serving
 #include "runtime/core/constants.h"  // from @xla_serving
 #include "runtime/interpreter/manifest_utils.h"  // from @xla_serving
 #include "xla/tsl/platform/errors.h"  // from @xla
@@ -46,6 +47,9 @@ GetTfSavedModelSupplement(const xla_saved_model_manifest::Manifest& manifest) {
 }  // namespace
 
 absl::StatusOr<bool> HasTfSavedModelSupplement(absl::string_view model_path) {
+  if (IsBundle(model_path)) {
+    return false;
+  }
   TF_ASSIGN_OR_RETURN(xla_saved_model_manifest::Manifest manifest,
                       GetManifest(model_path));
   const auto& dict = manifest.supplemental_info();

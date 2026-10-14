@@ -251,16 +251,21 @@ absl::Status TfSavedModelFunctionRunnerOp::RunInternal(
     // the flattening and provide the list `inputs_values`.
     const Value& input_value = inputs_values[i];
     const std::string& input_name = input_names_[i];
+    // TODO: Clean up the data conversion flags and convert
+    // whenever needed.
     if (pre_data_conversion_) {
-      if (!input_value.IsType<HostBuffer>()) {
-        return absl::InvalidArgumentError(absl::StrFormat(
-            "Input '%s' (at index %d) must be HostBuffer because "
-            "pre_data_conversion is true.",
-            input_name, i));
+      if (input_value.IsType<tensorflow::Tensor>()) {
+        named_inputs[input_name] = input_value.Get<tensorflow::Tensor>();
+      } else if (input_value.IsType<HostBuffer>()) {
+        TF_ASSIGN_OR_RETURN(tensorflow::Tensor tensor,
+                            ToTFTensor(input_value.Get<HostBuffer>()));
+        named_inputs[input_name] = std::move(tensor);
+      } else {
+        return absl::InvalidArgumentError(
+            absl::StrFormat("Input '%s' (at index %d) must be HostBuffer or "
+                            "tensorflow::Tensor.",
+                            input_name, i));
       }
-      TF_ASSIGN_OR_RETURN(tensorflow::Tensor tensor,
-                          ToTFTensor(input_value.Get<HostBuffer>()));
-      named_inputs[input_name] = std::move(tensor);
     } else {
       if (!input_value.IsType<tensorflow::Tensor>()) {
         return absl::InvalidArgumentError(absl::StrFormat(

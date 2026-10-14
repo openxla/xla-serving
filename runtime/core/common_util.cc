@@ -20,7 +20,6 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "runtime/core/constants.h"  // from @xla_serving
 #include "xla/tsl/platform/env.h"  // from @xla
-#include "xla/tsl/platform/errors.h"  // from @xla
 #include "tsl/platform/path.h"  // from @tsl
 
 namespace xla_serving {
@@ -28,6 +27,15 @@ namespace xla_serving {
 absl::Status IsOrbaxModelDirectory(absl::string_view path) {
   tsl::Env* env = tsl::Env::Default();
   return env->FileExists(tsl::io::JoinPath(path, kModelVersionTxt));
+}
+
+bool IsBundle(absl::string_view model_path) {
+  if (!IsOrbaxModelDirectory(model_path).ok()) {
+    return false;
+  }
+  std::string pb_path =
+      tsl::io::JoinPath(model_path, kBundleOrchestrationFileName);
+  return tsl::Env::Default()->FileExists(pb_path).ok();
 }
 
 }  // namespace xla_serving
