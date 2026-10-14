@@ -65,3 +65,58 @@ py_test(
         "@xla_serving_pypi//numpy",
     ],
 )
+
+py_library(
+    name = "reduction_ops",
+    srcs = ["reduction_ops.py"],
+    deps = [
+        "@xla_serving//data/kernels:numerical_transforms_module",
+        "@xla_serving_pypi//numpy",
+    ],
+)
+
+py_library(
+    name = "scan_ops",
+    srcs = ["scan_ops.py"],
+    deps = [
+        "@xla_serving//data/kernels:numerical_transforms_module",
+        "@xla_serving//data/processor/python:composite_processor_pybind",
+        "@xla_serving_pypi//numpy",
+    ],
+)
+
+py_library(
+    name = "math",
+    srcs = ["math.py"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":reduction_ops",
+        ":scan_ops",
+        "@xla_serving//data/kernels:numerical_transforms_module",
+    ],
+)
+
+py_test(
+    name = "math_test",
+    srcs = ["math_test.py"],
+    deps = [
+        ":bitwise",
+        ":math",
+        "@absl_py//absl/testing:parameterized",
+        "@xla_serving//data/kernels/math:reduction_transform_config_py_pb2",
+        "@xla_serving//data/processor/proto:transform_config_py_pb2",
+        "@xla_serving//data/processor/python:composite_processor_pybind",
+        "@xla_serving//data/processor/python:transform",
+        "@xla_serving_pypi//jax",
+        "@xla_serving_pypi//ml_dtypes",
+        "@xla_serving_pypi//numpy",
+    ],
+)
+
+py_library(
+    name = "bitwise",
+    srcs = ["bitwise.py"],
+    deps = [
+        "@xla_serving//data/kernels:numerical_transforms_module",
+    ],
+)

@@ -53,6 +53,7 @@ cc_shared_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        "//data/kernels:numerical_transforms",
         "//data/kernels/cpu_embedding:cpu_embedding_cc_proto",
         "//data/kernels/cpu_embedding:cpu_embedding_lookup_transform",
         "//data/kernels/cpu_embedding:cpu_embedding_resource",
@@ -109,9 +110,15 @@ genrule(
         "__init__.py",
         ":xla_serving_data_core",
         "@pybind11_abseil//pybind11_abseil:status.so",
+        "//data/ops:bitwise.py",
         "//data/ops:bucket_pad.py",
         "//data/ops:cpu_embedding.py",
+        "//data/ops:math.py",
         "//data/ops:packing.py",
+        "//data/ops:reduction_ops.py",
+        "//data/ops:scan_ops.py",
+        "//data/kernels:numerical_transforms_module.py",
+        "//data/kernels:numerical_transforms_pybind.so",
         "//data/kernels/bucket_pad:bucket_pad_transform_pybind.so",
         "//data/kernels/bucket_pad:bucket_pad_transform_py_pb2",
         "//data/kernels/cpu_embedding:cpu_embedding_module.py",
@@ -141,10 +148,16 @@ genrule(
         "xla_serving_data/cpu_embedding/python/__init__.py",
         "xla_serving_data/cpu_embedding/python/embedding_utils.py",
         "xla_serving_data/ops/__init__.py",
+        "xla_serving_data/ops/bitwise.py",
         "xla_serving_data/ops/bucket_pad.py",
         "xla_serving_data/ops/cpu_embedding.py",
+        "xla_serving_data/ops/math.py",
         "xla_serving_data/ops/packing.py",
+        "xla_serving_data/ops/reduction_ops.py",
+        "xla_serving_data/ops/scan_ops.py",
         "xla_serving_data/kernels/__init__.py",
+        "xla_serving_data/kernels/numerical_transforms_module.py",
+        "xla_serving_data/kernels/numerical_transforms_pybind.so",
         "xla_serving_data/kernels/bucket_pad/__init__.py",
         "xla_serving_data/kernels/bucket_pad/bucket_pad_transform_pybind.so",
         "xla_serving_data/kernels/bucket_pad/bucket_pad_transform_pb2.py",
@@ -205,12 +218,23 @@ genrule(
   touch $(@D)/xla_serving_data/pybind11_abseil/__init__.py
 
   cp $(location :xla_serving_data_core) $(@D)/xla_serving_data/libxla_serving_data_core.so
+  cp $(location //data/ops:bitwise.py) $(@D)/xla_serving_data/ops/bitwise.py
+  sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/ops/bitwise.py
   cp $(location //data/ops:bucket_pad.py) $(@D)/xla_serving_data/ops/bucket_pad.py
   sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/ops/bucket_pad.py
   cp $(location //data/ops:cpu_embedding.py) $(@D)/xla_serving_data/ops/cpu_embedding.py
   sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/ops/cpu_embedding.py
+  cp $(location //data/ops:math.py) $(@D)/xla_serving_data/ops/math.py
+  sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/ops/math.py
   cp $(location //data/ops:packing.py) $(@D)/xla_serving_data/ops/packing.py
   sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/ops/packing.py
+  cp $(location //data/ops:reduction_ops.py) $(@D)/xla_serving_data/ops/reduction_ops.py
+  sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/ops/reduction_ops.py
+  cp $(location //data/ops:scan_ops.py) $(@D)/xla_serving_data/ops/scan_ops.py
+  sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/ops/scan_ops.py
+  cp $(location //data/kernels:numerical_transforms_module.py) $(@D)/xla_serving_data/kernels/numerical_transforms_module.py
+  sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/kernels/numerical_transforms_module.py
+  cp $(location //data/kernels:numerical_transforms_pybind.so) $(@D)/xla_serving_data/kernels/numerical_transforms_pybind.so
   cp $(location //data/kernels/bucket_pad:bucket_pad_transform_pybind.so) $(@D)/xla_serving_data/kernels/bucket_pad/bucket_pad_transform_pybind.so
   for f in $(locations //data/kernels/bucket_pad:bucket_pad_transform_py_pb2); do
     if [[ $$f == *bucket_pad_transform_pb2.py ]]; then
@@ -295,10 +319,15 @@ py_library(
         "xla_serving_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_pb2.py",
         "xla_serving_data/kernels/cpu_embedding/pack_host_buffer_vector_module.py",
         "xla_serving_data/kernels/cpu_embedding/unpack_host_buffer_vector_module.py",
+        "xla_serving_data/kernels/numerical_transforms_module.py",
         "xla_serving_data/ops/__init__.py",
+        "xla_serving_data/ops/bitwise.py",
         "xla_serving_data/ops/bucket_pad.py",
         "xla_serving_data/ops/cpu_embedding.py",
+        "xla_serving_data/ops/math.py",
         "xla_serving_data/ops/packing.py",
+        "xla_serving_data/ops/reduction_ops.py",
+        "xla_serving_data/ops/scan_ops.py",
         "xla_serving_data/processor/__init__.py",
         "xla_serving_data/processor/cc/__init__.py",
         "xla_serving_data/processor/cc/utils/__init__.py",
@@ -322,6 +351,7 @@ py_library(
         "xla_serving_data/kernels/cpu_embedding/dense_cpu_embedding_lookup_transform_pybind.so",
         "xla_serving_data/kernels/cpu_embedding/pack_host_buffer_vector_transform_pybind.so",
         "xla_serving_data/kernels/cpu_embedding/unpack_host_buffer_vector_transform_pybind.so",
+        "xla_serving_data/kernels/numerical_transforms_pybind.so",
         "xla_serving_data/libxla_serving_data_core.so",
         "xla_serving_data/processor/proto/transform_config_pb2.pyi",
         "xla_serving_data/processor/python/composite_processor_pybind.so",

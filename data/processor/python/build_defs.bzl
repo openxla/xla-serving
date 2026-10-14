@@ -72,3 +72,27 @@ def transform_pybind_library(name, srcs = [], hdrs = [], deps = [], use_pytype =
             
             **kwargs
         )
+
+    if generate_wrappers:
+        module_name = name.removesuffix("_pybind") + "_module"
+        py_file = module_name + ".py"
+        native.genrule(
+            name = name + "_gen_module_py",
+            srcs = all_inputs,
+            outs = [py_file],
+            tools = ["@xla_serving//data/processor/python:generate_pybind"],
+            cmd = "$(location @xla_serving//data/processor/python:generate_pybind) $(location " + py_file + ") " + name + " $(SRCS)",
+            testonly = kwargs.get("testonly", False),
+        )
+
+        py_library(
+            name = module_name,
+            srcs = [py_file],
+            deps = [
+                ":" + name,
+                "@xla_serving//data/processor/python:composite_processor_pybind",
+                "@xla_serving//data/processor/python:transform",
+            ],
+            testonly = kwargs.get("testonly", False),
+            visibility = kwargs.get("visibility", None),
+        )

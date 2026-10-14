@@ -1,6 +1,7 @@
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("@xla_serving//data/processor/python:build_defs.bzl", "transform_pybind_library")
 
 package(default_visibility = ["@xla_serving//:__subpackages__"])
 
@@ -149,6 +150,23 @@ cc_library(
         "@xla_serving//runtime/core:host_buffer",
     ],
     alwayslink = 1,
+)
+
+transform_pybind_library(
+    name = "numerical_transforms_pybind",
+    srcs = [":numerical_transforms_srcs"],
+    hdrs = [
+        "numerical_transforms.h",
+        "@xla_serving//data/kernels/math:reduction_ops.h",
+        "@xla_serving//data/kernels/math:reduction_ops_common.h",
+        "@xla_serving//data/kernels/math:scan_ops.h",
+    ],
+    dynamic_deps = ["@xla_serving//data:xla_serving_data_core"],
+    generate_wrappers = True,
+    linkopts = ["-Wl,-rpath,$$ORIGIN/../.."],
+    deps = [
+        ":numerical_transforms",
+    ],
 )
 
 cc_test(

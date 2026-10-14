@@ -65,6 +65,7 @@ cc_library(
     ],
     deps = [
         ":composite_processor_function_handler",
+        "@xla_serving//data/kernels:numerical_transforms",
         "@xla_serving//data/kernels/bucket_pad:bucket_pad_transform",
         "@xla_serving//data/kernels/cpu_embedding:cpu_embedding_lookup_transform",
         "@xla_serving//data/kernels/cpu_embedding:pack_host_buffer_vector_transform",

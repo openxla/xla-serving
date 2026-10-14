@@ -211,6 +211,112 @@ def parse_signature(params_str):
   return ', '.join(mapped_params)
 
 
+def generate_module_py(output_file, pybind_module_name, registrations, all_code):
+  """Generates the module python file with wrapper classes and ops."""
+  is_jd_function = False
+
+  with open(output_file, 'w') as out:
+    def write(s):
+      out.write(s + '\n')
+
+    write('# Auto-generated wrapper module')
+    write('from typing import Any')
+    write(f'from . import {pybind_module_name}')
+    if is_jd_function:
+      pass
+    else:
+      write(
+          'from data.processor.python import'
+          ' transform'
+      )
+    write('')
+
+    ops_to_generate = []
+    seen_module_py_names = set()
+
+    for type_name, py_name in registrations.items():
+      if py_name in seen_module_py_names:
+        continue
+      seen_module_py_names.add(py_name)
+
+      short_cls = type_name.split('::')[-1]
+      cls_block = re.search(
+          rf'class\s+{short_cls}\s*[:{{](.*?)}};', all_code, re.DOTALL
+      )
+      if cls_block:
+        target_code = cls_block.group(1)
+      # Since we don't have the class block for transforms defined with op
+      # macros, we need to assign the target code based on the macro used.
+      elif re.search(
+          rf'(?:ND|JD)_DECLARE_BINARY_OP\s*\(\s*{short_cls}',
+          all_code,
+      ):
+        target_code = (
+            'Create() operator()(::jsv::HostBuffer a, ::jsv::HostBuffer b)'
+        )
+      elif re.search(
+          rf'(?:ND|JD)_DECLARE_UNARY_OP\s*\(\s*{short_cls}',
+          all_code,
+      ):
+        target_code = 'Create() operator()(::jsv::HostBuffer a)'
+      else:
+        target_code = all_code
+
+      # We just output the wrapper class
+      write(f'class {py_name}(transform.ExportableTransform):')
+      write(f'  """Python wrapper for C++ {py_name}."""')
+      write('  def __init__(self, *args, **kwargs):')
+      write('    self._args = args')
+      write('    self._kwargs = kwargs')
+      if not is_jd_function:
+        write(
+            f'    self._transform = {pybind_module_name}.{py_name}(*args,'
+            ' **kwargs)'
+        )
+      write('  def initialize(self, input_signature: Any) -> None:')
+      write(f'    self._transform = {pybind_module_name}.{py_name}(*self._args, **self._kwargs)')
+      write('')
+
+      # Extract op name, e.g. AddTransform -> add, MatMulTransform -> matmul
+      if py_name.endswith('Transform'):
+        op_name = py_name[:-9].lower()
+      else:
+        op_name = py_name.lower()
+
+      # Find signature to make nice wrappers
+      exec_params_with_types = '*args, **kwargs'
+      exec_params_pass = '*args, **kwargs'
+      op_match = re.search(
+          r'([a-zA-Z0-9_:<>\s]+)\s+operator\s*\(\)\s*\(((?:[^()]+|\([^()]*\))*)\)',
+          target_code,
+      )
+      if op_match:
+        pass
+        cpp_params = split_cpp_params(op_match.group(2))
+        arg_names = []
+        for i, p in enumerate(cpp_params):
+          p = p.strip()
+          parts = p.split()
+          if not parts: continue
+          last_token = parts[-1].replace('&', '').replace('*', '')
+          param_name = last_token if last_token and not last_token in ('int', 'float', 'bool', 'void') else f'arg{i}'
+          arg_names.append(param_name)
+        if arg_names:
+          exec_params_with_types = ', '.join(f'{n}: Any' for n in arg_names)
+          exec_params_pass = ', '.join(arg_names)
+
+      ops_to_generate.append((op_name, py_name, exec_params_with_types, exec_params_pass))
+
+    for op_name, py_name, exec_params_with_types, exec_params_pass in ops_to_generate:
+      write(f'def {op_name}({exec_params_with_types}) -> Any:')
+      write(f'  """Tracing wrapper for {op_name}."""')
+      if is_jd_function:
+        pass
+      write(f'  t = {py_name}()')
+      write(f'  return t({exec_params_pass})')
+      write('')
+
+
 def generate_pyi(output_file, registrations, all_code):
   """Generates a pyi file for the given Transform registrations."""
   with open(output_file, 'w') as out:
@@ -383,6 +489,9 @@ def main():
 
   if output_file.endswith('.pyi'):
     generate_pyi(output_file, registrations, all_code)
+    return
+  elif output_file.endswith('_module.py'):
+    generate_module_py(output_file, module_name, registrations, all_code)
     return
 
   with open(output_file, 'w') as out:
