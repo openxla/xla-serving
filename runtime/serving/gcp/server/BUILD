@@ -120,13 +120,53 @@ tar(
     tags = ["manual"],
 )
 
+# libtpu (the Cloud TPU PJRT plugin) as its own layer so that the image is
+# self-contained: no bind mount or `-e TPU_LIBRARY_PATH` needed at `docker run`
+# time. The pinned wheel lives in MODULE.bazel (`libtpu_wheel`). It is listed
+# first in `tars` below so that the large, rarely changing libtpu layer stays
+# cached across nightly pushes and only the binary layer is re-uploaded.
+tar(
+    name = "libtpu_layer",
+    srcs = [
+        "@libtpu_wheel//:libtpu/LICENSE",
+        "@libtpu_wheel//:libtpu/THIRD_PARTY_NOTICES.txt",
+        "@libtpu_wheel//:libtpu/libtpu.so",
+    ],
+    mtree = [
+        "usr uid=0 gid=0 mode=0755 type=dir",
+        "usr/lib uid=0 gid=0 mode=0755 type=dir",
+        "usr/lib/libtpu.so uid=0 gid=0 mode=0644 time=0 type=file content=$(location @libtpu_wheel//:libtpu/libtpu.so)",
+        "usr/share uid=0 gid=0 mode=0755 type=dir",
+        "usr/share/doc uid=0 gid=0 mode=0755 type=dir",
+        "usr/share/doc/libtpu uid=0 gid=0 mode=0755 type=dir",
+        "usr/share/doc/libtpu/LICENSE uid=0 gid=0 mode=0644 time=0 type=file content=$(location @libtpu_wheel//:libtpu/LICENSE)",
+        "usr/share/doc/libtpu/THIRD_PARTY_NOTICES.txt uid=0 gid=0 mode=0644 time=0 type=file content=$(location @libtpu_wheel//:libtpu/THIRD_PARTY_NOTICES.txt)",
+    ],
+    tags = ["manual"],
+)
+
 # Define the TPU Image
 oci_image(
     name = "xla_serving_image_tpu",
     base = "@distroless_cc",
     entrypoint = ["/runtime/serving/gcp/server/xla_serving_main_tpu"],
+    env = {
+        # Read by the server at startup to locate the TPU PJRT plugin (same
+        # convention as JAX; see ifrt_client_creator_tpu.cc). Override with
+        # `-e TPU_LIBRARY_PATH=...` or `--tpu_library_path=...` to use a
+        # different libtpu build.
+        "TPU_LIBRARY_PATH": "/usr/lib/libtpu.so",
+    },
+    labels = {
+        "org.opencontainers.image.title": "XLA Serving Engine (TPU)",
+        "org.opencontainers.image.description": "XLA Serving gRPC server for Cloud TPU with a bundled libtpu PJRT plugin at /usr/lib/libtpu.so.",
+        "org.opencontainers.image.source": "https://github.com/AI-Hypercomputer/xla-serving",
+    },
     tags = ["manual"],
-    tars = [":xla_serving_tpu"],
+    tars = [
+        ":libtpu_layer",
+        ":xla_serving_tpu",
+    ],
 )
 
 # Define the TPU Push destination
@@ -242,17 +282,40 @@ cc_library(
 )
 
 cc_library(
+    name = "tpu_env_init",
+    srcs = ["tpu_env_init.cc"],
+    hdrs = ["tpu_env_init.h"],
+    deps = [
+        "@abseil-cpp//absl/cleanup",
+        "@abseil-cpp//absl/functional:function_ref",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
+        "@tsl//tsl/platform:path",
+        "@xla//xla/tsl/platform:env",
+    ],
+)
+
+cc_library(
     name = "ifrt_client_creator_tpu",
     srcs = ["ifrt_client_creator_tpu.cc"],
     tags = ["manual"],
     deps = [
         ":ifrt_client_creator_hdr",
+        ":tpu_env_init",
+        "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
-        "@xla//xla/pjrt/plugin/xla_tpu:xla_tpu_pjrt_client",
+        "@xla//xla/pjrt:pjrt_api",
+        "@xla//xla/pjrt/c_api_client:pjrt_c_api_client",
+        "@xla//xla/pjrt/plugin:plugin_names",
         "@xla//xla/python/ifrt",
         "@xla//xla/python/pjrt_ifrt",
+        "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",
     ],
     alwayslink = True,

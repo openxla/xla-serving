@@ -65,6 +65,34 @@ cc_library(
     urls = ["https://sourceforge.net/projects/half/files/half/2.2.1/half-2.2.1.zip"],
 )
 
+# libtpu (the Cloud TPU PJRT plugin) bundled into the OSS TPU serving image, see
+# `libtpu_layer` in runtime/serving/gcp/server/BUILD.
+#
+# Pinned to the libtpu release that `pip install "jax[tpu]"` resolves to for the
+# JAX release closest to the XLA pin in third_party/xla/xla.MODULE.bazel
+# (jax 0.11.2 -> libtpu 0.0.48). PJRT only requires the plugin's minor API
+# version to be within the framework's forward-compatibility window, so bumping
+# this is low risk; bump it together with the XLA pin when convenient.
+#
+# libtpu wheels are tagged per CPython version, but libtpu.so itself does not
+# depend on Python, so any tag works. The wheel is a plain zip archive.
+http_archive(
+    name = "libtpu_wheel",
+    build_file_content = """
+exports_files(
+    [
+        "libtpu/libtpu.so",
+        "libtpu/LICENSE",
+        "libtpu/THIRD_PARTY_NOTICES.txt",
+    ],
+    visibility = ["//visibility:public"],
+)
+""",
+    sha256 = "79a450120c87d72e2e67aa549a75434818af38f666c1d224c228fff9f8a93805",
+    type = "zip",
+    urls = ["https://files.pythonhosted.org/packages/fa/21/b021938494d3c085d7bbac2379b76e3d6b3ecda3d18aabc1df4ffbb85f70/libtpu-0.0.48-cp312-cp312-manylinux_2_31_x86_64.whl"],
+)
+
 # To calculate integrity:
 # wget -O temp_module_archive.tar.gz <archive URL>
 # HASH=$(openssl dgst -sha256 -binary temp_module_archive.tar.gz | openssl base64 -A)

@@ -168,11 +168,18 @@ Prebuilt image for TPU
 gcr.io/neptune-serving-engine/tpu-jax-only
 ```
 
+The TPU image is self-contained: it bundles the Cloud TPU runtime (`libtpu.so`,
+the PJRT plugin) at `/usr/lib/libtpu.so` and sets `TPU_LIBRARY_PATH` to point at
+it, so no extra mounts or environment variables are needed to run it on a TPU
+VM. The bundled `libtpu` version is pinned in [MODULE.bazel](MODULE.bazel)
+(`libtpu_wheel`). The `:nightly` image is exercised every night on real TPU
+hardware by the
+[Nightly Serving Test (TPU)](.github/workflows/nightly-test-tpu.yml) workflow.
 
-To build docker image for GPU:
+To build docker image for TPU:
 
 ```
-bazel run -c opt --config=cuda_v12 \
+bazel run -c opt \
 //runtime/serving/gcp/server:xla_serving_pusher_tpu \
 -- --repository="<Path to Artifact registry>" \
 --tag="latest"
@@ -222,6 +229,53 @@ command:
 -e NVIDIA_VISIBLE_DEVICES=<mig_id>  # instead of NVIDIA_VISIBLE_DEVICES=all
 ```
 
+#### TPU
+
+The TPU image bundles `libtpu.so` and sets `TPU_LIBRARY_PATH`, so on a TPU VM
+the only thing you need to provide is the model and access to the TPU devices:
+
+```
+docker run --net=host --ulimit memlock=-1 --privileged \
+--mount type=bind,src=<Exported model>,dst=/tmp/model \
+gcr.io/neptune-serving-engine/tpu-jax-only:latest \
+--model_path /tmp/model \
+--model_name nnx \
+--orbax_grpc_server_platform tpu \
+--port=8500 \
+--use_insecure_grpc_credentials=true
+```
+
+Instead of `--privileged` you can pass just the TPU device nodes:
+
+*   TPU VM images (Cloud TPU API, GKE): `--device /dev/accel0 [--device /dev/accel1 ...]`
+*   Stock Linux images where the chips are bound to `vfio-pci`:
+    `--device /dev/vfio/vfio --device /dev/vfio/<iommu group> [...]` (find the
+    group with `readlink /sys/bus/pci/devices/<pci address>/iommu_group`). Only
+    the chips whose `/dev/vfio/<iommu group>` node is passed in are used; the
+    automatic topology below is derived from those.
+
+Overrides:
+
+| What                                  | How                                                                                                                                                                                                 |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Use a different `libtpu` build        | Bind-mount it over the bundled one: `--mount type=bind,src=<path to libtpu.so>,dst=/usr/lib/libtpu.so`, or mount it elsewhere and pass `-e TPU_LIBRARY_PATH=<path>`.                               |
+| Pass flags to the TPU runtime         | `-e LIBTPU_INIT_ARGS="--flag=value ..."`                                                                                                                                                             |
+| Pin the TPU topology / worker identity | Set the usual `TPU_*` variables explicitly (`TPU_ACCELERATOR_TYPE`, `TPU_CHIPS_PER_HOST_BOUNDS`, `TPU_HOST_BOUNDS`, `TPU_WORKER_ID`, `TPU_WORKER_HOSTNAMES`, `TPU_VISIBLE_DEVICE_PATHS`, `TPU_SKIP_MDS_QUERY`). Explicitly set variables always win. |
+
+On Cloud TPU VMs the runtime reads its topology from the GCE metadata server
+(`tpu-env`). On hosts without that metadata (e.g. GCE `ct*-standard-*` VMs
+created through the Compute API, or bare metal) the server detects the attached
+chips from the PCI bus and, before loading `libtpu`, fills in single-host
+defaults for everything that is not already set: `TPU_SKIP_MDS_QUERY=1`
+(otherwise the runtime waits for the metadata server for several minutes),
+`TPU_HOST_BOUNDS=1,1,1`, `TPU_WORKER_ID=0`, `TPU_WORKER_HOSTNAMES=localhost`,
+`TPU_ACCELERATOR_TYPE` / `TPU_CHIPS_PER_HOST_BOUNDS` for the known single-host
+shapes (v6e and v5e with 1, 4 or 8 chips, v5p and v4 with 4 chips) and
+`TPU_VISIBLE_DEVICE_PATHS` when the chips are bound to `vfio-pci`. The
+effective `TPU_*` environment is logged at startup. If any topology variable
+is set explicitly the server leaves the topology alone, and
+`--tpu_auto_env=false` disables the detection entirely.
+
 ### Running locally built server
 
 #### CPU
@@ -241,6 +295,24 @@ bazel run //runtime/serving/gcp/server:xla_serving_main_<gpu|tpu> -- \
   --orbax_grpc_server_platform <cpu|cuda|tpu>  \
   --port 8500 --use_insecure_grpc_credentials=<true|false>
 ```
+
+The TPU server loads the Cloud TPU runtime (`libtpu.so`) at startup from
+`--tpu_library_path`, falling back to `$TPU_LIBRARY_PATH` and then to
+`/usr/lib/libtpu.so` (where the Docker image installs it). Outside the image the
+easiest source is the `libtpu` pip package (installed by `pip install
+"jax[tpu]"`):
+
+```bash
+bazel run //runtime/serving/gcp/server:xla_serving_main_tpu -- \
+  --tpu_library_path="$(python3 -c 'import libtpu; print(libtpu.get_library_path())')" \
+  --model_path <Exported model path> \
+  --model_name <model_name> \
+  --orbax_grpc_server_platform tpu \
+  --port 8500 --use_insecure_grpc_credentials=true
+```
+
+The `TPU_*` environment defaults described in the Docker section above apply
+to locally built servers as well.
 
 ### Server Warmup on Startup
 
