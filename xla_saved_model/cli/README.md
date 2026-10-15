@@ -72,6 +72,17 @@ xsm-cli update /path/to/model --max_batch_size 32
 # Clone and update to a new directory (leaves original model untouched)
 xsm-cli update /path/to/model --max_batch_size 64 --output_dir /path/to/updated_model
 
+# Set XLA flags in the XLA compile options of all functions. Flags that are not
+# specified are left untouched. --xla_flags can be repeated, and each value may
+# contain multiple whitespace-separated flags (like XLA_FLAGS).
+xsm-cli update /path/to/model \
+  --xla_flags="--xla_jf_rematerialization_percent_shared_memory_limit=99 --xla_enable_profiler=false"
+
+# Select the platform (required if the compile options contain more than one)
+# and/or restrict the change to specific functions.
+xsm-cli update /path/to/model --platform cuda --function serving_default \
+  --xla_flags=--xla_gpu_autotune_level=2
+
 # View the model's modification audit log (history.txtpb)
 xsm-cli history /path/to/model
 
@@ -91,6 +102,12 @@ original state (`.orig`) are maintained, so running the same `rollback` command
 repeatedly when the configuration already matches the backup is a no-op. Each
 export, update, and rollback is also appended as a `HistoryRecord` entry in the
 model's `history.txtpb` textproto audit log.
+
+XLA flags are stored where they are persisted at export time: TPU flags are
+merged into the `TpuCompilationEnvironment` in
+`executable_build_options.comp_envs`, and CUDA flags are stored in
+`env_option_overrides` (only stable `xla_gpu_*` flags are accepted). Use
+`show --xla_compile_options` to inspect the result.
 
 ### 6. Recompile Models Ahead-Of-Time (AOT)
 

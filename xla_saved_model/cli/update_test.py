@@ -15,6 +15,7 @@
 """Tests for XSM / OBM CLI `update`, `history`, and `rollback` commands."""
 
 import os
+from typing import Any
 from unittest import mock
 
 from absl.testing import absltest
@@ -446,6 +447,119 @@ class UpdateTest(absltest.TestCase):
     self.assertIn('ROLLBACK', res_history.output)
     self.assertIn('16 -> 32', res_history.output)
     self.assertIn('32 -> 16', res_history.output)
+
+  def _add_compile_options(
+      self,
+      model_dir: str,
+      platforms: tuple[str, ...] = ('tpu',),
+      inlined: bool = True,
+      fn_name: str = 'serving_fn',
+  ) -> None:
+    """Adds a StableHLO function with XLA compile options to the model."""
+    opts_map = manifest_pb2.CompileOptionsProtoMap()
+    for platform in platforms:
+      opts = opts_map.map[platform]
+      opts.executable_build_options.num_replicas = 1
+      if platform == 'cuda':
+        opts.env_option_overrides['xla_gpu_autotune_level'].int_field = 4
+
+    manifest_path = os.path.join(model_dir, core_constants.MANIFEST_FILE_PATH)
+    manifest = manifest_pb2.Manifest()
+    with open(manifest_path, 'rb') as f:
+      manifest.ParseFromString(f.read())
+
+    if inlined:
+      data = manifest_pb2.UnstructuredData(
+          inlined_bytes=opts_map.SerializeToString(),
+          mime_type=constants.MIME_TYPE_XLA_COMPILE_OPTIONS,
+      )
+    else:
+      rel_path = f'{fn_name}_compile_options.pb'
+      with open(os.path.join(model_dir, rel_path), 'wb') as f:
+        f.write(opts_map.SerializeToString())
+      data = manifest_pb2.UnstructuredData(
+          file_system_location=manifest_pb2.FileSystemLocation(
+              string_path=rel_path
+          ),
+          mime_type=constants.MIME_TYPE_XLA_COMPILE_OPTIONS,
+      )
+    body = manifest.objects[fn_name].function.body.stable_hlo_body
+    body.supplemental_info['xla_compile_options'].CopyFrom(data)
+
+    with open(manifest_path, 'wb') as f:
+      f.write(manifest.SerializeToString())
+
+  def _read_compile_options(
+      self, model_dir: str, fn_name: str = 'serving_fn'
+  ) -> manifest_pb2.CompileOptionsProtoMap:
+    manifest = manifest_pb2.Manifest()
+    with open(
+        os.path.join(model_dir, core_constants.MANIFEST_FILE_PATH), 'rb'
+    ) as f:
+      manifest.ParseFromString(f.read())
+    data = manifest.objects[fn_name].function.body.stable_hlo_body
+    data = data.supplemental_info['xla_compile_options']
+    opts_map = manifest_pb2.CompileOptionsProtoMap()
+    if data.HasField('inlined_bytes'):
+      opts_map.ParseFromString(data.inlined_bytes)
+    else:
+      path = os.path.join(model_dir, data.file_system_location.string_path)
+      with open(path, 'rb') as f:
+        opts_map.ParseFromString(f.read())
+    return opts_map
+
+  def _read_history(self, model_dir: str) -> history_pb2.ModelHistory:
+    history_proto = history_pb2.ModelHistory()
+    with open(os.path.join(model_dir, constants.HISTORY_FILENAME), 'r') as f:
+      text_format.Parse(f.read(), history_proto)
+    return history_proto
+
+  def test_update_xla_flags_no_compile_options(self):
+    model_dir = self._create_test_model(initial_batch_size=16)
+    with self.assertRaises(typer.Exit):
+      update.update(
+          model_base_dir=model_dir, xla_flags=['--xla_gpu_autotune_level=2']
+      )
+
+  def test_update_xla_flags_invalid_selection_leaves_model_untouched(self):
+    model_dir = self._create_test_model(initial_batch_size=16)
+    self._add_compile_options(model_dir, platforms=('cpu', 'cuda'))
+    manifest_path = os.path.join(model_dir, core_constants.MANIFEST_FILE_PATH)
+    with open(manifest_path, 'rb') as f:
+      manifest_bytes = f.read()
+
+    invalid_kwargs: list[dict[str, Any]] = [
+        # Multiple platforms without --platform.
+        dict(xla_flags=['--xla_gpu_autotune_level=2']),
+        # Platform not present.
+        dict(xla_flags=['--xla_tpu_foo=1'], platform='tpu'),
+        # Unsupported platform.
+        dict(xla_flags=['--xla_cpu_foo=1'], platform='cpu'),
+        # Unknown function.
+        dict(
+            xla_flags=['--xla_gpu_autotune_level=2'],
+            platform='cuda',
+            functions=['does_not_exist'],
+        ),
+        # --platform / --function without --xla_flags.
+        dict(max_batch_size=32, platform='cuda'),
+        dict(max_batch_size=32, functions=['serving_fn']),
+        # Valid batch size but unsupported platform: nothing must be written.
+        dict(max_batch_size=32, xla_flags=['--xla_cpu_foo=1'], platform='cpu'),
+    ]
+    for kwargs in invalid_kwargs:
+      with self.subTest(str(kwargs)):
+        with self.assertRaises(typer.Exit):
+          update.update(model_base_dir=model_dir, **kwargs)
+
+    with open(manifest_path, 'rb') as f:
+      self.assertEqual(f.read(), manifest_bytes)
+    pipelines = orchestration_pb2.Pipelines()
+    with open(os.path.join(model_dir, 'orchestration.pb'), 'rb') as f:
+      pipelines.ParseFromString(f.read())
+    self.assertEqual(self._get_batch_size(pipelines), 16)
+    self.assertFalse(os.path.exists(f'{manifest_path}.orig'))
+    self.assertLen(self._read_history(model_dir).records, 1)
 
 
 if __name__ == '__main__':
