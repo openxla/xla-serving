@@ -118,7 +118,7 @@ jobs:
           fi
           uv pip install ".[${EXTRAS}]"
           uv pip uninstall triton 2>/dev/null || true
-          pytest -v -s --full-trace -n auto xla_saved_model/
+          pytest -v -s --full-trace -n auto xla_saved_model/ data/cpu_embedding/python/embedding_utils_test.py
 
       - name: Run Examples
         # Exports each example model and runs it through ModelRunner. This is
