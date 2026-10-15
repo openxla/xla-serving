@@ -176,7 +176,7 @@ transform_pybind_library(
     hdrs = ["dense_cpu_embedding_lookup_transform.h"],
     dynamic_deps = ["@xla_serving//data:xla_serving_data_core"],
     generate_wrappers = False,
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../.."],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/..:$$ORIGIN/../.."],
     deps = [
         ":dense_cpu_embedding_lookup_transform",
     ],
@@ -256,7 +256,7 @@ transform_pybind_library(
     srcs = ["cpu_embedding_lookup_transform.cc"],
     hdrs = ["cpu_embedding_lookup_transform.h"],
     dynamic_deps = ["@xla_serving//data:xla_serving_data_core"],
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../.."],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/..:$$ORIGIN/../.."],
     deps = [
         ":cpu_embedding_lookup_transform",
     ],
@@ -346,7 +346,7 @@ transform_pybind_library(
     hdrs = ["pack_host_buffer_vector_transform.h"],
     dynamic_deps = ["@xla_serving//data:xla_serving_data_core"],
     generate_wrappers = False,
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../.."],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/..:$$ORIGIN/../.."],
     deps = [
         ":pack_host_buffer_vector_transform",
     ],
@@ -358,7 +358,7 @@ transform_pybind_library(
     hdrs = ["unpack_host_buffer_vector_transform.h"],
     dynamic_deps = ["@xla_serving//data:xla_serving_data_core"],
     generate_wrappers = False,
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../.."],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/..:$$ORIGIN/../.."],
     deps = [
         ":unpack_host_buffer_vector_transform",
     ],

@@ -59,7 +59,7 @@ transform_pybind_library(
     hdrs = ["bucket_pad_transform.h"],
     dynamic_deps = ["@xla_serving//data:xla_serving_data_core"],
     generate_wrappers = True,
-    linkopts = ["-Wl,-rpath,$$ORIGIN/../.."],
+    linkopts = ["-Wl,-rpath,$$ORIGIN/..:$$ORIGIN/../.."],
     deps = [
         ":bucket_pad_transform",
     ],
