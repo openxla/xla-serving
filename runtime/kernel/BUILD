@@ -1,5 +1,6 @@
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package_group(
     name = "kernel_users",
@@ -21,6 +22,14 @@ package_group(
 package_group(
     name = "interpreter_users",
     includes = ["@xla_serving//runtime/interpreter:interpreter_users"],
+)
+
+filegroup(
+    name = "testdata",
+    srcs = glob([
+        "testdata/*.mlir",
+    ]),
+    visibility = [":kernel_internal"],
 )
 
 cc_library(
@@ -199,5 +208,129 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
         "@xla//xla/tsl/platform:statusor",
+    ],
+)
+
+cc_test(
+    name = "kernel_builder_context_test",
+    srcs = ["kernel_builder_context_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":kernel_builder_context",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@googletest//:gtest_main",
+        "@xla//xla/tsl/lib/core:status_test_util",
+        "@xla//xla/tsl/platform:status_matchers",
+        "@xla//xla/tsl/platform:statusor",
+    ],
+)
+
+cc_test(
+    name = "kernel_test",
+    size = "small",
+    srcs = ["kernel_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":kernel",
+        ":kernel_builder_context",
+        ":kernel_io_data_type",
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
+        "@googletest//:gtest_main",
+        "@xla//xla/tsl/concurrency:future",
+        "@xla//xla/tsl/lib/core:status_test_util",
+        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/core:host_buffer_matcher",
+        "@xla_serving//runtime/core:host_buffer_test_utils",
+        "@xla_serving//runtime/core:value",
+        "@xla_serving//runtime/core:value_matcher",
+    ],
+)
+
+cc_test(
+    name = "stablehlo_runner_op_test",
+    srcs = ["stablehlo_runner_op_test.cc"],
+    data = [
+        ":testdata",
+    ],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":aot_stablehlo_runner_registration",  # buildcleaner: keep
+        ":jit_stablehlo_runner_registration",  # buildcleaner: keep
+        ":kernel",
+        ":kernel_builder_context",
+        ":stablehlo_runner_op",
+        ":test_utils",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/types:span",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+        "@xla//xla:xla_data_proto_cc",
+        "@xla//xla/hlo/ir:hlo_sharding",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/tests:test_utils",
+        "@xla//xla/tsl/lib/core:status_test_util",
+        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/core:aot_stablehlo_runner",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/core:host_buffer_matcher",
+        "@xla_serving//runtime/core:host_buffer_test_utils",
+        "@xla_serving//runtime/core:ifrt_loaded_variable_registry",
+        "@xla_serving//runtime/core:stablehlo",
+        "@xla_serving//runtime/core:stablehlo_runner_base",
+        "@xla_serving//runtime/core:stablehlo_utils",
+        "@xla_serving//runtime/core:value",
+        "@xla_serving//runtime/core:value_matcher",
+        "@xla_serving//runtime/interpreter:manifest_utils",
+        "@xla_serving//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",
+    ],
+)
+
+cc_library(
+    name = "test_utils",
+    testonly = True,
+    hdrs = ["test_utils.h"],
+    visibility = [":kernel_internal"],
+    deps = [
+        ":jit_stablehlo_runner_registration",  # buildcleaner: keep
+        ":kernel",
+        ":kernel_builder_context",
+        ":stablehlo_runner_op",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/types:span",
+        "@tsl//tsl/platform:protobuf",
+        "@xla//xla:xla_data_proto_cc",
+        "@xla//xla/hlo/ir:hlo_sharding",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/python/ifrt:test_util",
+        "@xla//xla/python/pjrt_ifrt:tfrt_cpu_client_test_lib",
+        "@xla//xla/python/pjrt_ifrt:xla_ifrt",
+        "@xla//xla/tsl/concurrency:future",
+        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:errors",
+        "@xla//xla/tsl/platform:resource_loader",
+        "@xla//xla/tsl/platform:status",
+        "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/core:ifrt_loaded_variable_registry",
+        "@xla_serving//runtime/core:sharding_utils",
+        "@xla_serving//runtime/core:stablehlo",
+        "@xla_serving//runtime/core:stablehlo_optimizer",
+        "@xla_serving//runtime/core:value",
+        "@xla_serving//runtime/interpreter:manifest_utils",
+        "@xla_serving//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",
     ],
 )

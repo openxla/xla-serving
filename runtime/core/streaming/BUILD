@@ -1,5 +1,6 @@
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package_group(
     name = "streaming_users",
@@ -71,5 +72,25 @@ cc_library(
         "@xla//xla/tsl/platform:statusor",
         "@xla_serving//runtime/core:host_buffer",
         "@xla_serving//runtime/libs/mlir:dump_mlir_util",
+    ],
+)
+
+cc_test(
+    name = "utils_test",
+    srcs = ["utils_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":utils",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//mlir:FuncDialect",
+        "@llvm-project//mlir:IR",
+        "@stablehlo//:stablehlo_ops",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/tsl/lib/core:status_test_util",
+        "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/libs/ifrt:stablehlo_loader",
     ],
 )

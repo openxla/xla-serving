@@ -1,5 +1,6 @@
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package(default_visibility = [
     # TODO: Revert to :__pkg__ once the migration to QueueBase is complete.
@@ -21,6 +22,21 @@ cc_library(
         "@tsl//tsl/platform:thread_annotations",
         "@tsl//tsl/profiler/lib:traceme",
         "@xla//xla/tsl/platform:criticality",
+    ],
+)
+
+cc_test(
+    name = "batch_scheduler_test",
+    srcs = ["batch_scheduler_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":batch_scheduler",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@abseil-cpp//absl/synchronization",
+        "@googletest//:gtest_main",
+        "@xla//xla/tsl/platform:criticality",
+        "@xla//xla/tsl/platform:env",
     ],
 )
 
@@ -133,6 +149,78 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "shared_batch_scheduler_test",
+    srcs = ["shared_batch_scheduler_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":batch_scheduler",
+        ":fake_clock_env",
+        ":input_split_metadata",
+        ":shared_batch_scheduler",
+        "@abseil-cpp//absl/base",
+        "@abseil-cpp//absl/container:fixed_array",
+        "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/time",
+        "@googletest//:gtest_main",
+        "@tsl//tsl/platform:platform_port",
+        "@xla//xla/tsl/lib/core:status_test_util",
+        "@xla//xla/tsl/platform:criticality",
+        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:status",
+        "@xla//xla/tsl/platform:test_benchmark",
+        "@xla_serving//runtime/kernel/batching:batch_options_utils",
+    ],
+)
+
+cc_test(
+    name = "fifo_queue_test",
+    srcs = ["fifo_queue_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":batch_scheduler",
+        ":fake_clock_env",
+        ":fifo_queue",
+        ":input_split_metadata",
+        ":queue_options",
+        "@abseil-cpp//absl/container:fixed_array",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/time",
+        "@googletest//:gtest_main",
+        "@xla//xla/tsl/lib/core:status_test_util",
+        "@xla//xla/tsl/platform:criticality",
+        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:status",
+    ],
+)
+
+cc_test(
+    name = "priority_aware_queue_test",
+    srcs = ["priority_aware_queue_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":batch_scheduler",
+        ":fake_clock_env",
+        ":input_split_metadata",
+        ":priority_aware_queue",
+        ":queue_options",
+        "@abseil-cpp//absl/container:fixed_array",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@googletest//:gtest_main",
+        "@xla//xla/tsl/platform:criticality",
+        "@xla//xla/tsl/platform:env",
+        "@xla_serving//runtime/kernel/batching:batch_options_utils",
+    ],
+)
+
 cc_library(
     name = "batch_scheduler_utils",
     srcs = ["batch_scheduler_utils.cc"],
@@ -149,6 +237,20 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "batch_scheduler_utils_test",
+    srcs = ["batch_scheduler_utils_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":batch_scheduler",
+        ":batch_scheduler_utils",
+        ":batch_stats",
+        "@abseil-cpp//absl/time",
+        "@googletest//:gtest_main",
+        "@xla_serving//runtime/kernel/batching:batch_options_utils",
+    ],
+)
+
 cc_library(
     name = "batch_stats",
     hdrs = ["batch_stats.h"],
@@ -158,6 +260,17 @@ cc_library(
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/time",
         "@tsl//tsl/platform:thread_annotations",
+    ],
+)
+
+cc_test(
+    name = "batch_stats_test",
+    srcs = ["batch_stats_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":batch_stats",
+        "@abseil-cpp//absl/time",
+        "@googletest//:gtest_main",
     ],
 )
 
@@ -187,6 +300,19 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "periodic_function_test",
+    srcs = ["periodic_function_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":fake_clock_env",
+        ":periodic_function",
+        "@abseil-cpp//absl/synchronization",
+        "@googletest//:gtest_main",
+        "@xla//xla/tsl/platform:env",
+    ],
+)
+
 cc_library(
     name = "input_split_metadata",
     srcs = ["input_split_metadata.cc"],
@@ -194,6 +320,18 @@ cc_library(
     deps = [
         "@abseil-cpp//absl/container:fixed_array",
         "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "input_split_metadata_test",
+    srcs = ["input_split_metadata_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":input_split_metadata",
+        "@abseil-cpp//absl/container:fixed_array",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest_main",
     ],
 )
 
@@ -214,5 +352,17 @@ cc_library(
         "@abseil-cpp//absl/base:core_headers",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/synchronization",
+    ],
+)
+
+cc_test(
+    name = "threadsafe_status_test",
+    srcs = ["threadsafe_status_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":threadsafe_status",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@googletest//:gtest_main",
     ],
 )

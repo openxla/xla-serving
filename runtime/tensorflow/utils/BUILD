@@ -1,5 +1,6 @@
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package(default_visibility = [
     "@xla_serving//runtime/python:__subpackages__",
@@ -50,6 +51,21 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "ifrt_tensor_utils_test",
+    srcs = ["ifrt_tensor_utils_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":ifrt_tensor_utils",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@googletest//:gtest_main",
+        "@llvm-project//mlir:IR",
+        "@org_tensorflow//tensorflow/core:protos_all_cc",
+        "@xla//xla:xla_data_proto_cc",
+        "@xla//xla/python/ifrt",
+    ],
+)
+
 cc_library(
     name = "tf_to_host_buffer",
     srcs = ["tf_to_host_buffer.cc"],
@@ -71,6 +87,57 @@ cc_library(
         "@xla_serving//runtime/core:host_buffer",
         "@xla_serving//runtime/core:value",
         "@xla_serving//runtime/kernel:kernel_io_data_type",
+    ],
+)
+
+cc_test(
+    name = "tf_to_host_buffer_test",
+    srcs = ["tf_to_host_buffer_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":tf_to_host_buffer",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/types:span",
+        "@googletest//:gtest_main",
+        "@org_tensorflow//tensorflow/core:framework",
+        "@org_tensorflow//tensorflow/core:portable_gif_internal",
+        "@org_tensorflow//tensorflow/core:protos_all_cc",
+        "@org_tensorflow//tensorflow/core:test",
+        "@org_tensorflow//tensorflow/core:testlib",
+        "@org_tensorflow//tensorflow/core/framework:tensor_matcher",
+        "@tsl//tsl/platform:ml_dtypes",
+        "@xla//xla:xla_data_proto_cc",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/tsl/platform:statusor",
+        "@xla//xla/tsl/platform:types",
+        "@xla_serving//runtime/core:default_allocator",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/core:host_buffer_matcher",
+        "@xla_serving//runtime/core:host_buffer_test_utils",
+        "@xla_serving//runtime/core:value",
+        "@xla_serving//runtime/kernel:kernel_io_data_type",
+    ],
+)
+
+cc_test(
+    name = "tf_to_host_buffer_proto_test",
+    srcs = ["tf_to_host_buffer_proto_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":tf_to_host_buffer_proto",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@abseil-cpp//absl/types:span",
+        "@googletest//:gtest_main",
+        "@org_tensorflow//tensorflow/core:protos_all_cc",
+        "@org_tensorflow//tensorflow/core/framework:tensor",
+        "@org_tensorflow//tensorflow/core/framework:tensor_shape",
+        "@tsl//tsl/platform:tstring",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/tsl/util/proto:proto_matchers",
+        "@xla_serving//protos/grpc:host_buffer_cc_proto",
+        "@xla_serving//protos/grpc:model_cc_proto",
+        "@xla_serving//protos/grpc:predict_cc_proto",
+        "@xla_serving//runtime/core:host_buffer",
     ],
 )
 

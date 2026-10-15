@@ -1,5 +1,6 @@
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 cc_library(
     name = "batch_resource_base",
@@ -62,6 +63,73 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "batch_resource_base_test",
+    srcs = ["batch_resource_base_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":batch_options_utils",
+        ":batch_resource_base",
+        ":test_batch_resource_base",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/time",
+        "@abseil-cpp//absl/types:span",
+        "@googletest//:gtest_main",
+        "@org_tensorflow//tensorflow/core/common_runtime:request_cost",
+        "@tsl//tsl/platform:context",
+        "@tsl//tsl/platform:refcount",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/tsl/concurrency:future",
+        "@xla//xla/tsl/lib/core:status_test_util",
+        "@xla//xla/tsl/lib/histogram",
+        "@xla//xla/tsl/lib/monitoring:cell_reader",
+        "@xla//xla/tsl/lib/monitoring:test_utils",
+        "@xla//xla/tsl/platform:criticality",
+        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:env_time",
+        "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/core:allocator",
+        "@xla_serving//runtime/core:default_allocator",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/core:host_buffer_matcher",
+        "@xla_serving//runtime/core:host_buffer_test_utils",
+        "@xla_serving//runtime/core:value",
+        "@xla_serving//runtime/core:value_utils",
+        "@xla_serving//runtime/core/batching:batch_scheduler",
+        "@xla_serving//runtime/core/batching:shared_batch_scheduler",
+        "@xla_serving//runtime/core/batching:threadsafe_status",
+        "@xla_serving//runtime/kernel",
+    ],
+)
+
+cc_test(
+    name = "batch_resource_base_cost_measurement_test",
+    srcs = ["batch_resource_base_cost_measurement_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":batch_resource_base",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/time",
+        "@abseil-cpp//absl/types:span",
+        "@googletest//:gtest_main",
+        "@org_tensorflow//tensorflow/core/common_runtime:cost_constants",
+        "@org_tensorflow//tensorflow/core/common_runtime:cost_measurement",
+        "@org_tensorflow//tensorflow/core/common_runtime:cost_measurement_registry",
+        "@org_tensorflow//tensorflow/core/common_runtime:no_op_cost_measurement",
+        "@org_tensorflow//tensorflow/core/common_runtime:request_cost",
+        "@xla//xla/python/ifrt",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/core/batching:batch_stats",
+    ],
+)
+
 cc_library(
     name = "batch_runner_op",
     srcs = ["batch_runner_op.cc"],
@@ -107,6 +175,67 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "batch_runner_op_test",
+    srcs = ["batch_runner_op_test.cc"],
+    data = [
+        "@xla_serving//runtime/kernel:testdata",
+    ],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    env = {
+        "TF_COST_MEASUREMENT_TYPE": "tpu",
+    },
+    deps = [
+        ":batch_options_utils",
+        ":batch_resource_base",
+        ":batch_runner_op",
+        ":test_batch_resource_base",
+        ":warmup",
+        "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/time",
+        "@abseil-cpp//absl/types:span",
+        "@googletest//:gtest_main",
+        "@org_tensorflow//tensorflow/core/common_runtime:cost_constants",
+        "@org_tensorflow//tensorflow/core/common_runtime:cost_measurement",
+        "@org_tensorflow//tensorflow/core/common_runtime:cost_measurement_registry",
+        "@tsl//tsl/platform:refcount",
+        "@xla//xla:xla_data_proto_cc",
+        "@xla//xla/hlo/ir:hlo_sharding",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/tsl/concurrency:future",
+        "@xla//xla/tsl/lib/core:status_test_util",
+        "@xla//xla/tsl/lib/monitoring:cell_reader",
+        "@xla//xla/tsl/lib/monitoring:test_utils",
+        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:status",
+        "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/core:allocator",
+        "@xla_serving//runtime/core:default_allocator",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/core:host_buffer_matcher",
+        "@xla_serving//runtime/core:host_buffer_test_utils",
+        "@xla_serving//runtime/core:stablehlo",
+        "@xla_serving//runtime/core:stablehlo_utils",
+        "@xla_serving//runtime/core:value",
+        "@xla_serving//runtime/core:value_matcher",
+        "@xla_serving//runtime/core/batching:batch_scheduler",
+        "@xla_serving//runtime/core/batching:batch_stats",
+        "@xla_serving//runtime/core/batching:shared_batch_scheduler",
+        "@xla_serving//runtime/interpreter:manifest_utils",
+        "@xla_serving//runtime/kernel",
+        "@xla_serving//runtime/kernel:identity",
+        "@xla_serving//runtime/kernel:kernel_builder_context",
+        "@xla_serving//runtime/kernel:kernel_io_data_type",
+        "@xla_serving//runtime/kernel:test_utils",
+    ],
+)
+
 cc_library(
     name = "warmup",
     srcs = ["warmup.cc"],
@@ -121,6 +250,17 @@ cc_library(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/synchronization",
+    ],
+)
+
+cc_test(
+    name = "warmup_test",
+    srcs = ["warmup_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":warmup",
+        "@googletest//:gtest_main",
+        "@xla//xla/tsl/platform:statusor",
     ],
 )
 
@@ -146,6 +286,49 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "batch_options_utils_test",
+    srcs = ["batch_options_utils_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":batch_options_utils",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@googletest//:gtest_main",
+        "@xla//xla/tsl/platform:criticality",
+        "@xla_serving//protos:orchestration_cc_proto",
+        "@xla_serving//runtime/core/batching:batch_scheduler",
+    ],
+)
+
+cc_library(
+    name = "test_batch_resource_base",
+    testonly = True,
+    hdrs = ["test_batch_resource_base.h"],
+    visibility = [
+        "@xla_serving//runtime/kernel:__subpackages__",
+    ],
+    deps = [
+        ":batch_resource_base",
+        ":batch_runner_op",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/container:flat_hash_set",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/time",
+        "@abseil-cpp//absl/types:span",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/tsl/platform:env",
+        "@xla_serving//runtime/core:allocator",
+        "@xla_serving//runtime/core:default_allocator",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/core/batching:shared_batch_scheduler",
+        "@xla_serving//runtime/kernel",
+    ],
+)
+
 cc_library(
     name = "ragged_utils",
     srcs = ["ragged_utils.cc"],
@@ -162,6 +345,25 @@ cc_library(
         "@xla//xla/tsl/platform:env",
         "@xla_serving//runtime/core:allocator",
         "@xla_serving//runtime/core:host_buffer",
+    ],
+)
+
+cc_test(
+    name = "ragged_utils_test",
+    srcs = ["ragged_utils_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":ragged_utils",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@googletest//:gtest_main",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/core:allocator",
+        "@xla_serving//runtime/core:default_allocator",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/core:host_buffer_matcher",
+        "@xla_serving//runtime/core:host_buffer_test_utils",
     ],
 )
 
@@ -184,5 +386,25 @@ cc_library(
         "@xla_serving//runtime/core:allocator",
         "@xla_serving//runtime/core:default_allocator",
         "@xla_serving//runtime/core:host_buffer",
+    ],
+)
+
+cc_test(
+    name = "pad_utils_test",
+    srcs = ["pad_utils_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":pad_utils",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@googletest//:gtest_main",
+        "@tsl//tsl/platform:tstring",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/core:allocator",
+        "@xla_serving//runtime/core:default_allocator",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/core:host_buffer_matcher",
+        "@xla_serving//runtime/core:host_buffer_test_utils",
     ],
 )

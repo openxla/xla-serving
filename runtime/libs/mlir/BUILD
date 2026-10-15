@@ -1,5 +1,6 @@
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package(default_visibility = [
     "@xla_serving//runtime:__subpackages__",
@@ -44,5 +45,22 @@ cc_library(
         "@tsl//tsl/platform:path",
         "@xla//xla/tsl/lib/io:buffered_file",
         "@xla//xla/tsl/platform:env",
+    ],
+)
+
+cc_test(
+    name = "dump_mlir_util_test",
+    srcs = ["dump_mlir_util_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":dump_mlir_util",
+        "@googletest//:gtest_main",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:Pass",
+        "@llvm-project//mlir:Support",
+        "@xla//xla/tsl/lib/core:status_test_util",
+        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:test",
     ],
 )
