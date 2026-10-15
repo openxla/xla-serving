@@ -38,6 +38,9 @@ jobs:
     defaults:
       run:
         shell: bash
+    env:
+      # Must be one of the versions built by release-xla-serving.yml.
+      PYTHON_VERSION: "3.12"
 
     steps:
       - name: Checkout repository
@@ -82,11 +85,11 @@ jobs:
       - name: Install uv and Set up Python
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
-          python-version: "3.12"
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Create virtual environment
         run: |
-          uv venv --python 3.12
+          uv venv --python "${PYTHON_VERSION}"
           echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
 
@@ -111,8 +114,21 @@ jobs:
 
       - name: Install Release Wheels and Test Dependencies
         run: |
-          echo "Installing downloaded wheels..."
-          uv pip install wheels/*.whl
+          # Releases ship one binary wheel per supported Python version
+          # (cp312, cp313, ...). Only install the wheels matching this job's
+          # interpreter, plus the pure-Python (py3-none-any) wheels; passing
+          # all of them to uv fails with "conflicting URLs".
+          shopt -s nullglob
+          PY_TAG="cp${PYTHON_VERSION//./}"
+          WHEELS=(wheels/*-py3-none-any.whl wheels/*-"${PY_TAG}"-*.whl)
+          if [ ${#WHEELS[@]} -eq 0 ]; then
+            echo "Error: no wheels found for ${PY_TAG} in wheels/"
+            ls -la wheels/
+            exit 1
+          fi
+          echo "Installing downloaded wheels for ${PY_TAG}:"
+          printf '  %s\n' "${WHEELS[@]}"
+          uv pip install "${WHEELS[@]}"
           # Install JAX (CPU), Flax (for examples.nnx), and grpcio
           uv pip install "jax[cpu]" flax grpcio
 
