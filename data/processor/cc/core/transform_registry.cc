@@ -67,6 +67,12 @@ absl::Status TransformRegistry::RegisterTransformFactory(
   existing_creator =
       std::make_unique<TransformFactoryHolder>(std::move(factory));
   library_[std::string(name)].push_back(existing_creator.get());
+  auto [name_it, inserted] = type_name_to_holder_.try_emplace(
+      type_index.name(), existing_creator.get());
+  if (!inserted) {
+    // Two distinct types share a name, so the name cannot identify either.
+    name_it->second = nullptr;
+  }
   return absl::OkStatus();
 }
 
@@ -193,6 +199,12 @@ TransformRegistry::GetTransformFactoryHolder(std::type_index type_index) {
   auto it = type_to_holder_.find(type_index);
   if (it != type_to_holder_.end()) {
     return it->second.get();
+  }
+  // The same transform type may have a different `std::type_info` object in
+  // another shared library; fall back to matching by type name.
+  auto name_it = type_name_to_holder_.find(type_index.name());
+  if (name_it != type_name_to_holder_.end() && name_it->second != nullptr) {
+    return name_it->second;
   }
   return absl::NotFoundError(
       absl::StrFormat("Transform '%s' not found. Please ensure the relevant "

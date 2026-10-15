@@ -327,6 +327,15 @@ class TransformRegistry {
   absl::flat_hash_map<std::type_index,
                       absl_nonnull std::unique_ptr<TransformFactoryHolder>>
       type_to_holder_ ABSL_GUARDED_BY(transform_registry_mu_);
+  // Holders keyed by `std::type_info::name()`, used by
+  // GetTransformFactoryHolder() when `type_to_holder_` has no entry for a
+  // `std::type_index`. This happens when the same transform type has distinct
+  // `std::type_info` objects in different shared libraries, e.g. a header-only
+  // transform instantiated in both the core data library and a Python
+  // extension module loaded with `RTLD_LOCAL`. A null value marks a name that
+  // was registered for more than one `std::type_index`; it is never returned.
+  absl::flat_hash_map<std::string, TransformFactoryHolder*>
+      type_name_to_holder_ ABSL_GUARDED_BY(transform_registry_mu_);
   absl::flat_hash_map<std::string, std::vector<TransformFactoryHolder*>>
       library_ ABSL_GUARDED_BY(transform_registry_mu_);
 };
