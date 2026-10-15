@@ -185,6 +185,158 @@ TEST(TransformRegistryMacroTest, RegisterAndCreateWithDeserializer) {
   EXPECT_NE(transform, nullptr);
 }
 
+class DummyTestResource : public xla_serving::data::Resource {
+ public:
+  DummyTestResource() : xla_serving::data::Resource() {}
+
+ protected:
+  absl::Status LoadImpl() override { return absl::OkStatus(); }
+};
+
+template <int Tag = 0>
+class ProtoConfiguredTransform : public TransformBase {
+ public:
+  explicit ProtoConfiguredTransform(std::string tag, int resource_count = 0)
+      : tag_(std::move(tag)), resource_count_(resource_count) {}
+
+  static absl::StatusOr<std::unique_ptr<ProtoConfiguredTransform>> Create() {
+    return std::make_unique<ProtoConfiguredTransform>("");
+  }
+
+  static absl::StatusOr<std::unique_ptr<ProtoConfiguredTransform>>
+  CreateWithTag(std::string tag, int resource_count = 0) {
+    return std::make_unique<ProtoConfiguredTransform>(std::move(tag),
+                                                      resource_count);
+  }
+
+  const std::string& tag() const { return tag_; }
+  int resource_count() const { return resource_count_; }
+
+  absl::Status Execute(api::ExecuteContext& context) override {
+    return absl::OkStatus();
+  }
+
+  absl::Span<const api::TypeInfo> InputTypes() const override { return {}; }
+  absl::Span<const api::TypeInfo> OutputTypes() const override { return {}; }
+
+  absl::StatusOr<TransformConfig> ToProto() const override {
+    return TransformConfig();
+  }
+
+ private:
+  std::string tag_;
+  int resource_count_ = 0;
+};
+
+ND_REGISTER_TRANSFORM(ProtoConfiguredTransform<0>,
+                      "SetDeserializerWithDetail1ArgTransform")
+    .SetDeserializerWithDetail<ShapeDtypeStructProto>(
+        [](const ShapeDtypeStructProto& detail_proto) {
+          return ProtoConfiguredTransform<0>::CreateWithTag(
+              std::string(detail_proto.dtype()));
+        });
+
+ND_REGISTER_TRANSFORM(ProtoConfiguredTransform<1>,
+                      "SetDeserializerWithDetail2ArgTransform")
+    .SetDeserializerWithDetail<ShapeDtypeStructProto>(
+        [](const ShapeDtypeStructProto& detail_proto,
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>>
+               resources) {
+          return ProtoConfiguredTransform<1>::CreateWithTag(
+              std::string(detail_proto.dtype()),
+              static_cast<int>(resources.size()));
+        });
+
+TEST(TransformRegistryMacroTest, SetDeserializerWithDetail1ArgSuccess) {
+  TransformConfig config;
+  config.set_op_name("SetDeserializerWithDetail1ArgTransform");
+  ShapeDtypeStructProto detail;
+  detail.set_dtype("float32");
+  config.mutable_detail()->PackFrom(detail);
+
+  ASSERT_OK_AND_ASSIGN(
+      auto transform,
+      TransformRegistry::Instance().DeserializeTransform(config));
+  ASSERT_NE(transform, nullptr);
+  auto* custom = dynamic_cast<ProtoConfiguredTransform<0>*>(transform.get());
+  ASSERT_NE(custom, nullptr);
+  EXPECT_EQ(custom->tag(), "float32");
+}
+
+TEST(TransformRegistryMacroTest, SetDeserializerWithDetail1ArgMissingDetail) {
+  TransformConfig config;
+  config.set_op_name("SetDeserializerWithDetail1ArgTransform");
+
+  EXPECT_THAT(TransformRegistry::Instance().DeserializeTransform(config),
+              absl_testing::StatusIs(
+                  absl::StatusCode::kInvalidArgument,
+                  testing::HasSubstr("SetDeserializerWithDetail1ArgTransform "
+                                     "config missing detail.")));
+}
+
+TEST(TransformRegistryMacroTest, SetDeserializerWithDetail1ArgTypeMismatch) {
+  TransformConfig config;
+  config.set_op_name("SetDeserializerWithDetail1ArgTransform");
+  CompositeProcessorMetadata wrong_detail;
+  wrong_detail.set_version(1);
+  config.mutable_detail()->PackFrom(wrong_detail);
+
+  EXPECT_THAT(
+      TransformRegistry::Instance().DeserializeTransform(config),
+      absl_testing::StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          testing::HasSubstr(
+              "Failed to unpack xla_serving.data.composite.ShapeDtypeStructProto "
+              "for SetDeserializerWithDetail1ArgTransform")));
+}
+
+TEST(TransformRegistryMacroTest, SetDeserializerWithDetail2ArgSuccess) {
+  TransformConfig config;
+  config.set_op_name("SetDeserializerWithDetail2ArgTransform");
+  ShapeDtypeStructProto detail;
+  detail.set_dtype("int32");
+  config.mutable_detail()->PackFrom(detail);
+
+  std::vector<std::shared_ptr<xla_serving::data::Resource>> resources = {
+      std::make_shared<DummyTestResource>()};
+
+  ASSERT_OK_AND_ASSIGN(
+      auto transform,
+      TransformRegistry::Instance().DeserializeTransform(config, resources));
+  ASSERT_NE(transform, nullptr);
+  auto* custom = dynamic_cast<ProtoConfiguredTransform<1>*>(transform.get());
+  ASSERT_NE(custom, nullptr);
+  EXPECT_EQ(custom->tag(), "int32");
+  EXPECT_EQ(custom->resource_count(), 1);
+}
+
+TEST(TransformRegistryMacroTest, SetDeserializerWithDetail2ArgMissingDetail) {
+  TransformConfig config;
+  config.set_op_name("SetDeserializerWithDetail2ArgTransform");
+
+  EXPECT_THAT(TransformRegistry::Instance().DeserializeTransform(config),
+              absl_testing::StatusIs(
+                  absl::StatusCode::kInvalidArgument,
+                  testing::HasSubstr("SetDeserializerWithDetail2ArgTransform "
+                                     "config missing detail.")));
+}
+
+TEST(TransformRegistryMacroTest, SetDeserializerWithDetail2ArgTypeMismatch) {
+  TransformConfig config;
+  config.set_op_name("SetDeserializerWithDetail2ArgTransform");
+  CompositeProcessorMetadata wrong_detail;
+  wrong_detail.set_version(1);
+  config.mutable_detail()->PackFrom(wrong_detail);
+
+  EXPECT_THAT(
+      TransformRegistry::Instance().DeserializeTransform(config),
+      absl_testing::StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          testing::HasSubstr(
+              "Failed to unpack xla_serving.data.composite.ShapeDtypeStructProto "
+              "for SetDeserializerWithDetail2ArgTransform")));
+}
+
 class CustomExecutorTransform : public TransformBase {
  public:
   static absl::StatusOr<std::unique_ptr<CustomExecutorTransform>> Create() {

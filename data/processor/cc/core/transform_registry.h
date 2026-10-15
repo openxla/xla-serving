@@ -477,9 +477,10 @@ class TransformRegistrar {
   }
 
   // Register a deserializer for the transform. This is used to create the
-  // transform from the TransformConfig proto. If not provided a serialized
-  // transform cannot be created from the Registry. Users must provide this for
-  // the transform to be compatible with serving.
+  // transform from the TransformConfig proto. If not provided, a serialized
+  // transform cannot be created from the Registry. Users must provide either
+  // `SetDeserializer` or `SetDeserializerWithDetail` for the transform to be
+  // compatible with serving.
   // TODO: Consider providing a default deserializer for simple ops
   // that do not rely on details.
   TransformRegistrar& SetDeserializer(
@@ -487,6 +488,48 @@ class TransformRegistrar {
     CHECK_OK(TransformRegistry::Instance().RegisterTransformDeserializer(
         name_, type_index_, std::move(deserializer)));
     return *this;
+  }
+
+  // Register a deserializer for a transform that unpacks a `DetailProtoT` from
+  // `TransformConfig::detail`. Validates that `detail` is present and unpacks
+  // cleanly into `DetailProtoT` before invoking `deserializer` with
+  // `(const DetailProtoT&)` or
+  // `(const DetailProtoT&, absl::Span<const std::shared_ptr<Resource>>)`.
+  template <typename DetailProtoT, typename DeserializerFn>
+  TransformRegistrar& SetDeserializerWithDetail(DeserializerFn&& deserializer) {
+    return SetDeserializer(
+        [name = name_,
+         deserializer = std::forward<DeserializerFn>(deserializer)](
+            const TransformConfig& config,
+            absl::Span<const std::shared_ptr<xla_serving::data::Resource>>
+                resources) -> absl::StatusOr<std::unique_ptr<TransformBase>> {
+          if (!config.has_detail()) {
+            return absl::InvalidArgumentError(
+                absl::StrCat(name, " config missing detail."));
+          }
+          DetailProtoT detail_proto;
+          if (!config.detail().UnpackTo(&detail_proto)) {
+            return absl::InvalidArgumentError(absl::StrCat(
+                "Failed to unpack ", detail_proto.GetTypeName(), " for ", name,
+                " (got ", config.detail().type_url(), ")."));
+          }
+          if constexpr (std::is_invocable_v<const DeserializerFn&,
+                                            const DetailProtoT&,
+                                            absl::Span<const std::shared_ptr<
+                                                xla_serving::data::Resource>>>) {
+            ASSIGN_OR_RETURN(auto transform,
+                             deserializer(detail_proto, resources));
+            return transform;
+          } else {
+            static_assert(
+                std::is_invocable_v<const DeserializerFn&, const DetailProtoT&>,
+                "SetDeserializerWithDetail callback must accept "
+                "(const DetailProtoT&) or (const DetailProtoT&, "
+                "absl::Span<const std::shared_ptr<Resource>>).");
+            ASSIGN_OR_RETURN(auto transform, deserializer(detail_proto));
+            return transform;
+          }
+        });
   }
 
   TransformRegistrar& SetInputConstraints(
