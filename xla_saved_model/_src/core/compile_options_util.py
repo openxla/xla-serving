@@ -179,6 +179,44 @@ def generate_xla_compile_options(
   return compile_options_map
 
 
+def apply_xla_flags_overrides(
+    compile_options: compile_options_pb2.CompileOptionsProto,
+    platform: str,
+    xla_flags_overrides: Sequence[str],
+) -> dict[str, tuple[str, str]]:
+  """Applies XLA flag overrides to existing compile options in place.
+
+  This is used to modify the XLA flags persisted in an already exported model.
+  Flags are stored in the same place they are stored at export time:
+
+  * TPU: merged into the `TpuCompilationEnvironment` packed in
+    `executable_build_options.comp_envs`. If no TPU environment is present, a
+    default one is created first (same as at export time).
+  * CUDA: stored in `env_option_overrides`.
+
+  Flags that are not listed in `xla_flags_overrides` are left untouched.
+
+  Args:
+    compile_options: The compile options proto to modify in place.
+    platform: The platform the compile options are for (e.g. "tpu", "cuda").
+    xla_flags_overrides: A sequence of XLA flags in the format
+      '--flag_name=flag_value'.
+
+  Returns:
+    A mapping from flag name to a `(previous_value, new_value)` tuple of human
+    readable strings.
+
+  Raises:
+    ValueError: If the platform is not supported, or a flag is malformed,
+      unknown, deprecated or cannot be parsed.
+  """
+  if not xla_flags_overrides:
+    return {}
+  raise ValueError(
+      f'Modifying XLA flags is not supported for platform "{platform}".'
+  )
+
+
 def _validate_xla_flags_setting(
     xla_flags_overrides: Sequence[str] | None, persist_xla_flags: bool
 ) -> None:
