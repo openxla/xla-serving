@@ -16,12 +16,19 @@
 
 from xla_saved_model.tools.stitching.apply_function_loader import get_params_structure
 from xla_saved_model.tools.stitching.apply_function_loader import load_apply_fn
+from xla_saved_model.tools.stitching.extra_asset_loader import find_extra_asset_path
+from xla_saved_model.tools.stitching.extra_asset_loader import load_extra_asset
 from xla_saved_model.tools.stitching.weights_loader import find_checkpoint_path
 from xla_saved_model.tools.stitching.weights_loader import load_params
 
+# `tf_function_loader` is not imported here because it needs TensorFlow, which
+# is an optional dependency.
+
 __all__ = [
     "find_checkpoint_path",
+    "find_extra_asset_path",
     "get_params_structure",
     "load_apply_fn",
+    "load_extra_asset",
     "load_params",
 ]
