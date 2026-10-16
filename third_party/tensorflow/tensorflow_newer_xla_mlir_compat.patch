@@ -1,0 +1,158 @@
+// Copyright 2026 Arm Ltd. and affiliates
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+diff --git a/tensorflow/compiler/mlir/tfrt/ir/mlrt/tf_mlrt_dialect.td b/tensorflow/compiler/mlir/tfrt/ir/mlrt/tf_mlrt_dialect.td
+index 05930a5b733..86736536b06 100644
+--- a/tensorflow/compiler/mlir/tfrt/ir/mlrt/tf_mlrt_dialect.td
++++ b/tensorflow/compiler/mlir/tfrt/ir/mlrt/tf_mlrt_dialect.td
+@@ -30,5 +30,7 @@ def TensorflowMlrt_Dialect : Dialect {
+
+   let cppNamespace = "::tensorflow::tf_mlrt";
++
++  let useStrictPropertiesInAssemblyFormat = 0;
+ }
+
+ class TensorflowMlrt_Op<string mnemonic, list<Trait> traits = []> :
+diff --git a/tensorflow/compiler/mlir/tfrt/ir/mlrt/mlrt_dialect.td b/tensorflow/compiler/mlir/tfrt/ir/mlrt/mlrt_dialect.td
+index f198713097d..f4a67783c72 100644
+--- a/tensorflow/compiler/mlir/tfrt/ir/mlrt/mlrt_dialect.td
++++ b/tensorflow/compiler/mlir/tfrt/ir/mlrt/mlrt_dialect.td
+@@ -28,5 +28,7 @@ def Mlrt_Dialect : Dialect {
+
+   let cppNamespace = "::mlrt::compiler";
++
++  let useStrictPropertiesInAssemblyFormat = 0;
+ }
+
+ def MlrtFutureType : DialectType<Mlrt_Dialect,
+diff --git a/tensorflow/compiler/mlir/tfrt/ir/mlrt/tf_mlrt_tpu_ops.td b/tensorflow/compiler/mlir/tfrt/ir/mlrt/tf_mlrt_tpu_ops.td
+index 30ec7087551..dfc9909a19e 100644
+--- a/tensorflow/compiler/mlir/tfrt/ir/mlrt/tf_mlrt_tpu_ops.td
++++ b/tensorflow/compiler/mlir/tfrt/ir/mlrt/tf_mlrt_tpu_ops.td
+@@ -30,5 +30,7 @@ def TensorflowMlrtTpu_Dialect : Dialect {
+
+   let cppNamespace = "::tensorflow::tf_mlrt_tpu";
++
++  let useStrictPropertiesInAssemblyFormat = 0;
+ }
+
+ class TensorflowMlrtTpu_Op<string mnemonic, list<Trait> traits = []> :
+diff --git a/tensorflow/core/ir/dialect.td b/tensorflow/core/ir/dialect.td
+index 99ac014b4e7..25665b0980f 100644
+--- a/tensorflow/core/ir/dialect.td
++++ b/tensorflow/core/ir/dialect.td
+@@ -169,6 +169,8 @@ def TFGraphDialect : Dialect {
+
+   let cppNamespace = "::mlir::tfg";
+
++  let useStrictPropertiesInAssemblyFormat = 0;
++
+   let useDefaultAttributePrinterParser = 1;
+   let hasNonDefaultDestructor = 1;
+   let hasOperationInterfaceFallback = 1;
+diff --git a/tensorflow/compiler/mlir/tfrt/ir/tfrt_fallback_async.td b/tensorflow/compiler/mlir/tfrt/ir/tfrt_fallback_async.td
+index 864884358c6..3012a4bed93 100644
+--- a/tensorflow/compiler/mlir/tfrt/ir/tfrt_fallback_async.td
++++ b/tensorflow/compiler/mlir/tfrt/ir/tfrt_fallback_async.td
+@@ -34,5 +34,7 @@ def FallbackAsync_Dialect : Dialect {
+
+   let cppNamespace = "::tfrt::fallback_async";
++
++  let useStrictPropertiesInAssemblyFormat = 0;
+ }
+
+ class FallbackAsync_Op<string mnemonic, list<Trait> traits = []> :
+diff --git a/third_party/tf_runtime/mlir_strict_properties_compat.patch b/third_party/tf_runtime/mlir_strict_properties_compat.patch
+new file mode 100644
+index 00000000000..65bc06613f2
+--- /dev/null
++++ b/third_party/tf_runtime/mlir_strict_properties_compat.patch
+@@ -0,0 +1,66 @@
++/* Copyright 2026 The TensorFlow Authors. All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++==============================================================================*/
++diff --git a/include/tfrt/basic_kernels/opdefs/tfrt_base.td b/include/tfrt/basic_kernels/opdefs/tfrt_base.td
++index e8e7f38b..753230b1 100644
++--- a/include/tfrt/basic_kernels/opdefs/tfrt_base.td
+++++ b/include/tfrt/basic_kernels/opdefs/tfrt_base.td
++@@ -34,5 +34,7 @@ def TFRT_Dialect : Dialect {
++
++   let cppNamespace = "::tfrt::compiler";
+++
+++  let useStrictPropertiesInAssemblyFormat = 0;
++ }
++
++ def TFRT_ChainType :
++diff --git a/include/tfrt/core_runtime/opdefs/corert_base.td b/include/tfrt/core_runtime/opdefs/corert_base.td
++--- a/include/tfrt/core_runtime/opdefs/corert_base.td
+++++ b/include/tfrt/core_runtime/opdefs/corert_base.td
++@@ -32,1 +32,3 @@ def CoreRT_Dialect : Dialect {
++   let cppNamespace = "::tfrt::corert";
+++
+++  let useStrictPropertiesInAssemblyFormat = 0;
++diff --git a/include/tfrt/core_runtime/opdefs/sync/core_runtime.td b/include/tfrt/core_runtime/opdefs/sync/core_runtime.td
++--- a/include/tfrt/core_runtime/opdefs/sync/core_runtime.td
+++++ b/include/tfrt/core_runtime/opdefs/sync/core_runtime.td
++@@ -35,5 +35,7 @@ def CoreRTSync_Dialect : Dialect {
++
++   let cppNamespace = "::tfrt::corert_sync";
+++
+++  let useStrictPropertiesInAssemblyFormat = 0;
++ }
++
++ // Base class for corert dialect ops.
++diff --git a/include/tfrt/test_kernels/opdefs/test_kernels.td b/include/tfrt/test_kernels/opdefs/test_kernels.td
++--- a/include/tfrt/test_kernels/opdefs/test_kernels.td
+++++ b/include/tfrt/test_kernels/opdefs/test_kernels.td
++@@ -35,5 +35,7 @@ def Test_Dialect : Dialect {
++
++   let cppNamespace = "::tfrt::test";
+++
+++  let useStrictPropertiesInAssemblyFormat = 0;
++ }
++
++ def ProtoExampleType : OpaqueType<"proto", "example", "!proto.example type">;
++diff --git a/include/tfrt/test_kernels/opdefs/test_kernels_sync.td b/include/tfrt/test_kernels/opdefs/test_kernels_sync.td
++--- a/include/tfrt/test_kernels/opdefs/test_kernels_sync.td
+++++ b/include/tfrt/test_kernels/opdefs/test_kernels_sync.td
++@@ -36,5 +36,7 @@ def Test_Sync_Dialect : Dialect {
++
++   let cppNamespace = "::tfrt::test_sync";
+++
+++  let useStrictPropertiesInAssemblyFormat = 0;
++ }
++
++ #endif  // TEST_SYNC_OPS
+diff --git a/third_party/tf_runtime/workspace.bzl b/third_party/tf_runtime/workspace.bzl
+index 5b9c8125795..411f90f37f9 100644
+--- a/third_party/tf_runtime/workspace.bzl
++++ b/third_party/tf_runtime/workspace.bzl
+@@ -34,5 +34,6 @@ def repo():
+         patch_file = [
+             "//third_party/tf_runtime:f16_attr.patch",
+             "//third_party/tf_runtime:pointer_union.patch",
++            "//third_party/tf_runtime:mlir_strict_properties_compat.patch",
+         ],
+     )
