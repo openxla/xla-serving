@@ -22,6 +22,23 @@ SHLO_MIME_TYPE = 'application/x.mlir-stablehlo'
 SHLO_VERSION = '1.0'
 
 ################################################################################
+# TF SavedModel constants
+################################################################################
+
+# The directory, relative to the model directory, of the TF SavedModel that the
+# model's TF functions are saved in, and served from.
+TF_SAVED_MODEL_SUB_DIR = 'tf_saved_model/'
+
+# The directory, relative to the model directory, of the TF SavedModel as saved
+# before it was converted into `TF_SAVED_MODEL_SUB_DIR`. Only models saved with
+# a conversion step, and asked to keep the original, have it. Unlike the
+# converted TF SavedModel, it keeps the object graph, so loading it restores
+# every attribute of the saved module, not only its signatures. A model saved
+# without a conversion step has no such copy: `TF_SAVED_MODEL_SUB_DIR` is itself
+# unconverted.
+UNCONVERTED_TF_SAVED_MODEL_SUB_DIR = 'unconverted_tf_saved_model/'
+
+################################################################################
 # Executable constants
 ################################################################################
 

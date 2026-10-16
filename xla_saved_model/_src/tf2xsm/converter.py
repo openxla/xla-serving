@@ -28,6 +28,7 @@ import tensorflow as tf
 
 from xla_saved_model.protos import manifest_pb2
 from xla_saved_model.protos import tf_concrete_function_handle_pb2
+from xla_saved_model._src.core import constants as core_constants
 from xla_saved_model._src.core import file_utils
 from xla_saved_model._src.core import persistence_lib
 from xla_saved_model._src.core import serializable_function
@@ -46,7 +47,10 @@ TF_CONCRETE_FUNCTION_HANDLE_MIME_TYPE = (
     ' type=xla_saved_model_tf_concrete_function_handle.TfConcreteFunctionHandle'
 )
 TF_CONCRETE_FUNCTION_HANDLE_VERSION = '0.0.1'
-XSM_TF_SAVED_MODEL_SUB_DIR = 'tf_saved_model/'
+XSM_TF_SAVED_MODEL_SUB_DIR = core_constants.TF_SAVED_MODEL_SUB_DIR
+XSM_UNCONVERTED_TF_SAVED_MODEL_SUB_DIR = (
+    core_constants.UNCONVERTED_TF_SAVED_MODEL_SUB_DIR
+)
 TF_SAVED_MODEL_SUPPLEMENTAL_NAME = 'tensorflow_saved_model'
 SAVED_MODEL_MIME_TYPE = 'application/x.tensorflow-saved-model'
 SAVED_MODEL_VERSION = '1.0'

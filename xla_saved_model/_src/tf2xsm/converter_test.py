@@ -24,6 +24,7 @@ import chex
 import jax
 import tensorflow as tf
 
+from xla_saved_model._src.core import constants as core_constants
 from xla_saved_model._src.core import shlo_type
 from xla_saved_model._src.core import test_utils
 from xla_saved_model._src.tf2xsm import converter
