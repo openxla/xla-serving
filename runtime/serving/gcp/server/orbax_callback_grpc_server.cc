@@ -49,9 +49,9 @@
 #include "xla/tsl/platform/file_system.h"  // from @xla
 #include "tsl/platform/cpu_info.h"  // from @tsl
 #if ENABLE_TF == 1
-  #include "runtime/tensorflow/tf_compatible_interpreter_create_options.h"  // from @xla_serving
+#include "runtime/tensorflow/tf_compatible_interpreter_create_options.h"  // from @xla_serving
 #else
-  #include "runtime/interpreter/interpreter_create_options.h"  // from @xla_serving
+#include "runtime/interpreter/interpreter_create_options.h"  // from @xla_serving
 #endif
 #include "protos/grpc/model_server_config.pb.h"  // from @xla_serving
 #include "runtime/serving/gcp/server/flags.h"  // from @xla_serving
@@ -268,6 +268,12 @@ OrbaxCallbackGrpcServer::Create(const ModelServerConfig& config,
     ifrt_client_options.cpu.nanort_intra_op_threadpool =
         computation_thread_pool->AsEigenThreadPool();
   }
+  ifrt_client_options.tpu.use_premapped_buffer =
+      options.tpu_use_premapped_buffer;
+  ifrt_client_options.tpu.premapped_buffer_size =
+      options.tpu_premapped_buffer_size;
+  ifrt_client_options.tpu.num_premapped_partitions_per_device =
+      options.tpu_num_premapped_partitions_per_device;
   TF_ASSIGN_OR_RETURN(client,
                       GetIfrtClient(pjrt_platform, ifrt_client_options));
   LOG(INFO) << "Orbax Server initialized for Orbax platform: " << orbax_platform
@@ -321,9 +327,8 @@ OrbaxCallbackGrpcServer::Create(const ModelServerConfig& config,
     entry->interpreter = std::move(interpreter);
     auto [_, inserted] = models.insert({model_name, std::move(entry)});
     if (!inserted) {
-      return absl::AlreadyExistsError(
-          absl::StrCat("Duplicate model name '", model_name,
-                       "' in ModelServerConfig."));
+      return absl::AlreadyExistsError(absl::StrCat(
+          "Duplicate model name '", model_name, "' in ModelServerConfig."));
     }
   }
 

@@ -15,6 +15,7 @@
 #ifndef XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_ORBAX_CALLBACK_GRPC_SERVER_H_
 #define XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_ORBAX_CALLBACK_GRPC_SERVER_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -57,6 +58,14 @@ struct OrbaxCallbackGrpcServerOptions {
   // no extra compute threads are created. Otherwise NanoRt uses its own
   // process-wide intra-op thread pool.
   bool nanort_share_computation_thread_pool = true;
+  // TPU only. If true, enables premapped buffer in the PjRt TPU client.
+  bool tpu_use_premapped_buffer = false;
+  // TPU only. Size in bytes of the premapped buffer for the PjRt TPU client
+  // when `tpu_use_premapped_buffer` is true. Defaults to 2 GiB.
+  size_t tpu_premapped_buffer_size = 2 * (1ULL << 30);
+  // TPU only. Number of premapped partitions per device for the PjRt TPU client
+  // when `tpu_use_premapped_buffer` is true.
+  int tpu_num_premapped_partitions_per_device = 1;
 };
 
 class OrbaxCallbackGrpcServer final

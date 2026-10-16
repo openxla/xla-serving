@@ -15,6 +15,7 @@
 #ifndef XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_IFRT_CLIENT_CREATOR_H_
 #define XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_IFRT_CLIENT_CREATOR_H_
 
+#include <cstddef>
 #include <memory>
 #include <optional>
 
@@ -48,7 +49,22 @@ struct IfrtClientOptions {
     Eigen::ThreadPoolInterface* nanort_intra_op_threadpool = nullptr;
   };
 
+  // Options for the TPU platform.
+  struct TpuOptions {
+    // If true, enables premapped buffer in the PjRt TPU client.
+    bool use_premapped_buffer = false;
+
+    // Size in bytes of the premapped buffer for the PjRt TPU client when
+    // `use_premapped_buffer` is true. Defaults to 2 GiB.
+    size_t premapped_buffer_size = 2 * (1ULL << 30);
+
+    // Number of premapped partitions per device for the PjRt TPU client when
+    // `use_premapped_buffer` is true.
+    int num_premapped_partitions_per_device = 1;
+  };
+
   CpuOptions cpu;
+  TpuOptions tpu;
 };
 
 // Creates an IFRT client for `pjrt_platform` (e.g. "cpu", "gpu", "tpu"). Only

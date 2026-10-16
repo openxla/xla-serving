@@ -16,6 +16,7 @@
 //
 // This file is responsible for setting up the server, loading models, and
 // handling requests.
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -35,7 +36,9 @@
 #include "google/protobuf/text_format.h"
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/status.h"  // from @xla
+// clang-format off
 #include "xla/tsl/profiler/rpc/profiler_server.h"  // from @xla
+// clang-format on
 #include "tsl/platform/init_main.h"  // from @tsl
 
 ABSL_FLAG(int, port, 8500, "Port for the gRPC server to listen on.");
@@ -92,6 +95,15 @@ ABSL_FLAG(bool, nanort_share_computation_thread_pool, false,
           "Only used when --use_nanort_cpu_client is true. If true, the NanoRt "
           "client uses the server's computation thread pool as its intra-op "
           "thread pool instead of creating its own.");
+ABSL_FLAG(bool, tpu_use_premapped_buffer, false,
+          "TPU only. If true, enables premapped buffer in the PjRt TPU "
+          "client.");
+ABSL_FLAG(size_t, tpu_premapped_buffer_size, 2 * (1ULL << 30),
+          "TPU only. Size in bytes of the premapped buffer for the PjRt TPU "
+          "client when --tpu_use_premapped_buffer is true.");
+ABSL_FLAG(int, tpu_num_premapped_partitions_per_device, 1,
+          "TPU only. Number of premapped partitions per device for the PjRt "
+          "TPU client when --tpu_use_premapped_buffer is true.");
 
 void RunServer() {
   std::string server_address = absl::StrCat("[::]:", absl::GetFlag(FLAGS_port));
@@ -127,6 +139,12 @@ void RunServer() {
   options.use_nanort_cpu_client = absl::GetFlag(FLAGS_use_nanort_cpu_client);
   options.nanort_share_computation_thread_pool =
       absl::GetFlag(FLAGS_nanort_share_computation_thread_pool);
+  options.tpu_use_premapped_buffer =
+      absl::GetFlag(FLAGS_tpu_use_premapped_buffer);
+  options.tpu_premapped_buffer_size =
+      absl::GetFlag(FLAGS_tpu_premapped_buffer_size);
+  options.tpu_num_premapped_partitions_per_device =
+      absl::GetFlag(FLAGS_tpu_num_premapped_partitions_per_device);
 
   LOG(INFO) << "Server address: " << server_address;
   absl::StatusOr<std::unique_ptr<xla_serving::serving::OrbaxCallbackGrpcServer>>
@@ -137,7 +155,7 @@ void RunServer() {
                                       &config_content));
     xla_serving::serving::ModelServerConfig model_server_config;
     if (!google::protobuf::TextFormat::ParseFromString(config_content,
-                                              &model_server_config)) {
+                                             &model_server_config)) {
       LOG(FATAL) << "Failed to parse ModelServerConfig from "
                  << model_config_file;
     }
