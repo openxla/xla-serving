@@ -508,6 +508,15 @@ TEST_F(BatchRunnerOpTest, DefaultPriorityAwareBatchingOptions) {
   EXPECT_FALSE(options.priority_aware_batching_options.enable_task_resplit);
 }
 
+TEST_F(BatchRunnerOpTest, DefaultSchedulerConfig) {
+  BatchRunnerOpOptions options;
+
+  EXPECT_EQ(options.scheduler_config.scheduler_scope,
+            SchedulerScope::kLocalToPipeline);
+  EXPECT_EQ(options.scheduler_config.queue_selection_policy,
+            QueueSelectionPolicy::kRoundRobin);
+}
+
 TEST_F(BatchRunnerOpTest, RunFailsBatchedKernelFailsWrongInputShape) {
   TF_ASSERT_OK_AND_ASSIGN(
       const std::string stablehlo_str,

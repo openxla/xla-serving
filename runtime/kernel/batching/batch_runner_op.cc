@@ -186,6 +186,9 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateBatchRunnerOp(
   SharedBatchScheduler<BatchResourceBase::BatchTask>::Options scheduler_options;
 
   scheduler_options.num_batch_threads = options.num_batch_threads;
+  scheduler_options.scheduler_scope = options.scheduler_config.scheduler_scope;
+  scheduler_options.queue_selection_policy =
+      options.scheduler_config.queue_selection_policy;
 
   std::shared_ptr<SharedBatchScheduler<BatchResourceBase::BatchTask>> batcher;
   TF_RETURN_IF_ERROR(SharedBatchScheduler<BatchResourceBase::BatchTask>::Create(
