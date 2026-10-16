@@ -163,6 +163,59 @@ def _shapes_agree(shape: Sequence[Any], expected: Sequence[Any]) -> bool:
   )
 
 
+def _fits(leaf: Any, want: Any) -> bool:
+  return leaf.dtype == want.dtype and _shapes_agree(leaf.shape, want.shape)
+
+
+def _unrecorded_node_prefix(path: Sequence[Any]) -> tuple[str, ...] | None:
+  """Returns the path of the unrecorded custom node a leaf may belong to.
+
+  A function whose recorded calling convention lost a custom node, e.g. because
+  the node's auxiliary data could not be serialized, sees that node as nested
+  lists. Its leaves then end in a run of sequence indices, which name nothing in
+  a checkpoint saved from the real node. This returns the path without that
+  run, or None if the path does not end in one or has nothing before it.
+  """
+  end = len(path)
+  while end > 0 and isinstance(path[end - 1], jax.tree_util.SequenceKey):
+    end -= 1
+  if end == len(path) or end == 0:
+    return None
+  return _leaf_names(path[:end])
+
+
+def _match_unrecorded_node(
+    expected: Sequence[tuple[int, Any]],
+    candidates: Sequence[tuple[tuple[str, ...], Any]],
+) -> dict[int, tuple[str, ...]] | None:
+  """Matches the leaves of a node seen as lists to the leaves saved for it.
+
+  Names cannot be used, and neither can positions: the order a custom node
+  flattens its fields in need not be the order of the names the checkpoint
+  saved them under. Each expected leaf is matched to the only saved leaf of its
+  shape and dtype instead, so an array can never be bound to the wrong field.
+
+  Args:
+    expected: `(index, abstract value)` of each expected leaf of the node.
+    candidates: `(name, array)` of each unmatched saved leaf under the node.
+
+  Returns:
+    The name of the saved leaf for each expected index, or None if the leaves
+    are not in one-to-one correspondence by shape and dtype.
+  """
+  if len(expected) != len(candidates):
+    return None
+  matches = {}
+  for index, want in expected:
+    fitting = [name for name, leaf in candidates if _fits(leaf, want)]
+    if len(fitting) != 1:
+      return None
+    matches[index] = fitting[0]
+  if len(set(matches.values())) != len(matches):
+    return None
+  return matches
+
+
 def restructure_params(
     restored: jaxtyping.PyTree, expected: jaxtyping.PyTree
 ) -> jaxtyping.PyTree:
@@ -173,6 +226,12 @@ def restructure_params(
   `qwix.QArray`. Leaves are matched by the names along their key paths, not by
   position, so a difference in flattening order between the two cannot bind an
   array to the wrong parameter.
+
+  A function loaded from a model that could not record a custom node, e.g. a
+  `qwix.WithAux` whose `HowToQuantize` cannot be serialized, expects that node
+  as nested lists, whose indices name nothing in the checkpoint. The leaves of
+  such a node are matched to the leaves saved under the node's path by shape
+  and dtype instead, provided each expected leaf fits exactly one of them.
 
   Args:
     restored: The restored parameters.
@@ -191,21 +250,48 @@ def restructure_params(
   }
   expected_with_path, treedef = jax.tree.flatten_with_path(expected)
 
-  leaves = []
-  missing = []
+  leaves: list[Any] = [None] * len(expected_with_path)
+  unmatched = []
   mismatched = []
-  for path, want in expected_with_path:
+  for index, (path, want) in enumerate(expected_with_path):
     name = _leaf_names(path)
     if name not in by_name:
-      missing.append("/".join(name))
+      unmatched.append(index)
       continue
     leaf = by_name.pop(name)
-    if leaf.dtype != want.dtype or not _shapes_agree(leaf.shape, want.shape):
+    if not _fits(leaf, want):
       mismatched.append(
           f"{'/'.join(name)}: {leaf.dtype}{list(leaf.shape)}, expected"
           f" {want.dtype}{list(want.shape)}"
       )
-    leaves.append(leaf)
+    leaves[index] = leaf
+
+  # Leaves of custom nodes the function sees as lists, grouped by node.
+  unrecorded_nodes: dict[tuple[str, ...], list[tuple[int, Any]]] = {}
+  missing = []
+  for index in unmatched:
+    path, want = expected_with_path[index]
+    prefix = _unrecorded_node_prefix(path)
+    if prefix is None:
+      missing.append(index)
+    else:
+      unrecorded_nodes.setdefault(prefix, []).append((index, want))
+  for prefix, node_leaves in unrecorded_nodes.items():
+    candidates = [
+        (name, leaf)
+        for name, leaf in by_name.items()
+        if len(name) > len(prefix) and name[: len(prefix)] == prefix
+    ]
+    matches = _match_unrecorded_node(node_leaves, candidates)
+    if matches is None:
+      missing.extend(index for index, _ in node_leaves)
+      continue
+    for index, name in matches.items():
+      leaves[index] = by_name.pop(name)
+  missing = [
+      "/".join(_leaf_names(expected_with_path[index][0]))
+      for index in sorted(missing)
+  ]
 
   problems = []
   if missing:

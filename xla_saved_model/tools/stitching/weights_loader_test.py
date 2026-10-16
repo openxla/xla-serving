@@ -64,6 +64,22 @@ jax.tree_util.register_pytree_node(
 )
 
 
+# Stands in for the `HowToQuantize` of a `qwix.WithAux`: auxiliary data that
+# the model cannot record, so a loaded function sees the node as a list.
+@dataclasses.dataclass(frozen=True)
+class _How:
+  qtype: str
+
+
+# Stands in for a `qwix.WithAux` holding a `qwix.QArray`.
+@jax.tree_util.register_dataclass
+@dataclasses.dataclass(frozen=True)
+class _Unrecordable:
+  qvalue: Any
+  scale: Any
+  how: _How = dataclasses.field(metadata=dict(static=True), default=_How(''))
+
+
 def _abstract(params):
   return jax.tree.map(lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype), params)
 
@@ -97,6 +113,16 @@ def _dense(params, inputs):
 def _quantized(params, inputs):
   kernel = params['kernel']
   return {'out': inputs['x'] * kernel.value * kernel.scale}
+
+
+def _unrecordable(params, inputs):
+  # The node is a list if the function was loaded without its structure.
+  kernel = params['kernel']
+  if isinstance(kernel, _Unrecordable):
+    qvalue, scale = kernel.qvalue, kernel.scale
+  else:
+    qvalue, scale = kernel
+  return {'out': inputs['x'] * qvalue.astype(jnp.float32) * scale}
 
 
 def _save_dense_model(export_path):
@@ -388,6 +414,32 @@ class LoadParamsTest(absltest.TestCase):
         apply_fn(loaded, inputs)['out'], _quantized(params, inputs)['out']
     )
 
+  def test_loads_a_node_the_model_could_not_record(self):
+    params = {
+        'kernel': _Unrecordable(
+            qvalue=jnp.array([1, 2], jnp.int8),
+            scale=jnp.array([3.0], jnp.float32),
+            how=_How('int8'),
+        )
+    }
+    export_path = self.create_tempdir().full_path
+    _save_model(params, _unrecordable, export_path)
+
+    apply_fn = stitching.load_apply_fn(export_path, _FUNCTION_NAME)
+    structure = stitching.get_params_structure(apply_fn)
+    loaded = stitching.load_params(export_path, _FUNCTION_NAME, structure)
+
+    # The function sees the node as a list, which names nothing in the
+    # checkpoint saved from the real node.
+    self.assertIsInstance(structure['kernel'], list)
+    self.assertIsInstance(loaded['kernel'], list)
+    np.testing.assert_array_equal(loaded['kernel'][0], [1, 2])
+    np.testing.assert_array_equal(loaded['kernel'][1], [3.0])
+    inputs = {'x': jnp.array([1.0, 1.0])}
+    np.testing.assert_array_equal(
+        apply_fn(loaded, inputs)['out'], _unrecordable(params, inputs)['out']
+    )
+
 
 class GetParamsStructureTest(absltest.TestCase):
 
@@ -509,6 +561,93 @@ class RestructureParamsTest(absltest.TestCase):
     self.assertIsInstance(result, _Keyless)
     np.testing.assert_array_equal(result.first, jnp.zeros((1,)))
     np.testing.assert_array_equal(result.second, jnp.ones((2,)))
+
+  def test_matches_an_unrecorded_node_by_shape_and_dtype(self):
+    # How a `qwix.WithAux` looks to a function that could not record it, and
+    # how its checkpoint restores it. Matching the dict's sorted leaves by
+    # position would swap the two.
+    expected = {
+        'kernel': [
+            jax.ShapeDtypeStruct((1,), jnp.float32),
+            jax.ShapeDtypeStruct((2,), jnp.int8),
+        ],
+        'bias': jax.ShapeDtypeStruct((2,), jnp.float32),
+    }
+    restored = {
+        'kernel': {
+            'array': {
+                'qvalue': jnp.array([1, 2], jnp.int8),
+                'scale': jnp.array([3.0]),
+            }
+        },
+        'bias': jnp.zeros((2,)),
+    }
+
+    result = weights_loader.restructure_params(restored, expected)
+
+    self.assertIsInstance(result['kernel'], list)
+    np.testing.assert_array_equal(result['kernel'][0], [3.0])
+    np.testing.assert_array_equal(result['kernel'][1], [1, 2])
+    np.testing.assert_array_equal(result['bias'], jnp.zeros((2,)))
+
+  def test_matches_an_unrecorded_node_seen_as_nested_lists(self):
+    expected = {
+        'kernel': [[
+            jax.ShapeDtypeStruct((2,), jnp.int8),
+            jax.ShapeDtypeStruct((1,), jnp.float32),
+        ]]
+    }
+    restored = {
+        'kernel': {
+            'array': {
+                'qvalue': jnp.array([1, 2], jnp.int8),
+                'scale': jnp.array([3.0]),
+            }
+        }
+    }
+
+    result = weights_loader.restructure_params(restored, expected)
+
+    np.testing.assert_array_equal(result['kernel'][0][0], [1, 2])
+    np.testing.assert_array_equal(result['kernel'][0][1], [3.0])
+
+  def test_rejects_an_unrecorded_node_matching_ambiguously(self):
+    # Two saved leaves of the same shape and dtype could be either field.
+    spec = jax.ShapeDtypeStruct((2,), jnp.float32)
+    expected = {'kernel': [spec, spec]}
+    restored = {'kernel': {'a': jnp.zeros((2,)), 'b': jnp.ones((2,))}}
+
+    with self.assertRaisesRegex(
+        ValueError,
+        r"missing \['kernel/0', 'kernel/1'\]; unexpected \['kernel/a',"
+        r" 'kernel/b'\]",
+    ):
+      weights_loader.restructure_params(restored, expected)
+
+  def test_rejects_an_unrecorded_node_with_another_number_of_leaves(self):
+    expected = {'kernel': [jax.ShapeDtypeStruct((2,), jnp.int8)]}
+    restored = {
+        'kernel': {
+            'qvalue': jnp.array([1, 2], jnp.int8),
+            'scale': jnp.array([3.0]),
+        }
+    }
+
+    with self.assertRaisesRegex(
+        ValueError,
+        r"missing \['kernel/0'\]; unexpected \['kernel/qvalue',"
+        r" 'kernel/scale'\]",
+    ):
+      weights_loader.restructure_params(restored, expected)
+
+  def test_rejects_an_unrecorded_node_without_a_fitting_leaf(self):
+    expected = {'kernel': [jax.ShapeDtypeStruct((2,), jnp.int8)]}
+    restored = {'kernel': {'qvalue': jnp.array([1, 2, 3], jnp.int8)}}
+
+    with self.assertRaisesRegex(
+        ValueError, r"missing \['kernel/0'\]; unexpected \['kernel/qvalue'\]"
+    ):
+      weights_loader.restructure_params(restored, expected)
 
   def test_limits_the_number_of_reported_leaves(self):
     max_reported = weights_loader._MAX_REPORTED  # pylint: disable=protected-access

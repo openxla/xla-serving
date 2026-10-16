@@ -32,6 +32,7 @@ if importlib.util.find_spec("tensorflow") is None:
       "xla_saved_model/_src/export/main_lib_orchestration_test.py",
       "xla_saved_model/_src/processors/tf_processor_test.py",
       "xla_saved_model/_src/tf2xsm",
+      "xla_saved_model/tools/stitching/tf_function_loader_test.py",
   ]
 
 
