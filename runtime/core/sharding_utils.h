@@ -93,6 +93,21 @@ tsl::Future<HostBuffer> MakeHostBufferFromArray(
     const xla::ifrt::DeviceListRef& device_list,
     tsl::thread::ThreadPool& thread_pool);
 
+// Copies `input_array` from the device into `destination`, host memory the
+// caller already owns, rather than into a newly allocated buffer. When
+// `destination` is pinned (page-locked) memory the device writes into it
+// directly by DMA, with no intermediate staging buffer. `destination` must stay
+// alive until the returned future is ready.
+//
+// `destination` must have the array's dtype, which must be fixed-size, and the
+// same number of elements, laid out densely in row-major order. Only arrays
+// whose whole value lives on one device are supported: replicated arrays and
+// arrays placed on a single device. Donates `input_array`.
+tsl::Future<> CopyArrayToHostBuffer(xla::ifrt::Client& ifrt_client,
+                                    xla::ifrt::Array& input_array,
+                                    const xla::ifrt::ShardingRef& ifrt_sharding,
+                                    const HostBuffer& destination);
+
 // Creates an `xla::ifrt::DeviceList` from a list of device ids.
 absl::StatusOr<xla::ifrt::DeviceListRef> CreateDeviceList(
     xla::ifrt::Client& ifrt_client, absl::Span<const int> device_ids);

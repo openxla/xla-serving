@@ -209,6 +209,7 @@ cc_library(
         "@xla_serving//runtime/core:common_util",
         "@xla_serving//runtime/core:constants",
         "@xla_serving//runtime/core:flat_signature",
+        "@xla_serving//runtime/core:host_buffer",
         "@xla_serving//runtime/core:ifrt_device_utils",
         "@xla_serving//runtime/core:ifrt_loaded_variable_registry",
         "@xla_serving//runtime/core:stablehlo",

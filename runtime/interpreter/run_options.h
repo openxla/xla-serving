@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <variant>
 
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/time/time.h"  // from @abseil-cpp
@@ -26,6 +27,15 @@
 #include "xla/python/ifrt/array.h"  // from @xla
 
 namespace xla_serving {
+
+// Caller-provided memory for one component output; see
+// `RunOptions::preallocated_outputs`.
+//
+// - `xla::ifrt::ArrayRef`: device memory the execution writes its result into
+//   directly, through input aliasing.
+// - `HostBuffer`: host memory, typically pinned, that the result is copied into
+//   from the device.
+using PreallocatedOutput = std::variant<xla::ifrt::ArrayRef, HostBuffer>;
 
 // Per-request options for running a model. This struct is part of the public
 // API, and, thus, adding new fields should be done with caution since they may
@@ -50,38 +60,49 @@ struct RunOptions {
   // value (HostBuffer vs DeviceBuffer) and does not use a placement map.
   absl::flat_hash_map<std::string, Placement> output_placement_map;
 
-  // Pre-allocated device memory for components to write their results into,
-  // keyed by the name of the component output each array backs, as it appears
-  // in that component's named signature.
+  // Caller-provided memory for components' results, keyed by the name of the
+  // component output each entry backs, as it appears in that component's
+  // named signature. Requires a keyword-arguments based pipeline.
   //
   // Output names need no component qualifier: in a keyword-arguments based
-  // pipeline, which input aliasing requires, every value a run produces lives
-  // in one name-keyed map, so each output name belongs to exactly one
-  // component. The interpreter resolves each name to that component before the
-  // run and rejects a name that is not an output of any component, or that is
-  // produced by a component whose StableHLO function was not exported for
-  // input aliasing.
+  // pipeline every value a run produces lives in one name-keyed map, so each
+  // output name belongs to exactly one component. The interpreter resolves
+  // each name to that component before the run and rejects a name that is not
+  // an output of any component.
   //
-  // Components none of whose outputs appear in the map -- which is all of them
-  // by default -- allocate their own output memory, so a caller that wants
-  // pre-allocation for one component in a pipeline does not have to supply
-  // buffers for the rest. A component any of whose outputs appear must have
-  // all of them supplied: input aliasing is all-or-nothing per execution.
+  // Each entry is one of two kinds, and a component's entries must all be of
+  // the same kind:
   //
-  // Each array must match the dtype, shape, sharding and layout of the output
-  // it backs, and must be solely owned by the caller: the arrays are donated
-  // to the execution and consumed by it. The results come back through the
-  // normal return path, backed by this same memory.
+  // - Device memory (`xla::ifrt::ArrayRef`), written into directly through
+  //   input aliasing. The component's StableHLO function must have been
+  //   exported for input aliasing, and a component any of whose outputs are
+  //   given an array must be given one for all of them: input aliasing is
+  //   all-or-nothing per execution. Each array must match the dtype, shape,
+  //   sharding and layout of the output it backs, and must be solely owned by
+  //   the caller: the arrays are donated to the execution and consumed by it.
+  //   The results come back through the normal return path, backed by this
+  //   same memory.
+  //
+  // - Host memory (`HostBuffer`), which the result is copied into from the
+  //   device instead of into a buffer the runtime allocates. Pinned
+  //   (page-locked) memory lets the device write into it directly by DMA;
+  //   pageable memory works too, but is staged. Works with any component, for
+  //   any subset of its outputs. Each buffer must have the dtype and shape of
+  //   the output it backs, laid out densely in row-major order, and the output
+  //   must be replicated or placed on a single device. The output is returned
+  //   on the host, overriding `output_placement_map`, as a `HostBuffer` backed
+  //   by the caller's memory. The caller must not touch the buffer until the
+  //   run completes.
+  //
+  // Outputs that do not appear in the map -- which is all of them by default --
+  // get their memory from the runtime as usual.
   //
   // The names are those of component outputs, not of the pipeline's outputs,
-  // because the guarantee is about the memory an accelerator execution writes
-  // into. Where a component is followed by a post-processor, the aliased
-  // memory holds the accelerator result feeding it rather than the final
-  // value the caller gets back.
-  //
-  // TODO : Support pre-allocated pinned host memory.
-  absl::flat_hash_map<std::string, xla::ifrt::ArrayRef>
-      input_aliased_output_arrays;
+  // because the guarantee is about the memory an accelerator execution's
+  // results land in. Where a component is followed by a post-processor, that
+  // memory holds the accelerator result feeding it rather than the final value
+  // the caller gets back.
+  absl::flat_hash_map<std::string, PreallocatedOutput> preallocated_outputs;
 
   // The unique identifier for this execution request. Internal-only field,
   // populated automatically by the Interpreter. User should not set this field.

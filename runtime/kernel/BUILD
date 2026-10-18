@@ -142,6 +142,7 @@ cc_library(
         "@xla_serving//runtime/core:value",
         "@xla_serving//runtime/core/streaming:utils",
         "@xla_serving//runtime/interpreter:manifest_utils",
+        "@xla_serving//runtime/interpreter:run_options",
     ],
 )
 

@@ -381,15 +381,14 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeAssembledArrayFromHostBuffer(
       xla::ifrt::SingleDeviceShardSemantics::kAddressableShards);
 }
 
-absl::StatusOr<tsl::Future<HostBuffer>> MakeHostBufferFromArrayHelper(
+// Returns a single-device array that holds all of `input_array`'s data, when
+// `ifrt_sharding` makes one exist: one replica of a replicated array, or the
+// only shard of an array placed on a single device. Returns nullptr for any
+// other sharding (e.g. tiled), whose data is split across shards. Donates
+// `input_array`.
+absl::StatusOr<xla::ifrt::ArrayRef> GetSingleShardHoldingWholeArray(
     xla::ifrt::Client& ifrt_client, xla::ifrt::Array& input_array,
-    const xla::ifrt::ShardingRef& ifrt_sharding,
-    const xla::ifrt::DeviceListRef& device_list,
-    tsl::thread::ThreadPool& thread_pool) {
-  VLOG(2) << "MakeHostBufferFromArrayHelper" << input_array.dtype();
-  VLOG(2) << "Create HostBuffer from array based on sharding: "
-          << *ifrt_sharding;
-  xla::ifrt::DType input_dtype = input_array.dtype();
+    const xla::ifrt::ShardingRef& ifrt_sharding) {
   const xla::ifrt::Shape& input_shape = input_array.shape();
 
   bool is_replicated = false;
@@ -407,7 +406,7 @@ absl::StatusOr<tsl::Future<HostBuffer>> MakeHostBufferFromArrayHelper(
   if (is_replicated) {
     VLOG(1) << "Fast path for replication";
     // fast path for replication.
-    TF_ASSIGN_OR_RETURN(auto fully_replicated_array,
+    TF_ASSIGN_OR_RETURN(xla::ifrt::ArrayRef fully_replicated_array,
                         input_array.FullyReplicatedShard(
                             xla::ifrt::ArrayCopySemantics::kDonateInput));
 
@@ -416,61 +415,77 @@ absl::StatusOr<tsl::Future<HostBuffer>> MakeHostBufferFromArrayHelper(
           absl::StrCat("Not fully replicated output. Expected ", input_shape,
                        " but got ", fully_replicated_array->shape()));
     }
+    return fully_replicated_array;
+  }
+  if (!is_single_device) {
+    return xla::ifrt::ArrayRef();
+  }
 
-    HostBuffer output_buffer(input_dtype, input_shape);
-    return fully_replicated_array
-        ->CopyToHostBuffer(output_buffer.base(), std::nullopt,
-                           xla::ifrt::ArrayCopySemantics::kAlwaysCopy)
-        .MapTo(std::move(output_buffer));
-  } else if (is_single_device) {
-    VLOG(1) << "Fast path for single device";
+  VLOG(1) << "Fast path for single device";
 
+  TF_ASSIGN_OR_RETURN(
+      std::vector<xla::ifrt::ArrayRef> disassembled_array,
+      input_array.DisassembleIntoSingleDeviceArrays(
+          xla::ifrt::ArrayCopySemantics::kDonateInput,
+          xla::ifrt::SingleDeviceShardSemantics::kAddressableShards));
+
+  VLOG(1) << "Fast path for single device, disassembled size: "
+          << disassembled_array.size();
+
+  int target_device_index = -1;
+  // Fast path: If the physical array only has one slice, it's index 0.
+  if (disassembled_array.size() == 1) {
+    target_device_index = 0;
+  } else if (const auto* hlo_sharding =
+                 xla::ifrt::dyn_cast<const xla::ifrt::HloSharding>(
+                     ifrt_sharding.get())) {
+    // Edge case: Multi-slice array. Safely locate the slice matching the
+    // target device ID.
+    int target_device_id = hlo_sharding->xla_hlo_sharding().GetUniqueDevice();
     TF_ASSIGN_OR_RETURN(
-        std::vector<xla::ifrt::ArrayRef> disassembled_array,
-        input_array.DisassembleIntoSingleDeviceArrays(
-            xla::ifrt::ArrayCopySemantics::kDonateInput,
-            xla::ifrt::SingleDeviceShardSemantics::kAddressableShards));
+        xla::ifrt::Device * target_device,
+        ifrt_client.LookupDevice(xla::ifrt::DeviceId(target_device_id)));
 
-    VLOG(1) << "Fast path for single device, disassembled size: "
-            << disassembled_array.size();
-
-    int target_device_index = -1;
-    // Fast path: If the physical array only has one slice, it's index 0.
-    if (disassembled_array.size() == 1) {
-      target_device_index = 0;
-    } else if (const auto* hlo_sharding =
-                   xla::ifrt::dyn_cast<const xla::ifrt::HloSharding>(
-                       ifrt_sharding.get())) {
-      // Edge case: Multi-slice array. Safely locate the slice matching the
-      // target device ID.
-      int target_device_id = hlo_sharding->xla_hlo_sharding().GetUniqueDevice();
-      TF_ASSIGN_OR_RETURN(
-          xla::ifrt::Device * target_device,
-          ifrt_client.LookupDevice(xla::ifrt::DeviceId(target_device_id)));
-
-      for (int i = 0; i < disassembled_array.size(); ++i) {
-        const auto& shard_devices =
-            disassembled_array[i]->sharding().devices()->devices();
-        if (!shard_devices.empty() && shard_devices[0] == target_device) {
-          target_device_index = i;
-          break;
-        }
+    for (int i = 0; i < disassembled_array.size(); ++i) {
+      const auto& shard_devices =
+          disassembled_array[i]->sharding().devices()->devices();
+      if (!shard_devices.empty() && shard_devices[0] == target_device) {
+        target_device_index = i;
+        break;
       }
-    } else {
-      // Catch-all for unexpected sharding types with size > 1
-      target_device_index = 0;
     }
+  } else {
+    // Catch-all for unexpected sharding types with size > 1
+    target_device_index = 0;
+  }
 
-    if (target_device_index < 0 ||
-        target_device_index >= disassembled_array.size()) {
-      return absl::InternalError(
-          absl::StrCat("Target device index ", target_device_index,
-                       " out of range for disassembled array of size ",
-                       disassembled_array.size()));
-    }
+  if (target_device_index < 0 ||
+      target_device_index >= disassembled_array.size()) {
+    return absl::InternalError(
+        absl::StrCat("Target device index ", target_device_index,
+                     " out of range for disassembled array of size ",
+                     disassembled_array.size()));
+  }
+  return std::move(disassembled_array[target_device_index]);
+}
 
+absl::StatusOr<tsl::Future<HostBuffer>> MakeHostBufferFromArrayHelper(
+    xla::ifrt::Client& ifrt_client, xla::ifrt::Array& input_array,
+    const xla::ifrt::ShardingRef& ifrt_sharding,
+    const xla::ifrt::DeviceListRef& device_list,
+    tsl::thread::ThreadPool& thread_pool) {
+  VLOG(2) << "MakeHostBufferFromArrayHelper" << input_array.dtype();
+  VLOG(2) << "Create HostBuffer from array based on sharding: "
+          << *ifrt_sharding;
+  xla::ifrt::DType input_dtype = input_array.dtype();
+  const xla::ifrt::Shape& input_shape = input_array.shape();
+
+  TF_ASSIGN_OR_RETURN(
+      xla::ifrt::ArrayRef whole_array,
+      GetSingleShardHoldingWholeArray(ifrt_client, input_array, ifrt_sharding));
+  if (whole_array != nullptr) {
     HostBuffer output_buffer(input_dtype, input_shape);
-    return disassembled_array[target_device_index]
+    return whole_array
         ->CopyToHostBuffer(output_buffer.base(), std::nullopt,
                            xla::ifrt::ArrayCopySemantics::kAlwaysCopy)
         .MapTo(std::move(output_buffer));
@@ -613,6 +628,54 @@ tsl::Future<HostBuffer> MakeHostBufferFromArray(
     return tsl::Future<HostBuffer>(std::move(output_future).status());
   }
   return output_future.value();
+}
+
+tsl::Future<> CopyArrayToHostBuffer(xla::ifrt::Client& ifrt_client,
+                                    xla::ifrt::Array& input_array,
+                                    const xla::ifrt::ShardingRef& ifrt_sharding,
+                                    const HostBuffer& destination) {
+  tsl::profiler::TraceMe trace_me("CopyArrayToHostBuffer", /*level=*/3);
+  const xla::ifrt::DType dtype = input_array.dtype();
+  const std::optional<int> element_bytes = dtype.byte_size();
+  if (!element_bytes.has_value()) {
+    return tsl::Future<>(absl::InvalidArgumentError(absl::StrCat(
+        "Cannot copy an array of dtype ", dtype,
+        " into a caller-provided host buffer: only fixed-size dtypes are "
+        "supported.")));
+  }
+  if (destination.dtype() != dtype) {
+    return tsl::Future<>(absl::InvalidArgumentError(absl::StrCat(
+        "The host buffer has dtype ", destination.dtype(),
+        ", but the array it is to receive has dtype ", dtype, ".")));
+  }
+  if (destination.shape().num_elements() !=
+      input_array.shape().num_elements()) {
+    return tsl::Future<>(absl::InvalidArgumentError(absl::StrCat(
+        "The host buffer has shape ", destination.shape(),
+        ", which does not hold the same number of elements as the array it is "
+        "to receive, of shape ",
+        input_array.shape(), ".")));
+  }
+  if (GetByteStrides(destination).has_value()) {
+    return tsl::Future<>(absl::InvalidArgumentError(
+        "The host buffer must be dense and row-major."));
+  }
+
+  absl::StatusOr<xla::ifrt::ArrayRef> whole_array =
+      GetSingleShardHoldingWholeArray(ifrt_client, input_array, ifrt_sharding);
+  if (!whole_array.ok()) {
+    return tsl::Future<>(std::move(whole_array).status());
+  }
+  if (*whole_array == nullptr) {
+    return tsl::Future<>(absl::UnimplementedError(absl::StrCat(
+        "Copying an array with sharding ", *ifrt_sharding,
+        " into a caller-provided host buffer is not supported: its data is "
+        "split across devices. Only replicated and single-device arrays are "
+        "supported.")));
+  }
+  return (*whole_array)
+      ->CopyToHostBuffer(destination.base(), /*byte_strides=*/std::nullopt,
+                         xla::ifrt::ArrayCopySemantics::kAlwaysCopy);
 }
 
 absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(

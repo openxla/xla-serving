@@ -559,7 +559,8 @@ absl::StatusOr<std::vector<xla_serving::Value>>
 StableHloRunnerBase::DataConverter::ConvertOutput(
     absl::Span<const xla::ifrt::ArrayRef> stablehlo_outputs,
     const CachedExecutableBundle& executable_bundle,
-    absl::Span<const Placement> placements) {
+    absl::Span<const Placement> placements,
+    absl::Span<const std::optional<HostBuffer>> output_host_buffers) {
   tsl::profiler::TraceMe trace_me([&]() {
     return tsl::profiler::TraceMeEncode("TransferFromDeviceToHost", {});
   });
@@ -568,7 +569,17 @@ StableHloRunnerBase::DataConverter::ConvertOutput(
         absl::StrCat("Mismatched placements size (", placements.size(),
                      ") and outputs size (", stablehlo_outputs.size(), ")."));
   }
+  if (!output_host_buffers.empty() &&
+      output_host_buffers.size() != stablehlo_outputs.size()) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Mismatched output host buffers size (", output_host_buffers.size(),
+        ") and outputs size (", stablehlo_outputs.size(), ")."));
+  }
   std::vector<std::optional<tsl::Future<HostBuffer>>> output_futures(
+      stablehlo_outputs.size());
+  // Copies into caller-provided host buffers, which complete into memory the
+  // caller already holds rather than into a new `HostBuffer`.
+  std::vector<std::optional<tsl::Future<>>> copy_futures(
       stablehlo_outputs.size());
 
   TF_RET_CHECK(!device_list_->devices().empty())
@@ -599,7 +610,26 @@ StableHloRunnerBase::DataConverter::ConvertOutput(
           executable_bundle.io_spec.outputs[i].GetIfrtShape(), i));
     }
 
-    if (placements[i] == Placement::kHost) {
+    if (!output_host_buffers.empty() && output_host_buffers[i].has_value()) {
+      const HostBuffer& destination = *output_host_buffers[i];
+      const ArgSpec& expected = executable_bundle.original_io_spec.outputs[i];
+      if (placements[i] != Placement::kHost) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Output #", i,
+            " was given a host buffer to be copied into, but is placed on the "
+            "device."));
+      }
+      if (destination.dtype() != expected.dtype ||
+          destination.shape() != expected.GetIfrtShape()) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "The host buffer for output #", i, " has dtype ",
+            destination.dtype(), " and shape ", destination.shape(),
+            ", but the output has dtype ", expected.dtype, " and shape ",
+            expected.GetIfrtShape(), "."));
+      }
+      copy_futures[i] = sharding_internal::CopyArrayToHostBuffer(
+          *ifrt_client_, *array_for_copy, output_shardings[i], destination);
+    } else if (placements[i] == Placement::kHost) {
       // IFRT's return does not contain sufficient information; so we use
       // sharding spec from metadata.
       VLOG(2) << "Output sharding: " << array_for_copy->sharding();
@@ -612,7 +642,11 @@ StableHloRunnerBase::DataConverter::ConvertOutput(
   std::vector<xla_serving::Value> converted_outputs;
   converted_outputs.reserve(stablehlo_outputs.size());
   for (int i = 0; i < stablehlo_outputs.size(); ++i) {
-    if (placements[i] == Placement::kHost) {
+    if (copy_futures[i].has_value()) {
+      // The result is the caller's own memory, now holding the output.
+      TF_RETURN_IF_ERROR(copy_futures[i]->Await());
+      converted_outputs.push_back(xla_serving::Value(*output_host_buffers[i]));
+    } else if (placements[i] == Placement::kHost) {
       TF_ASSIGN_OR_RETURN(auto host_buffer, output_futures[i]->Await());
       const xla::ifrt::Shape expected_ifrt_shape =
           executable_bundle.original_io_spec.outputs[i].GetIfrtShape();
@@ -894,6 +928,13 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
 
   VLOG(2) << "Start StableHloRunner execution";
 
+  if (!options.output_arrays.empty() && !options.output_host_buffers.empty()) {
+    return absl::InvalidArgumentError(
+        "`ExecuteOptions::output_arrays` and "
+        "`ExecuteOptions::output_host_buffers` cannot both be set: the "
+        "pre-allocated outputs of one execution must all be of one kind.");
+  }
+
   bool has_streaming = model_io_metadata_.has_streaming;
   int64_t expected_num_inputs = model_io_metadata_.num_user_inputs;
   int32_t xla_launch_id = static_cast<int32_t>(launch_id_.fetch_add(1));
@@ -1169,8 +1210,25 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
     }
   }
 
+  // An output the caller gave host memory for goes to the host, whatever was
+  // asked for above: that memory is where the caller expects to find it.
+  if (!options.output_host_buffers.empty()) {
+    if (options.output_host_buffers.size() != execution_result.outputs.size()) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Expected ", execution_result.outputs.size(),
+                       " output host buffers, but got ",
+                       options.output_host_buffers.size()));
+    }
+    for (size_t i = 0; i < placements.size(); ++i) {
+      if (options.output_host_buffers[i].has_value()) {
+        placements[i] = Placement::kHost;
+      }
+    }
+  }
+
   return data_converter->ConvertOutput(absl::MakeSpan(execution_result.outputs),
-                                       *executable_bundle, placements);
+                                       *executable_bundle, placements,
+                                       options.output_host_buffers);
 }
 
 absl::Status StableHloRunnerBase::MarkFullyInitialized() {

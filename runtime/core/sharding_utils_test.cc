@@ -1006,5 +1006,113 @@ TEST(ShardingUtilsTest, MakeArrayFromHostBufferStrided) {
   EXPECT_THAT(rep_out, HostBufferEq(expected_dense));
 }
 
+class CopyArrayToHostBufferTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    TF_ASSERT_OK_AND_ASSIGN(client_, xla::ifrt::test_util::GetClient());
+    TF_ASSERT_OK_AND_ASSIGN(
+        device_list_, xla::ifrt::test_util::GetDevices(client_.get(), {0, 1}));
+  }
+
+  absl::StatusOr<xla::ifrt::ArrayRef> MakeArray(
+      const HostBuffer& source, const xla::ifrt::ShardingRef& sharding) {
+    return MakeArrayFromHostBuffer(*client_, source, device_list_, sharding,
+                                   thread_pool_);
+  }
+
+  static constexpr int kMaxParallelism = 16;
+  tsl::thread::ThreadPool thread_pool_{
+      tsl::Env::Default(), tsl::ThreadOptions(), "CopyTest", kMaxParallelism};
+  std::shared_ptr<xla::ifrt::Client> client_;
+  xla::ifrt::DeviceListRef device_list_;
+};
+
+// The copy must land in the caller's memory itself, so check the bytes at the
+// address the caller passed in, for each sharding that keeps the whole value on
+// one device.
+TEST_F(CopyArrayToHostBufferTest, CopiesIntoCallerMemory) {
+  const HostBuffer source =
+      AsHostBuffer<int32_t>({1, 2, 3, 4}, xla::ifrt::Shape({2, 2}));
+  const std::vector<xla::ifrt::ShardingRef> shardings = {
+      xla::ifrt::SingleDeviceSharding::Create(device_list_->devices()[0],
+                                              xla::ifrt::MemoryKind()),
+      xla::ifrt::HloSharding::Create(device_list_, xla::ifrt::MemoryKind(),
+                                     xla::HloSharding::Replicate()),
+  };
+  for (const xla::ifrt::ShardingRef& sharding : shardings) {
+    SCOPED_TRACE(absl::StrCat(*sharding));
+    TF_ASSERT_OK_AND_ASSIGN(xla::ifrt::ArrayRef array,
+                            MakeArray(source, sharding));
+    HostBuffer destination =
+        AsHostBuffer<int32_t>({0, 0, 0, 0}, xla::ifrt::Shape({2, 2}));
+    ASSERT_OK(
+        CopyArrayToHostBuffer(*client_, *array, sharding, destination).Await());
+    EXPECT_THAT(destination, HostBufferEq(source));
+  }
+}
+
+// Only the element count has to match: a destination of another shape but the
+// same size receives the data in row-major order.
+TEST_F(CopyArrayToHostBufferTest, AcceptsDestinationOfSameSize) {
+  const HostBuffer source =
+      AsHostBuffer<int32_t>({1, 2, 3, 4}, xla::ifrt::Shape({2, 2}));
+  xla::ifrt::ShardingRef sharding = xla::ifrt::SingleDeviceSharding::Create(
+      device_list_->devices()[0], xla::ifrt::MemoryKind());
+  TF_ASSERT_OK_AND_ASSIGN(xla::ifrt::ArrayRef array,
+                          MakeArray(source, sharding));
+  HostBuffer destination =
+      AsHostBuffer<int32_t>({0, 0, 0, 0}, xla::ifrt::Shape({4}));
+  ASSERT_OK(
+      CopyArrayToHostBuffer(*client_, *array, sharding, destination).Await());
+  EXPECT_THAT(destination, HostBufferEq(AsHostBuffer<int32_t>(
+                               {1, 2, 3, 4}, xla::ifrt::Shape({4}))));
+}
+
+TEST_F(CopyArrayToHostBufferTest, RejectsMismatchedDtype) {
+  const HostBuffer source =
+      AsHostBuffer<int32_t>({1, 2, 3, 4}, xla::ifrt::Shape({2, 2}));
+  xla::ifrt::ShardingRef sharding = xla::ifrt::SingleDeviceSharding::Create(
+      device_list_->devices()[0], xla::ifrt::MemoryKind());
+  TF_ASSERT_OK_AND_ASSIGN(xla::ifrt::ArrayRef array,
+                          MakeArray(source, sharding));
+  HostBuffer destination =
+      AsHostBuffer<float>({0, 0, 0, 0}, xla::ifrt::Shape({2, 2}));
+  EXPECT_THAT(
+      CopyArrayToHostBuffer(*client_, *array, sharding, destination).Await(),
+      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
+                             ::testing::HasSubstr("dtype")));
+}
+
+TEST_F(CopyArrayToHostBufferTest, RejectsMismatchedElementCount) {
+  const HostBuffer source =
+      AsHostBuffer<int32_t>({1, 2, 3, 4}, xla::ifrt::Shape({2, 2}));
+  xla::ifrt::ShardingRef sharding = xla::ifrt::SingleDeviceSharding::Create(
+      device_list_->devices()[0], xla::ifrt::MemoryKind());
+  TF_ASSERT_OK_AND_ASSIGN(xla::ifrt::ArrayRef array,
+                          MakeArray(source, sharding));
+  HostBuffer destination = AsHostBuffer<int32_t>({0, 0}, xla::ifrt::Shape({2}));
+  EXPECT_THAT(
+      CopyArrayToHostBuffer(*client_, *array, sharding, destination).Await(),
+      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
+                             ::testing::HasSubstr("same number of elements")));
+}
+
+// A tiled array's data is split across devices, so no single device-to-host
+// copy can fill one buffer with it.
+TEST_F(CopyArrayToHostBufferTest, RejectsTiledArray) {
+  const HostBuffer source =
+      AsHostBuffer<int32_t>({1, 2, 3, 4}, xla::ifrt::Shape({4}));
+  xla::ifrt::ShardingRef sharding = xla::ifrt::HloSharding::Create(
+      device_list_, xla::ifrt::MemoryKind(), xla::HloSharding::IotaTile({2}));
+  TF_ASSERT_OK_AND_ASSIGN(xla::ifrt::ArrayRef array,
+                          MakeArray(source, sharding));
+  HostBuffer destination =
+      AsHostBuffer<int32_t>({0, 0, 0, 0}, xla::ifrt::Shape({4}));
+  EXPECT_THAT(
+      CopyArrayToHostBuffer(*client_, *array, sharding, destination).Await(),
+      absl_testing::StatusIs(absl::StatusCode::kUnimplemented,
+                             ::testing::HasSubstr("split across devices")));
+}
+
 }  // namespace
 }  // namespace xla_serving::sharding_internal

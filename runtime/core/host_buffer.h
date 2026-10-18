@@ -234,6 +234,10 @@ class HostBuffer {
     return nullptr;
   }
 
+  // Whether this buffer has storage. A default-constructed `HostBuffer` has
+  // none, and most other accessors must not be called on it.
+  bool has_data() const { return buffer_data_.has_value(); }
+
   std::string DebugString() const {
     if (buffer_data_) {
       return buffer_data_->DebugString();

@@ -138,8 +138,29 @@ class StableHloRunnerBase {
     // Each array must match the dtype, shape and sharding of the output it
     // backs, and must be solely owned by the caller: the arrays are donated to
     // the execution, so they are consumed (deleted) by it. The results are
-    // returned as usual by `Execute`, backed by this same memory.
+    // returned as usual by `Execute`, backed by this same memory. Mutually
+    // exclusive with `output_host_buffers`.
     std::vector<xla::ifrt::ArrayRef> output_arrays;
+
+    // Host memory, typically pinned, that results are copied into from the
+    // device, instead of into buffers the runner allocates. Either empty, or
+    // one entry per output in output order, where `std::nullopt` leaves that
+    // output to the normal placement rules.
+    //
+    // An output given a buffer is always returned on the host, whatever
+    // `placements` says, as a `HostBuffer` backed by the caller's memory. The
+    // buffer must have the dtype and shape of the output, laid out densely in
+    // row-major order, and the output must be replicated or placed on a single
+    // device. Pinned memory lets the device write into it directly by DMA;
+    // pageable memory works too, but is staged.
+    //
+    // Unlike `output_arrays`, this works with any model, and buffers may be
+    // given for any subset of outputs. The device memory the execution writes
+    // into is allocated as usual.
+    //
+    // Mutually exclusive with `output_arrays`: an execution's pre-allocated
+    // outputs must all be of one kind, so at most one of the two may be set.
+    std::vector<std::optional<HostBuffer>> output_host_buffers;
   };
 
   // Executes the computation.
@@ -303,11 +324,14 @@ class StableHloRunnerBase {
         absl::Span<const int> stablehlo_indices) const;
 
     // Converts the outputs from `xla::ifrt::Array` to `xla_serving::Value` according
-    // to `placements`.
+    // to `placements`. `output_host_buffers` is either empty or one entry per
+    // output; an output with a buffer is copied into it, and must be placed on
+    // the host.
     absl::StatusOr<std::vector<xla_serving::Value>> ConvertOutput(
         absl::Span<const xla::ifrt::ArrayRef> stablehlo_outputs,
         const CachedExecutableBundle& executable_bundle,
-        absl::Span<const Placement> placements);
+        absl::Span<const Placement> placements,
+        absl::Span<const std::optional<HostBuffer>> output_host_buffers = {});
 
     xla::ifrt::DeviceListRef device_list() const { return device_list_; }
 

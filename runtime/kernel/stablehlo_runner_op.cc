@@ -19,6 +19,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
@@ -37,6 +38,7 @@
 #include "runtime/core/streaming/utils.h"  // from @xla_serving
 #include "runtime/core/value.h"  // from @xla_serving
 #include "runtime/interpreter/manifest_utils.h"  // from @xla_serving
+#include "runtime/interpreter/run_options.h"  // from @xla_serving
 #include "runtime/kernel/kernel.h"  // from @xla_serving
 #include "runtime/kernel/kernel_builder_constants.h"  // from @xla_serving
 #include "runtime/kernel/kernel_builder_context.h"  // from @xla_serving
@@ -82,44 +84,76 @@ StableHloRunnerFactoryRegistry::Create(
 
 namespace {
 
-// Takes, out of the caller's name-keyed aliased buffers, those naming this
-// component's outputs, in the order the executable expects: the order of
-// `output_signature`. The executable's aliases are compiled against argument
-// positions, so the names have to be resolved before the arrays reach it.
+// The caller-provided memory for one component's outputs, in the order the
+// runner expects: the order of `output_signature`. At most one of the two is
+// non-empty.
+struct ClaimedOutputs {
+  // Device memory for input aliasing: empty, or one array per output.
+  std::vector<xla::ifrt::ArrayRef> arrays;
+  // Host memory to copy into: empty, or one entry per output, where
+  // `std::nullopt` leaves that output to the runner.
+  std::vector<std::optional<HostBuffer>> host_buffers;
+};
+
+// Takes, out of the caller's name-keyed pre-allocated outputs, those naming
+// this component's outputs, and orders them by output position. The
+// executable's aliases are compiled against argument positions, so the names
+// have to be resolved before the memory reaches it.
 //
-// Returns an empty vector when none of this component's outputs are named, in
-// which case the runner allocates the output memory itself. The interpreter has
-// already checked that every name in the map belongs to exactly one component
-// that uses input aliasing, so entries left behind belong to other components.
-absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ClaimInputAliasedOutputArrays(
+// Returns nothing when none of this component's outputs are named, in which
+// case the runner allocates the output memory itself. The interpreter has
+// already checked that every name in the map belongs to exactly one component,
+// and that device arrays only go to components that use input aliasing, so
+// entries left behind belong to other components.
+absl::StatusOr<ClaimedOutputs> ClaimPreallocatedOutputs(
     const FlatSignature* output_signature,
-    absl::flat_hash_map<std::string, xla::ifrt::ArrayRef>& by_name) {
+    absl::flat_hash_map<std::string, PreallocatedOutput>& by_name) {
   if (by_name.empty() || output_signature == nullptr ||
       !output_signature->IsAllSpecWithName()) {
-    return std::vector<xla::ifrt::ArrayRef>();
+    return ClaimedOutputs();
   }
   const std::vector<MetaArgSpec>& specs = output_signature->specs();
 
-  std::vector<xla::ifrt::ArrayRef> claimed(specs.size());
-  int num_claimed = 0;
+  std::vector<xla::ifrt::ArrayRef> arrays(specs.size());
+  std::vector<std::optional<HostBuffer>> host_buffers(specs.size());
+  int num_arrays = 0;
+  int num_host_buffers = 0;
   for (int i = 0; i < specs.size(); ++i) {
-    absl::flat_hash_map<std::string, xla::ifrt::ArrayRef>::iterator it =
+    absl::flat_hash_map<std::string, PreallocatedOutput>::iterator it =
         by_name.find(*specs[i].name);
-    if (it != by_name.end()) {
-      claimed[i] = std::move(it->second);
-      by_name.erase(it);
-      ++num_claimed;
+    if (it == by_name.end()) {
+      continue;
     }
+    if (HostBuffer* host_buffer = std::get_if<HostBuffer>(&it->second)) {
+      host_buffers[i] = std::move(*host_buffer);
+      ++num_host_buffers;
+    } else {
+      arrays[i] = std::move(std::get<xla::ifrt::ArrayRef>(it->second));
+      ++num_arrays;
+    }
+    by_name.erase(it);
   }
-  if (num_claimed == 0) {
-    return std::vector<xla::ifrt::ArrayRef>();
+
+  ClaimedOutputs claimed;
+  if (num_host_buffers > 0 && num_arrays > 0) {
+    return absl::InvalidArgumentError(
+        "Both device arrays and host buffers were supplied for the outputs of "
+        "one component. A component's pre-allocated outputs must all be of "
+        "one kind.");
+  }
+  if (num_host_buffers > 0) {
+    claimed.host_buffers = std::move(host_buffers);
+    return claimed;
+  }
+  if (num_arrays == 0) {
+    return claimed;
   }
 
   // Input aliasing is all-or-nothing: rather than quietly allocating the
   // outputs the caller left out, which would put an allocation back on a path
   // the caller is trying to keep free of them, reject the request.
   for (int i = 0; i < specs.size(); ++i) {
-    if (claimed[i] == nullptr) {
+    if (arrays[i] == nullptr) {
       return absl::InvalidArgumentError(absl::StrCat(
           "No input-aliased output buffer was supplied for output \"",
           *specs[i].name,
@@ -128,6 +162,7 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ClaimInputAliasedOutputArrays(
           "none."));
     }
   }
+  claimed.arrays = std::move(arrays);
   return claimed;
 }
 
@@ -248,9 +283,11 @@ absl::Status StableHloRunnerOp::RunInternal(ExecuteContext& context) {
   // untouched, and makes it impossible to hand the same arrays to a second
   // execution.
   TF_ASSIGN_OR_RETURN(
-      execute_options.output_arrays,
-      ClaimInputAliasedOutputArrays(
-          output_signature(), context.run_context.input_aliased_output_arrays));
+      ClaimedOutputs claimed,
+      ClaimPreallocatedOutputs(output_signature(),
+                               context.run_context.preallocated_outputs));
+  execute_options.output_arrays = std::move(claimed.arrays);
+  execute_options.output_host_buffers = std::move(claimed.host_buffers);
   TF_ASSIGN_OR_RETURN(
       std::vector<Value> output_values,
       stablehlo_runner_->Execute(inputs_span, std::move(execute_options),
