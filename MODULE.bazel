@@ -106,13 +106,14 @@ override_repo(
 bazel_dep(name = "tensorflow", repo_name = "org_tensorflow")
 archive_override(
     module_name = "tensorflow",
-    integrity = "sha256-bqp2flgFQBHP1KZiFcQpanuDF7c9RnSA6RFtH9/n7O8=",
+    integrity = "sha256-Ft1pIwLT99OoylOQ+o5oiOQKblKQzzig3sad9fdXywc=",
     patch_strip = 1,
     patches = [
         "//third_party/tensorflow:where_op_gpu.patch",
+        "//third_party/tensorflow:tensorflow_newer_xla_mlir_compat.patch",
     ],
-    strip_prefix = "tensorflow-34d7ab29960ee6c4f1cc7e857da4d9d47e600208",
-    urls = ["https://github.com/tensorflow/tensorflow/archive/34d7ab29960ee6c4f1cc7e857da4d9d47e600208.zip"],
+    strip_prefix = "tensorflow-bf313a7a257b3177c1b64bc404afe2d4b62f0877",
+    urls = ["https://github.com/tensorflow/tensorflow/archive/bf313a7a257b3177c1b64bc404afe2d4b62f0877.zip"],
 )
 
 tf_third_party = use_extension("@org_tensorflow//third_party/extensions:third_party.bzl", "third_party_ext")

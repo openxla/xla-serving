@@ -12,7 +12,7 @@
 bazel_dep(name = "xla")
 archive_override(
     module_name = "xla",
-    integrity = "sha256-MsuAh9iDGKAfmXTq1iVOHKBtJj+hhH9hUDN5UlvUaJc=",
-    strip_prefix = "xla-91888df6ce85102c30220e41d952065925e10886",
-    urls = ["https://github.com/openxla/xla/archive/91888df6ce85102c30220e41d952065925e10886.tar.gz"],
+    integrity = "sha256-4dKOZH0ItEr6NzB9wR1SjsuQR/6PQjn4FPV04iEKEYQ=",
+    strip_prefix = "xla-342f53aed2eebc1f6ef253104180f3d5401aaf1d",
+    urls = ["https://github.com/openxla/xla/archive/342f53aed2eebc1f6ef253104180f3d5401aaf1d.tar.gz"],
 )
