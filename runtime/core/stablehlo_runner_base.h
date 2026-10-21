@@ -130,16 +130,19 @@ class StableHloRunnerBase {
           .placements = std::vector<Placement>(num_outputs, Placement::kHost)};
     }
 
-    // Pre-allocated device memory that the execution writes its results into,
-    // one array per output, in output order. Only usable when the model was
-    // exported for input aliasing; leaving it empty lets the runner allocate
-    // the output memory itself.
+    // Pre-allocated device memory that the execution writes its results into.
+    // Either empty, or one entry per output in output order, where a null
+    // entry lets the runner allocate that output's memory itself. Non-null
+    // entries are only usable when the model was exported for input aliasing.
     //
-    // Each array must match the dtype, shape and sharding of the output it
-    // backs, and must be solely owned by the caller: the arrays are donated to
-    // the execution, so they are consumed (deleted) by it. The results are
-    // returned as usual by `Execute`, backed by this same memory. Mutually
-    // exclusive with `output_host_buffers`.
+    // Each array must match the dtype, shape, sharding and layout of the
+    // output it backs, and must be solely owned by the caller.
+    //
+    // Lifecycle: the arrays are donated to the execution. Each one is deleted
+    // when it is passed in and must never be reused; from then on the runner
+    // manages its device memory. An output placed on the device is returned
+    // as a `DeviceBuffer` backed by that memory. An output placed on the host
+    // is copied off it, and the memory is released after the execution.
     std::vector<xla::ifrt::ArrayRef> output_arrays;
 
     // Host memory, typically pinned, that results are copied into from the
@@ -154,12 +157,10 @@ class StableHloRunnerBase {
     // device. Pinned memory lets the device write into it directly by DMA;
     // pageable memory works too, but is staged.
     //
-    // Unlike `output_arrays`, this works with any model, and buffers may be
-    // given for any subset of outputs. The device memory the execution writes
-    // into is allocated as usual.
-    //
-    // Mutually exclusive with `output_arrays`: an execution's pre-allocated
-    // outputs must all be of one kind, so at most one of the two may be set.
+    // This works with any model, not only one exported for input aliasing.
+    // The device memory the execution writes into is the output's entry in
+    // `output_arrays` if it has one, and is allocated by the runner
+    // otherwise. Either way, that memory is released after the copy.
     std::vector<std::optional<HostBuffer>> output_host_buffers;
   };
 
@@ -471,11 +472,11 @@ class StableHloRunnerBase {
   // Returns the arrays to pass as the executable's input-aliased output
   // arguments.
   //
-  // `caller_provided` is `ExecuteOptions::output_arrays`: when non-empty it is
-  // validated against the executable's outputs and handed through, and when
-  // empty the runner allocates uninitialized device memory instead. Either
-  // way the returned arrays are donated to the execution, which writes the
-  // results into them.
+  // `caller_provided` is `ExecuteOptions::output_arrays`. Each non-null entry
+  // is validated against the output it backs and handed through; for each
+  // null entry, or for every output when it is empty, the runner allocates
+  // uninitialized device memory instead. Either way the returned arrays are
+  // donated to the execution, which writes the results into them.
   absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
   ResolveInputAliasedOutputArrays(
       const CachedExecutableBundle& executable_bundle,

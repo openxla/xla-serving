@@ -1589,44 +1589,6 @@ TEST_F(StableHloRunnerExecuteOptionsTest, ExecuteCopiesIntoOutputHostBuffer) {
                                                xla::ifrt::Shape({2, 8}))));
 }
 
-// The pre-allocated outputs of one execution must all be of one kind. The
-// check comes before anything runs, so it needs no model exported for input
-// aliasing.
-TEST_F(StableHloRunnerExecuteOptionsTest,
-       ExecuteRejectsOutputArraysWithOutputHostBuffers) {
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHloRunner> runner,
-                          CreateRunner());
-
-  std::vector<Value> input_values = {
-      Value(
-          AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0}, xla::ifrt::Shape({2, 2}))),
-      Value(AsHostBuffer<float>(std::vector<float>(16, 1.0f),
-                                xla::ifrt::Shape({2, 8})))};
-
-  TF_ASSERT_OK_AND_ASSIGN(
-      xla::ifrt::DeviceListRef device_list,
-      xla::ifrt::test_util::GetDevices(
-          ifrt_client_.get(), *(assigned_devices_->device_assignment)));
-  xla::ifrt::ShardingRef sharding = xla::ifrt::SingleDeviceSharding::Create(
-      device_list->devices().front(), xla::ifrt::MemoryKind());
-  TF_ASSERT_OK_AND_ASSIGN(xla::ifrt::ArrayRef array,
-                          sharding_internal::MakeArrayFromHostBuffer(
-                              *ifrt_client_,
-                              AsHostBuffer<float>(std::vector<float>(16, 0.0f),
-                                                  xla::ifrt::Shape({2, 8})),
-                              device_list, sharding, *thread_pool_));
-
-  StableHloRunner::ExecuteOptions options;
-  options.output_arrays = {array, array};
-  options.output_host_buffers = {
-      std::nullopt, AsHostBuffer<float>(std::vector<float>(16, 0.0f),
-                                        xla::ifrt::Shape({2, 8}))};
-
-  EXPECT_THAT(runner->Execute(input_values, std::move(options), RunContext{}),
-              StatusIs(absl::StatusCode::kInvalidArgument,
-                       HasSubstr("cannot both be set")));
-}
-
 TEST_F(StableHloRunnerExecuteOptionsTest,
        ExecuteWithOptionsAllDevicePlacementsPasses) {
   TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHloRunner> runner,

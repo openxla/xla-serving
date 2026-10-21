@@ -314,6 +314,7 @@ cc_library(
         ":stablehlo",
         ":stablehlo_utils",
         ":value",
+        "@abseil-cpp//absl/algorithm:container",
         "@abseil-cpp//absl/base",
         "@abseil-cpp//absl/base:core_headers",
         "@abseil-cpp//absl/base:nullability",

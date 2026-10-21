@@ -54,8 +54,9 @@ struct RunContext {
   std::optional<int64_t> callback_id;
   std::vector<Placement> placements;
   // Pre-allocated output memory supplied by the caller, keyed by component
-  // output name. See `RunOptions::preallocated_outputs`. A kernel takes the
-  // entries naming its own outputs, and leaves the rest alone.
+  // output name. See `RunOptions::preallocated_output_arrays` and
+  // `RunOptions::preallocated_output_host_buffers`. A kernel takes the entries
+  // naming its own outputs, and leaves the rest alone.
   //
   // `RunContext` is copied once per kernel, so each kernel holds its own
   // handles and can move its entries out without disturbing anyone else. The
@@ -63,7 +64,9 @@ struct RunContext {
   // shells, and references to the host buffers, alive until the request ends.
   // That costs nothing: donation has already handed the device memory itself
   // to the execution, and the host memory belongs to the caller anyway.
-  absl::flat_hash_map<std::string, PreallocatedOutput> preallocated_outputs;
+  absl::flat_hash_map<std::string, xla::ifrt::ArrayRef>
+      preallocated_output_arrays;
+  absl::flat_hash_map<std::string, HostBuffer> preallocated_output_host_buffers;
 
   static RunContext Create(const RunOptions& run_options,
                            std::vector<Placement> resolved_placements = {},
@@ -74,7 +77,9 @@ struct RunContext {
         .request_id = run_options.request_id,
         .callback_id = callback_id,
         .placements = std::move(resolved_placements),
-        .preallocated_outputs = run_options.preallocated_outputs};
+        .preallocated_output_arrays = run_options.preallocated_output_arrays,
+        .preallocated_output_host_buffers =
+            run_options.preallocated_output_host_buffers};
   }
 };
 

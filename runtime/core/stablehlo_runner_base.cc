@@ -25,6 +25,7 @@
 #include <variant>
 #include <vector>
 
+#include "absl/algorithm/container.h"  // from @abseil-cpp
 #include "absl/base/call_once.h"  // from @abseil-cpp
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
@@ -842,33 +843,38 @@ StableHloRunnerBase::ResolveInputAliasedOutputArrays(
       << executable_bundle.input_aliased_output_arg_layouts.size()
       << ") does not match output count (" << num_outputs << ")";
 
+  // Empty means the caller supplies no output memory at all.
   if (caller_provided.empty()) {
-    std::vector<xla::ifrt::ArrayRef> allocated;
-    allocated.reserve(num_outputs);
-    for (int i = 0; i < num_outputs; ++i) {
-      TF_ASSIGN_OR_RETURN(
-          xla::ifrt::ArrayRef array,
-          MakeUninitializedOutputArray(
-              *ifrt_client_, executable_bundle.io_spec.outputs[i],
-              output_shardings[i],
-              executable_bundle.input_aliased_output_arg_layouts[i]));
-      allocated.push_back(std::move(array));
-    }
-    return allocated;
+    caller_provided.resize(num_outputs);
   }
-
-  // Verify the caller-provided arrays match the executable's outputs.
   if (caller_provided.size() != num_outputs) {
     return absl::InvalidArgumentError(absl::StrCat("Expected ", num_outputs,
                                                    " output arrays, but got ",
                                                    caller_provided.size()));
   }
   for (int i = 0; i < num_outputs; ++i) {
-    const xla::ifrt::ArrayRef& array = caller_provided[i];
+    xla::ifrt::ArrayRef& array = caller_provided[i];
+    // The caller supplied no memory for this output, so allocate it. The
+    // executable aliases every output, so each one needs an argument.
     if (array == nullptr) {
-      return absl::InvalidArgumentError(
-          absl::StrCat("Output array #", i, " is null"));
+      TF_ASSIGN_OR_RETURN(
+          array, MakeUninitializedOutputArray(
+                     *ifrt_client_, executable_bundle.io_spec.outputs[i],
+                     output_shardings[i],
+                     executable_bundle.input_aliased_output_arg_layouts[i]));
+      continue;
     }
+    // Donation consumes the array, so a deleted one was almost certainly
+    // passed to an earlier execution. Say so here rather than letting PjRt
+    // fail on it obscurely.
+    if (array->IsDeleted()) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Output array #", i,
+          " has already been deleted, most likely because it was donated to "
+          "an earlier execution. A pre-allocated output array is consumed by "
+          "the execution it is passed to and must not be reused."));
+    }
+    // Verify the caller-provided array matches the output it backs.
     const ArgSpec& output_spec = executable_bundle.io_spec.outputs[i];
     if (array->dtype() != output_spec.dtype) {
       return absl::InvalidArgumentError(
@@ -927,13 +933,6 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
   });
 
   VLOG(2) << "Start StableHloRunner execution";
-
-  if (!options.output_arrays.empty() && !options.output_host_buffers.empty()) {
-    return absl::InvalidArgumentError(
-        "`ExecuteOptions::output_arrays` and "
-        "`ExecuteOptions::output_host_buffers` cannot both be set: the "
-        "pre-allocated outputs of one execution must all be of one kind.");
-  }
 
   bool has_streaming = model_io_metadata_.has_streaming;
   int64_t expected_num_inputs = model_io_metadata_.num_user_inputs;
@@ -1148,7 +1147,10 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
         inputs_with_weights.end(),
         std::make_move_iterator(input_aliased_outputs.begin()),
         std::make_move_iterator(input_aliased_outputs.end()));
-  } else if (!options.output_arrays.empty()) {
+  } else if (absl::c_any_of(options.output_arrays,
+                            [](const xla::ifrt::ArrayRef& array) {
+                              return array != nullptr;
+                            })) {
     return absl::InvalidArgumentError(
         "`ExecuteOptions::output_arrays` requires a model exported for input "
         "aliasing, but this model was not.");
