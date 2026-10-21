@@ -1,0 +1,241 @@
+name: Nightly Serving Test (TPU)
+
+on:
+  schedule:
+    # Run nightly at 07:00 UTC (after nightly image push at 04:00 UTC)
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+    inputs:
+      image:
+        description: 'Docker image to test (leave empty for the nightly image)'
+        required: false
+        default: ''
+        type: string
+      release_tag:
+        description: 'GitHub Release tag for wheels (leave empty for latest release)'
+        required: false
+        default: ''
+        type: string
+      runner:
+        description: 'Runner label to run on (must have TPU chips attached)'
+        required: false
+        default: 'linux-x86-tpu7x-224-4tpu'
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  nightly-test-tpu:
+    name: Nightly Serving Test (TPU)
+    runs-on: ${{ inputs.runner || 'linux-x86-tpu7x-224-4tpu' }}
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:0ad60e35d5870853c4c463f1c23dff6ed2dbfe3b1f708406c25a7606a5cae078
+      # --privileged exposes the TPU device nodes to the container.
+      options: --init --privileged
+    defaults:
+      run:
+        shell: bash
+    env:
+      # Must be one of the versions built by release-xla-serving.yml.
+      PYTHON_VERSION: "3.12"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Configure Git Safe Directory
+        run: |
+          git config --global --add safe.directory /__w/xla-serving/xla-serving
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          git config --global --add safe.directory "*"
+
+      - name: Verify TPU Availability
+        run: |
+          shopt -s nullglob
+          NODES=(/dev/accel* /dev/vfio/*)
+          echo "TPU device nodes:"
+          [ ${#NODES[@]} -gt 0 ] && ls -la "${NODES[@]}" || echo "No /dev/accel* or /dev/vfio/* device nodes found"
+
+          echo "Google (vendor 0x1ae0) PCI functions by device id (tpu7x = 0x0076):"
+          for dev in /sys/bus/pci/devices/*; do
+            if [ "$(cat "${dev}/vendor" 2>/dev/null)" = "0x1ae0" ]; then cat "${dev}/device"; fi
+          done | sort | uniq -c
+
+      - name: Install Crane
+        run: |
+          if ! command -v crane > /dev/null 2>&1; then
+            echo "Installing crane..."
+            mkdir -p "$HOME/.local/bin"
+            curl -sL https://github.com/google/go-containerregistry/releases/download/v0.20.2/go-containerregistry_Linux_x86_64.tar.gz | tar -xz -C "$HOME/.local/bin" crane
+            chmod +x "$HOME/.local/bin/crane"
+            echo "$HOME/.local/bin" >> $GITHUB_PATH
+          fi
+
+      - name: Authenticate to Container Registry
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          if command -v gcloud > /dev/null 2>&1; then
+            gcloud auth configure-docker gcr.io --quiet || true
+            gcloud auth print-access-token | crane auth login -u oauth2accesstoken --password-stdin gcr.io || true
+          fi
+
+      - name: Extract and Verify Serving Image
+        env:
+          IMAGE: ${{ inputs.image || 'gcr.io/neptune-serving-engine/tpu-jax-only:nightly' }}
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "Extracting Docker image: ${IMAGE}"
+          mkdir -p /tmp/xla-serving
+          crane export "${IMAGE}" - | tar -xf - -C /tmp/xla-serving
+
+          echo "Verifying serving binary..."
+          ls -la /tmp/xla-serving/runtime/serving/gcp/server/
+          test -x /tmp/xla-serving/runtime/serving/gcp/server/xla_serving_main_tpu
+
+          echo "Verifying the image is self-contained (bundled libtpu)..."
+          ls -la /tmp/xla-serving/usr/lib/libtpu.so /tmp/xla-serving/usr/share/doc/libtpu/
+          test -f /tmp/xla-serving/usr/lib/libtpu.so
+
+          echo "Verifying image config sets TPU_LIBRARY_PATH..."
+          crane config "${IMAGE}" > /tmp/image-config.json
+          if ! grep -q '"TPU_LIBRARY_PATH=/usr/lib/libtpu.so"' /tmp/image-config.json; then
+            echo "Error: image config does not set TPU_LIBRARY_PATH=/usr/lib/libtpu.so:"
+            cat /tmp/image-config.json
+            exit 1
+          fi
+
+      - name: Install uv and Set up Python
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Create virtual environment
+        run: |
+          uv venv --python "${PYTHON_VERSION}"
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
+
+      - name: Download Release Wheels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          git config --global --add safe.directory /__w/xla-serving/xla-serving || true
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}" || true
+          git config --global --add safe.directory "*" || true
+          mkdir -p wheels
+          if [ -n "${RELEASE_TAG}" ]; then
+            echo "Downloading wheels from release: ${RELEASE_TAG} (repo: ${GH_REPO})"
+            gh release download "${RELEASE_TAG}" --repo "${GH_REPO}" --pattern "*.whl" --dir wheels
+          else
+            echo "Downloading wheels from latest release (repo: ${GH_REPO})"
+            gh release download --repo "${GH_REPO}" --pattern "*.whl" --dir wheels
+          fi
+          ls -la wheels/
+
+      - name: Install Release Wheels and Test Dependencies
+        run: |
+          # Releases ship one binary wheel per supported Python version
+          # (cp312, cp313, ...). Only install the wheels matching this job's
+          # interpreter, plus the pure-Python (py3-none-any) wheels; passing
+          # all of them to uv fails with "conflicting URLs".
+          shopt -s nullglob
+          PY_TAG="cp${PYTHON_VERSION//./}"
+          WHEELS=(wheels/*-py3-none-any.whl wheels/*-"${PY_TAG}"-*.whl)
+          if [ ${#WHEELS[@]} -eq 0 ]; then
+            echo "Error: no wheels found for ${PY_TAG} in wheels/"
+            ls -la wheels/
+            exit 1
+          fi
+          echo "Installing downloaded wheels for ${PY_TAG}:"
+          printf '  %s\n' "${WHEELS[@]}"
+          uv pip install "${WHEELS[@]}"
+          # Install JAX with TPU support, Flax (for examples.nnx), and grpcio.
+          uv pip install "jax[tpu]" flax grpcio
+
+      - name: Verify JAX TPU Support
+        run: |
+          echo "Checking JAX devices..."
+          python3 -c "import jax; print('JAX devices:', jax.devices()); assert any(d.platform == 'tpu' for d in jax.devices()), 'No TPU device found in JAX!'"
+
+      - name: Export NNX Example Model
+        run: |
+          mkdir -p /tmp/exported_model
+          rm -rf /tmp/test_workspace && mkdir -p /tmp/test_workspace
+          cp -r examples /tmp/test_workspace/
+          cd /tmp/test_workspace
+          python3 -m examples.nnx.run_export --export_path=/tmp/exported_model
+          ls -la /tmp/exported_model
+
+      - name: Start XLA Serving TPU Server and Run End-to-End Prediction Test
+        env:
+          # `crane export` does not apply the image's ENV, so set it here.
+          TPU_LIBRARY_PATH: /tmp/xla-serving/usr/lib/libtpu.so
+        run: |
+          SERVER_BIN="/tmp/xla-serving/runtime/serving/gcp/server/xla_serving_main_tpu"
+          if [ ! -x "${SERVER_BIN}" ]; then
+            echo "Error: No executable XLA serving TPU binary (xla_serving_main_tpu) found in extracted image!"
+            find /tmp/xla-serving -type f -perm -111
+            exit 1
+          fi
+
+          PLATFORM_FLAG="--orbax_grpc_server_platform=tpu"
+
+          echo "Starting XLA Serving TPU binary: ${SERVER_BIN} with ${PLATFORM_FLAG}..."
+          echo "TPU_LIBRARY_PATH=${TPU_LIBRARY_PATH}"
+          "${SERVER_BIN}" \
+            ${PLATFORM_FLAG} \
+            --model_name=nnx \
+            --model_path=/tmp/exported_model \
+            --use_insecure_grpc_credentials=true \
+            --port=8500 > /tmp/xla-serving.log 2>&1 &
+          SERVER_PID=$!
+          echo "SERVER_PID=${SERVER_PID}" >> $GITHUB_ENV
+          echo "Started XLA Serving server with PID ${SERVER_PID}"
+
+          echo "Waiting for XLA Serving server to be ready..."
+          READY=false
+          for i in $(seq 1 180); do
+            if grep -q "JAX Serving listening on" /tmp/xla-serving.log 2>/dev/null; then
+              echo "XLA Serving TPU server is ready after ${i}s!"
+              READY=true
+              break
+            fi
+            if ! kill -0 "${SERVER_PID}" 2>/dev/null; then
+              echo "XLA Serving TPU server exited prematurely. Server logs:"
+              cat /tmp/xla-serving.log || true
+              exit 1
+            fi
+            sleep 1
+          done
+
+          if [ "${READY}" != "true" ]; then
+            echo "XLA Serving TPU server failed to start within 180s. Server logs:"
+            cat /tmp/xla-serving.log || true
+            exit 1
+          fi
+
+          echo "Running prediction test against TPU serving endpoint..."
+          python3 /tmp/test_workspace/examples/nnx/test_prediction_client.py \
+            --server_address=localhost:8500 \
+            --model_name=nnx \
+            --signature_name=serving_default \
+            --batch_size=4 \
+            --timeout=60
+
+      - name: Clean up Server
+        if: always()
+        run: |
+          if [ -f /tmp/xla-serving.log ]; then
+            echo "=== XLA Serving Logs ==="
+            cat /tmp/xla-serving.log
+          fi
+          if [ -n "${SERVER_PID}" ]; then
+            kill -9 "${SERVER_PID}" 2>/dev/null || true
+          fi

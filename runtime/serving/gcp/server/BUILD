@@ -120,13 +120,52 @@ tar(
     tags = ["manual"],
 )
 
+# libtpu (the Cloud TPU PJRT plugin) as its own layer so that the image is
+# self-contained: no bind mount or `-e TPU_LIBRARY_PATH` needed at `docker run`
+# time. The pinned wheel lives in MODULE.bazel (`libtpu_wheel`). It is listed
+# first in `tars` below so that the large, rarely changing libtpu layer stays
+# cached across nightly pushes and only the binary layer is re-uploaded.
+tar(
+    name = "libtpu_layer",
+    srcs = [
+        "@libtpu_wheel//:libtpu/LICENSE",
+        "@libtpu_wheel//:libtpu/THIRD_PARTY_NOTICES.txt",
+        "@libtpu_wheel//:libtpu/libtpu.so",
+    ],
+    mtree = [
+        "usr uid=0 gid=0 mode=0755 type=dir",
+        "usr/lib uid=0 gid=0 mode=0755 type=dir",
+        "usr/lib/libtpu.so uid=0 gid=0 mode=0644 time=0 type=file content=$(location @libtpu_wheel//:libtpu/libtpu.so)",
+        "usr/share uid=0 gid=0 mode=0755 type=dir",
+        "usr/share/doc uid=0 gid=0 mode=0755 type=dir",
+        "usr/share/doc/libtpu uid=0 gid=0 mode=0755 type=dir",
+        "usr/share/doc/libtpu/LICENSE uid=0 gid=0 mode=0644 time=0 type=file content=$(location @libtpu_wheel//:libtpu/LICENSE)",
+        "usr/share/doc/libtpu/THIRD_PARTY_NOTICES.txt uid=0 gid=0 mode=0644 time=0 type=file content=$(location @libtpu_wheel//:libtpu/THIRD_PARTY_NOTICES.txt)",
+    ],
+    tags = ["manual"],
+)
+
 # Define the TPU Image
 oci_image(
     name = "xla_serving_image_tpu",
     base = "@distroless_cc",
     entrypoint = ["/runtime/serving/gcp/server/xla_serving_main_tpu"],
+    env = {
+        # Read by the server at startup to locate the TPU PJRT plugin (same
+        # convention as JAX). Override with `-e TPU_LIBRARY_PATH=...` to use a
+        # different libtpu build.
+        "TPU_LIBRARY_PATH": "/usr/lib/libtpu.so",
+    },
+    labels = {
+        "org.opencontainers.image.title": "XLA Serving Engine (TPU)",
+        "org.opencontainers.image.description": "XLA Serving gRPC server for Cloud TPU with a bundled libtpu PJRT plugin",
+        "org.opencontainers.image.source": "https://github.com/AI-Hypercomputer/xla-serving",
+    },
     tags = ["manual"],
-    tars = [":xla_serving_tpu"],
+    tars = [
+        ":libtpu_layer",
+        ":xla_serving_tpu",
+    ],
 )
 
 # Define the TPU Push destination

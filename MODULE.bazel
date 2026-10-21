@@ -65,6 +65,30 @@ cc_library(
     urls = ["https://sourceforge.net/projects/half/files/half/2.2.1/half-2.2.1.zip"],
 )
 
+# libtpu (the Cloud TPU PJRT plugin) bundled into the OSS TPU serving image, see
+# `libtpu_layer` in runtime/serving/gcp/server/BUILD.
+#
+# Wheels are sourced from the official libtpu index,
+# https://storage.googleapis.com/libtpu-wheels/index.html, which lists both LTS
+# releases and nightlies. To bump: pick the new wheel from the index and copy the
+# URL and the `#sha256=` fragment it carries into `urls` and `sha256` below.
+http_archive(
+    name = "libtpu_wheel",
+    build_file_content = """
+exports_files(
+    [
+        "libtpu/libtpu.so",
+        "libtpu/LICENSE",
+        "libtpu/THIRD_PARTY_NOTICES.txt",
+    ],
+    visibility = ["//visibility:public"],
+)
+""",
+    sha256 = "79a450120c87d72e2e67aa549a75434818af38f666c1d224c228fff9f8a93805",
+    type = "zip",
+    urls = ["https://storage.googleapis.com/libtpu-lts-releases/wheels/libtpu/libtpu-0.0.48-cp312-cp312-manylinux_2_31_x86_64.whl"],
+)
+
 # To calculate integrity:
 # wget -O temp_module_archive.tar.gz <archive URL>
 # HASH=$(openssl dgst -sha256 -binary temp_module_archive.tar.gz | openssl base64 -A)
