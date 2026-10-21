@@ -22,7 +22,7 @@ bazel_dep(name = "pybind11_bazel", version = "3.0.1")
 bazel_dep(name = "pybind11_protobuf", version = "0.0.0-20250210-f02a2b7")
 bazel_dep(name = "re2", version = "2025-11-05.bcr.1")
 bazel_dep(name = "riegeli", version = "0.0.0-20250822-9f2744d")
-bazel_dep(name = "rules_cc", version = "0.2.22")
+bazel_dep(name = "rules_cc", version = "0.2.25")
 bazel_dep(name = "rules_license", version = "1.0.0")
 bazel_dep(name = "rules_oci", version = "1.7.2")
 bazel_dep(name = "rules_proto", version = "7.1.0")
@@ -72,13 +72,13 @@ cc_library(
 bazel_dep(name = "rules_ml_toolchain")
 archive_override(
     module_name = "rules_ml_toolchain",
-    integrity = "sha256-izPVqzV2I7ox7EYzRzcRY6ogeLcHUr4LRP2xMrkWh6A=",
+    integrity = "sha256-Z38HhfFL91M5oxh8un+pXhofiIoYVo7cLl+sh9UT/Hw=",
     patch_strip = 1,
     patches = [
         "//third_party/rules_ml_toolchain:patch_nvcc_wrapper.patch",
     ],
-    strip_prefix = "rules_ml_toolchain-236a498d8624bef88e35ce2518a833204b0db19f",
-    urls = ["https://github.com/google-ml-infra/rules_ml_toolchain/archive/236a498d8624bef88e35ce2518a833204b0db19f.tar.gz"],
+    strip_prefix = "rules_ml_toolchain-f56a19573fec3543050a5f4bcd9a07a1de08e8ee",
+    urls = ["https://github.com/google-ml-infra/rules_ml_toolchain/archive/f56a19573fec3543050a5f4bcd9a07a1de08e8ee.tar.gz"],
 )
 
 # The XLA dependency and its pinned revision live in a separate file so that the
@@ -106,13 +106,19 @@ override_repo(
 bazel_dep(name = "tensorflow", repo_name = "org_tensorflow")
 archive_override(
     module_name = "tensorflow",
-    integrity = "sha256-bqp2flgFQBHP1KZiFcQpanuDF7c9RnSA6RFtH9/n7O8=",
+    integrity = "sha256-UbjfYA4j4P+lCvGwfcEt05e18J8mlJ+PfDePC9zjD94=",
     patch_strip = 1,
     patches = [
+        # Restores the `//tensorflow/core:framework` dep of
+        # `//tensorflow/core/kernels/batching_util:warmup`, which upstream
+        # switched to `framework_headers_lib`. The header-only library doesn't
+        # propagate the include paths of Eigen and protobuf when TensorFlow is
+        # an external module, so `warmup.cc` fails to compile.
+        "//third_party/tensorflow:warmup_framework_dep.patch",
         "//third_party/tensorflow:where_op_gpu.patch",
     ],
-    strip_prefix = "tensorflow-34d7ab29960ee6c4f1cc7e857da4d9d47e600208",
-    urls = ["https://github.com/tensorflow/tensorflow/archive/34d7ab29960ee6c4f1cc7e857da4d9d47e600208.zip"],
+    strip_prefix = "tensorflow-fa441ca48d3262b4938ee2a9ed6d560cdf5f3b13",
+    urls = ["https://github.com/tensorflow/tensorflow/archive/fa441ca48d3262b4938ee2a9ed6d560cdf5f3b13.zip"],
 )
 
 tf_third_party = use_extension("@org_tensorflow//third_party/extensions:third_party.bzl", "third_party_ext")

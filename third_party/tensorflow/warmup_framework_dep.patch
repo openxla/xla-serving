@@ -1,0 +1,11 @@
+--- a/tensorflow/core/kernels/batching_util/BUILD
++++ b/tensorflow/core/kernels/batching_util/BUILD
+@@ -527,7 +527,7 @@
+     srcs = ["warmup.cc"],
+     hdrs = ["warmup.h"],
+     deps = [
+-        "//tensorflow/core:framework_headers_lib",
++        "//tensorflow/core:framework",
+         "//tensorflow/core/protobuf:for_core_protos_cc",
+         "@com_google_absl//absl/container:flat_hash_map",
+         "@com_google_absl//absl/hash",
