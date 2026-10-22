@@ -31,7 +31,6 @@
 #include "absl/base/no_destructor.h"  // from @abseil-cpp
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
-#include "absl/container/flat_hash_set.h"  // from @abseil-cpp
 #include "absl/flags/flag.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
@@ -933,115 +932,6 @@ bool ComponentUsesInputAliasing(
       });
 }
 
-// `RunOptions::preallocated_output_arrays` and
-// `RunOptions::preallocated_output_host_buffers` are keyed by component output
-// name, and each kernel claims only the entries naming its own outputs. An
-// entry that no kernel claims would simply never be read: the execution would
-// allocate its own output memory and the caller would be handed results that
-// are not in the memory it asked for, with nothing to show that its buffers
-// went unused. So resolve every name to the component producing it here, and
-// fail the request on any name that cannot be honoured.
-//
-// TODO: This runs on every request that pre-allocates outputs and
-// rebuilds the output-name-to-component map each time. Everything but the
-// per-entry checks depends only on the loaded pipeline, so precompute it at
-// load time (e.g. on `GraphBundle`) and keep only the per-entry lookups here.
-absl::Status ValidatePreallocatedOutputs(
-    absl::string_view pipeline_name,
-    const xla_saved_model_orchestration::Pipeline& pipeline,
-    const absl::flat_hash_map<std::string,
-                              const xla_saved_model_manifest::TopLevelObject*>&
-        manifest_objects,
-    const RunOptions& run_options) {
-  if (run_options.preallocated_output_arrays.empty() &&
-      run_options.preallocated_output_host_buffers.empty()) {
-    return absl::OkStatus();
-  }
-  // Only a keyword-arguments based pipeline hands its components their named
-  // signatures, and without them there is no output name to address.
-  if (!pipeline.keyword_arguments_based()) {
-    return absl::FailedPreconditionError(absl::StrCat(
-        "Pipeline \"", pipeline_name,
-        "\" is not keyword-arguments based, so its component outputs have no "
-        "names to address pre-allocated output buffers to. Pre-allocated "
-        "outputs require a graph-based export."));
-  }
-
-  // Every value of a keyword-arguments based run lives in one name-keyed map,
-  // so a pipeline whose components share an output name cannot run anyway.
-  // Still, a buffer addressed to such a name could land on either output, so
-  // reject it here with a precise error rather than rely on that.
-  absl::flat_hash_map<absl::string_view, absl::string_view> producers;
-  absl::flat_hash_set<absl::string_view> ambiguous_names;
-  for (const xla_saved_model_orchestration::Component& component :
-       pipeline.components()) {
-    if (!component.has_named_signature()) {
-      continue;
-    }
-    for (const xla_saved_model_orchestration::NamedTensorType& output :
-         component.named_signature().outputs().named_tensor_types()) {
-      if (!producers.try_emplace(output.name(), component.function_name())
-               .second) {
-        ambiguous_names.insert(output.name());
-      }
-    }
-  }
-
-  // Returns the component producing `output_name`, or an error naming
-  // `field`, the `RunOptions` map the entry came from.
-  const auto find_producer =
-      [&](absl::string_view field,
-          absl::string_view output_name) -> absl::StatusOr<absl::string_view> {
-    absl::flat_hash_map<absl::string_view, absl::string_view>::const_iterator
-        producer = producers.find(output_name);
-    if (producer == producers.end()) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "`", field, "` has an entry for \"", output_name,
-          "\", which is not an output of any component of pipeline \"",
-          pipeline_name, "\"."));
-    }
-    if (ambiguous_names.contains(output_name)) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "`", field, "` has an entry for \"", output_name,
-          "\", which is an output of more than one component of pipeline \"",
-          pipeline_name, "\"."));
-    }
-    return producer->second;
-  };
-
-  for (const auto& [output_name, array] :
-       run_options.preallocated_output_arrays) {
-    TF_ASSIGN_OR_RETURN(
-        absl::string_view producer,
-        find_producer("preallocated_output_arrays", output_name));
-    if (array == nullptr) {
-      return absl::InvalidArgumentError(
-          absl::StrCat("`preallocated_output_arrays` has a null array for \"",
-                       output_name, "\"."));
-    }
-    if (!ComponentUsesInputAliasing(manifest_objects, producer)) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "`preallocated_output_arrays` has an entry for \"", output_name,
-          "\", which is an output of component \"", producer,
-          "\" of pipeline \"", pipeline_name,
-          "\", but that component was not exported for input aliasing."));
-    }
-  }
-  // Host memory is copied into after the execution, so it needs nothing from
-  // the export.
-  for (const auto& [output_name, host_buffer] :
-       run_options.preallocated_output_host_buffers) {
-    TF_RETURN_IF_ERROR(
-        find_producer("preallocated_output_host_buffers", output_name)
-            .status());
-    if (!host_buffer.has_data()) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "`preallocated_output_host_buffers` has an empty host buffer for \"",
-          output_name, "\"."));
-    }
-  }
-  return absl::OkStatus();
-}
 }  // namespace
 
 absl::StatusOr<std::unique_ptr<Interpreter>> Interpreter::Create(
@@ -1144,6 +1034,10 @@ absl::Status Interpreter::Load() {
     graph_bundle.pipeline_name = pipeline_name;
     graph_bundle.keyword_arguments_execution =
         graph_bundle.pipeline.keyword_arguments_based();
+    if (graph_bundle.keyword_arguments_execution) {
+      graph_bundle.output_producers =
+          ResolveOutputProducers(graph_bundle.pipeline);
+    }
   }
   if (create_options_->lazy_loading_pipelines) {
     return absl::OkStatus();
@@ -1623,6 +1517,122 @@ Interpreter::GetGraphBundle(absl::string_view pipeline_name) const {
   return it->second.get();
 }
 
+absl::flat_hash_map<std::string, Interpreter::GraphBundle::OutputProducer>
+Interpreter::ResolveOutputProducers(
+    const xla_saved_model_orchestration::Pipeline& pipeline) const {
+  absl::flat_hash_map<std::string, GraphBundle::OutputProducer> producers;
+  for (const xla_saved_model_orchestration::Component& component :
+       pipeline.components()) {
+    if (!component.has_named_signature()) {
+      continue;
+    }
+    const bool uses_input_aliasing = ComponentUsesInputAliasing(
+        manifest_objects_, component.function_name());
+    for (const xla_saved_model_orchestration::NamedTensorType& output :
+         component.named_signature().outputs().named_tensor_types()) {
+      auto [it, inserted] = producers.try_emplace(
+          output.name(), GraphBundle::OutputProducer{
+                             .component = component.function_name(),
+                             .uses_input_aliasing = uses_input_aliasing,
+                         });
+      if (!inserted) {
+        it->second.ambiguous = true;
+      }
+    }
+  }
+  return producers;
+}
+
+// `RunOptions::preallocated_output_arrays` and
+// `RunOptions::preallocated_output_host_buffers` are keyed by component output
+// name, and each kernel claims only the entries naming its own outputs. An
+// entry that no kernel claims would simply never be read: the execution would
+// allocate its own output memory and the caller would be handed results that
+// are not in the memory it asked for, with nothing to show that its buffers
+// went unused. So resolve every name to the component producing it here, and
+// fail the request on any name that cannot be honoured.
+//
+// This runs on every request, so it only does per-entry lookups into
+// `GraphBundle::output_producers`, which is built once at load time.
+absl::Status Interpreter::ValidatePreallocatedOutputs(
+    const GraphBundle& graph_bundle, const RunOptions& run_options) {
+  if (run_options.preallocated_output_arrays.empty() &&
+      run_options.preallocated_output_host_buffers.empty()) {
+    return absl::OkStatus();
+  }
+  const absl::string_view pipeline_name = graph_bundle.pipeline_name;
+  // Only a keyword-arguments based pipeline hands its components their named
+  // signatures, and without them there is no output name to address.
+  if (!graph_bundle.keyword_arguments_execution) {
+    return absl::FailedPreconditionError(absl::StrCat(
+        "Pipeline \"", pipeline_name,
+        "\" is not keyword-arguments based, so its component outputs have no "
+        "names to address pre-allocated output buffers to. Pre-allocated "
+        "outputs require a graph-based export."));
+  }
+
+  // Returns the producer of `output_name`, or an error naming `field`, the
+  // `RunOptions` map the entry came from.
+  //
+  // Every value of a keyword-arguments based run lives in one name-keyed map,
+  // so a pipeline whose components share an output name cannot run anyway.
+  // Still, a buffer addressed to such a name could land on either output, so
+  // reject it here with a precise error rather than rely on that.
+  const auto find_producer = [&](absl::string_view field,
+                                 absl::string_view output_name)
+      -> absl::StatusOr<const GraphBundle::OutputProducer*> {
+    absl::flat_hash_map<std::string,
+                        GraphBundle::OutputProducer>::const_iterator it =
+        graph_bundle.output_producers.find(output_name);
+    if (it == graph_bundle.output_producers.end()) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "`", field, "` has an entry for \"", output_name,
+          "\", which is not an output of any component of pipeline \"",
+          pipeline_name, "\"."));
+    }
+    if (it->second.ambiguous) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "`", field, "` has an entry for \"", output_name,
+          "\", which is an output of more than one component of pipeline \"",
+          pipeline_name, "\"."));
+    }
+    return &it->second;
+  };
+
+  for (const auto& [output_name, array] :
+       run_options.preallocated_output_arrays) {
+    TF_ASSIGN_OR_RETURN(
+        const GraphBundle::OutputProducer* producer,
+        find_producer("preallocated_output_arrays", output_name));
+    if (array == nullptr) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("`preallocated_output_arrays` has a null array for \"",
+                       output_name, "\"."));
+    }
+    if (!producer->uses_input_aliasing) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "`preallocated_output_arrays` has an entry for \"", output_name,
+          "\", which is an output of component \"", producer->component,
+          "\" of pipeline \"", pipeline_name,
+          "\", but that component was not exported for input aliasing."));
+    }
+  }
+  // Host memory is copied into after the execution, so it needs nothing from
+  // the export.
+  for (const auto& [output_name, host_buffer] :
+       run_options.preallocated_output_host_buffers) {
+    TF_RETURN_IF_ERROR(
+        find_producer("preallocated_output_host_buffers", output_name)
+            .status());
+    if (!host_buffer.has_data()) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "`preallocated_output_host_buffers` has an empty host buffer for \"",
+          output_name, "\"."));
+    }
+  }
+  return absl::OkStatus();
+}
+
 absl::StatusOr<DataLoader::LoadResult> Interpreter::LoadWeights(
     absl::string_view weight_set_name,
     absl::Span<const xla_saved_model_manifest::Function* const> stablehlo_funcs,
@@ -1697,8 +1707,7 @@ absl::StatusOr<std::vector<Value>> Interpreter::Run(
                  run_options]() -> absl::StatusOr<std::vector<Value>> {
     TF_ASSIGN_OR_RETURN(GraphBundle * graph_bundle,
                         GetGraphBundle(pipeline_name));
-    TF_RETURN_IF_ERROR(ValidatePreallocatedOutputs(
-        pipeline_name, graph_bundle->pipeline, manifest_objects_, run_options));
+    TF_RETURN_IF_ERROR(ValidatePreallocatedOutputs(*graph_bundle, run_options));
     TF_ASSIGN_OR_RETURN(const KernelGraph* graph,
                         GetOrCreateGraph(*graph_bundle));
     std::vector<Placement> resolved_placements =
@@ -1804,8 +1813,7 @@ tsl::Future<std::vector<Value>> Interpreter::RunAsync(
     }
 
     absl::Status preallocated_outputs_valid =
-        ValidatePreallocatedOutputs(pipeline_name, (*graph_bundle)->pipeline,
-                                    manifest_objects_, run_options);
+        ValidatePreallocatedOutputs(**graph_bundle, run_options);
     if (!preallocated_outputs_valid.ok()) {
       return tsl::Future<std::vector<Value>>(preallocated_outputs_valid);
     }

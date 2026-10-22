@@ -201,6 +201,23 @@ class Interpreter {
         ABSL_GUARDED_BY(graph_mutex);
     // Whether the graph is executed based on keyword arguments.
     bool keyword_arguments_execution = false;
+
+    // The component producing a component output.
+    struct OutputProducer {
+      // The component's function name.
+      std::string component;
+      // Whether more than one component has an output of this name.
+      bool ambiguous = false;
+      // Whether the component's StableHLO function was exported for input
+      // aliasing, which pre-allocated device arrays require.
+      bool uses_input_aliasing = false;
+    };
+    // The producer of each component output, keyed by output name, for
+    // resolving the names in `RunOptions::preallocated_output_arrays` and
+    // `RunOptions::preallocated_output_host_buffers`. Computed once when the
+    // pipeline is registered, and only for a keyword-arguments based pipeline:
+    // no other kind names its component outputs. Never modified afterwards.
+    absl::flat_hash_map<std::string, OutputProducer> output_producers;
   };
 
   // Returns the graph bundle of the given pipeline.
@@ -212,6 +229,16 @@ class Interpreter {
   // modify it.
   absl::StatusOr<const GraphBundle* absl_nonnull> GetGraphBundle(
       absl::string_view pipeline_name) const;
+
+  // Builds `GraphBundle::output_producers` for `pipeline`.
+  absl::flat_hash_map<std::string, GraphBundle::OutputProducer>
+  ResolveOutputProducers(
+      const xla_saved_model_orchestration::Pipeline& pipeline) const;
+
+  // Checks the pre-allocated outputs in `run_options` against the pipeline of
+  // `graph_bundle`, before anything runs.
+  static absl::Status ValidatePreallocatedOutputs(
+      const GraphBundle& graph_bundle, const RunOptions& run_options);
 
   // Returns the graph of the given graph bundle. If the graph is not loaded
   // yet, it will be loaded.
