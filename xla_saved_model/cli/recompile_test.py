@@ -40,10 +40,7 @@ class RecompileCliTest(test_utils.XsmTestCase):
   def setUp(self):
     super().setUp()
     self.temp_dir = self.create_tempdir().full_path
-    try:
-      self.runner = testing.CliRunner(mix_stderr=False)
-    except TypeError:
-      self.runner = testing.CliRunner()
+    self.runner = testing.CliRunner()
     self.app = xsm_cli.cli
 
   # -------------------------------------------------------------------------
