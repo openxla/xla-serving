@@ -60,37 +60,37 @@ jobs:
             name: "CPU JAX"
             target: "//runtime/serving/gcp/server:xla_serving_pusher"
             flags: "-c opt"
-            repository: "gcr.io/neptune-serving-engine/cpu-jax-only"
+            repository: "us-docker.pkg.dev/xla-serving-engine/xla-serving/cpu-jax-only"
           - id: cpu-jax-with-tf
             name: "CPU JAX + TF"
             target: "//runtime/serving/gcp/server:xla_serving_pusher"
             flags: "-c opt --define ENABLE_TF=1"
-            repository: "gcr.io/neptune-serving-engine/cpu-jax-with-tf"
+            repository: "us-docker.pkg.dev/xla-serving-engine/xla-serving/cpu-jax-with-tf"
           - id: gpu-jax-cuda12
             name: "CUDA 12 JAX"
             target: "//runtime/serving/gcp/server:xla_serving_pusher_gpu"
             flags: "-c opt --config=cuda_v12 --verbose_failures"
-            repository: "gcr.io/neptune-serving-engine/gpu-jax-cuda12"
+            repository: "us-docker.pkg.dev/xla-serving-engine/xla-serving/gpu-jax-cuda12"
           - id: gpu-jax-cuda12-with-tf
             name: "CUDA 12 JAX + TF"
             target: "//runtime/serving/gcp/server:xla_serving_pusher_gpu"
             flags: "-c opt --config=cuda_v12 --define ENABLE_TF=1 --verbose_failures"
-            repository: "gcr.io/neptune-serving-engine/gpu-jax-cuda12-with-tf"
+            repository: "us-docker.pkg.dev/xla-serving-engine/xla-serving/gpu-jax-cuda12-with-tf"
           - id: gpu-jax-cuda13
             name: "CUDA 13 JAX"
             target: "//runtime/serving/gcp/server:xla_serving_pusher_gpu"
             flags: "-c opt --config=cuda_v13 --verbose_failures"
-            repository: "gcr.io/neptune-serving-engine/gpu-jax-cuda13"
+            repository: "us-docker.pkg.dev/xla-serving-engine/xla-serving/gpu-jax-cuda13"
           - id: gpu-jax-cuda13-with-tf
             name: "CUDA 13 JAX + TF"
             target: "//runtime/serving/gcp/server:xla_serving_pusher_gpu"
             flags: "-c opt --config=cuda_v13 --define ENABLE_TF=1 --verbose_failures"
-            repository: "gcr.io/neptune-serving-engine/gpu-jax-cuda13-with-tf"
+            repository: "us-docker.pkg.dev/xla-serving-engine/xla-serving/gpu-jax-cuda13-with-tf"
           - id: tpu-jax-only
             name: "TPU JAX"
             target: "//runtime/serving/gcp/server:xla_serving_pusher_tpu"
             flags: "-c opt"
-            repository: "gcr.io/neptune-serving-engine/tpu-jax-only"
+            repository: "us-docker.pkg.dev/xla-serving-engine/xla-serving/tpu-jax-only"
 
 
 
@@ -107,7 +107,7 @@ jobs:
 
       - name: Configure Docker Authentication
         if: github.event_name != 'workflow_dispatch' || inputs.variant == 'all' || inputs.variant == matrix.variant.id
-        run: gcloud auth configure-docker gcr.io --quiet
+        run: gcloud auth configure-docker us-docker.pkg.dev --quiet
 
       - name: Build and Push Docker Image
         if: github.event_name != 'workflow_dispatch' || inputs.variant == 'all' || inputs.variant == matrix.variant.id

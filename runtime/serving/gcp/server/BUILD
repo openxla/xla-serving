@@ -85,7 +85,7 @@ oci_image(
 oci_push(
     name = "xla_serving_pusher",
     image = ":xla_serving_image",
-    repository = "gcr.io/neptune-serving-engine/cpu-jax-only",
+    repository = "us-docker.pkg.dev/xla-serving-engine/xla-serving/cpu-jax-only",
     tags = ["manual"],
 )
 
@@ -109,7 +109,7 @@ oci_image(
 oci_push(
     name = "xla_serving_pusher_gpu",
     image = ":xla_serving_image_gpu",
-    repository = "gcr.io/neptune-serving-engine/gpu-jax",
+    repository = "us-docker.pkg.dev/xla-serving-engine/xla-serving/gpu-jax",
     tags = ["manual"],
 )
 
@@ -172,7 +172,7 @@ oci_image(
 oci_push(
     name = "xla_serving_pusher_tpu",
     image = ":xla_serving_image_tpu",
-    repository = "gcr.io/neptune-serving-engine/tpu-jax",
+    repository = "us-docker.pkg.dev/xla-serving-engine/xla-serving/tpu-jax",
     tags = ["manual"],
 )
 

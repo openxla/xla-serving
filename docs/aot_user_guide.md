@@ -250,7 +250,7 @@ Docker container on gRPC port 8500:
 ```bash
 docker run -p 8500:8500 \
     -v /path/to/aot_model:/models/my_model \
-    gcr.io/neptune-serving-engine/gpu-jax-cuda12:latest \
+    us-docker.pkg.dev/xla-serving-engine/xla-serving/gpu-jax-cuda12:latest \
     --model_path=/models/my_model \
     --model_name=my_model \
     --orbax_grpc_server_platform=cuda \

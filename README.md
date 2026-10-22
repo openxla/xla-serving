@@ -119,8 +119,8 @@ latency and protect host container memory. See the
 You can use prebuilt images from Artifact Registry here:
 
 ```
-gcr.io/neptune-serving-engine/cpu-jax-only:latest
-gcr.io/neptune-serving-engine/cpu-jax-with-tf:latest
+us-docker.pkg.dev/xla-serving-engine/xla-serving/cpu-jax-only:latest
+us-docker.pkg.dev/xla-serving-engine/xla-serving/cpu-jax-with-tf:latest
 ```
 In order to build the image at head, please run:
 
@@ -148,7 +148,7 @@ already installed on the Cloud VM.
 
 Prebuilt GPU image
 ```
-gcr.io/neptune-serving-engine/gpu-jax-cuda12
+us-docker.pkg.dev/xla-serving-engine/xla-serving/gpu-jax-cuda12
 ```
 
 To build docker image for GPU:
@@ -165,7 +165,7 @@ bazel run -c opt --config=cuda_v12 \
 Prebuilt image for TPU
 
 ```
-gcr.io/neptune-serving-engine/tpu-jax-only
+us-docker.pkg.dev/xla-serving-engine/xla-serving/tpu-jax-only
 ```
 
 
@@ -187,7 +187,7 @@ bazel run -c opt --config=cuda_v12 \
 docker run   --net=host   --ulimit memlock=-1  \
 --mount type=bind,src=<exported model>,dst=/tmp/model \
  -e XLA_PYTHON_CLIENT_MEM_FRACTION=0.85 \
- gcr.io/neptune-serving-engine/cpu-jax-only:latest  \
+ us-docker.pkg.dev/xla-serving-engine/xla-serving/cpu-jax-only:latest  \
  --model_path /tmp/model  \
  --model_name nnx \
  --orbax_grpc_server_platform cpu \
@@ -207,7 +207,7 @@ profile-data \
 -e NVIDIA_DRIVER_CAPABILITIES=all,compute,utility \
 -e LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/cuda/lib64 \
 -e XLA_PYTHON_CLIENT_MEM_FRACTION=0.85 \
-gcr.io/neptune-serving-engine/gpu-jax-cuda12:latest \
+us-docker.pkg.dev/xla-serving-engine/xla-serving/gpu-jax-cuda12:latest \
 --model_path /tmp/model \
 --model_name nnx \
 --orbax_grpc_server_platform cuda \

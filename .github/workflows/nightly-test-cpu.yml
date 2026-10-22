@@ -9,7 +9,7 @@ on:
       image:
         description: 'Docker image to test'
         required: false
-        default: 'gcr.io/neptune-serving-engine/cpu-jax-only:nightly'
+        default: 'us-docker.pkg.dev/xla-serving-engine/xla-serving/cpu-jax-only:nightly'
         type: string
       release_tag:
         description: 'GitHub Release tag for wheels (leave empty for latest release)'
@@ -62,17 +62,17 @@ jobs:
             echo "$HOME/.local/bin" >> $GITHUB_PATH
           fi
 
-      - name: Authenticate to Container Registry
+      - name: Authenticate to Artifact Registry
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           if command -v gcloud > /dev/null 2>&1; then
-            gcloud auth configure-docker gcr.io --quiet || true
-            gcloud auth print-access-token | crane auth login -u oauth2accesstoken --password-stdin gcr.io || true
+            gcloud auth configure-docker us-docker.pkg.dev --quiet || true
+            gcloud auth print-access-token | crane auth login -u oauth2accesstoken --password-stdin us-docker.pkg.dev || true
           fi
 
       - name: Extract Serving Image
         env:
-          IMAGE: ${{ inputs.image || 'gcr.io/neptune-serving-engine/cpu-jax-only:nightly' }}
+          IMAGE: ${{ inputs.image || 'us-docker.pkg.dev/xla-serving-engine/xla-serving/cpu-jax-only:nightly' }}
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           echo "Extracting Docker image: ${IMAGE}"
