@@ -88,10 +88,12 @@ class FakePersistentCompilationCache : public IfrtPersistentCompilationCache {
           std::unique_ptr<xla::ifrt::CompileOptions> options)>
           value_fn) override {
     // For both cache hit and miss, we use CompileAndLoad to load the
-    // executable. The fake cache only makes note of hits and miss counts.
-    TF_ASSIGN_OR_RETURN(uint64_t fingerprint, hlo_program->Fingerprint());
+    // executable. The fake cache only makes note of hits and miss counts. It
+    // keys on the serialized program, which this test's OSS build supports at
+    // its pinned XLA version too.
+    TF_ASSIGN_OR_RETURN(std::string serialized_program, hlo_program->ToBytes());
     absl::MutexLock lock(mu_);
-    if (cache_.contains(fingerprint)) {
+    if (cache_.contains(serialized_program)) {
       cache_hit_counter_++;
       return ifrt_client_->GetDefaultCompiler()
           ->CompileAndLoad(std::move(hlo_program),
@@ -100,7 +102,7 @@ class FakePersistentCompilationCache : public IfrtPersistentCompilationCache {
           .Await();
     }
     cache_miss_counter_++;
-    cache_.insert(fingerprint);
+    cache_.insert(std::move(serialized_program));
     return value_fn(std::move(hlo_program),
                     std::make_unique<xla::ifrt::XlaCompileOptions>(
                         xla_compile_options, device_list));
@@ -113,7 +115,7 @@ class FakePersistentCompilationCache : public IfrtPersistentCompilationCache {
   absl::Mutex mu_;
   uint64_t cache_hit_counter_ = 0;
   uint64_t cache_miss_counter_ = 0;
-  absl::flat_hash_set<uint64_t> cache_ ABSL_GUARDED_BY(mu_);
+  absl::flat_hash_set<std::string> cache_ ABSL_GUARDED_BY(mu_);
   std::shared_ptr<xla::ifrt::Client> ifrt_client_;
 };
 
