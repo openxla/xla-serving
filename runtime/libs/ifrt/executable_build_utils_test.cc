@@ -89,7 +89,9 @@ class FakePersistentCompilationCache : public IfrtPersistentCompilationCache {
           value_fn) override {
     // For both cache hit and miss, we use CompileAndLoad to load the
     // executable. The fake cache only makes note of hits and miss counts.
-    TF_ASSIGN_OR_RETURN(uint64_t fingerprint, hlo_program->Fingerprint());
+    TF_ASSIGN_OR_RETURN(
+        uint64_t fingerprint,
+        hlo_program->Fingerprint(xla::ifrt::HloProgram::FingerprintOptions()));
     absl::MutexLock lock(mu_);
     if (cache_.contains(fingerprint)) {
       cache_hit_counter_++;
