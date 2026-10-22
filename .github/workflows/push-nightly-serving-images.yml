@@ -46,7 +46,7 @@ permissions:
 jobs:
   push-serving-images:
     name: "Push ${{ matrix.variant.name }}"
-    runs-on: linux-x86-n2-32
+    runs-on: linux-x86-n4-32
     defaults:
       run:
         shell: bash

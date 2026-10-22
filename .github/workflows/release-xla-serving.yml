@@ -52,7 +52,7 @@ jobs:
   # produced exactly once (matrix job outputs are last-writer-wins).
   resolve-version:
     name: Resolve Release Version
-    runs-on: linux-x86-n2-16
+    runs-on: linux-x86-n4-16
     container:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:0ad60e35d5870853c4c463f1c23dff6ed2dbfe3b1f708406c25a7606a5cae078
     outputs:
@@ -128,7 +128,7 @@ jobs:
   build-and-verify:
     name: "Build & Verify XLA Serving Wheels (Python ${{ matrix.python-version }})"
     needs: resolve-version
-    runs-on: linux-x86-n2-16
+    runs-on: linux-x86-n4-16
     container:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:0ad60e35d5870853c4c463f1c23dff6ed2dbfe3b1f708406c25a7606a5cae078
     strategy:
@@ -274,7 +274,7 @@ jobs:
   publish-release:
     name: Publish Release
     needs: [resolve-version, build-and-verify]
-    runs-on: linux-x86-n2-16
+    runs-on: linux-x86-n4-16
     permissions:
       contents: write # Required to create release & git tag
     container:
