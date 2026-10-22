@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "absl/base/nullability.h"  // from @abseil-cpp
+#include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
@@ -66,7 +67,8 @@ absl::Status CompositeProcessorOp::RunInternal(ExecuteContext& context) {
           },
   };
 
-  std::vector<xla_serving::data::composite::api::Value> converted_inputs;
+  absl::InlinedVector<xla_serving::data::composite::api::Value, 32>
+      converted_inputs;
   converted_inputs.reserve(context.inputs.size());
   for (const auto& input : context.inputs) {
     if (!input.IsType<xla_serving::HostBuffer>()) {
@@ -90,6 +92,7 @@ absl::Status CompositeProcessorOp::RunInternal(ExecuteContext& context) {
     return status;
   }
 
+  context.outputs.reserve(jax_data_context.outputs.size());
   for (auto& output : jax_data_context.outputs) {
     if (!output.IsType<xla_serving::HostBuffer>()) {
       return absl::InternalError(

@@ -35,11 +35,10 @@ namespace xla_serving::data::cpu_embedding::internal {
 // Auto-dispatch selects SVE only for the measured 128-bit vector length.
 inline constexpr int kAutoSveVectorLengthBytes = 16;
 
-// Work threshold (in float32 output elements) below which thread-pool task
-// scheduling overhead dominates compute time. Empirically determined via DLRM
-// CPU benchmark sweeps (Dim=16..128, BS=1..4096): for workloads <= 64K
-// elements (256 KB, matching private CPU L2 cache size), sequential execution
-// avoids mutex, thread wake, and interconnect synchronization latency.
+// Work threshold (in float32 work elements: output + looked-up rows) below
+// which thread-pool task scheduling overhead dominates compute time. For small
+// workloads (<= 64K elements, 256 KB, matching private CPU L2 cache size),
+// sequential execution avoids thread wake and synchronization latency.
 inline constexpr size_t kInlineWorkThreshold = 65536;
 
 // Backend selection for standard FP32 embedding-bag reductions.
@@ -69,6 +68,7 @@ struct EmbeddingBagInput {
   const EmbeddingTable* embedding_table = nullptr;
   absl::Span<const float> weights;
   absl::AnyInvocable<absl::Span<float>(size_t)>* output_allocator = nullptr;
+  absl::Span<const int32_t> embedding_ids_i32 = {};
 };
 
 // Availability is process-wide; vector length belongs to the calling thread.
@@ -81,7 +81,7 @@ absl::Status ComputeEmbeddingActivationsF32(
     EmbeddingBagBackend* selected = nullptr);
 
 // Executes cost-balanced bag ranges after validating the complete group.
-// Runs inline on the calling thread when the total output size across all
+// Runs inline on the calling thread when the total work size across all
 // inputs is at most `inline_work_threshold` elements, when the pool has a
 // single thread, or when called from one of the pool's own threads.
 absl::Status ExecuteEmbeddingBagBatch(

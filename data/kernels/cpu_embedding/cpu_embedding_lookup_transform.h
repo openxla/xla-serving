@@ -49,6 +49,8 @@ class CpuEmbeddingLookupTransform : public TransformBase {
   std::vector<std::shared_ptr<xla_serving::data::Resource>> GetAllResources()
       const override;
 
+  absl::Status Execute(api::ExecuteContext& context) override;
+
   absl::StatusOr<std::vector<xla_serving::HostBuffer>> operator()(
       std::vector<xla_serving::HostBuffer> ids,
       std::vector<xla_serving::HostBuffer> row_pointers,
@@ -69,6 +71,11 @@ class CpuEmbeddingLookupTransform : public TransformBase {
       std::vector<std::string> feature_names,
       std::vector<std::string> output_feature_names, bool dense_lookup,
       int64_t embedding_dim, std::vector<std::vector<int64_t>> output_shapes);
+
+  absl::StatusOr<std::vector<xla_serving::HostBuffer>> ExecuteSpan(
+      absl::Span<const xla_serving::HostBuffer> ids,
+      absl::Span<const xla_serving::HostBuffer> row_pointers,
+      absl::Span<const xla_serving::HostBuffer> weights);
 
   std::shared_ptr<CpuEmbeddingEngineResource> resource_;
   std::vector<std::string> feature_names_;

@@ -18,8 +18,10 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <type_traits>
 
+#include "absl/base/optimization.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"  // from @abseil-cpp
@@ -42,6 +44,7 @@ absl::Status AssembleCombinedEmbeddings(
   const T* table_data = embedding_table.AsTensor<T>().data();
   const int64_t dim = embedding_table.EmbeddingDim();
   const int64_t vocab_size = embedding_table.VocabSize();
+  const uint64_t vocab_u64 = static_cast<uint64_t>(vocab_size);
   const size_t num_samples = row_pointers.size() - 1;
 
   auto get_row_vec = [&](const T* ptr) {
@@ -76,26 +79,50 @@ absl::Status AssembleCombinedEmbeddings(
     absl::Span<const float> sample_weights =
         weights.empty() ? weights : weights.subspan(sample_start, sample_size);
 
-    Eigen::Matrix<T, 1, Dim> accumulator;
-    if constexpr (Dim == Eigen::Dynamic) {
-      accumulator.resize(dim);
-    }
-    accumulator.setZero();
-
-    // 1. Bounds check scan
+    // 1. Vectorized bounds check scan
+    uint64_t any_oob = 0;
     for (size_t emb_idx = 0; emb_idx < sample_size; ++emb_idx) {
-      int64_t id = sample_ids[emb_idx];
-      if (id < 0 || id >= vocab_size) {
-        return absl::InvalidArgumentError(absl::StrFormat(
-            "Embedding ID (%d) at index %d is out of bounds [0, %d) for table "
-            "%s.",
-            id, sample_start + emb_idx, vocab_size, embedding_table.Name()));
+      any_oob |=
+          (static_cast<uint64_t>(sample_ids[emb_idx]) >= vocab_u64);
+    }
+    if (ABSL_PREDICT_FALSE(any_oob != 0)) {
+      for (size_t emb_idx = 0; emb_idx < sample_size; ++emb_idx) {
+        int64_t id = sample_ids[emb_idx];
+        if (id < 0 || id >= vocab_size) {
+          return absl::InvalidArgumentError(absl::StrFormat(
+              "Embedding ID (%d) at index %d is out of bounds [0, %d) for "
+              "table %s.",
+              id, sample_start + emb_idx, vocab_size, embedding_table.Name()));
+        }
       }
     }
 
     // 2. Hot lookup execution
     if (sample_weights.empty()) {
-      for (size_t emb_idx = 0; emb_idx < sample_size; ++emb_idx) {
+      if (sample_size == 1) {
+        const T* row_ptr = table_data + sample_ids[0] * dim;
+        std::memcpy(act_ptr, row_ptr, dim * sizeof(T));
+        continue;
+      }
+
+      Eigen::Matrix<T, 1, Dim> accumulator;
+      if constexpr (Dim == Eigen::Dynamic) {
+        accumulator.resize(dim);
+      }
+      accumulator.noalias() = get_row_vec(table_data + sample_ids[0] * dim) +
+                              get_row_vec(table_data + sample_ids[1] * dim);
+      size_t emb_idx = 2;
+      for (; emb_idx + 4 <= sample_size; emb_idx += 4) {
+        const T* r0 = table_data + sample_ids[emb_idx + 0] * dim;
+        const T* r1 = table_data + sample_ids[emb_idx + 1] * dim;
+        const T* r2 = table_data + sample_ids[emb_idx + 2] * dim;
+        const T* r3 = table_data + sample_ids[emb_idx + 3] * dim;
+        accumulator += get_row_vec(r0);
+        accumulator += get_row_vec(r1);
+        accumulator += get_row_vec(r2);
+        accumulator += get_row_vec(r3);
+      }
+      for (; emb_idx < sample_size; ++emb_idx) {
         const T* row_ptr = table_data + sample_ids[emb_idx] * dim;
         accumulator += get_row_vec(row_ptr);
       }
@@ -114,7 +141,14 @@ absl::Status AssembleCombinedEmbeddings(
       if (scale != 1.0f) {
         accumulator *= T(scale);
       }
+      get_act_vec(act_ptr) = accumulator;
     } else {
+      Eigen::Matrix<T, 1, Dim> accumulator;
+      if constexpr (Dim == Eigen::Dynamic) {
+        accumulator.resize(dim);
+      }
+      accumulator.setZero();
+
       float sum_weights = 0.0f;
       for (size_t emb_idx = 0; emb_idx < sample_size; ++emb_idx) {
         const T* row_ptr = table_data + sample_ids[emb_idx] * dim;
@@ -147,8 +181,8 @@ absl::Status AssembleCombinedEmbeddings(
       if (scale != 1.0f) {
         accumulator *= T(scale);
       }
+      get_act_vec(act_ptr) = accumulator;
     }
-    get_act_vec(act_ptr) = accumulator;
   }
   return absl::OkStatus();
 }

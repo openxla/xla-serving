@@ -22,7 +22,9 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_set.h"  // from @abseil-cpp
+#include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"  // from @abseil-cpp
@@ -35,6 +37,7 @@
 #include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @xla_serving
 #include "data/processor/cc/api/registry.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/processor/cc/api/value.h"  // from @xla_serving
 #include "data/processor/cc/core/transform.h"  // from @xla_serving
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
@@ -49,12 +52,53 @@ namespace {
 
 struct PreparedLookup {
   int64_t batch_size = 0;
-  std::vector<int64_t> converted_ids;
   absl::Span<const int64_t> embedding_ids;
-  std::vector<int32_t> generated_row_pointers;
+  absl::Span<const int32_t> embedding_ids_i32;
   absl::Span<const int32_t> row_pointers;
   absl::Span<const float> weights;
 };
+
+struct DenseRowPointersKey {
+  int64_t batch_size;
+  int64_t valency;
+
+  bool operator==(const DenseRowPointersKey& other) const {
+    return batch_size == other.batch_size && valency == other.valency;
+  }
+
+  template <typename H>
+  friend H AbslHashValue(H h, const DenseRowPointersKey& k) {
+    return H::combine(std::move(h), k.batch_size, k.valency);
+  }
+};
+
+using DenseRowPointersCache =
+    absl::flat_hash_map<DenseRowPointersKey,
+                        std::unique_ptr<std::vector<int32_t>>>;
+
+DenseRowPointersCache& GetThreadLocalDenseRowPointersCache() {
+  thread_local DenseRowPointersCache cache;
+  return cache;
+}
+
+absl::Span<const int32_t> GetOrBuildDenseRowPointers(int64_t batch_size,
+                                                     int64_t valency) {
+  DenseRowPointersCache& cache = GetThreadLocalDenseRowPointersCache();
+  const DenseRowPointersKey key{batch_size, valency};
+  auto it = cache.find(key);
+  if (it != cache.end()) {
+    return absl::MakeConstSpan(*it->second);
+  }
+  auto vec = std::make_unique<std::vector<int32_t>>(batch_size + 1);
+  int32_t* ptr = vec->data();
+  const int32_t v = static_cast<int32_t>(valency);
+  for (int64_t b = 0; b <= batch_size; ++b) {
+    ptr[b] = static_cast<int32_t>(b) * v;
+  }
+  absl::Span<const int32_t> span = absl::MakeConstSpan(*vec);
+  cache.emplace(key, std::move(vec));
+  return span;
+}
 
 xla_serving::HostBuffer AllocateOutput(int64_t batch_size, size_t size) {
   if (batch_size > 0 && size % batch_size == 0) {
@@ -149,18 +193,18 @@ CpuEmbeddingLookupTransform::GetAllResources() const {
 absl::Status ValidateLookupInputs(const xla_serving::HostBuffer& ids,
                                   const xla_serving::HostBuffer& row_pointers,
                                   const xla_serving::HostBuffer& weights) {
+  if (!row_pointers.has_data()) {
+    return absl::InvalidArgumentError(
+        "row_pointers HostBuffer is uninitialized.");
+  }
   if (row_pointers.shape().dims().empty()) {
     return absl::InvalidArgumentError(
         "row_pointers HostBuffer must be at least 1D (got scalar).");
   }
-  if (ids.DebugString() == "Empty host buffer") {
+  if (!ids.has_data()) {
     return absl::InvalidArgumentError("ids HostBuffer is uninitialized.");
   }
-  if (row_pointers.DebugString() == "Empty host buffer") {
-    return absl::InvalidArgumentError(
-        "row_pointers HostBuffer is uninitialized.");
-  }
-  if (weights.DebugString() == "Empty host buffer") {
+  if (!weights.has_data()) {
     return absl::InvalidArgumentError("weights HostBuffer is uninitialized.");
   }
 
@@ -231,10 +275,41 @@ absl::Status ValidateLookupInputs(const xla_serving::HostBuffer& ids,
   return absl::OkStatus();
 }
 
+absl::Status CpuEmbeddingLookupTransform::Execute(
+    api::ExecuteContext& context) {
+  if (context.inputs.size() != 3) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Expected 3 input(s) when calling Execute, but got ",
+                     context.inputs.size(), " instead."));
+  }
+  if (!context.inputs[0].IsType<std::vector<xla_serving::HostBuffer>>() ||
+      !context.inputs[1].IsType<std::vector<xla_serving::HostBuffer>>() ||
+      !context.inputs[2].IsType<std::vector<xla_serving::HostBuffer>>()) {
+    return TransformBase::Execute(context);
+  }
+  ASSIGN_OR_RETURN(
+      std::vector<xla_serving::HostBuffer> outputs,
+      ExecuteSpan(context.inputs[0].Get<std::vector<xla_serving::HostBuffer>>(),
+                  context.inputs[1].Get<std::vector<xla_serving::HostBuffer>>(),
+                  context.inputs[2].Get<std::vector<xla_serving::HostBuffer>>()));
+  api::Value v;
+  v.Set(std::move(outputs));
+  context.outputs.push_back(std::move(v));
+  return absl::OkStatus();
+}
+
 absl::StatusOr<std::vector<xla_serving::HostBuffer>>
 CpuEmbeddingLookupTransform::operator()(
     std::vector<xla_serving::HostBuffer> ids, std::vector<xla_serving::HostBuffer> row_pointers,
     std::vector<xla_serving::HostBuffer> weights) {
+  return ExecuteSpan(ids, row_pointers, weights);
+}
+
+absl::StatusOr<std::vector<xla_serving::HostBuffer>>
+CpuEmbeddingLookupTransform::ExecuteSpan(
+    absl::Span<const xla_serving::HostBuffer> ids,
+    absl::Span<const xla_serving::HostBuffer> row_pointers,
+    absl::Span<const xla_serving::HostBuffer> weights) {
   if (ids.size() != feature_names_.size()) {
     return absl::InvalidArgumentError(absl::StrCat(
         "CpuEmbeddingLookupTransform expected ", feature_names_.size(),
@@ -251,25 +326,27 @@ CpuEmbeddingLookupTransform::operator()(
           "CpuEmbeddingLookupTransform expected ", feature_names_.size(),
           " weights buffers, but got ", weights.size(), "."));
     }
+  } else {
+    DenseRowPointersCache& cache = GetThreadLocalDenseRowPointersCache();
+    if (cache.size() > 512) {
+      cache.clear();
+    }
   }
 
-  // Keep converted IDs and generated row pointers alive through the batch.
-  std::vector<PreparedLookup> prepared(feature_names_.size());
+  absl::InlinedVector<PreparedLookup, 32> prepared(feature_names_.size());
   for (size_t i = 0; i < feature_names_.size(); ++i) {
     const xla_serving::HostBuffer& ids_hb = ids[i];
     PreparedLookup& lookup = prepared[i];
 
-    if (ids_hb.DebugString() == "Empty host buffer" ||
-        ids_hb.base() == nullptr) {
+    if (!ids_hb.has_data() || ids_hb.base() == nullptr) {
       return absl::InvalidArgumentError(
           "ids HostBuffer is uninitialized or null.");
     }
 
     if (ids_hb.dtype().kind() == xla::ifrt::DType::Kind::kS32) {
       auto flat_ids = ids_hb.flat<int32_t>();
-      lookup.converted_ids.assign(flat_ids.data(),
-                                  flat_ids.data() + flat_ids.size());
-      lookup.embedding_ids = absl::MakeConstSpan(lookup.converted_ids);
+      lookup.embedding_ids_i32 =
+          absl::MakeConstSpan(flat_ids.data(), flat_ids.size());
     } else if (ids_hb.dtype().kind() == xla::ifrt::DType::Kind::kS64) {
       auto flat_ids = ids_hb.flat<int64_t>();
       lookup.embedding_ids =
@@ -299,11 +376,8 @@ CpuEmbeddingLookupTransform::operator()(
         return absl::InvalidArgumentError(
             "Batch volume (batch_size * valency) exceeds INT32_MAX bounds.");
       }
-      lookup.generated_row_pointers.resize(lookup.batch_size + 1);
-      for (int64_t b = 0; b <= lookup.batch_size; ++b) {
-        lookup.generated_row_pointers[b] = b * valency;
-      }
-      lookup.row_pointers = absl::MakeConstSpan(lookup.generated_row_pointers);
+      lookup.row_pointers =
+          GetOrBuildDenseRowPointers(lookup.batch_size, valency);
     } else {
       const xla_serving::HostBuffer& row_pointers_hb = row_pointers[i];
       const xla_serving::HostBuffer& weights_hb = weights[i];
@@ -324,7 +398,7 @@ CpuEmbeddingLookupTransform::operator()(
   using FeatureBatchInput =
       cpu_embedding::CpuEmbeddingEngine::FeatureBatchInput<float>;
   std::vector<xla_serving::HostBuffer> batch_outputs(feature_names_.size());
-  std::vector<FeatureBatchInput> batch_inputs;
+  absl::InlinedVector<FeatureBatchInput, 32> batch_inputs;
   batch_inputs.reserve(feature_names_.size());
   for (size_t i = 0; i < feature_names_.size(); ++i) {
     batch_inputs.push_back({
@@ -338,6 +412,7 @@ CpuEmbeddingLookupTransform::operator()(
               auto output = batch_outputs[i].flat<float>();
               return absl::MakeSpan(output.data(), output.size());
             },
+        .embedding_ids_i32 = prepared[i].embedding_ids_i32,
     });
   }
 

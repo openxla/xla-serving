@@ -49,6 +49,7 @@ namespace {
 
 struct PreparedLookup {
   std::vector<int64_t> active_ids;
+  std::vector<int32_t> active_ids_i32;
   std::vector<int32_t> row_pointers;
 };
 
@@ -154,6 +155,8 @@ DenseCpuEmbeddingLookupTransform::operator()(
   }
 
   std::vector<PreparedLookup> prepared(feature_names_.size());
+  const bool pad_fits_i32 = pad_value_ >= std::numeric_limits<int32_t>::min() &&
+                            pad_value_ <= std::numeric_limits<int32_t>::max();
 
   for (size_t f = 0; f < feature_names_.size(); ++f) {
     const auto& dense_ids = dense_ids_list[f];
@@ -187,24 +190,24 @@ DenseCpuEmbeddingLookupTransform::operator()(
           " exceeds INT32_MAX: ", sequence_length));
     }
 
-    std::vector<int64_t>& active_ids = prepared[f].active_ids;
-    active_ids.reserve(num_elements);
     std::vector<int32_t>& row_pointers = prepared[f].row_pointers;
     row_pointers.reserve(batch_size + 1);
     row_pointers.push_back(0);
 
-    auto process_ids = [&](const auto* id_ptr) -> absl::Status {
+    auto process_ids = [&](const auto* id_ptr, auto& out_ids,
+                           auto pad_val) -> absl::Status {
+      out_ids.reserve(num_elements);
       for (int64_t i = 0; i < batch_size; ++i) {
         int32_t active_count = 0;
         for (int64_t j = 0; j < sequence_length; ++j) {
-          int64_t id = id_ptr[i * sequence_length + j];
-          if (id != pad_value_) {
-            active_ids.push_back(id);
+          auto id = id_ptr[i * sequence_length + j];
+          if (static_cast<int64_t>(id) != pad_value_) {
+            out_ids.push_back(id);
             active_count++;
           }
         }
         if (active_count == 0) {
-          active_ids.push_back(pad_value_);
+          out_ids.push_back(pad_val);
           active_count = 1;
         }
         int32_t next_offset = 0;
@@ -219,11 +222,19 @@ DenseCpuEmbeddingLookupTransform::operator()(
     };
 
     if (dense_ids.dtype().kind() == xla::ifrt::DType::Kind::kS64) {
-      RETURN_IF_ERROR(
-          process_ids(reinterpret_cast<const int64_t*>(dense_ids.base())));
+      RETURN_IF_ERROR(process_ids(
+          reinterpret_cast<const int64_t*>(dense_ids.base()),
+          prepared[f].active_ids, pad_value_));
     } else if (dense_ids.dtype().kind() == xla::ifrt::DType::Kind::kS32) {
-      RETURN_IF_ERROR(
-          process_ids(reinterpret_cast<const int32_t*>(dense_ids.base())));
+      if (pad_fits_i32) {
+        RETURN_IF_ERROR(process_ids(
+            reinterpret_cast<const int32_t*>(dense_ids.base()),
+            prepared[f].active_ids_i32, static_cast<int32_t>(pad_value_)));
+      } else {
+        RETURN_IF_ERROR(process_ids(
+            reinterpret_cast<const int32_t*>(dense_ids.base()),
+            prepared[f].active_ids, pad_value_));
+      }
     } else {
       return absl::InvalidArgumentError(absl::StrCat(
           "dense_ids for feature ", feature_names_[f],
@@ -259,6 +270,7 @@ DenseCpuEmbeddingLookupTransform::operator()(
               auto output = output_buffers[f].flat<float>();
               return absl::MakeSpan(output.data(), output.size());
             },
+        .embedding_ids_i32 = prepared[f].active_ids_i32,
     });
   }
 
