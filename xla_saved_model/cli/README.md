@@ -26,20 +26,25 @@ but it can be changed during the export, examine your model with
 
 ```bash
 # Inspect a specific function (signatures, lowering platforms, weights)
-xsm-cli show /path/to/model --details serving_default
+xsm-cli show /path/to/model \
+  --details serving_default
 
 # Inspect orchestration pipeline (inputs/outputs, stage components, etc.)
-xsm-cli show /path/to/model --details orchestration
+xsm-cli show /path/to/model \
+  --details orchestration
 
 # Inspect multiple objects
-xsm-cli show /path/to/model --details serving_default,orchestration
+xsm-cli show /path/to/model \
+  --details serving_default,orchestration
 ```
 
 Add `--verbose` (`-v`) to expand full tensor shapes, signatures, and weight
 names:
 
 ```bash
-xsm-cli show /path/to/model --details serving_default -v
+xsm-cli show /path/to/model \
+  --details serving_default \
+  --verbose
 ```
 
 ### 3. Dump StableHLO MLIR to File
@@ -48,7 +53,9 @@ Extract and deserialize the StableHLO bytecode embedded in the manifest to an
 MLIR text file:
 
 ```bash
-xsm-cli show /path/to/model --details serving_default --savehlo /tmp/model.mlir
+xsm-cli show /path/to/model \
+  --details serving_default \
+  --savehlo /tmp/model.mlir
 ```
 
 ### 4. Show XLA Compile Options
@@ -57,7 +64,9 @@ Inspect platform-specific XLA compilation options (e.g., TPU, CPU, CUDA)
 configured for a function:
 
 ```bash
-xsm-cli show /path/to/model --details serving_default --xla_compile_options
+xsm-cli show /path/to/model \
+  --details serving_default \
+  --xla_compile_options
 ```
 
 ### 5. Update, Inspect History, and Rollback Pipeline Configurations
@@ -67,19 +76,24 @@ orchestration pipelines:
 
 ```bash
 # Update maximum batch size in-place (backs up the modified config proto to .orig and .bak)
-xsm-cli update /path/to/model --max_batch_size 32
+xsm-cli update /path/to/model \
+  --max_batch_size 32
 
 # Clone and update to a new directory (leaves original model untouched)
-xsm-cli update /path/to/model --max_batch_size 64 --output_dir /path/to/updated_model
+xsm-cli update /path/to/model \
+  --max_batch_size 64 \
+  --output_dir /path/to/updated_model
 
 # View the model's modification audit log (history.txtpb)
 xsm-cli history /path/to/model
 
 # Undo the most recent in-place update (restores config proto from .bak)
-xsm-cli rollback /path/to/model --to=bak
+xsm-cli rollback /path/to/model \
+  --to=bak
 
 # Reset configuration to the original exported state (restores config proto from .orig)
-xsm-cli rollback /path/to/model --to=orig
+xsm-cli rollback /path/to/model \
+  --to=orig
 ```
 
 In-place updates modify the configuration protobuf atomically and create
@@ -106,7 +120,7 @@ xsm-cli recompile \
 # Optional: Pass --strip-stablehlo to minimize artifact size.
 ```
 
-See the [AOT User Guide](../../docs/aot_user_guide.md) for full details on
+See the [AOT guide](../../docs/guides/aot.md) for full details on
 multi-platform recompilation, Docker serving, and autotune databases.
 
 ### 7. Check CLI Version

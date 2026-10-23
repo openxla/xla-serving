@@ -1,457 +1,144 @@
 # XLA Serving Engine
 
-[XLA Serving Engine (XSE)](https://docs.cloud.google.com/tpu/docs/jax-ai-stack#jax_serving_orbax_serialization_and_neptune_serving_engine)
-is a general-purpose inference runtime for the XLA-based (TPU) software
-ecosystem. It is designed to be a modular infrastructure component that can be
-plugged into a variety of higher abstraction serving solutions.
-
-XSE is a generic serving solution for a diversity of deep learning models,
-including computer vision, NLP, transformers, recommenders, etc.
-It is not meant for high-throughput LLM serving.
-
-**Why use XSE?**
-
-- Battle-tested by major Google product areas including YouTube, Deepmind,
-Waymo, and Ads. Designed for doing inference on TPUs.
-- Capable of serving a diversity of architectures of models, including LEMs,
-LRMs, encoder-heavy LLMs.
-- Portable file format that can be loaded on GPUs and TPUs.
-- Minimal dependencies (no Python required).
-
-## Python Development
-
-A `xla_saved_model` Python library provides an API for exporting models that can
-run on XSE.
-
-### Prerequisites
-
--   **Bazel**: The build process requires `bazel` (or `bazelisk`) to be
-    installed and available in your system `PATH` to fetch or build XLA protocol
-    buffers.
-
-### Installation
-
-To work on `xla_saved_model` you can install the package in editable mode with
-development/test dependencies.
-
-```bash
-pip install -e .[tf,test]
-```
-
-Run tests using `pytest`:
-
-```bash
-pytest xla_saved_model/
-```
-
-Run example model exports with `python -m`:
-
-```bash
-python -m examples.nnx.export_test
-python -m examples.nnx.run_export --export_path=/path/to/export_dir
-```
-
-Build and install a wheel with `python -m build`:
-
-```bash
-pip install --upgrade build
-python -m build --wheel
-
-pip install dist/xla_saved_model-*.whl
-
-# Use [tf] tag if you want TensorFlow preprocessor support:
-
-wheel=(dist/xla_saved_model-*.whl)
-pip install "${wheel}[tf]"
-```
-
-## ModelRunner
-
-ModelRunner allows quickly testing inference on an exported model from Python.
-
-```bash
-# Python 3.11
-bazel build //runtime/python:xla_saved_model_runner --@rules_python//python/config_settings:python_version=3.11
-
-# Python 3.12+
-bazel build //runtime/python:xla_saved_model_runner --@rules_python//python/config_settings:python_version=3.12
-```
-
-Nanobind supports limited Python ABI for 3.12+, so you can use
-`xla_saved_model_runner` built with 3.12 for any Python 3.12+.
-
-Install it with:
-
-```bash
-# Replace *.whl with an actual version under your bazel-bin/.
-pip install bazel-bin/runtime/python/xla_saved_model_runner-0.0.1-cp311-cp311-manylinux_2_28_x86_64.whl
-```
-
-Test the model:
-
-```python
-import numpy as np
-from xla_saved_model_runner import model_runner
-
-runner = model_runner.ModelRunner(model_path='/your/model')
-
-inputs = {
-    'feature_1': np.zeros((2, 1), dtype=np.int32),
-    'feature_2': np.zeros((2, 1), dtype=np.int32),
-    'feature_3': np.zeros((2, 1), dtype=np.int32),
-    'feature_4': np.zeros((2, 1), dtype=np.int32),
-}
-
-outputs = runner.signature('serving_default').run_with_dict_return(**inputs)
-```
-
-## Ahead-Of-Time (AOT) Model Recompilation
-
-XLA Serving supports Ahead-Of-Time precompilation to eliminate online JIT
-latency and protect host container memory. See the
-[AOT User Guide](docs/aot_user_guide.md) and
-[AOT Benchmark](examples/aot_benchmark/README.md) for full details.
-
-## Docker images for GRPC Server
-
-### CPU
-
-You can use prebuilt images from Artifact Registry here:
-
-```
-us-docker.pkg.dev/xla-serving-engine/xla-serving/cpu-jax-only:latest
-us-docker.pkg.dev/xla-serving-engine/xla-serving/cpu-jax-with-tf:latest
-```
-In order to build the image at head, please run:
-
-```
-bazel run -c opt \
-//runtime/serving/gcp/server:xla_serving_pusher \
--- --repository=<Path to Artifact registry> \
---tag=latest
-```
-
-To build with Tensorflow dependencies
-
-```
-bazel run -c opt --define ENABLE_TF=1 \
-//runtime/serving/gcp/server:xla_serving_pusher \
--- --repository=<Path to Artifact registry> --tag=latest
-```
-
-### GPU
-
-We currently support building GPU image with CUDA 12.
-
-The prerequisite is to have CUDA toolkit and drivers 
-already installed on the Cloud VM.
-
-Prebuilt GPU image
-```
-us-docker.pkg.dev/xla-serving-engine/xla-serving/gpu-jax-cuda12
-```
-
-To build docker image for GPU:
-
-```
-bazel run -c opt --config=cuda_v12 \
-//runtime/serving/gcp/server:xla_serving_pusher_gpu \
--- --repository="<Path to Artifact registry>" \
---tag="latest"
-```
-
-### TPU
-
-Prebuilt image for TPU
-
-```
-us-docker.pkg.dev/xla-serving-engine/xla-serving/tpu-jax-only
-```
-
-
-To build docker image for GPU:
-
-```
-bazel run -c opt --config=cuda_v12 \
-//runtime/serving/gcp/server:xla_serving_pusher_tpu \
--- --repository="<Path to Artifact registry>" \
---tag="latest"
-```
-
-## Starting GRPC Servers
-
-### Using Docker images
-
-#### CPU
-```
-docker run   --net=host   --ulimit memlock=-1  \
---mount type=bind,src=<exported model>,dst=/tmp/model \
- -e XLA_PYTHON_CLIENT_MEM_FRACTION=0.85 \
- us-docker.pkg.dev/xla-serving-engine/xla-serving/cpu-jax-only:latest  \
- --model_path /tmp/model  \
- --model_name nnx \
- --orbax_grpc_server_platform cpu \
- --port=8500 \
- --use_insecure_grpc_credentials=true
-```
-
-#### GPU
-```
-docker run --gpus all --net=host -p 8500:8500 \
---ulimit memlock=-1 \
---mount type=bind,src=<Exported model>,dst=/tmp/model \
---mount type=bind,src=/tmp/profile-data,dst=/tmp/ \
-profile-data \
--e PJRT_DEVICE=cuda \
--e NVIDIA_VISIBLE_DEVICES=all \
--e NVIDIA_DRIVER_CAPABILITIES=all,compute,utility \
--e LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/cuda/lib64 \
--e XLA_PYTHON_CLIENT_MEM_FRACTION=0.85 \
-us-docker.pkg.dev/xla-serving-engine/xla-serving/gpu-jax-cuda12:latest \
---model_path /tmp/model \
---model_name nnx \
---orbax_grpc_server_platform cuda \
---use_insecure_grpc_credentials=true
-```
-
-You can also use partial GPUs with Multi Instance Group(MIG). In order to start
-docker with one of the MIG GPUs, pass the following parameters in the above
-command:
-```
---gpu '"device=<mig_id>" # instead of `--gpu all`
--e NVIDIA_VISIBLE_DEVICES=<mig_id>  # instead of NVIDIA_VISIBLE_DEVICES=all
-```
-
-### Running locally built server
-
-#### CPU
-```bash
-bazel run //runtime/serving/gcp/server:xla_serving_main_cpu -- \
-  --model_path <Exported model path> \
-  --model_name <model_name> \
-  --orbax_grpc_server_platform <cpu|cuda|tpu>  \
-  --port 8500 --use_insecure_grpc_credentials=<true|false>
-```
-
-#### GPU and TPU
-```bash
-bazel run //runtime/serving/gcp/server:xla_serving_main_<gpu|tpu> -- \
-  --model_path <Exported model path> \
-  --model_name <model_name> \
-  --orbax_grpc_server_platform <cpu|cuda|tpu>  \
-  --port 8500 --use_insecure_grpc_credentials=<true|false>
-```
-
-### Server Warmup on Startup
-
-The server can optionally run warmup requests on startup to trigger XLA compilation before serving live traffic. This is disabled by default.
-
-Running warmup requests avoids "cold start" latency spikes for the first few client requests by pre-compiling the XLA graphs, ensuring the server is ready to serve with predictable latency immediately after it starts reporting healthy.
-
-#### Prerequisites
-The model directory must contain a pre-generated warmup file at `assets.extra/xla_serving_warmup_requests`.
-
-This file can be generated during model export by passing warmup examples to `xla_saved_model.save(..., warmup_examples=...)`.
-
-Note that the warmup examples must follow the input specification (input names, shapes, and data types) of the corresponding serving signature.
-
-Here is an example of exporting a model with warmup requests:
-
-```python
-import numpy as np
-import xla_saved_model
-
-# Assume you have a JaxModel instance `model` and your ServingConfig `serving_config`
-model = ...
-serving_config = xla_saved_model.ServingConfig(
-    serving_signature="serving_default",
-    # ... other config options ...
-)
-
-# Prepare warmup examples.
-# The keys must match the serving signatures defined in your serving configs.
-# Each example in the sequence is a dictionary mapping input names to numpy arrays.
-# The inputs (names, shapes, and dtypes) must exactly match the input signature of the serving pipeline.
-warmup_examples = {
-    "serving_default": [
-        # Example request 1 (e.g. batch size 1)
-        {
-            "x": np.zeros((1, 224, 224, 3), dtype=np.float32),
-        },
-    ],
-}
-
-xla_saved_model.save(
-    model=model,
-    export_path="/path/to/export_dir",
-    serving_configs=[serving_config],
-    warmup_examples=warmup_examples,
-)
-```
-
-#### Running with Warmup
-To enable warmup, set `--warmup_server=true`. Note that if the warmup file is missing, the server startup will fail.
-
-```bash
-bazel run //runtime/serving/gcp/server:xla_serving_main_cpu -- \
-  --model_path <Exported model path> \
-  --model_name <model_name> \
-  --orbax_grpc_server_platform <cpu|cuda|tpu> \
-  --warmup_server=true
-```
-
-#### Disabling Warmup (Default)
-By default, warmup is disabled. You can also explicitly disable it with `--warmup_server=false`:
-
-```bash
-bazel run //runtime/serving/gcp/server:xla_serving_main_cpu -- \
-  --model_path <Exported model path> \
-  --model_name <model_name> \
-  --orbax_grpc_server_platform <cpu|cuda|tpu> \
-  --warmup_server=false
-```
-
-## XLA SavedModel Export Migration Guide
-
-With the release of `TensorflowModel` and explicit orchestration pipelines, several APIs in `xla_saved_model` have been updated to support exporting multiple models (such as JAX models combined with TensorFlow preprocessing and postprocessing) and complex multi-stage pipelines.
-
-### Key Changes
-
-1. **Model Containers (`JaxModel` and `TensorflowModel`)**:
-   - `xla_saved_model.save()` accepts a sequence of user-level model containers (`Sequence[Model] | Model`).
-     - `JaxModel`: Encapsulates JAX functions and related shared variables (mesh, model parameters).
-     - `TensorflowModel`: Encapsulates TensorFlow functions and trackable resources. Currently, at most one `TensorflowModel` instance is supported per export bundle.
-   - When exporting multiple models, explicitly assign unique names to your model containers (e.g., `name='jax_model'`, `name='tf_model'`). If only a single model is exported, naming is optional as it will be assigned a default name.
-   - Pass a sequence of models `[model1, model2, ...]` to `xla_saved_model.save()`.
-
-2. **Explicit Orchestration (`ServingConfig.orchestration`)**:
-   - Fixed processing pipeline structures (`processor.SequentialProcessing` and `TfProcessor`) are replaced by explicit `ServingConfig.orchestration` configurations using `ModelCall` objects.
-   - Each `ModelCall` references a target model by `model_name` and specifies the function to execute via `method_key`.
-   - Specify pipeline execution order by defining `orchestration=serving_config.Orchestration(model_calls=[...])`. Note that you only need to specify `role=orchestration_pb2.ROLE_MODEL` for the on-device function (typically the JAX function to be run on device); setting roles for other `ModelCall` entries is optional.
-
----
-
-### Step-by-Step Migration Journey (TF + JAX Example)
-
-Suppose you have an existing export script that uses JAX with TensorFlow preprocessing and postprocessing under the previous API:
+XLA Serving Engine (XSE) is a C++ inference runtime and model packaging toolkit for
+the OpenXLA ecosystem. Export a model once from JAX (Flax, Keras 3, or plain
+`jax.jit`) or from PyTorch via [torchax](https://github.com/pytorch/xla/tree/master/torchax);
+serve it on CPU, NVIDIA GPU, or Cloud TPU from a single self-contained bundle,
+with no Python in the request path.
+
+**Documentation: <https://xla-serving.readthedocs.io>**
+
+## Why XLA Serving Engine
+
+- **Native XLA from training to production.** Export uses `jax.export` to
+  capture StableHLO and an [Orbax](https://github.com/google/orbax) checkpoint
+  directly—no graph conversion to ONNX or TensorFlow, and full support for
+  custom XLA calls, Pallas kernels, and multi-device sharding.
+- **No Python on the serving path.** A standalone C++ server handles gRPC,
+  dynamic request batching, host-side pre- and post-processing, and PJRT/IFRT
+  device execution in one process without GIL contention or a multi-gigabyte
+  Python environment.
+- **One portable artifact across hardware.** A single exported directory can
+  carry lowerings for `cpu`, `cuda`, and `tpu`. Validate it locally on CPU and
+  deploy the same bundle to GPU or TPU containers.
+- **Serving policy lives with the model.** Dynamic batching, warmup requests,
+  host-side feature pipelines, and optional ahead-of-time (AOT) compiled
+  executables are packaged inside the bundle rather than scattered across
+  per-server flags.
+
+XSE is built for **recommenders and rankers**, **vision and multimodal
+encoders**, **encoder-style language models**, and **short fixed-horizon
+decoding** (such as beam search over a few tokens), where request latency and
+cost per query dominate. It is not a continuous-batching LLM engine; for
+open-ended long-form text generation with a paged KV cache, use
+[vLLM](https://github.com/vllm-project/vllm) (with
+[vllm-jax](https://github.com/vllm-project/vllm-jax) or
+[vllm-torchtpu](https://github.com/vllm-project/vllm-torchtpu) on TPUs) or
+[SGLang](https://github.com/sgl-project/sglang) (with
+[sglang-jax](https://github.com/sgl-project/sglang-jax) or
+[sglang-torchtpu](https://github.com/sgl-project/sglang-torchtpu) on TPUs).
+
+## Quick look
+
+Export a JAX model in Python:
 
 ```python
 import xla_saved_model
-from xla_saved_model import processor
-from xla_saved_model import tf_processor
 
 xla_saved_model.save(
-    export_path=export_path,
-    models=xla_saved_model.JaxModel(
-        apply_fn_bundle=apply_fn_bundle,
-        params=model_params,
+    xla_saved_model.JaxModel(
+        apply_fn_bundle=xla_saved_model.ApplyFnBundle(
+            apply_fn=apply_fn,                              # (params, inputs) -> outputs
+            input_polymorphic_shapes={'features': 'b, _'},  # symbolic batch dimension
+            jax_export_kwargs={'platforms': ['cpu', 'cuda', 'tpu']},
+        ),
+        params=params,
     ),
-    serving_configs=[
-        xla_saved_model.ServingConfig(
-            serving_signature='serving_default',
-            input_signature=input_signature,
-            processing=processor.SequentialProcessing(
-                preprocessors=[
-                    tf_processor.TfProcessor(
-                        name='embedding_layer',
-                        fn=embedding_layer,
-                    )
-                ],
-                postprocessors=[
-                    tf_processor.TfProcessor(
-                        name='simple_postprocessor',
-                        fn=simple_postprocessor,
-                    )
-                ],
-                options=processor.ProcessingOptions(
-                    tf_trackable_resources=[embedding_table]
-                ),
-            ),
-        )
-    ],
+    export_path='/tmp/classifier',
+    serving_configs=[xla_saved_model.ServingConfig(input_signature=input_signature)],
 )
 ```
 
-Follow these 4 steps to convert this script to the new API:
+Serve it over gRPC with a prebuilt container image:
 
-1. **Consolidate TensorFlow Processors into a `TensorflowModel` Container**:
-   - Instead of creating individual `TfProcessor` objects inside `SequentialProcessing`, create a single `TensorflowModel` container holding your preprocessing and postprocessing functions.
-   - Bind any required trackable resources (such as embedding tables) directly to `trackable_resources`:
-     ```python
-     tf_proc_model = xla_saved_model.TensorflowModel(
-         name='tf_model',
-         tf_functions={
-             'preprocessing': embedding_layer,
-             'postprocessing': simple_postprocessor,
-         },
-         trackable_resources=[embedding_table],
-     )
-     ```
-
-2. **Assign a Unique Name to Your `JaxModel`**:
-   - When exporting multiple models in a pipeline, add a `name='jax_model'` parameter to your `JaxModel` definition so that pipeline steps can reference it by name (if exporting only a single model, naming is optional as it will use a default name).
-
-3. **Replace `SequentialProcessing` with Explicit `Orchestration`**:
-   - In your `ServingConfig`, remove `processing=processor.SequentialProcessing(...)`.
-   - Define `orchestration=xla_saved_model.serving_config.Orchestration(model_calls=[...])`, where each `ModelCall` references a model by `model_name`, specifies the function via `method_key`, and assigns `role=orchestration_pb2.ROLE_MODEL` (other role types are not required).
-
-4. **Pass the Sequence of Models to `save()`**:
-   - Update `xla_saved_model.save()` to take the list of model containers: `[tf_proc_model, jax_model]`.
-
----
-
-### Converted Code (New API)
-
-After applying the steps above, the converted script using `TensorflowModel` and `Orchestration` is:
-
-```python
-import xla_saved_model
-from xla_saved_model.protos import orchestration_pb2
-
-# 1. Bundle TensorFlow pre/post-processing functions and trackable resources
-tf_proc_model = xla_saved_model.TensorflowModel(
-    name='tf_model',
-    tf_functions={
-        'preprocessing': embedding_layer,
-        'postprocessing': simple_postprocessor,
-    },
-    trackable_resources=[embedding_layer],
-)
-
-# 2. Define your JAX model with a unique name
-jm = xla_saved_model.JaxModel(
-    apply_fn_bundle=apply_fn_bundle,
-    params=model_params,
-    name='jax_model',
-)
-
-# 3. Pass all models as a sequence and explicitly define the orchestration pipeline
-xla_saved_model.save(
-    [tf_proc_model, jm],
-    export_path=export_path,
-    serving_configs=[
-        xla_saved_model.ServingConfig(
-            serving_signature='serving_default',
-            input_signature=input_signature,
-            orchestration=xla_saved_model.serving_config.Orchestration(
-                model_calls=[
-                    xla_saved_model.serving_config.ModelCall(
-                        model_name='tf_model',
-                        method_key='preprocessing',
-                    ),
-                    xla_saved_model.serving_config.ModelCall(
-                        model_name='jax_model',
-                        method_key='serving_default',
-                        role=orchestration_pb2.ROLE_MODEL,
-                    ),
-                    xla_saved_model.serving_config.ModelCall(
-                        model_name='tf_model',
-                        method_key='postprocessing',
-                    ),
-                ]
-            ),
-        )
-    ],
-)
+```bash
+docker run \
+  --net=host \
+  --mount type=bind,src=/tmp/classifier,dst=/models/classifier,readonly \
+  us-docker.pkg.dev/xla-serving-engine/xla-serving/cpu-jax-only:latest \
+  --model_name=classifier \
+  --model_path=/models/classifier \
+  --orbax_grpc_server_platform=cpu \
+  --use_insecure_grpc_credentials=true
 ```
 
+The server exposes `PredictionService/Predict` and
+`PredictionService/GetModelMetadata` on port 8500. Walk through the full
+example—including an in-process Python runner and a gRPC client—in the
+[quickstart](docs/quickstart.md).
+
+## What is in the repository
+
+- **`xla_saved_model`** — pure-Python export library and the `xsm-cli` CLI for
+  inspecting bundles, tuning batching post-export, and ahead-of-time compiling
+  executables.
+- **`xla_saved_model_runner`** — Python bindings (`ModelRunner`) around the C++
+  `Interpreter` for validating bundles in-process on CPU.
+- **`xla_serving_data`** — C++ feature transforms and Python bindings for
+  high-throughput host preprocessing without TensorFlow.
+- **`runtime/`** — the C++ `Interpreter`, batch scheduler, kernel library, and
+  gRPC server binary (`//runtime/serving/gcp/server:xla_serving_main_{cpu,gpu,tpu}`).
+- **`examples/`** — runnable exports for Flax NNX, ViT (Keras 3), DLRM with
+  embeddings, PyTorch via `torchax`, C++ composite preprocessors, AOT
+  compilation benchmarks, and Qwen3 beam search.
+
+## Installation
+
+Install `xla-saved-model` with `pip` (until the PyPI package is live, pass
+`--find-links` pointing at the wheels from
+[GitHub Releases](https://github.com/AI-Hypercomputer/xla-serving/releases)):
+
+```bash
+gh release download \
+  --repo AI-Hypercomputer/xla-serving \
+  --pattern '*.whl' \
+  --dir wheels
+
+pip install \
+  --find-links wheels \
+  xla-saved-model
+```
+
+Prebuilt server images are published to
+`us-docker.pkg.dev/xla-serving-engine/xla-serving/` for CPU, CUDA 12, CUDA 13,
+and Cloud TPU. See [Installation](docs/installation.md) for optional extras
+(`[tf]`, `[torch]`, `[llm]`), container tags, and building from source with
+Bazel.
+
+## Documentation
+
+- **Start:** [What XLA Serving Engine is](docs/overview.md) ·
+  [Concepts](docs/concepts.md) · [Installation](docs/installation.md) ·
+  [Quickstart](docs/quickstart.md)
+- **Guides:** [Exporting models](docs/guides/exporting.md) ·
+  [Serving and runtime](docs/guides/serving.md) ·
+  [Pre- and post-processing](docs/guides/processing.md) ·
+  [Batching](docs/guides/batching.md) · [Warmup](docs/guides/warmup.md) ·
+  [Ahead-of-time compilation](docs/guides/aot.md) ·
+  [`xsm-cli`](docs/guides/xsm_cli.md)
+
+To build the HTML documentation locally:
+
+```bash
+pip install -r docs/requirements.txt
+sphinx-build \
+  -W \
+  -b html \
+  docs \
+  docs/_build/html
+```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Licensed under
+[Apache 2.0](LICENSE).

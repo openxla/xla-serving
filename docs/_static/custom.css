@@ -1,0 +1,46 @@
+/* Small adjustments on top of sphinx-book-theme. Keep this file short. */
+
+/* Tighter hero on the landing page. */
+.xse-hero {
+  margin: 0 0 1.5rem 0;
+}
+.xse-tagline p {
+  font-size: 1.25rem;
+  line-height: 1.5;
+  color: var(--pst-color-text-muted);
+  max-width: 48rem;
+}
+
+/* Cards on the landing page: no box shadow jitter on hover. */
+.sd-card {
+  transition: none;
+}
+.sd-card:hover {
+  transform: none;
+  box-shadow: 0 0 0 2px var(--pst-color-primary);
+}
+
+/* Definition lists read better with a little extra air. */
+dl.simple dd,
+dl.field-list dd {
+  margin-bottom: 0.6rem;
+}
+
+/* Mermaid diagrams: center and cap width. */
+.mermaid {
+  display: flex;
+  justify-content: center;
+  margin: 1.5rem 0;
+}
+.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Tables: left-align and allow wrapping in long description columns. */
+table.docutils td,
+table.docutils th {
+  text-align: left;
+  vertical-align: top;
+  white-space: normal;
+}

@@ -1,0 +1,8 @@
+# Dependencies for building the documentation site (Sphinx + MyST).
+# The docs do not import xla_saved_model, so the ML stack is not needed here.
+sphinx>=7.3,<9
+sphinx-book-theme>=1.1
+myst-parser>=3.0
+sphinx-design>=0.6
+sphinx-copybutton>=0.5
+sphinxcontrib-mermaid>=1.0
