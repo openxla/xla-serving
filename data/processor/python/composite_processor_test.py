@@ -1131,6 +1131,36 @@ class CompositeProcessorTest(absltest.TestCase):
     self.assertEqual(context.outputs[0].spec().shape, (None, 3))
     self.assertEqual(context.outputs[0].spec().dtype, np.dtype(np.int32))
 
+  def test_shape_inference_context_partial_values(self):
+    context = composite_processor_pybind.ShapeInferenceContext()
+    self.assertEqual(context.input_partial_values, [])
+    self.assertEqual(context.output_partial_values, [])
+
+    context.input_partial_values = [[3, None, -1], None, ()]
+    self.assertEqual(context.input_partial_values, [(3, None, -1), None, ()])
+
+    context.output_partial_values = [None, [2**40]]
+    self.assertEqual(context.output_partial_values, [None, (2**40,)])
+
+    context.input_partial_values = []
+    self.assertEqual(context.input_partial_values, [])
+
+  def test_propagate_signature_partial_values(self):
+    transform = add_int_transform_pybind.AddIntTransform()
+    spec = composite_processor_pybind.HostBufferSpec(np.dtype(np.int32), [2])
+    context = composite_processor_pybind.ShapeInferenceContext()
+    context.inputs = [
+        composite_processor_pybind.ShapeInferenceValue(spec),
+        composite_processor_pybind.ShapeInferenceValue(spec),
+    ]
+    context.input_partial_values = [[3, 4], None]
+
+    transform.propagate_signature(context)
+
+    # AddIntTransform knows nothing about the contents of its output.
+    self.assertLen(context.outputs, 1)
+    self.assertEqual(context.output_partial_values, [])
+
 
 if __name__ == "__main__":
   absltest.main()

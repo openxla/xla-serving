@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <typeindex>
 #include <utility>
@@ -32,6 +33,7 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/api/shape.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
 #include "data/processor/cc/api/value.h"  // from @xla_serving
@@ -1205,6 +1207,144 @@ TEST(CompositeProcessorTest, GpuDynamicDispatchExecution) {
       static_cast<const float*>(des_cpu_out_hb.base());
   EXPECT_EQ(des_cpu_out_data[0], 11.5f);
   EXPECT_EQ(des_cpu_out_data[1], 12.5f);
+}
+
+using Values = std::vector<std::optional<api::PartialValue>>;
+
+// Forwards its input spec, and, if `forward_values`, its input value. Records
+// the input values it sees in `*seen`.
+class ValueRecordingTransform : public TransformBase {
+ public:
+  static absl::StatusOr<std::unique_ptr<ValueRecordingTransform>> Create() {
+    return std::make_unique<ValueRecordingTransform>(nullptr, true);
+  }
+  ValueRecordingTransform(Values* seen, bool forward_values)
+      : seen_(seen), forward_values_(forward_values) {}
+
+  absl::StatusOr<xla_serving::HostBuffer> operator()(xla_serving::HostBuffer a) { return a; }
+  absl::StatusOr<TransformConfig> ToProto() const override {
+    TransformConfig config;
+    config.set_op_name("ValueRecordingTransform");
+    return config;
+  }
+
+ protected:
+  absl::Status PropagateSignatureImpl(
+      api::ShapeInferenceContext& context) const override {
+    if (seen_ != nullptr) {
+      seen_->assign(context.input_partial_values.begin(),
+                    context.input_partial_values.end());
+    }
+    context.outputs.assign(context.inputs.begin(), context.inputs.end());
+    if (forward_values_) {
+      context.output_partial_values.assign(context.input_partial_values.begin(),
+                                           context.input_partial_values.end());
+    }
+    return absl::OkStatus();
+  }
+
+ private:
+  Values* seen_;
+  bool forward_values_;
+};
+
+ND_REGISTER_TRANSFORM(ValueRecordingTransform, "ValueRecordingTransform");
+
+TEST(CompositeProcessorTest, PropagateSignaturePropagatesValues) {
+  const xla::ifrt::DType s32(xla::ifrt::DType::Kind::kS32);
+  xla_serving::HostBuffer constant(s32, xla::ifrt::Shape({2}));
+  static_cast<int32_t*>(constant.base())[0] = 3;
+  static_cast<int32_t*>(constant.base())[1] = 4;
+
+  Values seen_constant, seen_input, seen_chained, seen_after_dropped;
+  ExecutionGraph graph;
+  int forward_constant = graph.AddNode(
+      "forward_constant",
+      std::make_unique<ValueRecordingTransform>(&seen_constant, true),
+      {GraphEdge::Constant(api::Value(constant))});
+  int forward_input = graph.AddNode(
+      "forward_input",
+      std::make_unique<ValueRecordingTransform>(&seen_input, true),
+      {GraphEdge::GraphInput(0).value()});
+  int chained = graph.AddNode(
+      "chained", std::make_unique<ValueRecordingTransform>(&seen_chained, true),
+      {GraphEdge::NodeOutput(forward_constant, 0).value()});
+  int drop_values = graph.AddNode(
+      "drop_values", std::make_unique<ValueRecordingTransform>(nullptr, false),
+      {GraphEdge::NodeOutput(forward_input, 0).value()});
+  int after_dropped = graph.AddNode(
+      "after_dropped",
+      std::make_unique<ValueRecordingTransform>(&seen_after_dropped, true),
+      {GraphEdge::NodeOutput(drop_values, 0).value()});
+  graph.SetOutputs({GraphEdge::NodeOutput(chained, 0).value(),
+                    GraphEdge::NodeOutput(forward_input, 0).value(),
+                    GraphEdge::NodeOutput(after_dropped, 0).value(),
+                    GraphEdge::GraphInput(0).value(),
+                    GraphEdge::Constant(api::Value(constant))});
+  ASSERT_OK_AND_ASSIGN(CompositeProcessor processor,
+                       CompositeProcessor::Create(std::move(graph)));
+
+  const api::PartialValue constant_value = api::PartialValue::Known({3, 4});
+  const api::PartialValue input_value =
+      api::PartialValue::FromElements({std::nullopt, 5});
+  std::vector<api::ShapeInferenceValue> inputs = {
+      api::HostBufferSpec{s32, xla::ifrt::Shape({2})}};
+  Values input_partial_values = {input_value};
+  api::ShapeInferenceContext context;
+  context.inputs = inputs;
+  context.input_partial_values = input_partial_values;
+  ASSERT_OK(processor.PropagateSignature(context));
+
+  EXPECT_THAT(seen_constant, testing::ElementsAre(constant_value));
+  EXPECT_THAT(seen_input, testing::ElementsAre(input_value));
+  EXPECT_THAT(seen_chained, testing::ElementsAre(constant_value));
+  EXPECT_THAT(seen_after_dropped, testing::ElementsAre(std::nullopt));
+  ASSERT_EQ(context.outputs.size(), 5);
+  EXPECT_THAT(context.output_partial_values,
+              testing::ElementsAre(constant_value, input_value, std::nullopt,
+                                   input_value, constant_value));
+
+  // Without input values, nothing is known about the graph input.
+  api::ShapeInferenceContext no_values_context;
+  no_values_context.inputs = inputs;
+  ASSERT_OK(processor.PropagateSignature(no_values_context));
+  EXPECT_THAT(seen_input, testing::ElementsAre(std::nullopt));
+  EXPECT_THAT(no_values_context.output_partial_values,
+              testing::ElementsAre(constant_value, std::nullopt, std::nullopt,
+                                   std::nullopt, constant_value));
+
+  // input_partial_values must be empty or parallel to inputs.
+  Values two_values = {input_value, input_value};
+  api::ShapeInferenceContext bad_context;
+  bad_context.inputs = inputs;
+  bad_context.input_partial_values = two_values;
+  EXPECT_THAT(
+      processor.PropagateSignature(bad_context),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("input_partial_values has 2 entries, but there are 1 "
+                         "inputs")));
+}
+
+TEST(CompositeProcessorTest, PropagateSignatureGivesNoValuesByDefault) {
+  // AddIntTransform does not set output values.
+  ExecutionGraph graph;
+  int add = graph.AddNode(
+      "add", std::make_unique<AddIntTransform>(),
+      {GraphEdge::Constant(api::Value(1)), GraphEdge::GraphInput(0).value()});
+  graph.SetOutputs({GraphEdge::NodeOutput(add, 0).value()});
+  ASSERT_OK_AND_ASSIGN(CompositeProcessor processor,
+                       CompositeProcessor::Create(std::move(graph)));
+
+  const xla::ifrt::DType s32(xla::ifrt::DType::Kind::kS32);
+  std::vector<api::ShapeInferenceValue> inputs = {
+      api::HostBufferSpec{s32, xla::ifrt::Shape({})}};
+  Values input_partial_values = {api::PartialValue::Known({2})};
+  api::ShapeInferenceContext context;
+  context.inputs = inputs;
+  context.input_partial_values = input_partial_values;
+  ASSERT_OK(processor.PropagateSignature(context));
+  EXPECT_THAT(context.output_partial_values,
+              testing::ElementsAre(std::nullopt));
 }
 
 }  // namespace

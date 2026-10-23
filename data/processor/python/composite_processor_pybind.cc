@@ -83,6 +83,7 @@ struct PyExecuteContext : public api::ExecuteContext {
 
 struct PyShapeInferenceContext : public api::ShapeInferenceContext {
   std::vector<api::ShapeInferenceValue> inputs_storage;
+  std::vector<std::optional<api::PartialValue>> input_partial_values_storage;
 };
 
 // Helper struct for holding PyObject reference and its associated Python buffer
@@ -618,6 +619,58 @@ api::PartialShape PyShapeToPartialShape(
     throw py::value_error(std::string(shape.status().message()));
   }
   return *std::move(shape);
+}
+
+// Returns a tuple of `int | None`, with None for an element that is unknown at
+// trace time.
+py::tuple PartialValueToPyTuple(const api::PartialValue& value) {
+  py::tuple py_value(value.size());
+  for (int64_t i = 0; i < value.size(); ++i) {
+    const std::optional<int64_t> element = value.element(i);
+    if (element.has_value()) {
+      py_value[i] = *element;
+    } else {
+      py_value[i] = py::none();
+    }
+  }
+  return py_value;
+}
+
+// Returns a list of `tuple[int | None, ...] | None`, with None for a value that
+// is unknown at trace time.
+py::list PartialValuesToPyList(
+    absl::Span<const std::optional<api::PartialValue>> values) {
+  py::list py_values;
+  for (const std::optional<api::PartialValue>& value : values) {
+    if (value.has_value()) {
+      py_values.append(PartialValueToPyTuple(*value));
+    } else {
+      py_values.append(py::none());
+    }
+  }
+  return py_values;
+}
+
+// Python's `list[Sequence[int | None] | None]`, for input_partial_values and
+// output_partial_values.
+using PyPartialValues =
+    std::vector<std::optional<std::vector<std::optional<int64_t>>>>;
+
+// Converts trace-time values from Python. Does not check them against the
+// specs: TransformBase::PropagateSignature does.
+std::vector<std::optional<api::PartialValue>> PyToPartialValues(
+    PyPartialValues py_values) {
+  std::vector<std::optional<api::PartialValue>> values;
+  values.reserve(py_values.size());
+  for (std::optional<std::vector<std::optional<int64_t>>>& py_value :
+       py_values) {
+    if (py_value.has_value()) {
+      values.push_back(api::PartialValue::FromElements(*std::move(py_value)));
+    } else {
+      values.push_back(std::nullopt);
+    }
+  }
+  return values;
 }
 
 py::object BuildNestedStringList(const tsl::tstring* ptr,
@@ -1173,6 +1226,11 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
                                return std::vector<api::ShapeInferenceValue>(
                                    self.inputs.begin(), self.inputs.end());
                              })
+      .def_property_readonly(
+          "input_partial_values",
+          [](const api::ShapeInferenceContext& self) {
+            return PartialValuesToPyList(self.input_partial_values);
+          })
       .def_property(
           "outputs",
           [](const api::ShapeInferenceContext& self) {
@@ -1182,6 +1240,18 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
           [](api::ShapeInferenceContext& self,
              absl::Span<const api::ShapeInferenceValue> val) {
             self.outputs.assign(val.begin(), val.end());
+          })
+      .def_property(
+          "output_partial_values",
+          [](const api::ShapeInferenceContext& self) {
+            return PartialValuesToPyList(self.output_partial_values);
+          },
+          [](api::ShapeInferenceContext& self, PyPartialValues py_values) {
+            std::vector<std::optional<api::PartialValue>> values =
+                PyToPartialValues(std::move(py_values));
+            self.output_partial_values.assign(
+                std::make_move_iterator(values.begin()),
+                std::make_move_iterator(values.end()));
           });
 
   py::class_<PyShapeInferenceContext, api::ShapeInferenceContext>(
@@ -1197,6 +1267,17 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
              std::vector<api::ShapeInferenceValue> inputs) {
             self.inputs_storage = std::move(inputs);
             self.inputs = absl::MakeConstSpan(self.inputs_storage);
+          })
+      .def_property(
+          "input_partial_values",
+          [](const PyShapeInferenceContext& self) {
+            return PartialValuesToPyList(self.input_partial_values);
+          },
+          [](PyShapeInferenceContext& self, PyPartialValues py_values) {
+            self.input_partial_values_storage =
+                PyToPartialValues(std::move(py_values));
+            self.input_partial_values =
+                absl::MakeConstSpan(self.input_partial_values_storage);
           });
 
   // Internal API only. Do not export.

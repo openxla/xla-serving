@@ -795,6 +795,86 @@ TEST(PartialShapeDeathTest, ConversionFromIfrtShapeRequiresTheInvariant) {
       "too large");
 }
 
+// PartialValue.
+
+TEST(PartialValueTest, Known) {
+  const PartialValue v = PartialValue::Known({1, -1, 3});
+  EXPECT_EQ(v.size(), 3);
+  EXPECT_THAT(v.element(0), Optional(1));
+  // A -1 stays -1: it is never read as unknown.
+  EXPECT_THAT(v.element(1), Optional(-1));
+  EXPECT_THAT(v.element(2), Optional(3));
+  EXPECT_TRUE(v.IsFullyKnown());
+  EXPECT_THAT(v.AsInts(), Optional(ElementsAre(1, -1, 3)));
+}
+
+TEST(PartialValueTest, FromElements) {
+  const PartialValue v = PartialValue::FromElements({1, std::nullopt, -1});
+  EXPECT_EQ(v.size(), 3);
+  EXPECT_THAT(v.element(0), Optional(1));
+  EXPECT_EQ(v.element(1), std::nullopt);
+  EXPECT_THAT(v.element(2), Optional(-1));
+  EXPECT_FALSE(v.IsFullyKnown());
+  EXPECT_EQ(v.AsInts(), std::nullopt);
+}
+
+TEST(PartialValueTest, FromShape) {
+  const PartialValue v =
+      PartialValue::FromShape(PartialShapeOrDie({S(2), U(), S(0)}));
+  EXPECT_EQ(v, PartialValue::FromElements({2, std::nullopt, 0}));
+  EXPECT_EQ(PartialValue::FromShape(Scalar()).size(), 0);
+}
+
+TEST(PartialValueTest, Empty) {
+  const PartialValue v = PartialValue::Known({});
+  EXPECT_EQ(v.size(), 0);
+  EXPECT_TRUE(v.IsFullyKnown());
+  EXPECT_THAT(v.AsInts(), Optional(IsEmpty()));
+  EXPECT_THAT(v.AsShape(), IsOkAndHolds(Scalar()));
+  EXPECT_EQ(v.DebugString(), "{}");
+}
+
+TEST(PartialValueTest, AsShape) {
+  EXPECT_THAT(PartialValue::FromElements({2, std::nullopt}).AsShape(),
+              IsOkAndHolds(PartialShapeOrDie({S(2), U()})));
+  EXPECT_THAT(PartialValue::Known({0, 3}).AsShape(),
+              IsOkAndHolds(PartialShapeOrDie({S(0), S(3)})));
+  // A literal -1 is an error, never an unknown dimension.
+  EXPECT_THAT(PartialValue::Known({-1, 2}).AsShape(),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Expected a non-negative size for dimension "
+                                 "0, got -1; a literal -1 is not an unknown "
+                                 "dimension")));
+  EXPECT_THAT(PartialValue::Known({2, -3}).AsShape(),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Expected a non-negative size for dimension "
+                                 "1, got -3; a literal -1 is not an unknown "
+                                 "dimension")));
+  EXPECT_THAT(
+      PartialValue::Known({kBig, kBig}).AsShape(),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr(kTooLarge)));
+}
+
+TEST(PartialValueTest, DebugString) {
+  EXPECT_EQ(PartialValue::FromElements({1, std::nullopt, -1}).DebugString(),
+            "{1,?,-1}");
+  EXPECT_EQ(PartialValue::Known({4, 5}).DebugString(), "{4,5}");
+  std::ostringstream os;
+  os << PartialValue::FromElements({std::nullopt});
+  EXPECT_EQ(os.str(), "{?}");
+}
+
+TEST(PartialValueTest, EqualityIsStructural) {
+  EXPECT_EQ(PartialValue::Known({1, 2}), PartialValue::FromElements({1, 2}));
+  EXPECT_EQ(PartialValue::FromElements({std::nullopt}),
+            PartialValue::FromElements({std::nullopt}));
+  EXPECT_NE(PartialValue::Known({1, 2}),
+            PartialValue::FromElements({1, std::nullopt}));
+  EXPECT_NE(PartialValue::Known({-1}),
+            PartialValue::FromElements({std::nullopt}));
+  EXPECT_NE(PartialValue::Known({1}), PartialValue::Known({1, 1}));
+}
+
 }  // namespace
 }  // namespace api
 }  // namespace composite

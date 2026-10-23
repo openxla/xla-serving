@@ -12,6 +12,7 @@ cc_library(
     deps = [
         ":transform",
         "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/container:inlined_vector",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:status_macros",
@@ -19,6 +20,7 @@ cc_library(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/types:span",
         "@xla//xla/python/ifrt",
+        "@xla_serving//data/processor/cc/api:shape",
         "@xla_serving//data/processor/cc/api:transform_context",
         "@xla_serving//data/processor/cc/api:value",
         "@xla_serving//data/processor/cc/core/graph:execution_graph",
@@ -53,6 +55,7 @@ cc_test(
         "@googletest//:gtest_main",
         "@xla//xla/python/ifrt",
         "@xla_serving//data/processor/cc/api:registry",
+        "@xla_serving//data/processor/cc/api:shape",
         "@xla_serving//data/processor/cc/api:transform_context",
         "@xla_serving//data/processor/cc/api:type_info",
         "@xla_serving//data/processor/cc/api:value",

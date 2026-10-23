@@ -16,6 +16,7 @@
 #define XLA_SERVING_DATA_PROCESSOR_CC_API_TRANSFORM_CONTEXT_H_
 
 #include <cstdint>
+#include <optional>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -74,7 +75,15 @@ class ShapeInferenceValue {
 struct ShapeInferenceContext {
   ExecuteMetadata metadata;
   absl::Span<const ShapeInferenceValue> inputs;
+  // What is known at trace time about the contents of each input, as TF's
+  // InferenceContext::input_tensor. Empty, or parallel to `inputs`; an entry is
+  // nullopt when nothing is known about that input.
+  absl::Span<const std::optional<PartialValue>> input_partial_values;
   absl::InlinedVector<ShapeInferenceValue, 4> outputs;
+  // Empty, or parallel to `outputs`. A transform that knows the contents of an
+  // output (e.g. Shape, Identity) sets its entry. Most transforms leave it
+  // empty, so later transforms know nothing about those contents.
+  absl::InlinedVector<std::optional<PartialValue>, 4> output_partial_values;
 };
 
 // The context of the transform execution. The transform takes the

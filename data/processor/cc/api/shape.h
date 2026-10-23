@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Partially known shapes for trace-time shape inference.
+// Partially known shapes and values for trace-time shape inference.
 //
 // PartialShape mirrors TensorFlow's PartialTensorShape
 // (tensorflow/core/framework/tensor_shape.h), and the Dim functions mirror the
@@ -29,6 +29,7 @@
 #include <ostream>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
@@ -294,6 +295,66 @@ inline bool operator==(const PartialShape& a, const PartialShape& b) {
 }
 
 std::ostream& operator<<(std::ostream& os, const PartialShape& shape);
+
+// Trace-time knowledge of the contents of a small integer tensor: TF's
+// InferenceContext::input_tensor and input_tensors_as_shapes in one type.
+//
+// A value is present only for an int32 or int64 tensor whose shape is fully
+// known and has at most kMaxElements elements;
+// TransformBase::PropagateSignature checks that. Each element, in row-major
+// order, is known (with any sign) or unknown.
+class PartialValue {
+ public:
+  // Grappler's constant folding caps at 128.
+  static constexpr int64_t kMaxElements = 64;
+
+  // A value whose elements are all known.
+  static PartialValue Known(absl::Span<const int64_t> values);
+
+  // A value whose elements may be unknown (nullopt).
+  static PartialValue FromElements(
+      std::vector<std::optional<int64_t>> elements);
+
+  // The value of the shape of a tensor whose shape is `shape`: one element per
+  // dimension, unknown where the dimension is unknown.
+  static PartialValue FromShape(const PartialShape& shape);
+
+  // Returns the number of elements.
+  int64_t size() const { return static_cast<int64_t>(elements_.size()); }
+
+  // Returns element `i`, or nullopt if it is unknown at trace time. A value,
+  // -1 included, is the literal element: the two are never conflated.
+  // REQUIRES: `0 <= i < size()`.
+  std::optional<int64_t> element(int64_t i) const;
+
+  // Returns true iff every element is known.
+  bool IsFullyKnown() const;
+
+  // Returns the elements if every one is known, else nullopt.
+  std::optional<std::vector<int64_t>> AsInts() const;
+
+  // Reads the value as a list of sizes: an unknown element gives an unknown
+  // dimension, and a known element must be non-negative. Unlike TF, a literal
+  // -1 is an InvalidArgument error, never an unknown dimension. Ops that give
+  // -1 a meaning, such as reshape, slice and split_v, read element() instead.
+  absl::StatusOr<PartialShape> AsShape() const;
+
+  // For error messages: "{1,?,-1}".
+  std::string DebugString() const;
+
+  // Structural.
+  friend bool operator==(const PartialValue& a, const PartialValue& b) {
+    return a.elements_ == b.elements_;
+  }
+
+ private:
+  explicit PartialValue(std::vector<std::optional<int64_t>> elements)
+      : elements_(std::move(elements)) {}
+
+  std::vector<std::optional<int64_t>> elements_;
+};
+
+std::ostream& operator<<(std::ostream& os, const PartialValue& value);
 
 }  // namespace api
 }  // namespace composite

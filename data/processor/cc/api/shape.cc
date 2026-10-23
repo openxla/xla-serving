@@ -21,6 +21,8 @@
 #include <optional>
 #include <ostream>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "absl/algorithm/container.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
@@ -345,12 +347,90 @@ absl::StatusOr<xla::ifrt::Shape> PartialShape::GetStatic() const {
   return xla::ifrt::Shape(sizes);
 }
 
+PartialValue PartialValue::Known(absl::Span<const int64_t> values) {
+  return PartialValue(
+      std::vector<std::optional<int64_t>>(values.begin(), values.end()));
+}
+
+PartialValue PartialValue::FromElements(
+    std::vector<std::optional<int64_t>> elements) {
+  return PartialValue(std::move(elements));
+}
+
+PartialValue PartialValue::FromShape(const PartialShape& shape) {
+  std::vector<std::optional<int64_t>> elements;
+  elements.reserve(shape.dims().size());
+  for (const Dim& d : shape.dims()) {
+    elements.push_back(d.Value());
+  }
+  return PartialValue(std::move(elements));
+}
+
+std::optional<int64_t> PartialValue::element(int64_t i) const {
+  DCHECK_GE(i, 0);
+  DCHECK_LT(i, size());
+  return elements_[i];
+}
+
+bool PartialValue::IsFullyKnown() const {
+  return absl::c_all_of(
+      elements_, [](const std::optional<int64_t>& e) { return e.has_value(); });
+}
+
+std::optional<std::vector<int64_t>> PartialValue::AsInts() const {
+  std::vector<int64_t> values;
+  values.reserve(elements_.size());
+  for (const std::optional<int64_t>& e : elements_) {
+    if (!e.has_value()) return std::nullopt;
+    values.push_back(*e);
+  }
+  return values;
+}
+
+absl::StatusOr<PartialShape> PartialValue::AsShape() const {
+  PartialShape::Dimensions dims;
+  dims.reserve(elements_.size());
+  for (int64_t i = 0; i < size(); ++i) {
+    const std::optional<int64_t>& e = elements_[i];
+    Dim dim = Dim::Unknown();
+    if (e.has_value()) {
+      absl::StatusOr<Dim> known = Dim::FromSize(*e);
+      if (!known.ok()) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Expected a non-negative size for dimension ", i, ", got ", *e,
+            "; a literal -1 is not an unknown dimension"));
+      }
+      dim = *known;
+    }
+    dims.push_back(dim);
+  }
+  return PartialShape::Create(dims);
+}
+
+std::string PartialValue::DebugString() const {
+  return absl::StrCat(
+      "{",
+      absl::StrJoin(elements_, ",",
+                    [](std::string* out, const std::optional<int64_t>& e) {
+                      if (e.has_value()) {
+                        absl::StrAppend(out, *e);
+                      } else {
+                        absl::StrAppend(out, "?");
+                      }
+                    }),
+      "}");
+}
+
 std::ostream& operator<<(std::ostream& os, const Dim& d) {
   return os << d.DebugString();
 }
 
 std::ostream& operator<<(std::ostream& os, const PartialShape& shape) {
   return os << shape.DebugString();
+}
+
+std::ostream& operator<<(std::ostream& os, const PartialValue& value) {
+  return os << value.DebugString();
 }
 
 }  // namespace api

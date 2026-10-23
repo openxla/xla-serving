@@ -14,13 +14,16 @@
 
 #include "data/processor/cc/core/composite_processor.h"  // from @xla_serving
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/base/nullability.h"  // from @abseil-cpp
+#include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_macros.h"
@@ -28,6 +31,7 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "data/processor/cc/api/shape.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/api/value.h"  // from @xla_serving
 #include "data/processor/cc/core/graph/execution_graph.h"  // from @xla_serving
@@ -76,6 +80,56 @@ api::ShapeInferenceValue GetSpecFromValue(const api::Value& val) {
         xla::ifrt::Shape({})};
   }
   return api::HostBufferSpec{};
+}
+
+// Returns true iff the elements of `hb`, each `element_size` bytes, are laid
+// out densely in row-major order. REQUIRES: `hb` has few elements, so that no
+// stride overflows.
+bool IsDenseRowMajor(const xla_serving::HostBuffer& hb, int64_t element_size) {
+  const auto& byte_strides = hb.byte_strides();
+  if (!byte_strides.has_value()) return true;
+  absl::Span<const int64_t> dims = hb.shape().dims();
+  if (byte_strides->size() != dims.size()) return false;
+  int64_t expected_stride = element_size;
+  for (int64_t d = static_cast<int64_t>(dims.size()) - 1; d >= 0; --d) {
+    // The stride of a dimension of size 0 or 1 is never used.
+    if (dims[d] > 1 && (*byte_strides)[d] != expected_stride) return false;
+    expected_stride *= dims[d];
+  }
+  return true;
+}
+
+// Returns the trace-time value of a constant, matching the spec that
+// GetSpecFromValue gives it: the elements of a small int32 or int64 HostBuffer,
+// or of an int (an int32 scalar). Returns nullopt for anything else.
+std::optional<api::PartialValue> GetValueFromConstant(const api::Value& val) {
+  if (val.IsType<int>()) {
+    return api::PartialValue::Known({val.Get<int>()});
+  }
+  if (!val.IsType<xla_serving::HostBuffer>()) return std::nullopt;
+  const auto& hb = val.Get<xla_serving::HostBuffer>();
+  const xla::ifrt::DType::Kind kind = hb.dtype().kind();
+  if (kind != xla::ifrt::DType::kS32 && kind != xla::ifrt::DType::kS64) {
+    return std::nullopt;
+  }
+  const int64_t num_elements = hb.shape().num_elements();
+  if (num_elements > api::PartialValue::kMaxElements) return std::nullopt;
+  if (num_elements == 0) return api::PartialValue::Known({});
+  // unaligned_flat() reads a dense row-major buffer only.
+  if (!IsDenseRowMajor(hb, kind == xla::ifrt::DType::kS32 ? sizeof(int32_t)
+                                                          : sizeof(int64_t))) {
+    return std::nullopt;
+  }
+  std::vector<int64_t> elements;
+  elements.reserve(num_elements);
+  if (kind == xla::ifrt::DType::kS32) {
+    const auto flat = hb.unaligned_flat<int32_t>();
+    for (int64_t i = 0; i < num_elements; ++i) elements.push_back(flat(i));
+  } else {
+    const auto flat = hb.unaligned_flat<int64_t>();
+    for (int64_t i = 0; i < num_elements; ++i) elements.push_back(flat(i));
+  }
+  return api::PartialValue::Known(elements);
 }
 
 absl::Status SerializeEdges(const GraphEdge& edge, EdgeProto& edge_proto) {
@@ -363,12 +417,39 @@ absl::StatusOr<CompositeProcessor> CompositeProcessor::FromProto(
 
 absl::Status CompositeProcessor::PropagateSignature(
     api::ShapeInferenceContext& context) const {
+  if (!context.input_partial_values.empty() &&
+      context.input_partial_values.size() != context.inputs.size()) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "PropagateSignature error: input_partial_values has ",
+        context.input_partial_values.size(), " entries, but there are ",
+        context.inputs.size(), " inputs"));
+  }
+  // The value of graph input `i`, or nullopt if nothing is known about it.
+  auto graph_input_partial_value =
+      [&](int64_t i) -> std::optional<api::PartialValue> {
+    if (context.input_partial_values.empty()) return std::nullopt;
+    return context.input_partial_values[i];
+  };
+
   std::vector<absl::InlinedVector<api::ShapeInferenceValue, 4>> node_outputs(
       graph_.size());
+  // Parallel to node_outputs. An inner vector is empty if the node set no
+  // output values.
+  std::vector<absl::InlinedVector<std::optional<api::PartialValue>, 4>>
+      node_output_partial_values(graph_.size());
+  // The value of output `port` of node `node`, or nullopt if nothing is known
+  // about it. REQUIRES: `node` and `port` index node_outputs.
+  auto node_output_partial_value =
+      [&](int64_t node, int64_t port) -> std::optional<api::PartialValue> {
+    if (node_output_partial_values[node].empty()) return std::nullopt;
+    return node_output_partial_values[node][port];
+  };
 
   for (const auto& node : graph_.nodes()) {
     std::vector<api::ShapeInferenceValue> node_inputs;
+    std::vector<std::optional<api::PartialValue>> node_input_partial_values;
     node_inputs.reserve(node.input_edges.size());
+    node_input_partial_values.reserve(node.input_edges.size());
     for (const auto& edge : node.input_edges) {
       switch (edge.type) {
         case GraphEdge::SourceType::kGraphInput:
@@ -381,6 +462,8 @@ absl::Status CompositeProcessor::PropagateSignature(
                              context.inputs.size(), " inputs)"));
           }
           node_inputs.push_back(context.inputs[edge.source_index]);
+          node_input_partial_values.push_back(
+              graph_input_partial_value(edge.source_index));
           break;
         case GraphEdge::SourceType::kNodeOutput:
           if (edge.source_index >= node_outputs.size() ||
@@ -398,9 +481,13 @@ absl::Status CompositeProcessor::PropagateSignature(
           }
           node_inputs.push_back(
               node_outputs[edge.source_index][edge.port_index]);
+          node_input_partial_values.push_back(
+              node_output_partial_value(edge.source_index, edge.port_index));
           break;
         case GraphEdge::SourceType::kConstant:
           node_inputs.push_back(GetSpecFromValue(edge.constant_value));
+          node_input_partial_values.push_back(
+              GetValueFromConstant(edge.constant_value));
           break;
       }
     }
@@ -408,6 +495,7 @@ absl::Status CompositeProcessor::PropagateSignature(
     api::ShapeInferenceContext node_context = {
         .metadata = context.metadata,
         .inputs = absl::MakeConstSpan(node_inputs),
+        .input_partial_values = absl::MakeConstSpan(node_input_partial_values),
     };
     node_context.outputs.reserve(node.transform->OutputTypes().size());
 
@@ -420,10 +508,15 @@ absl::Status CompositeProcessor::PropagateSignature(
     }
 
     node_outputs[node.node_index] = std::move(node_context.outputs);
+    node_output_partial_values[node.node_index] =
+        std::move(node_context.output_partial_values);
   }
 
   absl::InlinedVector<api::ShapeInferenceValue, 4> graph_outputs;
+  absl::InlinedVector<std::optional<api::PartialValue>, 4>
+      graph_output_partial_values;
   graph_outputs.reserve(graph_.outputs().size());
+  graph_output_partial_values.reserve(graph_.outputs().size());
   for (size_t i = 0; i < graph_.outputs().size(); ++i) {
     const auto& edge = graph_.outputs()[i];
     switch (edge.type) {
@@ -434,6 +527,8 @@ absl::Status CompositeProcessor::PropagateSignature(
               "Graph output references invalid graph input");
         }
         graph_outputs.push_back(context.inputs[edge.source_index]);
+        graph_output_partial_values.push_back(
+            graph_input_partial_value(edge.source_index));
         break;
       case GraphEdge::SourceType::kNodeOutput:
         if (edge.source_index >= node_outputs.size() || edge.source_index < 0) {
@@ -446,14 +541,19 @@ absl::Status CompositeProcessor::PropagateSignature(
         }
         graph_outputs.push_back(
             node_outputs[edge.source_index][edge.port_index]);
+        graph_output_partial_values.push_back(
+            node_output_partial_value(edge.source_index, edge.port_index));
         break;
       case GraphEdge::SourceType::kConstant:
         graph_outputs.push_back(GetSpecFromValue(edge.constant_value));
+        graph_output_partial_values.push_back(
+            GetValueFromConstant(edge.constant_value));
         break;
     }
   }
 
   context.outputs = std::move(graph_outputs);
+  context.output_partial_values = std::move(graph_output_partial_values);
   return absl::OkStatus();
 }
 
