@@ -41,6 +41,7 @@
 #include "runtime/core/value.h"  // from @xla_serving
 #include "runtime/interpreter/interpreter.h"  // from @xla_serving
 #include "runtime/interpreter/run_options.h"  // from @xla_serving
+#include "runtime/kernel/batching/warmup.h"  // from @xla_serving
 #include "runtime/kernel/kernel_io_data_type.h"  // from @xla_serving
 #include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 #include "google/protobuf/util/delimited_message_util.h"
@@ -341,7 +342,8 @@ OrbaxCallbackGrpcServer::Create(const ModelServerConfig& config,
     for (const auto& model_config : config.model_config_list().configs()) {
       auto it = server->models_.find(model_config.name());
       if (it != server->models_.end()) {
-        TF_RETURN_IF_ERROR(server->Warmup(*it->second));
+        TF_RETURN_IF_ERROR(
+            server->Warmup(*it->second, options.warmup_all_batch_sizes));
       }
     }
   }
@@ -478,7 +480,8 @@ OrbaxCallbackGrpcServer::RunPredictInternal(
       pipeline_name, /*positional_inputs=*/{}, input_with_names, run_options);
 }
 
-absl::Status OrbaxCallbackGrpcServer::Warmup(const ModelEntry& model_entry) {
+absl::Status OrbaxCallbackGrpcServer::Warmup(const ModelEntry& model_entry,
+                                             bool warmup_all_batch_sizes) {
   std::string warmup_path =
       absl::StrCat(model_entry.path, "/", kWarmupRequestsRelativePath);
   tsl::Env* env = tsl::Env::Default();
@@ -486,6 +489,16 @@ absl::Status OrbaxCallbackGrpcServer::Warmup(const ModelEntry& model_entry) {
 
   LOG(INFO) << "Running warmup for model '" << model_entry.name << "' from "
             << warmup_path;
+
+  auto per_model_data =
+      std::make_unique<xla_serving::WarmupStateRegistry::PerModelData>(
+          xla_serving::WarmupStateRegistry::PerModelData{
+              .warmup_all_batch_sizes = warmup_all_batch_sizes});
+  // TODO: Support model versioning.
+  TF_ASSIGN_OR_RETURN(
+      xla_serving::WarmupStateRegistry::Handle warmup_handle,
+      xla_serving::GetGlobalWarmupStateRegistry().Register(
+          {model_entry.name, /*version=*/0}, std::move(per_model_data)));
 
   std::unique_ptr<tsl::RandomAccessFile> file;
   TF_RETURN_IF_ERROR(env->NewRandomAccessFile(warmup_path, &file));

@@ -49,6 +49,7 @@ struct OrbaxCallbackGrpcServerOptions {
   bool sink_in_invariant_ops = true;
   int64_t cost_threshold = 10000;
   bool warmup_server = false;
+  bool warmup_all_batch_sizes = false;
   int thread_pool_num_threads = 0;
   // CPU only. If true, uses the NanoRt IFRT client instead of the PjRt CPU
   // client.
@@ -142,7 +143,8 @@ class OrbaxCallbackGrpcServer final
   std::unique_ptr<tsl::thread::ThreadPool> checkpoint_loader_thread_pool_;
   absl::flat_hash_map<std::string, std::shared_ptr<ModelEntry>> models_;
 
-  absl::Status Warmup(const ModelEntry& model_entry);
+  absl::Status Warmup(const ModelEntry& model_entry,
+                      bool warmup_all_batch_sizes = false);
 
   absl::StatusOr<absl::flat_hash_map<std::string, xla_serving::Value>>
   RunPredictInternal(const ModelEntry& model_entry,

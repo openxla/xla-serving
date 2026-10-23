@@ -205,6 +205,7 @@ XLA_SERVING_CALLBACK_GRPC_SERVER_COMMON_DEPS = [
     "@xla_serving//runtime/interpreter",
     "@xla_serving//runtime/interpreter:run_options",
     "@xla_serving//runtime/kernel:kernel_io_data_type",
+    "@xla_serving//runtime/kernel/batching:warmup",
     "@xla_serving//protos/grpc:get_model_metadata_cc_proto",
     "@xla_serving//protos/grpc:model_cc_proto",
     "@xla_serving//protos/grpc:predict_cc_proto",

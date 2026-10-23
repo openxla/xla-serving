@@ -80,6 +80,8 @@ ABSL_FLAG(bool, warmup_server, false,
           "`warmup_examples` to `xla_saved_model.save()`. See "
           "https://github.com/AI-Hypercomputer/xla-serving/blob/main/"
           "README.md#server-warmup-on-startup for details.");
+ABSL_FLAG(bool, warmup_all_batch_sizes, false,
+          "If true, warms up all allowed batch sizes during server warmup.");
 ABSL_FLAG(int, max_receive_message_size,
           16 * 1024 * 1024,  // 16 MiB, up from default 4 MiB
           "Maximum size of a received message.");
@@ -134,6 +136,7 @@ void RunServer() {
   options.sink_in_invariant_ops = absl::GetFlag(FLAGS_sink_in_invariant_ops);
   options.cost_threshold = absl::GetFlag(FLAGS_cost_threshold);
   options.warmup_server = absl::GetFlag(FLAGS_warmup_server);
+  options.warmup_all_batch_sizes = absl::GetFlag(FLAGS_warmup_all_batch_sizes);
   options.thread_pool_num_threads =
       absl::GetFlag(FLAGS_thread_pool_num_threads);
   options.use_nanort_cpu_client = absl::GetFlag(FLAGS_use_nanort_cpu_client);

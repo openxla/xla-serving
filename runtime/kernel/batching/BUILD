@@ -240,6 +240,9 @@ cc_library(
     name = "warmup",
     srcs = ["warmup.cc"],
     hdrs = ["warmup.h"],
+    visibility = [
+        "@xla_serving//runtime:__subpackages__",
+    ],
     deps = [
         "@abseil-cpp//absl/base:core_headers",
         "@abseil-cpp//absl/container:flat_hash_map",
