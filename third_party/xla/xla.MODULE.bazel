@@ -1,13 +1,15 @@
-# XLA dependency for XLA Serving, included from //:MODULE.bazel.
+# XLA, TensorFlow, and rules_ml_toolchain dependencies for XLA Serving,
+# included from //:MODULE.bazel.
 #
-# The revision below is updated automatically to the latest green XLA commit.
-# Keep this file limited to the XLA pin: the time of the last change to this
-# file is used to decide whether the pin is older than the latest green commit.
+# The revisions below are updated automatically in lockstep to the latest green
+# XLA commit and its corresponding TensorFlow and rules_ml_toolchain revisions.
+# Keep this file limited to these lockstep pins: the time of the last change to
+# this file is used to decide whether the pins are older than the latest green
+# commit.
 #
 # To update manually, set the commit in `strip_prefix` and `urls`, and compute
 # `integrity` with:
-#   curl -sL https://github.com/openxla/xla/archive/<commit>.tar.gz \
-#     | openssl dgst -sha256 -binary | openssl base64 -A
+#   curl -sL <archive_url> | openssl dgst -sha256 -binary | openssl base64 -A
 
 bazel_dep(name = "xla")
 archive_override(
@@ -15,4 +17,34 @@ archive_override(
     integrity = "sha256-V9AnQtp2tawyLBga+pltbA2gv+onomp1CODK74vQl9c=",
     strip_prefix = "xla-4354388139f007b1b06d35dc8bfbac3aab3df562",
     urls = ["https://github.com/openxla/xla/archive/4354388139f007b1b06d35dc8bfbac3aab3df562.tar.gz"],
+)
+
+bazel_dep(name = "tensorflow", repo_name = "org_tensorflow")
+archive_override(
+    module_name = "tensorflow",
+    integrity = "sha256-UbjfYA4j4P+lCvGwfcEt05e18J8mlJ+PfDePC9zjD94=",
+    patch_strip = 1,
+    patches = [
+        # Restores the `//tensorflow/core:framework` dep of
+        # `//tensorflow/core/kernels/batching_util:warmup`, which upstream
+        # switched to `framework_headers_lib`. The header-only library doesn't
+        # propagate the include paths of Eigen and protobuf when TensorFlow is
+        # an external module, so `warmup.cc` fails to compile.
+        "//third_party/tensorflow:warmup_framework_dep.patch",
+        "//third_party/tensorflow:where_op_gpu.patch",
+    ],
+    strip_prefix = "tensorflow-fa441ca48d3262b4938ee2a9ed6d560cdf5f3b13",
+    urls = ["https://github.com/tensorflow/tensorflow/archive/fa441ca48d3262b4938ee2a9ed6d560cdf5f3b13.zip"],
+)
+
+bazel_dep(name = "rules_ml_toolchain")
+archive_override(
+    module_name = "rules_ml_toolchain",
+    integrity = "sha256-Z38HhfFL91M5oxh8un+pXhofiIoYVo7cLl+sh9UT/Hw=",
+    patch_strip = 1,
+    patches = [
+        "//third_party/rules_ml_toolchain:patch_nvcc_wrapper.patch",
+    ],
+    strip_prefix = "rules_ml_toolchain-f56a19573fec3543050a5f4bcd9a07a1de08e8ee",
+    urls = ["https://github.com/google-ml-infra/rules_ml_toolchain/archive/f56a19573fec3543050a5f4bcd9a07a1de08e8ee.tar.gz"],
 )

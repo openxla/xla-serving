@@ -89,24 +89,6 @@ exports_files(
     urls = ["https://storage.googleapis.com/libtpu-lts-releases/wheels/libtpu/libtpu-0.0.48-cp312-cp312-manylinux_2_31_x86_64.whl"],
 )
 
-# To calculate integrity:
-# wget -O temp_module_archive.tar.gz <archive URL>
-# HASH=$(openssl dgst -sha256 -binary temp_module_archive.tar.gz | openssl base64 -A)
-# echo "sha256-${HASH}"
-bazel_dep(name = "rules_ml_toolchain")
-archive_override(
-    module_name = "rules_ml_toolchain",
-    integrity = "sha256-Z38HhfFL91M5oxh8un+pXhofiIoYVo7cLl+sh9UT/Hw=",
-    patch_strip = 1,
-    patches = [
-        "//third_party/rules_ml_toolchain:patch_nvcc_wrapper.patch",
-    ],
-    strip_prefix = "rules_ml_toolchain-f56a19573fec3543050a5f4bcd9a07a1de08e8ee",
-    urls = ["https://github.com/google-ml-infra/rules_ml_toolchain/archive/f56a19573fec3543050a5f4bcd9a07a1de08e8ee.tar.gz"],
-)
-
-# The XLA dependency and its pinned revision live in a separate file so that the
-# revision can be updated automatically without touching this file.
 include("//third_party/xla:xla.MODULE.bazel")
 
 xla_third_party = use_extension("@xla//third_party/extensions:third_party.bzl", "third_party_ext")
@@ -120,29 +102,6 @@ override_repo(
     xla_third_party,
     nanobind = "nanobind",
     riegeli = "riegeli",
-)
-
-## Tensorflow dependencies for common runtime, Tensor etc.
-# To calculate integrity:
-# wget -O temp_module_archive.zip
-# HASH=$(openssl dgst -sha256 -binary temp_module_archive.zip | openssl base64 -A)
-# echo "sha256-${HASH}"
-bazel_dep(name = "tensorflow", repo_name = "org_tensorflow")
-archive_override(
-    module_name = "tensorflow",
-    integrity = "sha256-UbjfYA4j4P+lCvGwfcEt05e18J8mlJ+PfDePC9zjD94=",
-    patch_strip = 1,
-    patches = [
-        # Restores the `//tensorflow/core:framework` dep of
-        # `//tensorflow/core/kernels/batching_util:warmup`, which upstream
-        # switched to `framework_headers_lib`. The header-only library doesn't
-        # propagate the include paths of Eigen and protobuf when TensorFlow is
-        # an external module, so `warmup.cc` fails to compile.
-        "//third_party/tensorflow:warmup_framework_dep.patch",
-        "//third_party/tensorflow:where_op_gpu.patch",
-    ],
-    strip_prefix = "tensorflow-fa441ca48d3262b4938ee2a9ed6d560cdf5f3b13",
-    urls = ["https://github.com/tensorflow/tensorflow/archive/fa441ca48d3262b4938ee2a9ed6d560cdf5f3b13.zip"],
 )
 
 tf_third_party = use_extension("@org_tensorflow//third_party/extensions:third_party.bzl", "third_party_ext")
