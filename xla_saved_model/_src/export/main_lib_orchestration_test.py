@@ -652,6 +652,122 @@ class MainLibOrchestrationTest(test_utils.XsmTestCase):
     self.assertCountEqual(pipeline_inputs, ['x', 'y'])
     self.assertEqual(pipeline_outputs, ['post_output'])
 
+  def _input_aliasing_model(self) -> jax_model.JaxModel:
+    def model_fn(params, inputs):
+      return {'out': inputs['x'] * params['w']}
+
+    return jax_model.JaxModel(
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=model_fn,
+            jax_export_kwargs={'platforms': ['cpu']},
+            use_input_aliasing=True,
+        ),
+        params={'w': jnp.array(2.0, dtype=jnp.float32)},
+        name='jax_model',
+    )
+
+  def test_input_aliasing_without_orchestration_is_graph_based(self):
+    # Callers address pre-allocated output memory by output name, which only a
+    # graph-based pipeline records, so a lone model exported with input
+    # aliasing gets one without asking.
+    cfg = serving_config.ServingConfig(
+        serving_signature='serving_default',
+        input_signature={
+            'x': jax.ShapeDtypeStruct(shape=(2, 2), dtype=jnp.float32)
+        },
+    )
+
+    export_path = pathlib.Path(self.create_tempdir().full_path)
+    main_lib.save(
+        models=[self._input_aliasing_model()],
+        export_path=str(export_path),
+        serving_configs=[cfg],
+    )
+
+    with open(export_path / 'orchestration.pb', 'rb') as f:
+      pipelines_proto = orchestration_pb2.Pipelines.FromString(f.read())
+    pipeline = pipelines_proto.name_to_pipeline['serving_default']
+    self.assertTrue(pipeline.keyword_arguments_based)
+    self.assertLen(pipeline.components, 1)
+    signature = pipeline.components[0].named_signature
+    self.assertEqual(
+        [t.name for t in signature.inputs.named_tensor_types], ['x']
+    )
+    self.assertEqual(
+        [t.name for t in signature.outputs.named_tensor_types], ['out']
+    )
+
+  def test_input_aliasing_without_orchestration_requires_named_inputs(self):
+    cfg = serving_config.ServingConfig(
+        serving_signature='serving_default',
+        input_signature=jax.ShapeDtypeStruct(shape=(2, 2), dtype=jnp.float32),
+    )
+
+    with self.assertRaisesRegex(ValueError, 'non-empty Mapping of input'):
+      main_lib.save(
+          models=[self._input_aliasing_model()],
+          export_path=self.create_tempdir().full_path,
+          serving_configs=[cfg],
+      )
+
+  def test_input_aliasing_with_sequential_orchestration_is_graph_based(self):
+    # A sequential pipeline could not serve the model at all, so it is exported
+    # as a graph-based one instead.
+    cfg = serving_config.ServingConfig(
+        serving_signature='serving_default',
+        input_signature={
+            'x': jax.ShapeDtypeStruct(shape=(2, 2), dtype=jnp.float32)
+        },
+        orchestration=serving_config.Orchestration(
+            model_calls=[
+                serving_config.ModelCall(
+                    model_name='jax_model',
+                    method_key='serving_default',
+                    input_keys=['x'],
+                    output_keys=['out'],
+                ),
+            ],
+        ),
+    )
+
+    export_path = pathlib.Path(self.create_tempdir().full_path)
+    main_lib.save(
+        models=[self._input_aliasing_model()],
+        export_path=str(export_path),
+        serving_configs=[cfg],
+    )
+
+    with open(export_path / 'orchestration.pb', 'rb') as f:
+      pipelines_proto = orchestration_pb2.Pipelines.FromString(f.read())
+    pipeline = pipelines_proto.name_to_pipeline['serving_default']
+    self.assertTrue(pipeline.keyword_arguments_based)
+    signature = pipeline.components[0].named_signature
+    self.assertEqual(
+        [t.name for t in signature.outputs.named_tensor_types], ['out']
+    )
+
+  def test_input_aliasing_with_orchestration_requires_keys(self):
+    cfg = serving_config.ServingConfig(
+        serving_signature='serving_default',
+        input_signature={
+            'x': jax.ShapeDtypeStruct(shape=(2, 2), dtype=jnp.float32)
+        },
+        orchestration=serving_config.Orchestration(
+            model_calls=[
+                serving_config.ModelCall(
+                    model_name='jax_model', method_key='serving_default'
+                ),
+            ],
+        ),
+    )
+
+    with self.assertRaisesRegex(ValueError, 'must have `input_keys` and'):
+      main_lib.save(
+          models=[self._input_aliasing_model()],
+          export_path=self.create_tempdir().full_path,
+          serving_configs=[cfg],
+      )
+
 
 if __name__ == '__main__':
   absltest.main()

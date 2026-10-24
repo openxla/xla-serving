@@ -136,6 +136,23 @@ def _checkpoint_weights_name(
   return constants.WEIGHTS_NAME if is_single_model else model.weights_name
 
 
+def _orchestration_uses_input_aliasing(
+    models: Sequence[Model],
+    orchestration: serving_config.Orchestration,
+) -> bool:
+  """Returns whether a model call runs a JAX method exported with aliasing."""
+  for model_call in orchestration.model_calls:
+    for model in models:
+      if (
+          isinstance(model, jax_model.JaxModel)
+          and model.name == model_call.model_name
+      ):
+        bundle = model.apply_fn_bundles.get(model_call.method_key)
+        if bundle is not None and bundle.use_input_aliasing:
+          return True
+  return False
+
+
 def _build_orchestration_pipeline_nodes(
     models: Sequence[Model],
     serving_signature: str,
@@ -143,6 +160,24 @@ def _build_orchestration_pipeline_nodes(
 ) -> Sequence[PipelineNode]:
   """Builds pipeline nodes based on orchestration."""
   ordered_model_calls = orchestration.ordered_model_calls
+  if not orchestration.graph_based and _orchestration_uses_input_aliasing(
+      models, orchestration
+  ):
+    # Input aliasing makes the pipeline graph-based (see
+    # `_update_save_bundle`), so order the calls by their data dependencies, as
+    # `Orchestration(..., graph_based=True)` would.
+    for model_call in orchestration.model_calls:
+      if not model_call.input_keys or not model_call.output_keys:
+        raise ValueError(
+            f'ModelCall for model {model_call.model_name!r} and method'
+            f' {model_call.method_key!r} must have `input_keys` and'
+            ' `output_keys` set: the orchestration calls a model exported'
+            ' with `ApplyFnBundle(use_input_aliasing=True)`, which makes'
+            ' the pipeline graph-based.'
+        )
+    ordered_model_calls = serving_config.topological_sort(
+        orchestration.model_calls
+    )
 
   pipeline_nodes = []
   for model_call in ordered_model_calls:
@@ -240,18 +275,38 @@ def _build_pipeline_nodes(
         ' to execute.'
     )
 
+  apply_fn_bundle = next(iter(model.apply_fn_bundles.values()))
+  input_keys: list[str] = []
+  if apply_fn_bundle.use_input_aliasing and isinstance(
+      cfg.input_signature, Mapping
+  ):
+    # Input aliasing makes the pipeline graph-based (see `_update_save_bundle`),
+    # in which every node reads its inputs by name. A lone model takes the
+    # whole input signature, so it reads every input.
+    input_keys = list(cfg.input_signature)
+
   return [
       PipelineNode(
           processor=jax_processor.JaxProcessor(
               name=cfg.serving_signature,
-              apply_fn_bundle=next(iter(model.apply_fn_bundles.values())),
+              apply_fn_bundle=apply_fn_bundle,
               params=model.params,
               weights_name=constants.WEIGHTS_NAME,
               jax_mesh=model.jax_mesh,
           ),
           role=orchestration_pb2.ROLE_MODEL,
+          input_keys=input_keys,
       )
   ]
+
+
+def _uses_input_aliasing(pipeline_nodes: Sequence[PipelineNode]) -> bool:
+  """Returns whether any node is a JAX model exported with input aliasing."""
+  return any(
+      isinstance(node.processor, jax_processor.JaxProcessor)
+      and node.processor.apply_fn_bundle.use_input_aliasing
+      for node in pipeline_nodes
+  )
 
 
 def _update_save_bundle_with_pipeline_node(
@@ -299,7 +354,7 @@ def _update_save_bundle_with_pipeline_node(
     raise ValueError(
         f'Processor {prepared_processor.name!r} was exported for output'
         ' donation, which requires graph-based orchestration so that the'
-        ' component\'s output names are recorded in the artifact: a caller'
+        " component's output names are recorded in the artifact: a caller"
         ' supplying donated output buffers addresses them by name. Set'
         ' `ServingConfig.orchestration` to an'
         ' `Orchestration(..., graph_based=True)`, or export without'
@@ -362,12 +417,25 @@ def _update_save_bundle(
     save_bundle: The XseModelSaveBundle to update.
   """
 
-  is_graph_based = bool(cfg.orchestration and cfg.orchestration.graph_based)
+  # A caller supplying pre-allocated output memory addresses it to a model's
+  # outputs by name, which only a graph-based pipeline records. So a pipeline
+  # that runs a model exported with input aliasing is graph-based, as with
+  # Orbax export, whether or not its orchestration says so: a sequential one
+  # could not serve the model at all.
+  is_graph_based = bool(
+      cfg.orchestration and cfg.orchestration.graph_based
+  ) or _uses_input_aliasing(pipeline_nodes)
   pipeline_input_signature: jaxtyping.PyTree | None = None
   pipeline_output_signature: jaxtyping.PyTree | None = None
 
   if is_graph_based:
-    assert isinstance(cfg.input_signature, Mapping)
+    if not isinstance(cfg.input_signature, Mapping) or not cfg.input_signature:
+      raise ValueError(
+          f'ServingConfig {cfg.serving_signature!r} is exported as a'
+          ' graph-based pipeline, so its `input_signature` must be a'
+          ' non-empty Mapping of input names to tensor specs. Got:'
+          f' {cfg.input_signature}'
+      )
     available_tensor_specs = dict(cfg.input_signature)
     pipeline_input_signature = cfg.input_signature
 
