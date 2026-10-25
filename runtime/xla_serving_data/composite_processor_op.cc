@@ -33,6 +33,12 @@
 namespace xla_serving {
 namespace composite {
 
+// Both value types are sized so a HostBuffer is stored without a heap
+// allocation; this op converts between them on every call.
+static_assert(xla_serving::Value::IsInPlace<xla_serving::HostBuffer>());
+static_assert(
+    xla_serving::data::composite::api::Value::IsInPlace<xla_serving::HostBuffer>());
+
 CompositeProcessorOp::CompositeProcessorOp(
     absl_nonnull
     std::unique_ptr<xla_serving::data::composite::core::CompositeProcessor>
