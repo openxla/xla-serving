@@ -41,8 +41,7 @@ class TfSavedModelFunctionRunnerOp : public CancellableKernel {
   std::string Name() const override;
 
   Kernel::IODataTypes GetIODataTypes() const override {
-    return {.input = pre_data_conversion_ ? KernelIODataType::kHostBuffer
-                                          : KernelIODataType::kTensor,
+    return {.input = KernelIODataType::kHostBuffer,
             .output = post_data_conversion_ ? KernelIODataType::kHostBuffer
                                             : KernelIODataType::kTensor};
   }
@@ -62,7 +61,7 @@ class TfSavedModelFunctionRunnerOp : public CancellableKernel {
       std::vector<std::string> sorted_output_names,
       std::vector<int> output_original_indices,
       std::unique_ptr<FlatSignature> input_signature,
-      std::unique_ptr<FlatSignature> output_signature, bool pre_data_conversion,
+      std::unique_ptr<FlatSignature> output_signature,
       bool post_data_conversion);
 
   absl::Status RunInternal(ExecuteContext& context) override;
@@ -72,7 +71,6 @@ class TfSavedModelFunctionRunnerOp : public CancellableKernel {
   std::vector<std::string> input_names_;
   std::vector<std::string> sorted_output_names_;
   std::vector<int> output_original_indices_;
-  bool pre_data_conversion_ = false;
   bool post_data_conversion_ = false;
 };
 

@@ -34,15 +34,14 @@
 namespace xla_serving {
 
 // An implementation of `OptionalFunctionHandler` that can handle TensorFlow
-// functions. `pre_data_conversion` and `post_data_conversion` are used to
-// determine whether to do data conversion before and after the TF function.
+// functions. `post_data_conversion` is used to determine whether to do data
+// conversion after the TF function.
 class TfCompatibleOptionalFunctionHandler : public OptionalFunctionHandler {
  public:
   absl::StatusOr<std::unique_ptr<Kernel>> HandleFunction(
       absl::string_view model_path,
       const xla_saved_model_manifest::Function& function,
-      const InterpreterCreateOptions& create_options, bool pre_data_conversion,
-      bool post_data_conversion,
+      const InterpreterCreateOptions& create_options, bool post_data_conversion,
       const xla_saved_model_orchestration::NamedTensorTypeList* named_inputs,
       const xla_saved_model_orchestration::NamedTensorTypeList* named_outputs)
       override;

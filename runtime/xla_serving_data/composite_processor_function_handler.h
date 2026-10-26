@@ -46,8 +46,7 @@ class CompositeProcessorFunctionHandler : public OptionalFunctionHandler {
   absl::StatusOr<std::unique_ptr<Kernel>> HandleFunction(
       absl::string_view model_path,
       const xla_saved_model_manifest::Function& function,
-      const InterpreterCreateOptions& create_options, bool pre_data_conversion,
-      bool post_data_conversion,
+      const InterpreterCreateOptions& create_options, bool post_data_conversion,
       const xla_saved_model_orchestration::NamedTensorTypeList* named_inputs,
       const xla_saved_model_orchestration::NamedTensorTypeList* named_outputs)
       override;

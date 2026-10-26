@@ -1366,14 +1366,7 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadOnHostFunction(
     TF_ASSIGN_OR_RETURN(OptionalFunctionHandler * handler,
                         optional_function_handler_router_.GetHandler(key));
 
-    // By default, processor kernels convert inputs and outputs to/from
-    // HostBuffer.
-    // For an unbatched first component, we skip HostBuffer -> Tensor conversion
-    // so clients can pass native framework tensors directly.
-    bool pre_data_conversion = true;
-    if (component_index == 0) {
-      pre_data_conversion = component.use_batching();
-    }
+    // By default, processor kernels convert outputs to HostBuffer.
     // For an unbatched last component , we skip Tensor -> HostBuffer conversion
     // so the pipeline returns native framework tensors directly to clients.
     bool post_data_conversion = true;
@@ -1381,10 +1374,9 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadOnHostFunction(
       post_data_conversion = component.use_batching();
     }
 
-    return handler->HandleFunction(create_options_->model_path, *func,
-                                   *create_options_, pre_data_conversion,
-                                   post_data_conversion, named_signature.inputs,
-                                   named_signature.outputs);
+    return handler->HandleFunction(
+        create_options_->model_path, *func, *create_options_,
+        post_data_conversion, named_signature.inputs, named_signature.outputs);
   }
 }
 

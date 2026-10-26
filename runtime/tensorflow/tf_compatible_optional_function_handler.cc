@@ -125,8 +125,7 @@ absl::StatusOr<std::unique_ptr<Kernel>>
 TfCompatibleOptionalFunctionHandler::HandleFunction(
     absl::string_view model_path,
     const xla_saved_model_manifest::Function& function,
-    const InterpreterCreateOptions& create_options, bool pre_data_conversion,
-    bool post_data_conversion,
+    const InterpreterCreateOptions& create_options, bool post_data_conversion,
     const xla_saved_model_orchestration::NamedTensorTypeList* named_inputs,
     const xla_saved_model_orchestration::NamedTensorTypeList* named_outputs) {
   if (!function.has_body()) {
@@ -215,9 +214,6 @@ TfCompatibleOptionalFunctionHandler::HandleFunction(
     TF_RETURN_IF_ERROR(builder_context.SetConfig(
         kTfFunctionFlatOutputSignature, std::move(output_flat_signature)));
   }
-
-  TF_RETURN_IF_ERROR(builder_context.SetConfig(kTfFunctionPreDataConversion,
-                                               pre_data_conversion));
 
   TF_RETURN_IF_ERROR(builder_context.SetConfig(kTfFunctionPostDataConversion,
                                                post_data_conversion));

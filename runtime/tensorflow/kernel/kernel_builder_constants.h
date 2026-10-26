@@ -31,8 +31,6 @@ inline constexpr absl::string_view kTfFunctionFlatInputSignature =
     "tf_function_flat_input_signature";
 inline constexpr absl::string_view kTfFunctionFlatOutputSignature =
     "tf_function_flat_output_signature";
-inline constexpr absl::string_view kTfFunctionPreDataConversion =
-    "pre_data_conversion";
 inline constexpr absl::string_view kTfFunctionPostDataConversion =
     "post_data_conversion";
 

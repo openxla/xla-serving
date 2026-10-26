@@ -109,8 +109,7 @@ TfSavedModelFunctionRunnerOp::TfSavedModelFunctionRunnerOp(
     std::vector<std::string> sorted_output_names,
     std::vector<int> output_original_indices,
     std::unique_ptr<FlatSignature> input_signature,
-    std::unique_ptr<FlatSignature> output_signature, bool pre_data_conversion,
-    bool post_data_conversion)
+    std::unique_ptr<FlatSignature> output_signature, bool post_data_conversion)
     : CancellableKernel(std::move(input_signature),
                         std::move(output_signature)),
       tf_saved_model_runner_(tf_saved_model_runner),
@@ -118,7 +117,6 @@ TfSavedModelFunctionRunnerOp::TfSavedModelFunctionRunnerOp(
       input_names_(std::move(input_names)),
       sorted_output_names_(std::move(sorted_output_names)),
       output_original_indices_(std::move(output_original_indices)),
-      pre_data_conversion_(pre_data_conversion),
       post_data_conversion_(post_data_conversion) {}
 
 absl::StatusOr<std::unique_ptr<Kernel>> TfSavedModelFunctionRunnerOp::Create(
@@ -174,15 +172,6 @@ absl::StatusOr<std::unique_ptr<Kernel>> TfSavedModelFunctionRunnerOp::Create(
     return output_sig_status.status();
   }
 
-  bool pre_data_conversion = false;
-  absl::StatusOr<bool> pre_data_conversion_status =
-      context.GetConfig<bool>(kTfFunctionPreDataConversion);
-  if (pre_data_conversion_status.ok()) {
-    pre_data_conversion = *pre_data_conversion_status;
-  } else if (!absl::IsNotFound(pre_data_conversion_status.status())) {
-    return pre_data_conversion_status.status();
-  }
-
   bool post_data_conversion = false;
   absl::StatusOr<bool> post_data_conversion_status =
       context.GetConfig<bool>(kTfFunctionPostDataConversion);
@@ -204,7 +193,7 @@ absl::StatusOr<std::unique_ptr<Kernel>> TfSavedModelFunctionRunnerOp::Create(
       std::move(tf_saved_model_runner), std::move(function_name),
       std::move(input_names), std::move(sorted_output_names_in_signature_def),
       std::move(output_original_indices_in_signature_def), std::move(input_sig),
-      std::move(output_sig), pre_data_conversion, post_data_conversion));
+      std::move(output_sig), post_data_conversion));
 }
 
 std::string TfSavedModelFunctionRunnerOp::Name() const {
@@ -251,29 +240,17 @@ absl::Status TfSavedModelFunctionRunnerOp::RunInternal(
     // the flattening and provide the list `inputs_values`.
     const Value& input_value = inputs_values[i];
     const std::string& input_name = input_names_[i];
-    // TODO: Clean up the data conversion flags and convert
-    // whenever needed.
-    if (pre_data_conversion_) {
-      if (input_value.IsType<tensorflow::Tensor>()) {
-        named_inputs[input_name] = input_value.Get<tensorflow::Tensor>();
-      } else if (input_value.IsType<HostBuffer>()) {
-        TF_ASSIGN_OR_RETURN(tensorflow::Tensor tensor,
-                            ToTFTensor(input_value.Get<HostBuffer>()));
-        named_inputs[input_name] = std::move(tensor);
-      } else {
-        return absl::InvalidArgumentError(
-            absl::StrFormat("Input '%s' (at index %d) must be HostBuffer or "
-                            "tensorflow::Tensor.",
-                            input_name, i));
-      }
-    } else {
-      if (!input_value.IsType<tensorflow::Tensor>()) {
-        return absl::InvalidArgumentError(absl::StrFormat(
-            "Input '%s' (at index %d) must be tensorflow::Tensor because "
-            "pre_data_conversion is false.",
-            input_name, i));
-      }
+    if (input_value.IsType<tensorflow::Tensor>()) {
       named_inputs[input_name] = input_value.Get<tensorflow::Tensor>();
+    } else if (input_value.IsType<HostBuffer>()) {
+      TF_ASSIGN_OR_RETURN(tensorflow::Tensor tensor,
+                          ToTFTensor(input_value.Get<HostBuffer>()));
+      named_inputs[input_name] = std::move(tensor);
+    } else {
+      return absl::InvalidArgumentError(
+          absl::StrFormat("Input '%s' (at index %d) must be HostBuffer or "
+                          "tensorflow::Tensor.",
+                          input_name, i));
     }
   }
 
