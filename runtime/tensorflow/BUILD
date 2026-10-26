@@ -113,6 +113,7 @@ cc_library(
     deps = [
         ":tf_compatible_optional_function_handler",
         "@xla_serving//runtime/tensorflow/kernel:init_lib_tensorflow",
+        "@xla_serving//runtime/tensorflow/utils:tf_host_buffer_converter",
     ],
 )
 
