@@ -21,7 +21,6 @@ from typing import Any, cast
 from absl.testing import absltest
 from absl.testing import parameterized
 import jax
-
 from xla_saved_model._src.core import offline_compiler
 from xla_saved_model._src.core import test_utils
 
