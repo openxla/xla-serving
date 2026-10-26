@@ -447,6 +447,196 @@ class UpdateTest(absltest.TestCase):
     self.assertIn('16 -> 32', res_history.output)
     self.assertIn('32 -> 16', res_history.output)
 
+  def test_update_all_batch_options_and_rollback(self):
+    model_dir = self._create_test_model(initial_batch_size=16)
+
+    update.update(
+        model_base_dir=model_dir,
+        max_batch_size=64,
+        batch_timeout_micros=5000,
+        allowed_batch_sizes='8, 16, 32, 64',
+        num_batch_threads=4,
+        max_enqueued_batches=12,
+        disable_large_batch_splitting=True,
+        pad_variable_length_inputs=True,
+    )
+
+    pipelines = orchestration_pb2.Pipelines()
+    pipelines_path = os.path.join(model_dir, 'orchestration.pb')
+    with open(pipelines_path, 'rb') as f:
+      pipelines.ParseFromString(f.read())
+
+    opts = pipelines.name_to_pipeline['serving_default'].batch_options
+    self.assertEqual(opts.max_batch_size, 64)
+    self.assertEqual(opts.batch_timeout_micros, 5000)
+    self.assertEqual(list(opts.allowed_batch_sizes), [8, 16, 32, 64])
+    self.assertEqual(opts.num_batch_threads, 4)
+    self.assertEqual(opts.max_enqueued_batches, 12)
+    self.assertTrue(opts.disable_large_batch_splitting)
+    self.assertTrue(opts.pad_variable_length_inputs)
+
+    # Verify history record captures all 7 fields
+    history_path = os.path.join(model_dir, constants.HISTORY_FILENAME)
+    history_proto = history_pb2.ModelHistory()
+    with open(history_path, 'r') as f:
+      text_format.Parse(f.read(), history_proto)
+    self.assertLen(history_proto.records, 2)
+    changes = history_proto.records[1].changes
+    self.assertEqual(changes['serving_default.max_batch_size'].new_value, '64')
+    self.assertEqual(
+        changes['serving_default.batch_timeout_micros'].new_value, '5000'
+    )
+    self.assertEqual(
+        changes['serving_default.allowed_batch_sizes'].new_value,
+        '[8, 16, 32, 64]',
+    )
+    self.assertEqual(
+        changes['serving_default.num_batch_threads'].new_value, '4'
+    )
+    self.assertEqual(
+        changes['serving_default.max_enqueued_batches'].new_value, '12'
+    )
+    self.assertEqual(
+        changes['serving_default.disable_large_batch_splitting'].new_value,
+        'True',
+    )
+    self.assertEqual(
+        changes['serving_default.pad_variable_length_inputs'].new_value,
+        'True',
+    )
+
+    # Verify rollback restores all fields and logs diffs in history
+    update.rollback(model_base_dir=model_dir, to='orig')
+    history_proto = history_pb2.ModelHistory()
+    with open(history_path, 'r') as f:
+      text_format.Parse(f.read(), history_proto)
+    self.assertLen(history_proto.records, 3)
+    rb_changes = history_proto.records[2].changes
+    self.assertEqual(
+        rb_changes['serving_default.max_batch_size'].new_value, '16'
+    )
+    self.assertEqual(
+        rb_changes['serving_default.allowed_batch_sizes'].new_value, '[]'
+    )
+    self.assertEqual(
+        rb_changes['serving_default.pad_variable_length_inputs'].new_value,
+        'False',
+    )
+
+  def test_update_validation_rejects_invalid_batch_options(self):
+    model_dir = self._create_test_model(initial_batch_size=16)
+
+    # No update flags specified
+    with self.assertRaises(typer.Exit):
+      update.update(model_base_dir=model_dir)
+
+    # Negative batch_timeout_micros
+    with self.assertRaises(typer.Exit):
+      update.update(model_base_dir=model_dir, batch_timeout_micros=-1)
+
+    # Non-positive num_batch_threads or max_enqueued_batches
+    with self.assertRaises(typer.Exit):
+      update.update(model_base_dir=model_dir, num_batch_threads=0)
+    with self.assertRaises(typer.Exit):
+      update.update(model_base_dir=model_dir, max_enqueued_batches=0)
+
+    # Malformed or non-ascending allowed_batch_sizes
+    for bad_sizes in (
+        '',
+        '8,,16',
+        '8,16,',
+        '4,abc',
+        '0,4,8',
+        '-4,8',
+        '8,4,16',
+        '4,8,8,16',
+    ):
+      with self.assertRaises(typer.Exit):
+        update.update(model_base_dir=model_dir, allowed_batch_sizes=bad_sizes)
+
+    # allowed_batch_sizes[-1] > existing max_batch_size (16)
+    with self.assertRaises(typer.Exit):
+      update.update(model_base_dir=model_dir, allowed_batch_sizes='4,8,32')
+
+    # allowed_batch_sizes[-1] > newly provided max_batch_size (32)
+    with self.assertRaises(typer.Exit):
+      update.update(
+          model_base_dir=model_dir,
+          max_batch_size=32,
+          allowed_batch_sizes='8,16,64',
+      )
+
+    # allowed_batch_sizes[-1] != max_batch_size when
+    # disable_large_batch_splitting=True
+    with self.assertRaises(typer.Exit):
+      update.update(
+          model_base_dir=model_dir,
+          max_batch_size=32,
+          allowed_batch_sizes='8,16',
+          disable_large_batch_splitting=True,
+      )
+
+    # pad_variable_length_inputs=True without disable_large_batch_splitting=True
+    with self.assertRaises(typer.Exit):
+      update.update(
+          model_base_dir=model_dir,
+          pad_variable_length_inputs=True,
+      )
+
+    # Valid update setting allowed_batch_sizes and pad_variable_length_inputs
+    update.update(
+        model_base_dir=model_dir,
+        max_batch_size=32,
+        allowed_batch_sizes='8,16,32',
+        disable_large_batch_splitting=True,
+        pad_variable_length_inputs=True,
+    )
+
+    # Lowering max_batch_size below existing allowed_batch_sizes[-1] (32) fails
+    with self.assertRaises(typer.Exit):
+      update.update(model_base_dir=model_dir, max_batch_size=16)
+
+    # Re-enabling large batch splitting while pad_variable_length_inputs is True
+    # fails
+    with self.assertRaises(typer.Exit):
+      update.update(
+          model_base_dir=model_dir,
+          disable_large_batch_splitting=False,
+      )
+
+  def test_update_specific_pipeline_name(self):
+    model_dir = self._create_test_model(initial_batch_size=16)
+    pipelines_path = os.path.join(model_dir, 'orchestration.pb')
+
+    # Add a second pipeline to orchestration.pb
+    pipelines = orchestration_pb2.Pipelines()
+    with open(pipelines_path, 'rb') as f:
+      pipelines.ParseFromString(f.read())
+    pipelines.name_to_pipeline['prefill'].batch_options.max_batch_size = 8
+    with open(pipelines_path, 'wb') as f:
+      f.write(pipelines.SerializeToString())
+
+    # Update only 'prefill' pipeline
+    update.update(
+        model_base_dir=model_dir,
+        pipeline_name='prefill',
+        max_batch_size=32,
+    )
+
+    updated = orchestration_pb2.Pipelines()
+    with open(pipelines_path, 'rb') as f:
+      updated.ParseFromString(f.read())
+    self.assertEqual(self._get_batch_size(updated, 'serving_default'), 16)
+    self.assertEqual(self._get_batch_size(updated, 'prefill'), 32)
+
+    # Non-existent pipeline name raises typer.Exit
+    with self.assertRaises(typer.Exit):
+      update.update(
+          model_base_dir=model_dir,
+          pipeline_name='non_existent',
+          max_batch_size=64,
+      )
+
 
 if __name__ == '__main__':
   absltest.main()

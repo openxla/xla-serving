@@ -180,6 +180,30 @@ def _find_pipelines_data(
   return None
 
 
+def _parse_allowed_batch_sizes(raw: str) -> list[int]:
+  """Parses and validates a comma-separated list of allowed batch sizes."""
+  if not raw.strip():
+    _bail('allowed_batch_sizes cannot be empty.')
+  parts = [p.strip() for p in raw.split(',')]
+  try:
+    sizes = [int(p) for p in parts]
+  except ValueError:
+    _bail(
+        'allowed_batch_sizes must be a comma-separated list of integers, got'
+        f' "{raw}".'
+    )
+  if any(s <= 0 for s in sizes):
+    _bail(
+        'allowed_batch_sizes must contain strictly positive integers, got'
+        f' {sizes}.'
+    )
+  if any(sizes[i] >= sizes[i + 1] for i in range(len(sizes) - 1)):
+    _bail(
+        f'allowed_batch_sizes must be in strictly ascending order, got {sizes}.'
+    )
+  return sizes
+
+
 def update(
     model_base_dir: Annotated[
         str, typer.Argument(help='Base directory of the exported model.')
@@ -189,6 +213,71 @@ def update(
         typer.Option(
             '--max_batch_size',
             help='Maximum batch size (must be a positive integer).',
+        ),
+    ] = None,
+    batch_timeout_micros: Annotated[
+        int | None,
+        typer.Option(
+            '--batch_timeout_micros',
+            help=(
+                'Maximum microseconds to wait before outputting an incomplete'
+                ' batch (must be >= 0).'
+            ),
+        ),
+    ] = None,
+    allowed_batch_sizes: Annotated[
+        str | None,
+        typer.Option(
+            '--allowed_batch_sizes',
+            help=(
+                'Comma-separated list of strictly ascending positive batch'
+                ' sizes (e.g. "1,2,4,8,16").'
+            ),
+        ),
+    ] = None,
+    num_batch_threads: Annotated[
+        int | None,
+        typer.Option(
+            '--num_batch_threads',
+            help='Number of batch scheduling threads (must be >= 1).',
+        ),
+    ] = None,
+    max_enqueued_batches: Annotated[
+        int | None,
+        typer.Option(
+            '--max_enqueued_batches',
+            help=(
+                'Maximum number of batches enqueued before failing fast (must'
+                ' be >= 1).'
+            ),
+        ),
+    ] = None,
+    disable_large_batch_splitting: Annotated[
+        bool | None,
+        typer.Option(
+            '--disable_large_batch_splitting/--enable_large_batch_splitting',
+            help='Whether to disable splitting large input batches.',
+        ),
+    ] = None,
+    pad_variable_length_inputs: Annotated[
+        bool | None,
+        typer.Option(
+            '--pad_variable_length_inputs/--no_pad_variable_length_inputs',
+            help=(
+                'Whether to dynamically pad variable-length non-batch'
+                ' dimensions to the maximum size across requests within each'
+                ' batch. Requires disable_large_batch_splitting=True.'
+            ),
+        ),
+    ] = None,
+    pipeline_name: Annotated[
+        str | None,
+        typer.Option(
+            '--pipeline_name',
+            help=(
+                'Optional name of a specific pipeline to update. If omitted,'
+                ' updates all pipelines.'
+            ),
         ),
     ] = None,
     output_dir: Annotated[
@@ -203,11 +292,45 @@ def update(
     ] = None,
 ) -> None:
   """Updates batching configurations and options in an exported model."""
-  if max_batch_size is None:
-    _bail('No update options specified. Provide at least --max_batch_size.')
-
-  if max_batch_size <= 0:
+  if max_batch_size is not None and max_batch_size <= 0:
     _bail(f'max_batch_size must be positive, got {max_batch_size}')
+
+  if batch_timeout_micros is not None and batch_timeout_micros < 0:
+    _bail(
+        f'batch_timeout_micros must be non-negative, got {batch_timeout_micros}'
+    )
+
+  if num_batch_threads is not None and num_batch_threads <= 0:
+    _bail(f'num_batch_threads must be >= 1, got {num_batch_threads}')
+
+  if max_enqueued_batches is not None and max_enqueued_batches <= 0:
+    _bail(f'max_enqueued_batches must be >= 1, got {max_enqueued_batches}')
+
+  parsed_allowed_sizes: list[int] | None = None
+  if allowed_batch_sizes is not None:
+    parsed_allowed_sizes = _parse_allowed_batch_sizes(allowed_batch_sizes)
+
+  field_updates: list[tuple[str, Any]] = [
+      (name, val)
+      for name, val in (
+          ('max_batch_size', max_batch_size),
+          ('batch_timeout_micros', batch_timeout_micros),
+          ('allowed_batch_sizes', parsed_allowed_sizes),
+          ('num_batch_threads', num_batch_threads),
+          ('max_enqueued_batches', max_enqueued_batches),
+          ('disable_large_batch_splitting', disable_large_batch_splitting),
+          ('pad_variable_length_inputs', pad_variable_length_inputs),
+      )
+      if val is not None
+  ]
+  if not field_updates:
+    _bail(
+        'No update options specified. Provide at least one batching'
+        ' configuration flag (e.g. --max_batch_size, --batch_timeout_micros,'
+        ' --allowed_batch_sizes, --num_batch_threads,'
+        ' --max_enqueued_batches, --disable_large_batch_splitting,'
+        ' --pad_variable_length_inputs).'
+    )
 
   try:
     manifest = persistence_lib.load(model_base_dir)
@@ -225,6 +348,64 @@ def update(
   if not pipelines.name_to_pipeline:
     _bail('No named pipelines found inside pipelines proto.')
 
+  if pipeline_name is not None:
+    if pipeline_name not in pipelines.name_to_pipeline:
+      available = ', '.join(sorted(pipelines.name_to_pipeline.keys()))
+      _bail(
+          f'Pipeline "{pipeline_name}" not found. Available pipelines:'
+          f' {available}'
+      )
+    target_pipelines = [
+        (pipeline_name, pipelines.name_to_pipeline[pipeline_name])
+    ]
+  else:
+    target_pipelines = sorted(pipelines.name_to_pipeline.items())
+
+  # Cross-field validation across effective pipeline batch_options
+  for p_name, pipeline in target_pipelines:
+    bo = pipeline.batch_options
+    effective_max = (
+        max_batch_size if max_batch_size is not None else bo.max_batch_size
+    )
+    effective_allowed = (
+        parsed_allowed_sizes
+        if parsed_allowed_sizes is not None
+        else list(bo.allowed_batch_sizes)
+    )
+    effective_disable_splitting = (
+        disable_large_batch_splitting
+        if disable_large_batch_splitting is not None
+        else bo.disable_large_batch_splitting
+    )
+    effective_pad_variable = (
+        pad_variable_length_inputs
+        if pad_variable_length_inputs is not None
+        else bo.pad_variable_length_inputs
+    )
+
+    if effective_allowed:
+      if effective_disable_splitting and effective_allowed[-1] != effective_max:
+        _bail(
+            f'Pipeline "{p_name}": max_batch_size ({effective_max}) must equal'
+            f' the largest allowed_batch_size ({effective_allowed[-1]}) when'
+            ' disable_large_batch_splitting is True.'
+        )
+      if (
+          not effective_disable_splitting
+          and effective_allowed[-1] > effective_max
+      ):
+        _bail(
+            f'Pipeline "{p_name}": largest allowed_batch_size'
+            f' ({effective_allowed[-1]}) cannot exceed max_batch_size'
+            f' ({effective_max}).'
+        )
+
+    if effective_pad_variable and not effective_disable_splitting:
+      _bail(
+          f'Pipeline "{p_name}": disable_large_batch_splitting must be True'
+          ' when pad_variable_length_inputs is True.'
+      )
+
   target_dir = model_base_dir
   if output_dir:
     output_dir = os.path.abspath(output_dir)
@@ -236,13 +417,21 @@ def update(
     target_dir = output_dir
 
   changes: dict[str, Any] = {}
-  for pipeline_name, pipeline in sorted(pipelines.name_to_pipeline.items()):
-    prev_batch_size = pipeline.batch_options.max_batch_size
-    pipeline.batch_options.max_batch_size = max_batch_size
-    changes[f'{pipeline_name}.max_batch_size'] = {
-        'previous': prev_batch_size,
-        'new': max_batch_size,
-    }
+  updated_fields = [field_name for field_name, _ in field_updates]
+
+  for p_name, pipeline in target_pipelines:
+    bo = pipeline.batch_options
+    for field_name, new_val in field_updates:
+      if field_name == 'allowed_batch_sizes':
+        prev = list(bo.allowed_batch_sizes)
+        bo.allowed_batch_sizes[:] = new_val
+      else:
+        prev = getattr(bo, field_name)
+        setattr(bo, field_name, new_val)
+      changes[f'{p_name}.{field_name}'] = {
+          'previous': prev,
+          'new': new_val,
+      }
 
   # Write back mutated proto
   if pipelines_data.HasField('file_system_location'):
@@ -258,10 +447,11 @@ def update(
     _atomic_write_proto(manifest_file_path, manifest, backup=(not output_dir))
 
   # Record change in history.txtpb
+  fields_summary = ', '.join(updated_fields)
   record_history_entry(
       target_dir,
       action='UPDATE',
-      description='Updated max_batch_size via CLI.',
+      description=f'Updated {fields_summary} via CLI.',
       changes=changes,
   )
 
@@ -284,11 +474,11 @@ def update(
   )
 
 
-def _get_pipeline_batch_sizes(
+def _get_pipeline_batch_options(
     model_base_dir: str,
     manifest: manifest_pb2.Manifest | None = None,
-) -> dict[str, int]:
-  """Reads current max_batch_size for each pipeline in the model, if present."""
+) -> dict[str, Any]:
+  """Reads current batch_options fields for each pipeline in the model."""
   try:
     if manifest is None:
       manifest = persistence_lib.load(model_base_dir)
@@ -298,10 +488,21 @@ def _get_pipeline_batch_sizes(
     unused_name, pipelines_data = pipelines_entry
     pipelines = orchestration_pb2.Pipelines()
     _read_proto_from_data(model_base_dir, pipelines_data, pipelines)
-    return {
-        name: pipeline.batch_options.max_batch_size
-        for name, pipeline in sorted(pipelines.name_to_pipeline.items())
-    }
+    options: dict[str, Any] = {}
+    for name, pipeline in sorted(pipelines.name_to_pipeline.items()):
+      bo = pipeline.batch_options
+      options[f'{name}.max_batch_size'] = bo.max_batch_size
+      options[f'{name}.batch_timeout_micros'] = bo.batch_timeout_micros
+      options[f'{name}.allowed_batch_sizes'] = list(bo.allowed_batch_sizes)
+      options[f'{name}.num_batch_threads'] = bo.num_batch_threads
+      options[f'{name}.max_enqueued_batches'] = bo.max_enqueued_batches
+      options[f'{name}.disable_large_batch_splitting'] = (
+          bo.disable_large_batch_splitting
+      )
+      options[f'{name}.pad_variable_length_inputs'] = (
+          bo.pad_variable_length_inputs
+      )
+    return options
   except Exception:  # pylint: disable=broad-except
     return {}
 
@@ -434,7 +635,7 @@ def rollback(
       )
       return
 
-  before_batch_sizes = _get_pipeline_batch_sizes(
+  before_options = _get_pipeline_batch_options(
       model_base_dir, manifest=manifest
   )
 
@@ -446,13 +647,13 @@ def rollback(
     if file_utils.exists(tmp_path):
       file_utils.remove(tmp_path)
 
-  after_batch_sizes = _get_pipeline_batch_sizes(model_base_dir)
+  after_options = _get_pipeline_batch_options(model_base_dir)
 
   changes: dict[str, Any] = {}
-  for name, new_val in sorted(after_batch_sizes.items()):
-    prev_val = before_batch_sizes.get(name)
+  for key, new_val in sorted(after_options.items()):
+    prev_val = before_options.get(key)
     if prev_val is not None and prev_val != new_val:
-      changes[f'{name}.max_batch_size'] = {
+      changes[key] = {
           'previous': prev_val,
           'new': new_val,
       }

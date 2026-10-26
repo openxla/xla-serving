@@ -71,13 +71,24 @@ xsm-cli show /path/to/model \
 
 ### 5. Update, Inspect History, and Rollback Pipeline Configurations
 
-Update configuration options (such as maximum batch size) in an exported model's
-orchestration pipelines:
+Update batching configuration options in an exported model's orchestration
+pipelines:
 
 ```bash
 # Update maximum batch size in-place (backs up the modified config proto to .orig and .bak)
 xsm-cli update /path/to/model \
   --max_batch_size 32
+
+# Update multiple batching parameters and target a specific pipeline
+xsm-cli update /path/to/model \
+    --pipeline_name serving_default \
+    --max_batch_size 64 \
+    --batch_timeout_micros 5000 \
+    --allowed_batch_sizes 8,16,32,64 \
+    --num_batch_threads 4 \
+    --max_enqueued_batches 16 \
+    --disable_large_batch_splitting \
+    --pad_variable_length_inputs
 
 # Clone and update to a new directory (leaves original model untouched)
 xsm-cli update /path/to/model \
