@@ -136,6 +136,25 @@ class Interpreter {
       const absl::flat_hash_map<std::string, Value>& keyword_inputs,
       RunOptions run_options = RunOptions());
 
+  // Runs `RunWithMapReturn` as a single task on the internal worker pool and
+  // returns a future of its result. See `Run` for the definition of the
+  // arguments.
+  //
+  // Unlike `RunAsyncWithMapReturn`, which schedules each kernel of the
+  // pipeline as its own worker task, this runs the whole pipeline
+  // synchronously within one task, as `Run` does on the caller's thread. That
+  // avoids a thread hop per kernel, and supports every pipeline that
+  // `RunWithMapReturn` supports, including keyword-arguments based ones. The
+  // task holds its worker thread until the run completes.
+  //
+  // The inputs are copied into the task; `Value` copies keep the underlying
+  // buffers alive. The interpreter must outlive the returned future.
+  tsl::Future<absl::flat_hash_map<std::string, Value>> RunWithMapReturnOnWorker(
+      absl::string_view pipeline_name,
+      absl::Span<const Value> positional_inputs,
+      absl::flat_hash_map<std::string, Value> keyword_inputs,
+      RunOptions run_options = RunOptions());
+
   // TODO: Allow the user to specify the data type.
   // Returns the accepted data type of the model input. This is determined by
   // the first computation function.

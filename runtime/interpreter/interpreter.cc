@@ -1887,6 +1887,34 @@ Interpreter::RunAsyncWithMapReturn(
   return map_output_future;
 }
 
+tsl::Future<absl::flat_hash_map<std::string, Value>>
+Interpreter::RunWithMapReturnOnWorker(
+    absl::string_view pipeline_name, absl::Span<const Value> positional_inputs,
+    absl::flat_hash_map<std::string, Value> keyword_inputs,
+    RunOptions run_options) {
+  using Outputs = absl::flat_hash_map<std::string, Value>;
+  tsl::thread::ThreadPool* const thread_pool =
+      create_options_ == nullptr ? nullptr
+                                 : create_options_->execute_worker_thread_pool;
+  if (thread_pool == nullptr) {
+    return tsl::Future<Outputs>(absl::FailedPreconditionError(
+        "RunWithMapReturnOnWorker() requires execute_worker_thread_pool to be "
+        "set in the interpreter's create options."));
+  }
+  auto [promise, future] = tsl::MakePromise<Outputs>();
+  thread_pool->Schedule(
+      [this, pipeline_name = std::string(pipeline_name),
+       positional_inputs = std::vector<Value>(positional_inputs.begin(),
+                                              positional_inputs.end()),
+       keyword_inputs = std::move(keyword_inputs),
+       run_options = std::move(run_options),
+       promise = std::move(promise).ToShared()]() mutable {
+        std::move(promise)->Set(RunWithMapReturn(
+            pipeline_name, positional_inputs, keyword_inputs, run_options));
+      });
+  return future;
+}
+
 absl::StatusOr<KernelIODataType> Interpreter::GetModelInputDataType(
     absl::string_view pipeline_name) const {
   TF_ASSIGN_OR_RETURN(const GraphBundle* graph_bundle,
