@@ -31,7 +31,6 @@
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/DialectRegistry.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/OwningOpRef.h"  // from @llvm-project
-#include "mlir/include/mlir/InitAllDialects.h"  // from @llvm-project
 #include "mlir/include/mlir/Pass/PassManager.h"  // from @llvm-project
 #include "stablehlo/dialect/ChloOps.h"  // from @stablehlo
 #include "stablehlo/dialect/Register.h"  // from @stablehlo
@@ -56,7 +55,6 @@ absl::StatusOr<mlir::OwningOpRef<mlir::ModuleOp>> StableHloLoader::Load(
   registry.insert<mlir::shape::ShapeDialect>();
   mlir::func::registerAllExtensions(registry);
   mlir::stablehlo::registerAllDialects(registry);
-  mlir::registerAllDialects(registry);
 
   context_.appendDialectRegistry(registry);
 
