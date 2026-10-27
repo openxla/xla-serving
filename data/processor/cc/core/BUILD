@@ -104,6 +104,7 @@ cc_library(
         "@abseil-cpp//absl/strings:str_format",
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/types:span",
+        "@com_google_protobuf//:any_cc_proto",
         "@xla//xla/python/ifrt",
         "@xla_serving//data/processor/cc/api:transform_context",
         "@xla_serving//data/processor/cc/api:type_info",

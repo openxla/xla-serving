@@ -28,6 +28,7 @@
 #include <utility>
 #include <vector>
 
+#include "google/protobuf/any.pb.h"
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/base/thread_annotations.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
