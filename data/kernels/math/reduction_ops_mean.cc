@@ -15,11 +15,13 @@ limitations under the License.
 ==============================================================================*/
 
 #include "data/kernels/math/reduction_ops_common.h"  // from @xla_serving
+#include "data/kernels/math/reduction_transform_config.pb.h"  // from @xla_serving
 #include "data/processor/cc/api/registry.h"  // from @xla_serving
 
 namespace xla_serving::data::kernel {
 
 ND_REGISTER_TRANSFORM(ReduceMeanTransform, "ReduceMeanTransform")
-    .SetDeserializer(&DeserializeReductionTransform<ReduceMeanTransform>);
+    .SetDeserializerWithDetail<ReductionTransformConfig>(
+        &DeserializeReductionTransform<ReduceMeanTransform>);
 
 }  // namespace xla_serving::data::kernel

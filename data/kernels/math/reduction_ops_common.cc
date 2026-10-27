@@ -40,7 +40,6 @@ limitations under the License.
 #include "data/processor/cc/api/value.h"  // from @xla_serving
 #include "data/processor/cc/core/transform.h"  // from @xla_serving
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
-#include "data/resource_manager/cc/resource.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
@@ -350,17 +349,10 @@ absl::Status AllNumberReductionTransformBase<Derived, Reducer>::DispatchByDType(
 
 template <typename Transform>
 absl::StatusOr<std::unique_ptr<::xla_serving::data::composite::TransformBase>>
-DeserializeReductionTransform(
-    const ::xla_serving::data::composite::TransformConfig& config,
-    absl::Span<const std::shared_ptr<::xla_serving::data::Resource>>
-    /*resources*/) {
-  ReductionTransformConfig detail_proto;
-  if (config.has_detail()) {
-    config.detail().UnpackTo(&detail_proto);
-  }
-  std::vector<int64_t> axis(detail_proto.axis().begin(),
-                            detail_proto.axis().end());
-  return Transform::Create(std::move(axis), detail_proto.keep_dims());
+DeserializeReductionTransform(const ReductionTransformConfig& detail_proto) {
+  return Transform::Create(
+      {detail_proto.axis().begin(), detail_proto.axis().end()},
+      detail_proto.keep_dims());
 }
 
 #define INSTANTIATE_REDUCTION_TRANSFORM(BaseTemplate, Transform, Reducer) \
@@ -368,9 +360,7 @@ DeserializeReductionTransform(
   template class BaseTemplate<Transform, Reducer>;                        \
   template absl::StatusOr<                                                \
       std::unique_ptr<::xla_serving::data::composite::TransformBase>>         \
-  DeserializeReductionTransform<Transform>(                               \
-      const ::xla_serving::data::composite::TransformConfig&,                 \
-      absl::Span<const std::shared_ptr<::xla_serving::data::Resource>>)
+  DeserializeReductionTransform<Transform>(const ReductionTransformConfig&)
 
 INSTANTIATE_REDUCTION_TRANSFORM(BoolReductionTransformBase, ReduceAllTransform,
                                 functor::AndReducer);

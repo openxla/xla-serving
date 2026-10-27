@@ -43,7 +43,6 @@ limitations under the License.
 #include "data/processor/cc/core/transform.h"  // from @xla_serving
 #include "data/processor/cc/core/transform_registry.h"  // from @xla_serving
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
-#include "data/resource_manager/cc/resource.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
@@ -271,14 +270,7 @@ ScanTransformBase<Derived, Reducer, kFloatOnly>::ToProto() const {
 template <typename Transform>
 static absl::StatusOr<
     std::unique_ptr<::xla_serving::data::composite::TransformBase>>
-DeserializeScanTransform(
-    const ::xla_serving::data::composite::TransformConfig& config,
-    absl::Span<const std::shared_ptr<::xla_serving::data::Resource>>
-    /*resources*/) {
-  ScanTransformConfig detail_proto;
-  if (config.has_detail()) {
-    config.detail().UnpackTo(&detail_proto);
-  }
+DeserializeScanTransform(const ScanTransformConfig& detail_proto) {
   std::optional<int64_t> axis = std::nullopt;
   if (detail_proto.has_axis()) {
     axis = detail_proto.axis();
@@ -295,13 +287,16 @@ template class ScanTransformBase<CumulativeLogsumexpTransform,
                                  /*kFloatOnly=*/true>;
 
 ND_REGISTER_TRANSFORM(CumsumTransform, "CumsumTransform")
-    .SetDeserializer(&DeserializeScanTransform<CumsumTransform>);
+    .SetDeserializerWithDetail<ScanTransformConfig>(
+        &DeserializeScanTransform<CumsumTransform>);
 
 ND_REGISTER_TRANSFORM(CumprodTransform, "CumprodTransform")
-    .SetDeserializer(&DeserializeScanTransform<CumprodTransform>);
+    .SetDeserializerWithDetail<ScanTransformConfig>(
+        &DeserializeScanTransform<CumprodTransform>);
 
 ND_REGISTER_TRANSFORM(CumulativeLogsumexpTransform,
                       "CumulativeLogsumexpTransform")
-    .SetDeserializer(&DeserializeScanTransform<CumulativeLogsumexpTransform>);
+    .SetDeserializerWithDetail<ScanTransformConfig>(
+        &DeserializeScanTransform<CumulativeLogsumexpTransform>);
 
 }  // namespace xla_serving::data::kernel

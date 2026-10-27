@@ -181,7 +181,6 @@ cc_library(
         "@xla_serving//data/processor/cc/api:type_info",
         "@xla_serving//data/processor/cc/core:transform",
         "@xla_serving//data/processor/proto:transform_config_cc_proto",
-        "@xla_serving//data/resource_manager/cc:resource",
     ],
     alwayslink = 1,
 )

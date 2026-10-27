@@ -30,10 +30,6 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
-#include "data/kernels/macros.h"  // from @xla_serving
-#include "data/kernels/math/reduction_ops.h"  // from @xla_serving
-#include "data/kernels/transpose_functor.h"  // from @xla_serving
-#include "data/kernels/util/ttypes.h"  // from @xla_serving
 #include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_macros.h"
@@ -42,11 +38,15 @@ limitations under the License.
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "Eigen/Core"
 #include "unsupported/Eigen/CXX11/Tensor"
+#include "data/kernels/macros.h"  // from @xla_serving
+#include "data/kernels/math/reduction_ops.h"  // from @xla_serving
+#include "data/kernels/math/reduction_transform_config.pb.h"  // from @xla_serving
+#include "data/kernels/transpose_functor.h"  // from @xla_serving
+#include "data/kernels/util/ttypes.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
 #include "data/processor/cc/core/transform.h"  // from @xla_serving
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
-#include "data/resource_manager/cc/resource.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
@@ -339,9 +339,7 @@ class AllNumberReductionTransformBase : public ReductionTransformBase<Derived> {
 
 template <typename Transform>
 absl::StatusOr<std::unique_ptr<::xla_serving::data::composite::TransformBase>>
-DeserializeReductionTransform(
-    const ::xla_serving::data::composite::TransformConfig& config,
-    absl::Span<const std::shared_ptr<::xla_serving::data::Resource>> resources);
+DeserializeReductionTransform(const ReductionTransformConfig& detail_proto);
 
 class ReduceAllTransform
     : public BoolReductionTransformBase<ReduceAllTransform,

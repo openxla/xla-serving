@@ -25,7 +25,6 @@
 #include "data/processor/cc/core/transform.h"  // from @xla_serving
 #include "data/processor/cc/core/transform_registry.h"  // from @xla_serving
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
-#include "data/resource_manager/cc/resource.h"  // from @xla_serving
 
 namespace xla_serving::data {
 namespace composite {
@@ -49,15 +48,9 @@ absl::StatusOr<TransformConfig> SuffixTransform::ToProto() const {
 }
 
 ND_REGISTER_TRANSFORM(SuffixTransform, "SuffixTransform")
-    .SetDeserializer(
-        [](const TransformConfig& config,
-           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
-            -> absl::StatusOr<std::unique_ptr<TransformBase>> {
-          google::protobuf::StringValue suffix_proto;
-          if (config.has_detail()) {
-            config.detail().UnpackTo(&suffix_proto);
-          }
-          return std::make_unique<SuffixTransform>(suffix_proto.value());
+    .SetDeserializerWithDetail<google::protobuf::StringValue>(
+        [](const google::protobuf::StringValue& suffix_proto) {
+          return SuffixTransform::Create(suffix_proto.value());
         });
 
 }  // namespace composite
