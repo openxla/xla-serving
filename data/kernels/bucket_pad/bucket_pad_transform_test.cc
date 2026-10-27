@@ -294,8 +294,7 @@ TEST(BucketPadTransformTest, ExecuteContextSuccessAndErrorHandling) {
 TEST(BucketPadTransformTest, ConfigUnpackError) {
   ::xla_serving::data::composite::TransformConfig invalid_config;
   invalid_config.set_op_name("BucketPadTransform");
-  EXPECT_THAT(BucketPadTransform::CreateFromTransformConfig(invalid_config,
-                                                            /*resources=*/{}),
+  EXPECT_THAT(TransformBase::FromProto(invalid_config, /*resources=*/{}),
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 

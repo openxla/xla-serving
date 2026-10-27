@@ -47,7 +47,6 @@ cc_library(
         "@xla_serving//data/processor/cc/utils:default_value_cc_proto",
         "@xla_serving//data/processor/cc/utils:default_value_utils",
         "@xla_serving//data/processor/proto:transform_config_cc_proto",
-        "@xla_serving//data/resource_manager/cc:resource",
         "@xla_serving//runtime/core:host_buffer",
     ],
     alwayslink = 1,

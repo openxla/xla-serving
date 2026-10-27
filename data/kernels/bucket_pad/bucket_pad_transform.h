@@ -29,7 +29,6 @@
 #include "data/processor/cc/core/transform.h"  // from @xla_serving
 #include "data/processor/cc/utils/default_value.pb.h"  // from @xla_serving
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
-#include "data/resource_manager/cc/resource.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 
 namespace xla_serving::data::composite::transforms {
@@ -44,11 +43,6 @@ class BucketPadTransform : public TransformBase {
 
   static absl::StatusOr<std::unique_ptr<BucketPadTransform>> CreateFromProto(
       const BucketPadArgs& args);
-
-  static absl::StatusOr<std::unique_ptr<BucketPadTransform>>
-  CreateFromTransformConfig(
-      const ::xla_serving::data::composite::TransformConfig& config,
-      absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources);
 
   BucketPadTransform(std::vector<int64_t> target_dimensions, int32_t axis,
                      utils::DefaultValue pad_value);

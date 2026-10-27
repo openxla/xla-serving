@@ -16,16 +16,17 @@
 #define XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_PACK_HOST_BUFFER_VECTOR_TRANSFORM_H_
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "data/kernels/cpu_embedding/cpu_embedding.pb.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
 #include "data/processor/cc/core/transform.h"  // from @xla_serving
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
-#include "runtime/core/host_buffer.h"  // from @xla_serving
 
 namespace xla_serving {
 namespace data {
@@ -37,11 +38,6 @@ class PackHostBufferVectorTransform : public TransformBase {
  public:
   static absl::StatusOr<std::unique_ptr<PackHostBufferVectorTransform>> Create(
       int input_count);
-
-  static absl::StatusOr<std::unique_ptr<PackHostBufferVectorTransform>>
-  CreateFromTransformConfig(
-      const ::xla_serving::data::composite::TransformConfig& config,
-      absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources);
 
   explicit PackHostBufferVectorTransform(int input_count);
 

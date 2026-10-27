@@ -422,8 +422,11 @@ absl::StatusOr<TransformConfig> CpuEmbeddingLookupTransform::ToProto() const {
 
 ND_REGISTER_TRANSFORM(CpuEmbeddingLookupTransform,
                       "CpuEmbeddingLookupTransform")
-    .SetDeserializer(
-        [](const TransformConfig& config,
+    .SetDeserializerWithDetail<
+        ::xla_serving::data::composite::transforms::cpu_embedding::
+            CpuEmbeddingLookupTransformConfig>(
+        [](const ::xla_serving::data::composite::transforms::cpu_embedding::
+               CpuEmbeddingLookupTransformConfig& detail,
            absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           if (resources.empty()) {
@@ -431,41 +434,37 @@ ND_REGISTER_TRANSFORM(CpuEmbeddingLookupTransform,
                 "CpuEmbeddingLookupTransform requires a resource.");
           }
           auto resource = std::dynamic_pointer_cast<CpuEmbeddingEngineResource>(
-              const_cast<std::shared_ptr<xla_serving::data::Resource>&>(
-                  resources[0]));
+              resources[0]);
           if (resource == nullptr) {
             return absl::InvalidArgumentError(
                 "Resource is not a CpuEmbeddingEngineResource.");
           }
 
-          namespace jce = ::xla_serving::data::composite::transforms::cpu_embedding;
-          jce::CpuEmbeddingLookupTransformConfig detail;
           std::vector<std::string> feature_names;
           std::vector<std::string> output_feature_names;
           bool dense_lookup = false;
           int64_t embedding_dim = 128;
-          if (config.has_detail() && config.detail().UnpackTo(&detail)) {
-            if (detail.feature_names_size() > 0) {
-              feature_names.reserve(detail.feature_names_size());
-              for (const auto& name : detail.feature_names()) {
-                feature_names.push_back(std::string(name));
-              }
-            } else if (!detail.feature().empty()) {
-              feature_names.push_back(std::string(detail.feature()));
+          if (detail.feature_names_size() > 0) {
+            feature_names.reserve(detail.feature_names_size());
+            for (const auto& name : detail.feature_names()) {
+              feature_names.push_back(std::string(name));
             }
-            if (detail.output_feature_names_size() > 0) {
-              output_feature_names.reserve(detail.output_feature_names_size());
-              for (const auto& name : detail.output_feature_names()) {
-                output_feature_names.push_back(std::string(name));
-              }
-            }
-            dense_lookup = detail.dense_lookup();
-            if (detail.embedding_dim() > 0) {
-              embedding_dim = detail.embedding_dim();
+          } else if (!detail.feature().empty()) {
+            feature_names.push_back(std::string(detail.feature()));
+          } else {
+            return absl::InvalidArgumentError(
+                "CpuEmbeddingLookupTransform requires at least one feature "
+                "name.");
+          }
+          if (detail.output_feature_names_size() > 0) {
+            output_feature_names.reserve(detail.output_feature_names_size());
+            for (const auto& name : detail.output_feature_names()) {
+              output_feature_names.push_back(std::string(name));
             }
           }
-          if (feature_names.empty()) {
-            feature_names.push_back(std::string(config.name()));
+          dense_lookup = detail.dense_lookup();
+          if (detail.embedding_dim() > 0) {
+            embedding_dim = detail.embedding_dim();
           }
 
           return CpuEmbeddingLookupTransform::Create(

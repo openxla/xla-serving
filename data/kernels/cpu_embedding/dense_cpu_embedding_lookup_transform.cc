@@ -293,8 +293,9 @@ absl::StatusOr<TransformConfig> DenseCpuEmbeddingLookupTransform::ToProto()
 
 ND_REGISTER_TRANSFORM(DenseCpuEmbeddingLookupTransform,
                       "DenseCpuEmbeddingLookupTransform")
-    .SetDeserializer(
-        [](const TransformConfig& config,
+    .SetDeserializerWithDetail<
+        transforms::cpu_embedding::DenseCpuEmbeddingLookupArgs>(
+        [](const transforms::cpu_embedding::DenseCpuEmbeddingLookupArgs& args,
            absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
             -> absl::StatusOr<std::unique_ptr<TransformBase>> {
           if (resources.empty()) {
@@ -308,16 +309,16 @@ ND_REGISTER_TRANSFORM(DenseCpuEmbeddingLookupTransform,
                 "Failed to cast resource to CpuEmbeddingEngineResource.");
           }
 
-          transforms::cpu_embedding::DenseCpuEmbeddingLookupArgs args;
-          if (!config.detail().UnpackTo(&args)) {
-            return absl::InvalidArgumentError(
-                "Failed to unpack DenseCpuEmbeddingLookupArgs proto.");
-          }
           std::vector<std::string> feature_names(args.feature_names().begin(),
                                                  args.feature_names().end());
-          if (feature_names.empty() && args.has_feature_name() &&
-              !args.feature_name().empty()) {
-            feature_names.push_back(args.feature_name());
+          if (feature_names.empty()) {
+            if (args.has_feature_name() && !args.feature_name().empty()) {
+              feature_names.push_back(args.feature_name());
+            } else {
+              return absl::InvalidArgumentError(
+                  "DenseCpuEmbeddingLookupTransform requires at least one "
+                  "feature name.");
+            }
           }
           std::vector<std::string> output_feature_names(
               args.output_feature_names().begin(),

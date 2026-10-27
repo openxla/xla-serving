@@ -34,10 +34,8 @@
 #include "data/processor/cc/api/registry.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
-#include "data/processor/cc/core/transform.h"  // from @xla_serving
 #include "data/processor/cc/utils/default_value_utils.h"  // from @xla_serving
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
-#include "data/resource_manager/cc/resource.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
@@ -161,18 +159,6 @@ BucketPadTransform::CreateFromProto(const BucketPadArgs& args) {
   std::vector<int64_t> target_dimensions(args.target_dimensions().begin(),
                                          args.target_dimensions().end());
   return Create(std::move(target_dimensions), args.axis(), args.pad_value());
-}
-
-absl::StatusOr<std::unique_ptr<BucketPadTransform>>
-BucketPadTransform::CreateFromTransformConfig(
-    const ::xla_serving::data::composite::TransformConfig& config,
-    absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources) {
-  BucketPadArgs args;
-  if (!config.detail().UnpackTo(&args)) {
-    return absl::InvalidArgumentError(
-        "Failed to unpack BucketPadArgs from TransformConfig.");
-  }
-  return CreateFromProto(args);
 }
 
 BucketPadTransform::BucketPadTransform(std::vector<int64_t> target_dimensions,
@@ -371,6 +357,7 @@ std::string BucketPadTransform::DebugName() const {
 }
 
 ND_REGISTER_TRANSFORM(BucketPadTransform, "BucketPadTransform")
-    .SetDeserializer(&BucketPadTransform::CreateFromTransformConfig);
+    .SetDeserializerWithDetail<BucketPadArgs>(
+        &BucketPadTransform::CreateFromProto);
 
 }  // namespace xla_serving::data::composite::transforms

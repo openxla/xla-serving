@@ -18,7 +18,6 @@
 #include <string>
 #include <vector>
 
-#include "google/protobuf/any.pb.h"
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
@@ -27,8 +26,8 @@
 #include "data/processor/cc/api/registry.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
+#include "data/processor/cc/api/value.h"  // from @xla_serving
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
-#include "data/resource_manager/cc/resource.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 
 namespace xla_serving {
@@ -97,24 +96,14 @@ std::string UnpackHostBufferVectorTransform::DebugName() const {
   return "UnpackHostBufferVectorTransform";
 }
 
-absl::StatusOr<std::unique_ptr<UnpackHostBufferVectorTransform>>
-UnpackHostBufferVectorTransform::CreateFromTransformConfig(
-    const ::xla_serving::data::composite::TransformConfig& config,
-    absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources) {
-  ::xla_serving::data::composite::transforms::cpu_embedding::
-      UnpackHostBufferVectorArgs args;
-
-  if (!config.detail().UnpackTo(&args)) {
-    return absl::InvalidArgumentError(
-        "Failed to unpack UnpackHostBufferVectorArgs from config.");
-  }
-  return Create(args.output_count());
-}
-
 ND_REGISTER_TRANSFORM(UnpackHostBufferVectorTransform,
                       "UnpackHostBufferVectorTransform")
-    .SetDeserializer(
-        &UnpackHostBufferVectorTransform::CreateFromTransformConfig);
+    .SetDeserializerWithDetail<::xla_serving::data::composite::transforms::
+                                   cpu_embedding::UnpackHostBufferVectorArgs>(
+        [](const ::xla_serving::data::composite::transforms::cpu_embedding::
+               UnpackHostBufferVectorArgs& args) {
+          return UnpackHostBufferVectorTransform::Create(args.output_count());
+        });
 
 }  // namespace transforms
 }  // namespace composite
