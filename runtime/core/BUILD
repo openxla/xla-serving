@@ -343,6 +343,7 @@ cc_library(
         "@xla//xla/python/ifrt",
         "@xla//xla/python/pjrt_ifrt",
         "@xla//xla/python/pjrt_ifrt:pjrt_dtype",
+        "@xla//xla/runtime:chip_id",
         "@xla//xla/tsl/concurrency:future",
         "@xla//xla/tsl/concurrency:ref_count",
         "@xla//xla/tsl/framework:serving_device_selector",
