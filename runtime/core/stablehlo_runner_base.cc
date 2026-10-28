@@ -43,6 +43,7 @@
 #include "runtime/core/device_buffer.h"  // from @xla_serving
 #include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/host_buffer_converter.h"  // from @xla_serving
 #include "runtime/core/ifrt_loaded_variable_registry.h"  // from @xla_serving
 #include "runtime/core/sharding_utils.h"  // from @xla_serving
 #include "runtime/core/stablehlo.h"  // from @xla_serving
@@ -958,6 +959,44 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
     }
   });
 
+  // Convert host values of other types (e.g. `tensorflow::Tensor`) to
+  // `HostBuffer` with the converter registered for their type. Copy the inputs
+  // only if some input needs converting.
+  std::vector<xla_serving::Value> host_converted_inputs;
+  for (int i = 0; i < inputs.size(); ++i) {
+    const xla_serving::Value& input = inputs[i];
+    if (input.IsType<HostBuffer>() || input.IsType<xla_serving::DeviceBuffer>()) {
+      continue;
+    }
+    std::shared_ptr<const HostBufferConverter> converter =
+        FindHostBufferConverter(input);
+    if (converter == nullptr) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "StableHloRunner inputs must be HostBuffer or xla_serving::DeviceBuffer. "
+          "Input #",
+          i,
+          " is neither, and no HostBuffer converter is registered for its "
+          "type. To pass tensorflow::Tensor inputs, link "
+          "//third_party/neptune/runtime/tensorflow:"
+          "interpreter_tensorflow_support (it registers the TF converter), or "
+          "convert the input to a HostBuffer before calling."));
+    }
+    absl::StatusOr<HostBuffer> host_buffer = converter->Convert(input);
+    if (!host_buffer.ok()) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Failed to convert StableHloRunner input #", i,
+                       " to HostBuffer (converter '", converter->name(),
+                       "'): ", host_buffer.status().message()));
+    }
+    if (host_converted_inputs.empty()) {
+      host_converted_inputs.assign(inputs.begin(), inputs.end());
+    }
+    host_converted_inputs[i] = xla_serving::Value(*std::move(host_buffer));
+  }
+  if (!host_converted_inputs.empty()) {
+    inputs = host_converted_inputs;
+  }
+
   std::vector<xla::ifrt::Shape> input_shapes;
   input_shapes.reserve(inputs.size() + 1);
   std::vector<xla::ifrt::DType> input_dtypes;
@@ -969,13 +1008,10 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
       const auto& host_buf = input.Get<HostBuffer>();
       input_shapes.push_back(host_buf.shape());
       input_dtypes.push_back(host_buf.dtype());
-    } else if (input.IsType<xla_serving::DeviceBuffer>()) {
+    } else {
       const auto& device_buf = input.Get<xla_serving::DeviceBuffer>();
       input_shapes.push_back(device_buf.ifrt_array->shape());
       input_dtypes.push_back(device_buf.ifrt_array->dtype());
-    } else {
-      return absl::InvalidArgumentError(
-          "StableHloRunner inputs must be HostBuffer or xla_serving::DeviceBuffer.");
     }
   }
 
