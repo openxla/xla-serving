@@ -18,6 +18,19 @@ cc_library(
 )
 
 cc_library(
+    name = "shape",
+    testonly = True,
+    hdrs = ["shape.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
+    deps = [
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/types:span",
+        "@xla_serving//data/processor/cc/api:shape",
+    ],
+)
+
+cc_library(
     name = "status_macros",
     testonly = True,
     hdrs = ["status_macros.h"],

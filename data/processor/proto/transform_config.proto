@@ -53,6 +53,18 @@ message TransformConfig {
   DeviceProto device = 6;
 }
 
+// One dimension of a PartialShapeProto.
+message DimProto {
+  // Set with a static size (>= 0) or leave unset for an unknown dimension.
+  // EXPLICIT presence is required to avoid 0 being read as unknown.
+  int64 size = 1 [features.field_presence = EXPLICIT];
+}
+
+// A shape whose rank is known and whose dimensions may be unknown: the
+// serialized form of a PartialShape.
+message PartialShapeProto {
+  repeated DimProto dims = 1;
+}
 
 message ShapeDtypeStructProto {
   repeated int64 shape = 1;

@@ -28,6 +28,24 @@ cc_library(
 )
 
 cc_library(
+    name = "shape",
+    srcs = ["shape.cc"],
+    hdrs = ["shape.h"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
+    deps = [
+        "@abseil-cpp//absl/algorithm:container",
+        "@abseil-cpp//absl/container:inlined_vector",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/types:span",
+        "@xla//xla/python/ifrt",
+        "@xla_serving//data/processor/proto:transform_config_cc_proto",
+    ],
+)
+
+cc_library(
     name = "transform_context",
     hdrs = ["transform_context.h"],
     defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
@@ -73,6 +91,30 @@ cc_test(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/strings:string_view",
         "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "shape_test",
+    srcs = ["shape_test.cc"],
+    defines = [
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS",
+        "ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS",
+    ],
+    deps = [
+        ":shape",
+        "@abseil-cpp//absl/container:flat_hash_set",
+        "@abseil-cpp//absl/hash:hash_testing",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/types:span",
+        "@googletest//:gtest_main",
+        "@xla//xla/python/ifrt",
+        "@xla_serving//data/processor/proto:transform_config_cc_proto",
+        "@xla_serving//data/test_utils:shape",
+        "@xla_serving//data/test_utils:status_macros",
     ],
 )
 
