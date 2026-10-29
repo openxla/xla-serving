@@ -96,18 +96,25 @@ exports_files(
 bazel_dep(name = "rules_ml_toolchain")
 archive_override(
     module_name = "rules_ml_toolchain",
-    integrity = "sha256-Z38HhfFL91M5oxh8un+pXhofiIoYVo7cLl+sh9UT/Hw=",
+    integrity = "sha256-jS+3cXmAQJFifU4JZOQcuH+ZfB9bhnyj7/C+tDSq6QM=",
     patch_strip = 1,
     patches = [
         "//third_party/rules_ml_toolchain:patch_nvcc_wrapper.patch",
     ],
-    strip_prefix = "rules_ml_toolchain-f56a19573fec3543050a5f4bcd9a07a1de08e8ee",
-    urls = ["https://github.com/google-ml-infra/rules_ml_toolchain/archive/f56a19573fec3543050a5f4bcd9a07a1de08e8ee.tar.gz"],
+    strip_prefix = "rules_ml_toolchain-acf23037903eff6359c5bac21379957725fb9dda",
+    urls = ["https://github.com/google-ml-infra/rules_ml_toolchain/archive/acf23037903eff6359c5bac21379957725fb9dda.tar.gz"],
 )
 
-# The XLA dependency and its pinned revision live in a separate file so that the
-# revision can be updated automatically without touching this file.
-include("//third_party/xla:xla.MODULE.bazel")
+# To calculate integrity:
+# curl -sL https://github.com/openxla/xla/archive/<commit>.tar.gz \
+#   | openssl dgst -sha256 -binary | openssl base64 -A
+bazel_dep(name = "xla")
+archive_override(
+    module_name = "xla",
+    integrity = "sha256-Q2T1kZsUKxntBPPXkxpg5f04819l2CUh93O7fjHpbxs=",
+    strip_prefix = "xla-aef971c1f405bf1ddc51c469cf70e00a9ad6f584",
+    urls = ["https://github.com/openxla/xla/archive/aef971c1f405bf1ddc51c469cf70e00a9ad6f584.tar.gz"],
+)
 
 xla_third_party = use_extension("@xla//third_party/extensions:third_party.bzl", "third_party_ext")
 
@@ -130,7 +137,7 @@ override_repo(
 bazel_dep(name = "tensorflow", repo_name = "org_tensorflow")
 archive_override(
     module_name = "tensorflow",
-    integrity = "sha256-UbjfYA4j4P+lCvGwfcEt05e18J8mlJ+PfDePC9zjD94=",
+    integrity = "sha256-2TwlSSpVAnZEkQRRMC9SOjQJt9Ul3KbYTgBhBjx+gFc=",
     patch_strip = 1,
     patches = [
         # Restores the `//tensorflow/core:framework` dep of
@@ -141,8 +148,8 @@ archive_override(
         "//third_party/tensorflow:warmup_framework_dep.patch",
         "//third_party/tensorflow:where_op_gpu.patch",
     ],
-    strip_prefix = "tensorflow-fa441ca48d3262b4938ee2a9ed6d560cdf5f3b13",
-    urls = ["https://github.com/tensorflow/tensorflow/archive/fa441ca48d3262b4938ee2a9ed6d560cdf5f3b13.zip"],
+    strip_prefix = "tensorflow-66c42e61a7df4d29da17a7b4da9e53f3902031ba",
+    urls = ["https://github.com/tensorflow/tensorflow/archive/66c42e61a7df4d29da17a7b4da9e53f3902031ba.zip"],
 )
 
 tf_third_party = use_extension("@org_tensorflow//third_party/extensions:third_party.bzl", "third_party_ext")
