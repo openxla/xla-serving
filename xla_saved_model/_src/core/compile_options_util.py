@@ -76,9 +76,7 @@ def _generate_compilation_options(
       executable_build_options.num_partitions = partition
       device_assignment.computation_count = partition
       executable_build_options.device_assignment.CopyFrom(device_assignment)
-  executable_build_options.use_shardy_partitioner = (
-      jax.config.jax_use_shardy_partitioner
-  )
+  executable_build_options.use_shardy_partitioner = True
   compile_options.executable_build_options.CopyFrom(executable_build_options)
   return compile_options
 
