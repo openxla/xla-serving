@@ -159,7 +159,7 @@ oci_image(
     labels = {
         "org.opencontainers.image.title": "XLA Serving Engine (TPU)",
         "org.opencontainers.image.description": "XLA Serving gRPC server for Cloud TPU with a bundled libtpu PJRT plugin",
-        "org.opencontainers.image.source": "https://github.com/AI-Hypercomputer/xla-serving",
+        "org.opencontainers.image.source": "https://github.com/openxla/xla-serving",
     },
     tags = ["manual"],
     tars = [

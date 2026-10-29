@@ -142,6 +142,6 @@ guides/xsm_cli
 :hidden:
 :caption: Project
 
-GitHub <https://github.com/AI-Hypercomputer/xla-serving>
-Releases <https://github.com/AI-Hypercomputer/xla-serving/releases>
+GitHub <https://github.com/openxla/xla-serving>
+Releases <https://github.com/openxla/xla-serving/releases>
 ```

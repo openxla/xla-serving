@@ -78,7 +78,7 @@ ABSL_FLAG(bool, warmup_server, false,
           "xla_serving::serving::PredictionLog containing PredictRequests. This file "
           "can be generated automatically during model export by passing "
           "`warmup_examples` to `xla_saved_model.save()`. See "
-          "https://github.com/AI-Hypercomputer/xla-serving/blob/main/"
+          "https://github.com/openxla/xla-serving/blob/main/"
           "README.md#server-warmup-on-startup for details.");
 ABSL_FLAG(bool, warmup_all_batch_sizes, false,
           "If true, warms up all allowed batch sizes during server warmup.");

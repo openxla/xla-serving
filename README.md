@@ -96,11 +96,11 @@ example—including an in-process Python runner and a gRPC client—in the
 
 Install `xla-saved-model` with `pip` (until the PyPI package is live, pass
 `--find-links` pointing at the wheels from
-[GitHub Releases](https://github.com/AI-Hypercomputer/xla-serving/releases)):
+[GitHub Releases](https://github.com/openxla/xla-serving/releases)):
 
 ```bash
 gh release download \
-  --repo AI-Hypercomputer/xla-serving \
+  --repo openxla/xla-serving \
   --pattern '*.whl' \
   --dir wheels
 

@@ -12,7 +12,7 @@ description = "XLA SavedModel"
 readme = 'README.md'
 license = {file = 'LICENSE'}
 requires-python = '>=3.10'
-authors = [{name = 'XLA Serving Authors', email='obm-jsv-team@google.com'}]
+authors = [{name = 'XLA Serving Authors', email='xla-serving-team@google.com'}]
 classifiers=[
     'Development Status :: 4 - Beta',
     'Intended Audience :: Developers',
@@ -41,8 +41,8 @@ dependencies = [
 dynamic = ['version']
 
 [project.urls]
-homepage = 'http://github.com/AI-Hypercomputer/xla-serving'
-repository = 'http://github.com/AI-Hypercomputer/xla-serving'
+homepage = 'https://github.com/openxla/xla-serving'
+repository = 'https://github.com/openxla/xla-serving'
 
 [project.scripts]
 xsm-cli = 'xla_saved_model.cli.xsm_cli:run'

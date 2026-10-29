@@ -34,7 +34,7 @@ lowers functions to StableHLO for `cpu`, `cuda`, and `tpu` on any CPU host.
 PyPI publishing for `xla-saved-model`, `xla-saved-model-runner`, and
 `xla-serving-data` is being finalized. Once published, installing the export
 package will be a standard `pip install xla-saved-model`. Until then, download
-the wheel artifacts from [GitHub Releases](https://github.com/AI-Hypercomputer/xla-serving/releases)
+the wheel artifacts from [GitHub Releases](https://github.com/openxla/xla-serving/releases)
 and pass `--find-links wheels` to `pip`.
 :::
 
@@ -45,7 +45,7 @@ python3.12 -m venv .venv
 source .venv/bin/activate
 
 gh release download \
-  --repo AI-Hypercomputer/xla-serving \
+  --repo openxla/xla-serving \
   --pattern '*.whl' \
   --dir wheels
 ```
@@ -144,7 +144,7 @@ To build the C++ server or native wheels from source, you need
 The build downloads a hermetic Clang toolchain.
 
 ```bash
-git clone https://github.com/AI-Hypercomputer/xla-serving
+git clone https://github.com/openxla/xla-serving
 cd xla-serving
 ```
 

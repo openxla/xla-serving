@@ -24,7 +24,7 @@ import pathlib
 import re
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
-_GITHUB_URL = "https://github.com/AI-Hypercomputer/xla-serving"
+_GITHUB_URL = "https://github.com/openxla/xla-serving"
 
 
 def _read_version() -> str:
