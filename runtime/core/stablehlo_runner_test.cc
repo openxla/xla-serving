@@ -34,6 +34,7 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_matchers.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/cord.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
@@ -52,6 +53,7 @@
 #include "runtime/core/device_buffer.h"  // from @xla_serving
 #include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/host_buffer_converter.h"  // from @xla_serving
 #include "runtime/core/host_buffer_matcher.h"  // from @xla_serving
 #include "runtime/core/host_buffer_test_utils.h"  // from @xla_serving
 #include "runtime/core/ifrt_device_utils.h"  // from @xla_serving
@@ -333,7 +335,9 @@ std::shared_ptr<StableHlo> CreateMockStableHloTestHelper(
 
 using ::absl_testing::StatusIs;
 using ::testing::_;
+using ::testing::Eq;
 using ::testing::HasSubstr;
+using ::testing::Optional;
 using ::testing::Return;
 using ::testing::TestWithParam;
 using ::testing::Unused;
@@ -2256,6 +2260,111 @@ TEST_F(StableHloRunnerExecuteOptionsTest, ExecuteWithMixedInputsPasses) {
     EXPECT_THAT(output_values[i].Get<HostBuffer>(),
                 HostBufferEq(expected_outputs[i]));
   }
+}
+
+// A host value type the runner doesn't know, standing in for a framework
+// tensor (e.g. `tensorflow::Tensor`) whose support library registers a
+// `HostBuffer` converter.
+struct FakeHostTensor {
+  HostBuffer buffer;
+};
+
+absl::StatusOr<HostBuffer> ConvertFakeHostTensor(const FakeHostTensor& tensor) {
+  return tensor.buffer;
+}
+
+TEST_F(StableHloRunnerExecuteOptionsTest,
+       ExecuteConvertsInputsWithRegisteredConverter) {
+  TF_ASSERT_OK_AND_ASSIGN(
+      ScopedHostBufferConverterRegistration registration,
+      ScopedHostBufferConverterRegistration::Create<FakeHostTensor>(
+          "fake", ConvertFakeHostTensor));
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHloRunner> runner,
+                          CreateRunner());
+
+  std::vector<Value> input_values;
+  input_values.emplace_back(FakeHostTensor{
+      AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0}, xla::ifrt::Shape({2, 2}))});
+  input_values.emplace_back(
+      AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0,
+                           11.0, 12.0, 13.0, 14.0, 15.0, 16.0},
+                          xla::ifrt::Shape({2, 8})));
+
+  TF_ASSERT_OK_AND_ASSIGN(std::vector<Value> output_values,
+                          runner->Execute(input_values, RunContext{}));
+
+  const auto expected_outputs = std::vector<HostBuffer>{
+      AsHostBuffer<float>(
+          {19, 22, 25, 28, 31, 34, 37, 40, 39, 46, 53, 60, 67, 74, 81, 88},
+          xla::ifrt::Shape({2, 8})),
+      AsHostBuffer<float>(
+          {18, 21, 24, 27, 30, 33, 36, 39, 38, 45, 52, 59, 66, 73, 80, 87},
+          xla::ifrt::Shape({2, 8}))};
+  ASSERT_EQ(output_values.size(), expected_outputs.size());
+  for (int i = 0; i < output_values.size(); ++i) {
+    EXPECT_THAT(output_values[i].Get<HostBuffer>(),
+                HostBufferEq(expected_outputs[i]));
+  }
+  // The caller's input is left as it was.
+  EXPECT_TRUE(input_values[0].IsType<FakeHostTensor>());
+}
+
+TEST_F(StableHloRunnerExecuteOptionsTest, ExecuteRejectsInputWithoutConverter) {
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHloRunner> runner,
+                          CreateRunner());
+
+  std::vector<Value> input_values;
+  input_values.emplace_back(
+      AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0}, xla::ifrt::Shape({2, 2})));
+  input_values.emplace_back(FakeHostTensor{
+      AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0,
+                           11.0, 12.0, 13.0, 14.0, 15.0, 16.0},
+                          xla::ifrt::Shape({2, 8}))});
+
+  EXPECT_THAT(
+      runner->Execute(input_values, RunContext{}),
+      StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          "StableHloRunner inputs must be HostBuffer or xla_serving::DeviceBuffer. "
+          "Input #1 is neither, and no HostBuffer converter is registered for "
+          "its type. To pass tensorflow::Tensor inputs, link "
+          "//third_party/neptune/runtime/tensorflow:"
+          "interpreter_tensorflow_support (it registers the TF converter), or "
+          "convert the input to a HostBuffer before calling."));
+}
+
+TEST_F(StableHloRunnerExecuteOptionsTest, ExecuteReportsConverterError) {
+  TF_ASSERT_OK_AND_ASSIGN(
+      ScopedHostBufferConverterRegistration registration,
+      ScopedHostBufferConverterRegistration::Create<FakeHostTensor>(
+          "broken_fake",
+          [](const FakeHostTensor&) -> absl::StatusOr<HostBuffer> {
+            absl::Status status =
+                absl::FailedPreconditionError("unsupported fake dtype");
+            status.SetPayload("type.googleapis.com/test.Detail",
+                              absl::Cord("detail"));
+            return status;
+          }));
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHloRunner> runner,
+                          CreateRunner());
+
+  std::vector<Value> input_values;
+  input_values.emplace_back(FakeHostTensor{
+      AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0}, xla::ifrt::Shape({2, 2}))});
+  input_values.emplace_back(
+      AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0,
+                           11.0, 12.0, 13.0, 14.0, 15.0, 16.0},
+                          xla::ifrt::Shape({2, 8})));
+
+  // The converter's code and payloads are kept, with context added.
+  const auto outputs = runner->Execute(input_values, RunContext{});
+  EXPECT_THAT(outputs,
+              StatusIs(absl::StatusCode::kFailedPrecondition,
+                       "Failed to convert StableHloRunner input #0 to "
+                       "HostBuffer (converter 'broken_fake'): unsupported "
+                       "fake dtype"));
+  EXPECT_THAT(outputs.status().GetPayload("type.googleapis.com/test.Detail"),
+              Optional(Eq(absl::Cord("detail"))));
 }
 
 TEST_P(StableHloRunnerCreateFailureTest, RunnerCreationFailure) {

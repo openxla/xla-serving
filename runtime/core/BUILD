@@ -309,6 +309,7 @@ cc_library(
         ":device_buffer",
         ":h2d_transfer_executor",
         ":host_buffer",
+        ":host_buffer_converter",
         ":ifrt_loaded_variable_registry",
         ":sharding_utils",
         ":stablehlo",
@@ -327,6 +328,7 @@ cc_library(
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:cord",
         "@abseil-cpp//absl/strings:str_format",
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/types:span",
@@ -445,6 +447,7 @@ cc_library(
         ":device_buffer",
         ":h2d_transfer_executor",
         ":host_buffer",
+        ":host_buffer_converter",
         ":host_buffer_matcher",
         ":host_buffer_test_utils",
         ":ifrt_device_utils",
@@ -464,6 +467,7 @@ cc_library(
         "@abseil-cpp//absl/status:status_matchers",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:cord",
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/types:span",
@@ -544,6 +548,46 @@ cc_library(
         "@xla//xla/tsl/platform:statusor",
         "@xla//xla/tsl/platform:types",
         "@xla_serving//protos/grpc:host_buffer_cc_proto",
+    ],
+)
+
+cc_library(
+    name = "host_buffer_converter",
+    srcs = ["host_buffer_converter.cc"],
+    hdrs = ["host_buffer_converter.h"],
+    visibility = ["@xla_serving//:__subpackages__"],
+    deps = [
+        ":host_buffer",
+        ":value",
+        "@abseil-cpp//absl/algorithm:container",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/base:no_destructor",
+        "@abseil-cpp//absl/functional:any_invocable",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/synchronization",
+    ],
+)
+
+cc_test(
+    name = "host_buffer_converter_test",
+    srcs = ["host_buffer_converter_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":host_buffer",
+        ":host_buffer_converter",
+        ":host_buffer_matcher",
+        ":host_buffer_test_utils",
+        ":value",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings:cord",
+        "@googletest//:gtest_main",
+        "@xla//xla/python/ifrt",
     ],
 )
 

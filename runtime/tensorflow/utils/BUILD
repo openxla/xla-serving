@@ -90,6 +90,45 @@ cc_library(
     ],
 )
 
+# Registers a `tensorflow::Tensor` -> `HostBuffer` converter in the global
+# `HostBufferConverterRegistry`, so StableHLO runners accept `Tensor` inputs.
+cc_library(
+    name = "tf_host_buffer_converter",
+    srcs = ["tf_host_buffer_converter.cc"],
+    hdrs = ["tf_host_buffer_converter.h"],
+    visibility = ["@xla_serving//runtime/tensorflow:__subpackages__"],
+    deps = [
+        ":tf_to_host_buffer",
+        "@abseil-cpp//absl/status:statusor",
+        "@org_tensorflow//tensorflow/core:framework",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/core:host_buffer_converter",
+    ],
+    alwayslink = True,
+)
+
+cc_test(
+    name = "tf_host_buffer_converter_test",
+    srcs = ["tf_host_buffer_converter_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":tf_host_buffer_converter",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@abseil-cpp//absl/status:statusor",
+        "@googletest//:gtest_main",
+        "@org_tensorflow//tensorflow/core:framework",
+        "@org_tensorflow//tensorflow/core:protos_all_cc",
+        "@org_tensorflow//tensorflow/core:testlib",
+        "@xla//xla/python/ifrt",
+        "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/core:host_buffer_converter",
+        "@xla_serving//runtime/core:host_buffer_matcher",
+        "@xla_serving//runtime/core:host_buffer_test_utils",
+        "@xla_serving//runtime/core:value",
+    ],
+)
+
 cc_test(
     name = "tf_to_host_buffer_test",
     srcs = ["tf_to_host_buffer_test.cc"],
