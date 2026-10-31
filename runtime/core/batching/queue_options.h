@@ -167,6 +167,13 @@ struct QueueOptions {
   Allocator* allocator = DefaultAllocator::GetInstance();
 };
 
+// Computes the max_execution_batch_size of a queue based on its options.
+template <typename TaskType>
+size_t GetMaxExecutionBatchSize(const QueueOptions<TaskType>& options) {
+  return options.enable_large_batch_splitting ? options.max_execution_batch_size
+                                              : options.input_batch_size_limit;
+}
+
 }  // namespace xla_serving
 
 #endif  // XLA_SERVING_RUNTIME_CORE_BATCHING_QUEUE_OPTIONS_H_

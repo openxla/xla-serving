@@ -145,22 +145,6 @@ class QueueBase {
 
   bool IsEmptyInternal() const ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
 
-  // Computes the max_execution_batch_size of the queue based on queue options.
-  static size_t GetMaxExecutionBatchSize(
-      const QueueOptions<TaskType>& options) {
-    // If `enable_large_batch_splitting`, returns `max_execution_batch_size`
-    // configured by user options directly; returns `input_batch_size_limit`
-    // otherwise.
-    //
-    // Note `input_batch_size_limit` is used for backward compatibility ->
-    // users may not specify `max_execution_batch_size` explicitly.
-    if (options.enable_large_batch_splitting) {
-      return options.max_execution_batch_size;
-    } else {
-      return options.input_batch_size_limit;
-    }
-  }
-
   const QueueOptions<TaskType> options_;
 
   // The environment to use.
