@@ -42,6 +42,7 @@
 #include "include/dlpack/dlpack.h"  // from @dlpack
 #include "absl/status/status_macros.h"
 #include "include/nanobind/nanobind.h"  // from @nanobind_bazel
+#include "data/processor/cc/api/shape.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
 #include "data/processor/cc/api/value.h"  // from @xla_serving
@@ -580,6 +581,45 @@ py::tuple IfrtShapeToPyTuple(const xla::ifrt::Shape& shape) {
   return py_shape;
 }
 
+// Returns a tuple of `int | None`, with None for an unknown dimension.
+py::tuple PartialShapeToPyTuple(const api::PartialShape& shape) {
+  py::tuple py_shape(shape.dims().size());
+  for (size_t i = 0; i < shape.dims().size(); ++i) {
+    const std::optional<int64_t> size = shape.dims()[i].Value();
+    if (size.has_value()) {
+      py_shape[i] = *size;
+    } else {
+      py_shape[i] = py::none();
+    }
+  }
+  return py_shape;
+}
+
+// Converts a HostBufferSpec shape from Python, a sequence of `int | None` with
+// None for an unknown dimension. Throws ValueError for a negative size, so that
+// a -1 never becomes a size in a PartialShape, and for a shape that is too
+// large.
+api::PartialShape PyShapeToPartialShape(
+    absl::Span<const std::optional<int64_t>> py_shape) {
+  api::PartialShape::Dimensions dims;
+  for (const std::optional<int64_t>& size : py_shape) {
+    api::Dim dim = api::Dim::Unknown();
+    if (size.has_value()) {
+      absl::StatusOr<api::Dim> known = api::Dim::FromSize(*size);
+      if (!known.ok()) {
+        throw py::value_error(std::string(known.status().message()));
+      }
+      dim = *known;
+    }
+    dims.push_back(dim);
+  }
+  absl::StatusOr<api::PartialShape> shape = api::PartialShape::Create(dims);
+  if (!shape.ok()) {
+    throw py::value_error(std::string(shape.status().message()));
+  }
+  return *std::move(shape);
+}
+
 py::object BuildNestedStringList(const tsl::tstring* ptr,
                                  absl::Span<const int64_t> dims, int dim_idx,
                                  int& element_idx) {
@@ -1090,20 +1130,23 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
       .def_readwrite("trace_id", &api::ExecuteMetadata::trace_id);
 
   py::class_<api::HostBufferSpec>(m, "HostBufferSpec")
-      .def(py::init([](py::object dtype_obj, std::vector<int64_t> shape_vec) {
-        auto ifrt_dtype = DtypeToIfRtDTypeWithStrings(dtype_obj);
-        if (!ifrt_dtype.ok()) {
-          throw py::value_error(std::string(ifrt_dtype.status().message()));
-        }
-        xla::ifrt::Shape shape(shape_vec);
-        return api::HostBufferSpec{*ifrt_dtype, shape};
-      }))
+      .def(
+          py::init([](py::object dtype_obj,
+                      const std::vector<std::optional<int64_t>>& shape_vec) {
+            auto ifrt_dtype = DtypeToIfRtDTypeWithStrings(dtype_obj);
+            if (!ifrt_dtype.ok()) {
+              throw py::value_error(std::string(ifrt_dtype.status().message()));
+            }
+            return api::HostBufferSpec{*ifrt_dtype,
+                                       PyShapeToPartialShape(shape_vec)};
+          }),
+          py::arg("dtype"), py::arg("shape"))
       .def_property_readonly("dtype",
                              [](const api::HostBufferSpec& self) {
                                return IfrtDTypeToPyObject(self.dtype);
                              })
       .def_property_readonly("shape", [](const api::HostBufferSpec& self) {
-        return IfrtShapeToPyTuple(self.shape);
+        return PartialShapeToPyTuple(self.shape);
       });
 
   py::class_<api::ShapeInferenceValue>(m, "ShapeInferenceValue")

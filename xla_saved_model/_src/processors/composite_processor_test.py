@@ -247,7 +247,15 @@ class CompositeProcessorTest(parameterized.TestCase):
 
     resource.close()
 
-  def test_from_graph_dynamic_shape_propagation(self):
+  @parameterized.named_parameters(
+      dict(testcase_name="static", shape=(64, 2), expected_shape=(64, 2)),
+      # -1 is an unknown dimension: None in the HostBufferSpec seen by C++,
+      # and None in the exported signature.
+      dict(
+          testcase_name="unknown_dim", shape=(-1, 2), expected_shape=(None, 2)
+      ),
+  )
+  def test_from_graph_dynamic_shape_propagation(self, shape, expected_shape):
     graph = composite_processor_pybind.ExecutionGraph()
     t_add = add_int_transform_pybind.AddIntTransform()
     idx = graph.add_node(
@@ -280,15 +288,15 @@ class CompositeProcessorTest(parameterized.TestCase):
         "from_graph_proc", graph, assets={}
     )
 
-    # Call prepare with dynamic runtime batch size of (64, 2)
+    # Call prepare with a dynamic runtime shape, e.g. a batch size of (64, 2)
     dynamic_input_sig = {
-        "a": jax.ShapeDtypeStruct(shape=(64, 2), dtype=jnp.int32),
-        "b": jax.ShapeDtypeStruct(shape=(64, 2), dtype=jnp.int32),
+        "a": jax.ShapeDtypeStruct(shape=shape, dtype=jnp.int32),
+        "b": jax.ShapeDtypeStruct(shape=shape, dtype=jnp.int32),
     }
     prepared = proc_from_graph.prepare(dynamic_input_sig)
 
-    # Verify output signature dynamically calculated (64, 2) instead of static proto shape ()
-    self.assertEqual(prepared.output_signature["out"].shape, (64, 2))
+    # Verify the output signature is calculated, not the static proto shape ().
+    self.assertEqual(prepared.output_signature["out"].shape, expected_shape)
     self.assertEqual(
         prepared.output_signature["out"].dtype, shlo_type.ShloDType.i32
     )

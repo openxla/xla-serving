@@ -50,6 +50,7 @@ cc_library(
     hdrs = ["transform_context.h"],
     defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
+        ":shape",
         ":value",
         "@abseil-cpp//absl/container:inlined_vector",
         "@abseil-cpp//absl/strings:string_view",

@@ -22,8 +22,6 @@ limitations under the License.
 #include <type_traits>
 #include <utility>
 
-#include "data/kernels/macros.h"  // from @xla_serving
-#include "data/kernels/util/bcast.h"  // from @xla_serving
 #include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_macros.h"
@@ -31,6 +29,8 @@ limitations under the License.
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "data/kernels/macros.h"  // from @xla_serving
+#include "data/kernels/util/bcast.h"  // from @xla_serving
 #include "data/processor/cc/api/registry.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/core/transform.h"  // from @xla_serving
@@ -88,15 +88,17 @@ class ND_EXPORT_SYMBOL BinaryOpShared
       return absl::InvalidArgumentError(
           absl::StrCat(op_name, " inputs must have the same dtype"));
     }
-    BCast bcast(a.shape, b.shape);
+    // TODO: Broadcast partial shapes.
+    ASSIGN_OR_RETURN(const xla::ifrt::Shape a_shape, a.shape.GetStatic());
+    ASSIGN_OR_RETURN(const xla::ifrt::Shape b_shape, b.shape.GetStatic());
+    BCast bcast(a_shape, b_shape);
     if (!bcast.IsValid()) {
       return absl::InvalidArgumentError(absl::StrCat(
           op_name, " inputs are not broadcast-compatible: ", a.shape, " and ",
           b.shape));
     }
-    auto out_spec = a;
-    out_spec.shape = BCast::ToShape(bcast.output_shape());
-    context.outputs.push_back(out_spec);
+    context.outputs.push_back(xla_serving::data::composite::api::HostBufferSpec{
+        a.dtype, BCast::ToShape(bcast.output_shape())});
     return absl::OkStatus();
   }
 };
@@ -121,11 +123,13 @@ class ND_EXPORT_SYMBOL UnaryOpShared
       return absl::InvalidArgumentError(
           absl::StrCat(op_name, " expects tensor inputs"));
     }
-    auto out_spec = context.inputs[0].spec();
+    const auto& in_spec = context.inputs[0].spec();
+    xla::ifrt::DType out_dtype = in_spec.dtype;
     if constexpr (!std::is_void_v<Functor>) {
-      out_spec.dtype = GetUnaryOutputDType<Functor>(out_spec.dtype);
+      out_dtype = GetUnaryOutputDType<Functor>(in_spec.dtype);
     }
-    context.outputs.push_back(out_spec);
+    context.outputs.push_back(xla_serving::data::composite::api::HostBufferSpec{
+        out_dtype, in_spec.shape});
     return absl::OkStatus();
   }
 };
@@ -456,33 +460,35 @@ using UnaryTransformBase = UnaryOp<Derived, Functor>;
 }  // namespace xla_serving::data::kernel
 
 // Registration Macros mirroring TensorFlow's REGISTER_* macros
-#define ND_DECLARE_BINARY_OP(ClassName, FunctorType)                           \
-  class ND_EXPORT_SYMBOL ClassName                                             \
-      : public ::xla_serving::data::kernel::BinaryOp<ClassName, FunctorType> {          \
-   public:                                                                     \
-    static constexpr const char* kOpName = #ClassName;                         \
-    static ::absl::StatusOr<std::unique_ptr<ClassName>> Create() {             \
-      return ::xla_serving::data::kernel::BinaryOp<ClassName, FunctorType>::Create();   \
-    }                                                                          \
-    ::absl::StatusOr<::xla_serving::HostBuffer> operator()(::xla_serving::HostBuffer a,        \
-                                                   ::xla_serving::HostBuffer b) {      \
-      return ::xla_serving::data::kernel::BinaryOp<ClassName, FunctorType>::operator()( \
-          std::move(a), std::move(b));                                         \
-    }                                                                          \
+#define ND_DECLARE_BINARY_OP(ClassName, FunctorType)                       \
+  class ND_EXPORT_SYMBOL ClassName                                         \
+      : public ::xla_serving::data::kernel::BinaryOp<ClassName, FunctorType> { \
+   public:                                                                 \
+    static constexpr const char* kOpName = #ClassName;                     \
+    static ::absl::StatusOr<std::unique_ptr<ClassName>> Create() {         \
+      return ::xla_serving::data::kernel::BinaryOp<ClassName,                  \
+                                               FunctorType>::Create();     \
+    }                                                                      \
+    ::absl::StatusOr<::xla_serving::HostBuffer> operator()(::xla_serving::HostBuffer a,    \
+                                                   ::xla_serving::HostBuffer b) {  \
+      return ::xla_serving::data::kernel::BinaryOp<                            \
+          ClassName, FunctorType>::operator()(std::move(a), std::move(b)); \
+    }                                                                      \
   }
 
-#define ND_DECLARE_UNARY_OP(ClassName, FunctorType)                           \
-  class ND_EXPORT_SYMBOL ClassName                                            \
-      : public ::xla_serving::data::kernel::UnaryOp<ClassName, FunctorType> {          \
-   public:                                                                    \
-    static constexpr const char* kOpName = #ClassName;                        \
-    static ::absl::StatusOr<std::unique_ptr<ClassName>> Create() {            \
-      return ::xla_serving::data::kernel::UnaryOp<ClassName, FunctorType>::Create();   \
-    }                                                                         \
-    ::absl::StatusOr<::xla_serving::HostBuffer> operator()(::xla_serving::HostBuffer a) {     \
-      return ::xla_serving::data::kernel::UnaryOp<ClassName, FunctorType>::operator()( \
-          std::move(a));                                                      \
-    }                                                                         \
+#define ND_DECLARE_UNARY_OP(ClassName, FunctorType)                       \
+  class ND_EXPORT_SYMBOL ClassName                                        \
+      : public ::xla_serving::data::kernel::UnaryOp<ClassName, FunctorType> { \
+   public:                                                                \
+    static constexpr const char* kOpName = #ClassName;                    \
+    static ::absl::StatusOr<std::unique_ptr<ClassName>> Create() {        \
+      return ::xla_serving::data::kernel::UnaryOp<ClassName,                  \
+                                              FunctorType>::Create();     \
+    }                                                                     \
+    ::absl::StatusOr<::xla_serving::HostBuffer> operator()(::xla_serving::HostBuffer a) { \
+      return ::xla_serving::data::kernel::UnaryOp<                            \
+          ClassName, FunctorType>::operator()(std::move(a));              \
+    }                                                                     \
   }
 
 #define ND_REGISTER_BINARY_OP(ClassName, ...)                               \

@@ -37,6 +37,7 @@ pybind_extension(
         "@tsl//tsl/platform:tstring",
         "@xla//xla/python:types",
         "@xla//xla/python/ifrt",
+        "@xla_serving//data/processor/cc/api:shape",
         "@xla_serving//data/processor/cc/api:transform_context",
         "@xla_serving//data/processor/cc/api:type_info",
         "@xla_serving//data/processor/cc/api:value",

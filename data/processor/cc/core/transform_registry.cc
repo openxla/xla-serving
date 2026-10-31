@@ -15,7 +15,9 @@
 #include "data/processor/cc/core/transform_registry.h"  // from @xla_serving
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <typeindex>
@@ -33,6 +35,7 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "data/processor/cc/api/shape.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
 #include "data/processor/cc/api/value.h"  // from @xla_serving
@@ -41,7 +44,6 @@
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
-#include "xla/python/ifrt/shape.h"  // from @xla
 
 namespace xla_serving::data {
 namespace composite {
@@ -64,8 +66,8 @@ absl::Status TransformRegistry::RegisterTransformFactory(
                         " %s",
                         name));
   }
-  existing_creator =
-      std::make_unique<TransformFactoryHolder>(std::move(factory));
+  existing_creator = std::make_unique<TransformFactoryHolder>(
+      std::string(name), std::move(factory));
   library_[std::string(name)].push_back(existing_creator.get());
   auto [name_it, inserted] = type_name_to_holder_.try_emplace(
       type_index.name(), existing_creator.get());
@@ -247,18 +249,24 @@ xla::ifrt::DType GetDType(const api::HostBufferSpec& spec) {
   return spec.dtype;
 }
 
-const xla::ifrt::Shape& GetShape(const xla_serving::HostBuffer& hb) {
-  return hb.shape();
+// The rank, and the size of dimension `d` (nullopt if unknown). A run-time
+// buffer's sizes are always known; a trace-time spec's may not be.
+size_t GetRank(const xla_serving::HostBuffer& hb) { return hb.shape().dims().size(); }
+size_t GetRank(const api::HostBufferSpec& spec) {
+  return spec.shape.dims().size();
 }
-const xla::ifrt::Shape& GetShape(const api::HostBufferSpec& spec) {
-  return spec.shape;
+
+std::optional<int64_t> GetDim(const xla_serving::HostBuffer& hb, size_t d) {
+  return hb.shape().dims()[d];
+}
+std::optional<int64_t> GetDim(const api::HostBufferSpec& spec, size_t d) {
+  return spec.shape.dims()[d].Value();
 }
 
 template <typename Item>
 absl::Status ValidateSingleItem(const Item& item, size_t input_idx,
                                 const InputConstraint& constraint) {
   xla::ifrt::DType dtype = GetDType(item);
-  const xla::ifrt::Shape& shape = GetShape(item);
 
   if (!constraint.allowed_dtypes.empty()) {
     bool allowed = false;
@@ -277,17 +285,21 @@ absl::Status ValidateSingleItem(const Item& item, size_t input_idx,
   }
   if (constraint.expected_shape.has_value()) {
     const auto& expected_shape = *constraint.expected_shape;
-    if (shape.dims().size() != expected_shape.size()) {
+    const size_t rank = GetRank(item);
+    if (rank != expected_shape.size()) {
       return absl::InvalidArgumentError(absl::StrCat(
-          "Input ", input_idx, " has invalid shape. Rank mismatch: ",
-          shape.dims().size(), " vs ", expected_shape.size()));
+          "Input ", input_idx, " has invalid shape. Rank mismatch: ", rank,
+          " vs ", expected_shape.size()));
     }
     for (size_t d = 0; d < expected_shape.size(); ++d) {
-      if (expected_shape[d].has_value() &&
-          shape.dims()[d] != *expected_shape[d]) {
-        return absl::InvalidArgumentError(absl::StrCat(
-            "Input ", input_idx, " has invalid shape at dim ", d, ": ",
-            shape.dims()[d], ". Expected: ", *expected_shape[d]));
+      // An unknown dimension of a spec is accepted at trace time; the buffer
+      // is checked when the transform executes.
+      const std::optional<int64_t> dim = GetDim(item, d);
+      if (expected_shape[d].has_value() && dim.has_value() &&
+          *dim != *expected_shape[d]) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("Input ", input_idx, " has invalid shape at dim ", d,
+                         ": ", *dim, ". Expected: ", *expected_shape[d]));
       }
     }
   }

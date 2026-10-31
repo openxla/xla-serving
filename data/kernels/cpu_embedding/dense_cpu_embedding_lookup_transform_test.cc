@@ -34,10 +34,12 @@
 #include "data/cpu_embedding/cc/embedding_table.h"  // from @xla_serving
 #include "data/cpu_embedding/cc/feature_spec.h"  // from @xla_serving
 #include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @xla_serving
+#include "data/processor/cc/api/shape.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/core/transform.h"  // from @xla_serving
 #include "data/resource_manager/cc/asset.h"  // from @xla_serving
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
+#include "data/test_utils/shape.h"  // from @xla_serving
 #include "data/test_utils/status_macros.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
@@ -241,13 +243,10 @@ TEST(DenseCpuEmbeddingLookupTransformTest, ShapeInference) {
                            /*pad_value=*/0));
 
   api::ShapeInferenceContext context;
-  api::HostBufferSpec spec1;
-  spec1.dtype = xla::ifrt::DType(xla::ifrt::DType::kS32);
-  spec1.shape = xla::ifrt::Shape({64, 4});
-
-  api::HostBufferSpec spec2;
-  spec2.dtype = xla::ifrt::DType(xla::ifrt::DType::kS32);
-  spec2.shape = xla::ifrt::Shape({64, 8});
+  const api::HostBufferSpec spec1{xla::ifrt::DType(xla::ifrt::DType::kS32),
+                                  xla::ifrt::Shape({64, 4})};
+  const api::HostBufferSpec spec2{xla::ifrt::DType(xla::ifrt::DType::kS32),
+                                  xla::ifrt::Shape({64, 8})};
 
   std::vector<api::ShapeInferenceValue> inputs = {
       api::ShapeInferenceValue(spec1), api::ShapeInferenceValue(spec2)};
@@ -256,11 +255,45 @@ TEST(DenseCpuEmbeddingLookupTransformTest, ShapeInference) {
   ASSERT_OK(transform->PropagateSignature(context));
   ASSERT_EQ(context.outputs.size(), 2);
   EXPECT_TRUE(context.outputs[0].IsSpec());
-  EXPECT_EQ(context.outputs[0].spec().shape.dims(),
-            (std::vector<int64_t>{64, 16}));
+  EXPECT_EQ(context.outputs[0].spec().shape, xla::ifrt::Shape({64, 16}));
   EXPECT_TRUE(context.outputs[1].IsSpec());
-  EXPECT_EQ(context.outputs[1].spec().shape.dims(),
-            (std::vector<int64_t>{64, 32}));
+  EXPECT_EQ(context.outputs[1].spec().shape, xla::ifrt::Shape({64, 32}));
+}
+
+TEST(DenseCpuEmbeddingLookupTransformTest, ShapeInferenceWithUnknownBatch) {
+  auto resource = std::make_shared<TestCpuEmbeddingEngineResource>(
+      "engine_res", std::vector<Asset>{}, "CpuEmbeddingEngineResource");
+  resource->RegisterEmbeddingDim("feat1", 16);
+  resource->RegisterEmbeddingDim("feat2", 32);
+
+  ASSERT_OK_AND_ASSIGN(auto transform,
+                       DenseCpuEmbeddingLookupTransform::Create(
+                           resource, std::vector<std::string>{"feat1", "feat2"},
+                           /*pad_value=*/0));
+
+  // An unknown batch dimension is forwarded. A scalar has no batch dimension,
+  // so the output's is unknown.
+  std::vector<api::ShapeInferenceValue> inputs = {
+      api::ShapeInferenceValue(
+          api::HostBufferSpec{xla::ifrt::DType(xla::ifrt::DType::kS32),
+                              test_utils::PartialShapeOrDie(
+                                  {api::Dim::Unknown(), api::Dim::Static(4)})}),
+      api::ShapeInferenceValue(
+          api::HostBufferSpec{xla::ifrt::DType(xla::ifrt::DType::kS32),
+                              api::PartialShape(xla::ifrt::Shape({}))})};
+  api::ShapeInferenceContext context;
+  context.inputs = absl::MakeConstSpan(inputs);
+
+  ASSERT_OK(transform->PropagateSignature(context));
+  ASSERT_EQ(context.outputs.size(), 2);
+  ASSERT_TRUE(context.outputs[0].IsSpec());
+  EXPECT_EQ(context.outputs[0].spec().shape,
+            test_utils::PartialShapeOrDie(
+                {api::Dim::Unknown(), api::Dim::Static(16)}));
+  ASSERT_TRUE(context.outputs[1].IsSpec());
+  EXPECT_EQ(context.outputs[1].spec().shape,
+            test_utils::PartialShapeOrDie(
+                {api::Dim::Unknown(), api::Dim::Static(32)}));
 }
 
 TEST(DenseCpuEmbeddingLookupTransformTest, S64InputDenseLookup) {

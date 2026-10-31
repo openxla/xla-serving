@@ -23,6 +23,7 @@
 #include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "data/processor/cc/api/shape.h"  // from @xla_serving
 #include "data/processor/cc/api/value.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
@@ -37,9 +38,16 @@ struct ExecuteMetadata {
   uint64_t trace_id;
 };
 
+// The trace-time description of a HostBuffer.
 struct HostBufferSpec {
   xla::ifrt::DType dtype = xla::ifrt::DType(xla::ifrt::DType::Kind::kInvalid);
-  xla::ifrt::Shape shape = xla::ifrt::Shape({});
+  // A scalar by default. Dimensions may be unknown; code that needs the static
+  // shape calls `shape.GetStatic()`, which rejects them.
+  PartialShape shape = xla::ifrt::Shape({});
+
+  // Structural, as PartialShape's `==`.
+  friend bool operator==(const HostBufferSpec&,
+                         const HostBufferSpec&) = default;
 };
 
 // Wrapper around HostBufferSpec to cleanly propagate shape validation. This

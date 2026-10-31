@@ -19,6 +19,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -32,6 +33,7 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "data/kernels/bucket_pad/bucket_pad_transform.pb.h"  // from @xla_serving
 #include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/api/shape.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
 #include "data/processor/cc/utils/default_value_utils.h"  // from @xla_serving
@@ -297,8 +299,7 @@ absl::Status BucketPadTransform::PropagateSignatureImpl(
         "BucketPadTransform expected HostBufferSpec input.");
   }
   const auto& in_spec = context.inputs[0].spec();
-  const auto& in_dims = in_spec.shape.dims();
-  int rank = in_dims.size();
+  int rank = in_spec.shape.dims().size();
   if (rank == 0) {
     context.outputs.push_back(in_spec);
     return absl::OkStatus();
@@ -313,24 +314,25 @@ absl::Status BucketPadTransform::PropagateSignatureImpl(
         "Axis ", axis_, " is out of bounds for tensor of rank ", rank));
   }
 
-  std::vector<int64_t> out_dims(in_dims.begin(), in_dims.end());
-  int64_t in_dim = in_dims[norm_axis];
-  if (in_dim > 0) {
+  // The padded dimension is unknown unless the input dimension is known and
+  // positive, and fits in a bucket.
+  api::Dim out_dim = api::Dim::Unknown();
+  const std::optional<int64_t> in_dim = in_spec.shape.dims()[norm_axis].Value();
+  if (in_dim.has_value() && *in_dim > 0) {
     auto it = std::lower_bound(target_dimensions_.begin(),
-                               target_dimensions_.end(), in_dim);
+                               target_dimensions_.end(), *in_dim);
     if (it != target_dimensions_.end()) {
-      out_dims[norm_axis] = *it;
-    } else {
-      out_dims[norm_axis] = -1;
+      ASSIGN_OR_RETURN(out_dim, api::Dim::FromSize(*it));
     }
-  } else {
-    out_dims[norm_axis] = -1;
   }
 
-  api::HostBufferSpec out_spec;
-  out_spec.dtype = in_spec.dtype;
-  out_spec.shape = xla::ifrt::Shape(out_dims);
-  context.outputs.push_back(out_spec);
+  api::PartialShape::Dimensions out_dims(in_spec.shape.dims().begin(),
+                                         in_spec.shape.dims().end());
+  out_dims[norm_axis] = out_dim;
+  ASSIGN_OR_RETURN(api::PartialShape out_shape,
+                   api::PartialShape::Create(out_dims));
+  context.outputs.push_back(
+      api::HostBufferSpec{in_spec.dtype, std::move(out_shape)});
   return absl::OkStatus();
 }
 

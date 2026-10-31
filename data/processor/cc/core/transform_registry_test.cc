@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <thread>
 #include <type_traits>
@@ -34,12 +35,14 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/api/shape.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
 #include "data/processor/cc/api/value.h"  // from @xla_serving
 #include "data/processor/cc/core/transform.h"  // from @xla_serving
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
+#include "data/test_utils/shape.h"  // from @xla_serving
 #include "data/test_utils/status_macros.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
@@ -615,6 +618,93 @@ TEST(TransformBaseTest, PropagateSignature) {
     EXPECT_EQ(status.code(), absl::StatusCode::kInvalidArgument);
     EXPECT_THAT(status.message(), testing::HasSubstr("unsupported dtype: F32"));
   }
+}
+
+// Like ConstrainedDummyTransform, but constrains the shape of its input to
+// [2,*] instead of its dtype.
+class ShapeConstrainedDummyTransform : public TransformBase {
+ public:
+  static absl::StatusOr<std::unique_ptr<TransformBase>> Create() {
+    return std::make_unique<ShapeConstrainedDummyTransform>();
+  }
+  absl::StatusOr<xla_serving::HostBuffer> operator()(xla_serving::HostBuffer a) { return a; }
+  absl::StatusOr<TransformConfig> ToProto() const override {
+    TransformConfig config;
+    config.set_op_name("ShapeConstrainedDummyTransform");
+    return config;
+  }
+  absl::string_view DebugString() const override {
+    return "ShapeConstrainedDummyTransform";
+  }
+
+ protected:
+  absl::Status PropagateSignatureImpl(
+      api::ShapeInferenceContext& context) const override {
+    context.outputs.push_back(context.inputs[0]);
+    return absl::OkStatus();
+  }
+};
+
+ND_REGISTER_TRANSFORM(ShapeConstrainedDummyTransform,
+                      "ShapeConstrainedDummyTransform")
+    .SetDeserializer(
+        [](const TransformConfig& config,
+           absl::Span<const std::shared_ptr<xla_serving::data::Resource>> resources)
+            -> absl::StatusOr<std::unique_ptr<TransformBase>> {
+          return ShapeConstrainedDummyTransform::Create();
+        })
+    .SetInputConstraints(
+        {{.expected_shape = std::vector<std::optional<int64_t>>{
+              2, std::nullopt}}});
+
+absl::Status PropagateSpec(const TransformBase& transform,
+                           api::HostBufferSpec spec) {
+  api::ShapeInferenceContext context;
+  std::vector<api::ShapeInferenceValue> inputs = {
+      api::ShapeInferenceValue(std::move(spec))};
+  context.inputs = inputs;
+  return transform.PropagateSignature(context);
+}
+
+TEST(TransformBaseTest, ExpectedShapeAcceptsUnknownDimsAtTraceTime) {
+  auto transform = TransformBase::FromProto(
+      []() {
+        TransformConfig config;
+        config.set_op_name("ShapeConstrainedDummyTransform");
+        return config;
+      }(),
+      {});
+  ASSERT_OK(transform) << transform.status().message();
+  const xla::ifrt::DType s32(xla::ifrt::DType::Kind::kS32);
+
+  // An unknown dimension may have the expected size at run time.
+  EXPECT_OK(PropagateSpec(
+      **transform, {s32, test_utils::PartialShapeOrDie(
+                             {api::Dim::Unknown(), api::Dim::Static(3)})}));
+  EXPECT_OK(PropagateSpec(**transform, {s32, xla::ifrt::Shape({2, 3})}));
+
+  // A known dimension of another size, or another rank, is still rejected.
+  EXPECT_THAT(
+      PropagateSpec(**transform, {s32, xla::ifrt::Shape({4, 3})}),
+      absl_testing::StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          testing::HasSubstr("has invalid shape at dim 0: 4. Expected: 2")));
+  EXPECT_THAT(
+      PropagateSpec(**transform, {s32, test_utils::PartialShapeOrDie(
+                                           {api::Dim::Unknown()})}),
+      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
+                             testing::HasSubstr("Rank mismatch: 1 vs 2")));
+
+  // At run time every size is known, and checked.
+  api::ExecuteContext context;
+  std::vector<api::Value> inputs = {
+      api::Value(xla_serving::HostBuffer(s32, xla::ifrt::Shape({4, 3})))};
+  context.inputs = inputs;
+  EXPECT_THAT(
+      (*transform)->Execute(context),
+      absl_testing::StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          testing::HasSubstr("has invalid shape at dim 0: 4. Expected: 2")));
 }
 
 template <typename T>

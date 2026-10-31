@@ -28,6 +28,7 @@
 #include "absl/algorithm/container.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_matchers.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "data/cpu_embedding/cc/array.h"  // from @xla_serving
@@ -35,10 +36,12 @@
 #include "data/cpu_embedding/cc/embedding_table.h"  // from @xla_serving
 #include "data/cpu_embedding/cc/feature_spec.h"  // from @xla_serving
 #include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @xla_serving
+#include "data/processor/cc/api/shape.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/api/value.h"  // from @xla_serving
 #include "data/resource_manager/cc/asset.h"  // from @xla_serving
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
+#include "data/test_utils/shape.h"  // from @xla_serving
 #include "data/test_utils/status_macros.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
@@ -48,6 +51,7 @@ namespace xla_serving::data {
 namespace composite {
 namespace {
 
+using ::xla_serving::data::test_utils::PartialShapeOrDie;
 using ::testing::ElementsAre;
 using ::testing::FloatEq;
 
@@ -60,6 +64,31 @@ class TestCpuEmbeddingEngineResource : public CpuEmbeddingEngineResource {
     feature_to_embedding_dim_[std::string(feature_name)] = embedding_dim;
   }
 };
+
+// Propagates the signature of `transform` for `num_features` ids specs of shape
+// `ids_shape`, and returns the output specs.
+absl::StatusOr<api::ShapeInferenceValue::SpecList> PropagateIdsShape(
+    const CpuEmbeddingLookupTransform& transform, size_t num_features,
+    const api::PartialShape& ids_shape) {
+  const std::vector<api::ShapeInferenceValue> inputs = {
+      api::ShapeInferenceValue::SpecList(
+          num_features,
+          api::HostBufferSpec{xla::ifrt::DType(xla::ifrt::DType::Kind::kS64),
+                              ids_shape}),
+      api::ShapeInferenceValue::SpecList(),
+      api::ShapeInferenceValue::SpecList(),
+  };
+  api::ShapeInferenceContext context;
+  context.inputs = inputs;
+  if (absl::Status status = transform.PropagateSignature(context);
+      !status.ok()) {
+    return status;
+  }
+  if (context.outputs.size() != 1 || !context.outputs[0].IsSpecList()) {
+    return absl::InternalError("Expected a single list of specs as output.");
+  }
+  return context.outputs[0].spec_list();
+}
 
 TEST(CpuEmbeddingLookupTransformTest, Execute) {
   // 1. Setup Resource and Engine
@@ -250,7 +279,8 @@ TEST(CpuEmbeddingLookupTransformTest, MultiLookupSuccess) {
   // Verify per-feature dimensions in the grouped signature.
   auto specs = [](xla::ifrt::DType::Kind kind) {
     return api::ShapeInferenceValue::SpecList(
-        2, api::HostBufferSpec{xla::ifrt::DType(kind), xla::ifrt::Shape({-1})});
+        2, api::HostBufferSpec{xla::ifrt::DType(kind),
+                               PartialShapeOrDie({api::Dim::Unknown()})});
   };
   std::vector<api::ShapeInferenceValue> shape_inputs = {
       api::ShapeInferenceValue(specs(xla::ifrt::DType::Kind::kS64)),
@@ -264,8 +294,10 @@ TEST(CpuEmbeddingLookupTransformTest, MultiLookupSuccess) {
   ASSERT_TRUE(shape_context.outputs[0].IsSpecList());
   const auto& output_specs = shape_context.outputs[0].spec_list();
   ASSERT_EQ(output_specs.size(), 2);
-  EXPECT_EQ(output_specs[0].shape, xla::ifrt::Shape({-1, 3}));
-  EXPECT_EQ(output_specs[1].shape, xla::ifrt::Shape({-1, 2}));
+  EXPECT_EQ(output_specs[0].shape,
+            PartialShapeOrDie({api::Dim::Unknown(), api::Dim::Static(3)}));
+  EXPECT_EQ(output_specs[1].shape,
+            PartialShapeOrDie({api::Dim::Unknown(), api::Dim::Static(2)}));
 
   // 3. Prepare Inputs
   // Table A inputs
@@ -1055,6 +1087,82 @@ TEST(CpuEmbeddingLookupTransformTest,
   EXPECT_FALSE(status.ok());
   EXPECT_THAT(std::string(status.message()),
               testing::HasSubstr("is out of bounds [0, 2)"));
+}
+
+TEST(CpuEmbeddingLookupTransformTest,
+     PropagateSignatureReadsNegativeOutputShapeSizeAsUnknown) {
+  auto resource = std::make_shared<TestCpuEmbeddingEngineResource>(
+      "engine_res", std::vector<Asset>{}, "CpuEmbeddingEngineResource");
+  ASSERT_OK_AND_ASSIGN(
+      auto transform,
+      CpuEmbeddingLookupTransform::Create(
+          resource, std::vector<std::string>{"feature1", "feature2"},
+          /*dense_lookup=*/false, /*output_feature_names=*/{},
+          /*embedding_dim=*/128, /*output_shapes=*/{{-1, 4}, {2, 5}}));
+
+  ASSERT_OK_AND_ASSIGN(
+      auto specs, PropagateIdsShape(*transform, /*num_features=*/2,
+                                    PartialShapeOrDie({api::Dim::Unknown()})));
+  ASSERT_EQ(specs.size(), 2);
+  EXPECT_EQ(specs[0].shape,
+            PartialShapeOrDie({api::Dim::Unknown(), api::Dim::Static(4)}));
+  EXPECT_EQ(specs[1].shape, xla::ifrt::Shape({2, 5}));
+}
+
+TEST(CpuEmbeddingLookupTransformTest, PropagateSignatureForwardsIdsDim1) {
+  auto resource = std::make_shared<TestCpuEmbeddingEngineResource>(
+      "engine_res", std::vector<Asset>{}, "CpuEmbeddingEngineResource");
+  resource->RegisterEmbeddingDim("feature1", 3);
+  ASSERT_OK_AND_ASSIGN(auto transform,
+                       CpuEmbeddingLookupTransform::Create(
+                           resource, std::vector<std::string>{"feature1"}));
+
+  // An unknown dimension 1 of the ids is forwarded as is.
+  ASSERT_OK_AND_ASSIGN(
+      auto specs, PropagateIdsShape(*transform, /*num_features=*/1,
+                                    PartialShapeOrDie({api::Dim::Static(4),
+                                                       api::Dim::Unknown()})));
+  ASSERT_EQ(specs.size(), 1);
+  EXPECT_EQ(specs[0].shape,
+            PartialShapeOrDie({api::Dim::Unknown(), api::Dim::Unknown(),
+                               api::Dim::Static(3)}));
+
+  // So is a known one.
+  ASSERT_OK_AND_ASSIGN(specs, PropagateIdsShape(*transform, /*num_features=*/1,
+                                                xla::ifrt::Shape({4, 7})));
+  ASSERT_EQ(specs.size(), 1);
+  EXPECT_EQ(specs[0].shape,
+            PartialShapeOrDie({api::Dim::Unknown(), api::Dim::Static(7),
+                               api::Dim::Static(3)}));
+}
+
+TEST(CpuEmbeddingLookupTransformTest,
+     DensePropagateSignatureForwardsIdsDim1OfRank3Ids) {
+  auto resource = std::make_shared<TestCpuEmbeddingEngineResource>(
+      "engine_res", std::vector<Asset>{}, "CpuEmbeddingEngineResource");
+  resource->RegisterEmbeddingDim("feature1", 3);
+  ASSERT_OK_AND_ASSIGN(auto transform,
+                       CpuEmbeddingLookupTransform::Create(
+                           resource, std::vector<std::string>{"feature1"},
+                           /*dense_lookup=*/true));
+
+  // Dense rank 2 ids are [batch, valency]: the valency is not forwarded.
+  ASSERT_OK_AND_ASSIGN(auto specs,
+                       PropagateIdsShape(*transform, /*num_features=*/1,
+                                         xla::ifrt::Shape({4, 7})));
+  ASSERT_EQ(specs.size(), 1);
+  EXPECT_EQ(specs[0].shape,
+            PartialShapeOrDie({api::Dim::Unknown(), api::Dim::Static(3)}));
+
+  ASSERT_OK_AND_ASSIGN(
+      specs, PropagateIdsShape(
+                 *transform, /*num_features=*/1,
+                 PartialShapeOrDie({api::Dim::Static(4), api::Dim::Unknown(),
+                                    api::Dim::Static(2)})));
+  ASSERT_EQ(specs.size(), 1);
+  EXPECT_EQ(specs[0].shape,
+            PartialShapeOrDie({api::Dim::Unknown(), api::Dim::Unknown(),
+                               api::Dim::Static(3)}));
 }
 }  // namespace
 }  // namespace composite

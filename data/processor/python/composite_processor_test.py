@@ -1078,6 +1078,59 @@ class CompositeProcessorTest(absltest.TestCase):
     self.assertEqual(specs[1].shape, (4, 5))
     self.assertEqual(specs[1].dtype, np.dtype(np.complex64))
 
+  def test_host_buffer_spec_unknown_dims(self):
+    spec = composite_processor_pybind.HostBufferSpec(
+        np.dtype(np.int32), [None, 3]
+    )
+    self.assertEqual(spec.shape, (None, 3))
+
+    spec = composite_processor_pybind.HostBufferSpec(np.dtype(np.int32), [])
+    self.assertEqual(spec.shape, ())
+
+  def test_host_buffer_spec_invalid_shape(self):
+    # A negative size is never read as an unknown dimension: that is None.
+    with self.assertRaisesRegex(
+        ValueError, "Expected a non-negative size, got -1"
+    ):
+      composite_processor_pybind.HostBufferSpec(np.dtype(np.int32), [-1])
+
+    with self.assertRaisesRegex(ValueError, "is too large"):
+      composite_processor_pybind.HostBufferSpec(
+          np.dtype(np.int32), [2**32, None, 2**32]
+      )
+
+  def test_shape_inference_value_unknown_dim(self):
+    spec1 = composite_processor_pybind.HostBufferSpec(
+        np.dtype(np.int64), [None, 3]
+    )
+    spec2 = composite_processor_pybind.HostBufferSpec(np.dtype(np.int64), [2])
+
+    val_single = composite_processor_pybind.ShapeInferenceValue(spec1)
+    self.assertEqual(val_single.spec().shape, (None, 3))
+
+    val_list = composite_processor_pybind.ShapeInferenceValue([spec1, spec2])
+    specs = val_list.spec_list()
+    self.assertLen(specs, 2)
+    self.assertEqual(specs[0].shape, (None, 3))
+    self.assertEqual(specs[1].shape, (2,))
+
+  def test_propagate_signature_unknown_dim(self):
+    transform = add_int_transform_pybind.AddIntTransform()
+    spec = composite_processor_pybind.HostBufferSpec(
+        np.dtype(np.int32), [None, 3]
+    )
+    context = composite_processor_pybind.ShapeInferenceContext()
+    context.inputs = [
+        composite_processor_pybind.ShapeInferenceValue(spec),
+        composite_processor_pybind.ShapeInferenceValue(spec),
+    ]
+
+    transform.propagate_signature(context)
+
+    self.assertLen(context.outputs, 1)
+    self.assertEqual(context.outputs[0].spec().shape, (None, 3))
+    self.assertEqual(context.outputs[0].spec().dtype, np.dtype(np.int32))
+
 
 if __name__ == "__main__":
   absltest.main()

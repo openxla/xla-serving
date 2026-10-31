@@ -34,6 +34,7 @@
 #include "data/kernels/cpu_embedding/cpu_embedding.pb.h"  // from @xla_serving
 #include "data/kernels/cpu_embedding/cpu_embedding_resource.h"  // from @xla_serving
 #include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/api/shape.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/core/transform.h"  // from @xla_serving
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
@@ -356,14 +357,19 @@ absl::Status CpuEmbeddingLookupTransform::PropagateSignatureImpl(
   std::vector<api::HostBufferSpec> output_specs;
   output_specs.reserve(feature_names_.size());
 
-  constexpr int64_t kDynamicDimension = -1;
   for (size_t i = 0; i < feature_names_.size(); ++i) {
-    std::vector<int64_t> output_dims;
+    api::PartialShape::Dimensions output_dims;
 
     if (i < output_shapes_.size() && !output_shapes_[i].empty()) {
       output_dims.reserve(output_shapes_[i].size());
+      // The config encodes a dynamic dimension as a negative size.
       for (int64_t d : output_shapes_[i]) {
-        output_dims.push_back(d < 0 ? kDynamicDimension : d);
+        if (d < 0) {
+          output_dims.push_back(api::Dim::Unknown());
+          continue;
+        }
+        ASSIGN_OR_RETURN(const api::Dim dim, api::Dim::FromSize(d));
+        output_dims.push_back(dim);
       }
     } else {
       int64_t embedding_dim = embedding_dim_;
@@ -374,20 +380,25 @@ absl::Status CpuEmbeddingLookupTransform::PropagateSignatureImpl(
       } else if (resource_dim.status().code() != absl::StatusCode::kNotFound) {
         return resource_dim.status();
       }
-      output_dims.push_back(kDynamicDimension);
+      // The first dimension is always dynamic.
+      output_dims.push_back(api::Dim::Unknown());
 
       if (i < ids_specs.size()) {
-        absl::Span<const int64_t> id_dims = ids_specs[i].shape.dims();
+        absl::Span<const api::Dim> id_dims = ids_specs[i].shape.dims();
         if (id_dims.size() == 3 || (id_dims.size() == 2 && !dense_lookup_)) {
           output_dims.push_back(id_dims[1]);
         }
       }
-      output_dims.push_back(embedding_dim);
+      ASSIGN_OR_RETURN(const api::Dim embedding_size,
+                       api::Dim::FromSize(embedding_dim));
+      output_dims.push_back(embedding_size);
     }
+    ASSIGN_OR_RETURN(api::PartialShape output_shape,
+                     api::PartialShape::Create(output_dims));
 
-    output_specs.push_back(api::HostBufferSpec(
-        xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
-        xla::ifrt::Shape(absl::MakeConstSpan(output_dims))));
+    output_specs.push_back(
+        api::HostBufferSpec(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+                            std::move(output_shape)));
   }
 
   context.outputs.push_back(api::ShapeInferenceValue(std::move(output_specs)));

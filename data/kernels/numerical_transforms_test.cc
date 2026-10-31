@@ -10,15 +10,19 @@
 #include <utility>
 #include <vector>
 
-#include "data/kernels/math/reduction_ops_common.h"  // from @xla_serving
-#include "data/kernels/math/scan_ops.h"  // from @xla_serving
-#include "data/kernels/test_utils.h"  // from @xla_serving
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_macros.h"
+#include "absl/status/status_matchers.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "Eigen/Core"
+#include "data/kernels/math/reduction_ops_common.h"  // from @xla_serving
+#include "data/kernels/math/scan_ops.h"  // from @xla_serving
+#include "data/kernels/test_utils.h"  // from @xla_serving
+#include "data/processor/cc/api/shape.h"  // from @xla_serving
+#include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/test_utils/shape.h"  // from @xla_serving
 #include "data/test_utils/status_macros.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
@@ -28,6 +32,13 @@
 namespace xla_serving::data::kernel {
 namespace {
 
+using ::absl_testing::StatusIs;
+using ::xla_serving::data::composite::api::Dim;
+using ::xla_serving::data::composite::api::HostBufferSpec;
+using ::xla_serving::data::composite::api::ShapeInferenceContext;
+using ::xla_serving::data::composite::api::ShapeInferenceValue;
+using ::xla_serving::data::test_utils::PartialShapeOrDie;
+using ::testing::HasSubstr;
 using ::xla::ifrt::DType;
 using ::xla::ifrt::Shape;
 
@@ -720,6 +731,65 @@ TEST(NumericalTransformsTest, MatMulTransformFloat32) {
   // [1 2] * [2 0] = [4 4]
   // [3 4]   [1 2]   [10 8]
   EXPECT_EQ(GetData<float>(out), std::vector<float>({4.0f, 4.0f, 10.0f, 8.0f}));
+}
+
+TEST(NumericalTransformsTest, MatMulTransformPropagateSignature) {
+  auto transform = MatMulTransform::Create().value();
+  const std::vector<ShapeInferenceValue> inputs = {
+      HostBufferSpec{DType(DType::kF32), Shape({2, 3})},
+      HostBufferSpec{DType(DType::kF32), Shape({3, 4})},
+  };
+  ShapeInferenceContext context;
+  context.inputs = inputs;
+
+  ASSERT_OK(transform->PropagateSignature(context));
+  ASSERT_EQ(context.outputs.size(), 1);
+  EXPECT_EQ(context.outputs[0].spec().shape, Shape({2, 4}));
+}
+
+TEST(NumericalTransformsTest, MatMulTransformForwardsUnknownDimensions) {
+  auto transform = MatMulTransform::Create().value();
+  // The outer dimensions are forwarded; an unknown inner one is accepted.
+  const std::vector<ShapeInferenceValue> inputs = {
+      HostBufferSpec{DType(DType::kF32),
+                     PartialShapeOrDie({Dim::Unknown(), Dim::Unknown()})},
+      HostBufferSpec{DType(DType::kF32), Shape({3, 4})},
+  };
+  ShapeInferenceContext context;
+  context.inputs = inputs;
+  ASSERT_OK(transform->PropagateSignature(context));
+  ASSERT_EQ(context.outputs.size(), 1);
+  EXPECT_EQ(context.outputs[0].spec().shape,
+            PartialShapeOrDie({Dim::Unknown(), Dim::Static(4)}));
+
+  // Known inner dimensions must match.
+  const std::vector<ShapeInferenceValue> mismatched = {
+      HostBufferSpec{DType(DType::kF32),
+                     PartialShapeOrDie({Dim::Unknown(), Dim::Static(2)})},
+      HostBufferSpec{DType(DType::kF32), Shape({3, 4})},
+  };
+  ShapeInferenceContext mismatched_context;
+  mismatched_context.inputs = mismatched;
+  EXPECT_THAT(transform->PropagateSignature(mismatched_context),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Inner dimensions must match for MatMul. Got "
+                                 "2 and 3")));
+}
+
+TEST(NumericalTransformsTest, MatMulTransformRejectsTooLargeOutput) {
+  auto transform = MatMulTransform::Create().value();
+  constexpr int64_t kBig = int64_t{1} << 40;
+  const std::vector<ShapeInferenceValue> inputs = {
+      HostBufferSpec{DType(DType::kF32), Shape({kBig, 1})},
+      HostBufferSpec{DType(DType::kF32), Shape({1, kBig})},
+  };
+  ShapeInferenceContext context;
+  context.inputs = inputs;
+
+  // The output would have 2**80 entries.
+  EXPECT_THAT(
+      transform->PropagateSignature(context),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("too large")));
 }
 
 TEST(NumericalTransformsTest, LogTransformEdgeCases) {
@@ -1907,6 +1977,37 @@ TEST(NumericalTransformsTest, Reduce4DAlternatingAxesAndInvalidAxes) {
   EXPECT_FALSE(dup_status.ok());
   EXPECT_THAT(dup_status.message(),
               testing::HasSubstr("Axes contains duplicate dimension"));
+}
+
+TEST(NumericalTransformsTest, ReduceSumTransformPropagateSignature) {
+  ASSERT_OK_AND_ASSIGN(auto sum_t,
+                       ReduceSumTransform::Create(std::vector<int64_t>{1}));
+  const std::vector<ShapeInferenceValue> inputs = {
+      HostBufferSpec{DType(DType::kF32), Shape({2, 3})},
+  };
+  ShapeInferenceContext context;
+  context.inputs = inputs;
+
+  ASSERT_OK(sum_t->PropagateSignature(context));
+  ASSERT_EQ(context.outputs.size(), 1);
+  EXPECT_EQ(context.outputs[0].spec().shape, Shape({2}));
+}
+
+TEST(NumericalTransformsTest, ReduceSumTransformRejectsUnknownDimension) {
+  ASSERT_OK_AND_ASSIGN(auto sum_t,
+                       ReduceSumTransform::Create(std::vector<int64_t>{1}));
+  const std::vector<ShapeInferenceValue> inputs = {
+      HostBufferSpec{DType(DType::kF32),
+                     PartialShapeOrDie({Dim::Unknown(), Dim::Static(3)})},
+  };
+  ShapeInferenceContext context;
+  context.inputs = inputs;
+
+  // The error names the transform.
+  EXPECT_THAT(sum_t->PropagateSignature(context),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("ReduceSumTransform: Shape [?,3] is not fully "
+                                 "known: dimension 0 is unknown")));
 }
 
 TEST(NumericalTransformsTest, MaximumMinimumTransforms) {

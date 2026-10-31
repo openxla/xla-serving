@@ -186,8 +186,11 @@ class TransformFactoryHolder {
   using ExecutorFunc = absl::AnyInvocable<absl::Status(
       TransformBase*, api::ExecuteContext&) const>;
 
-  explicit TransformFactoryHolder(TransformFactory factory)
-      : factory_(std::move(factory)) {}
+  TransformFactoryHolder(std::string name, TransformFactory factory)
+      : name_(std::move(name)), factory_(std::move(factory)) {}
+
+  // The name the transform was registered with.
+  absl::string_view name() const { return name_; }
 
   std::unique_ptr<TransformBase> CreateTransform(
       const std::vector<api::Value>& args) const {
@@ -250,6 +253,7 @@ class TransformFactoryHolder {
       absl::Span<const api::ShapeInferenceValue> inputs) const;
 
  private:
+  std::string name_;
   absl_nonnull TransformFactory factory_;
   absl_nullable TransformDeserializer deserializer_;
   absl_nullable ExecutorFunc executor_;

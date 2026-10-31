@@ -23,13 +23,16 @@
 #include "gtest/gtest.h"
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_matchers.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "data/kernels/bucket_pad/bucket_pad_transform.pb.h"  // from @xla_serving
+#include "data/processor/cc/api/shape.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/api/value.h"  // from @xla_serving
 #include "data/processor/cc/core/transform.h"  // from @xla_serving
 #include "data/processor/cc/utils/default_value.pb.h"  // from @xla_serving
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
+#include "data/test_utils/shape.h"  // from @xla_serving
 #include "data/test_utils/status_macros.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
@@ -39,6 +42,7 @@ namespace xla_serving::data::composite::transforms {
 namespace {
 
 using ::absl_testing::StatusIs;
+using ::xla_serving::data::test_utils::PartialShapeOrDie;
 
 TEST(BucketPadTransformTest, Basic2DPadSuccess) {
   // Buckets: [4, 8, 16]. Input shape: [2, 3] -> Expect: [2, 4]
@@ -199,9 +203,8 @@ TEST(BucketPadTransformTest, ShapeInference) {
       BucketPadTransform::Create(/*target_dimensions=*/{16, 32}, /*axis=*/1));
 
   api::ShapeInferenceContext context;
-  api::HostBufferSpec in_spec;
-  in_spec.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32);
-  in_spec.shape = xla::ifrt::Shape({64, 10});
+  const api::HostBufferSpec in_spec{xla::ifrt::DType(xla::ifrt::DType::kF32),
+                                    xla::ifrt::Shape({64, 10})};
   std::vector<api::ShapeInferenceValue> inputs = {
       api::ShapeInferenceValue(in_spec)};
   context.inputs = absl::MakeConstSpan(inputs);
@@ -209,8 +212,79 @@ TEST(BucketPadTransformTest, ShapeInference) {
   ASSERT_OK(transform->PropagateSignature(context));
   ASSERT_EQ(context.outputs.size(), 1);
   EXPECT_TRUE(context.outputs[0].IsSpec());
-  EXPECT_EQ(context.outputs[0].spec().shape.dims(),
-            (std::vector<int64_t>{64, 16}));
+  EXPECT_EQ(context.outputs[0].spec().shape, xla::ifrt::Shape({64, 16}));
+}
+
+// Propagates the signature of `transform` for an f32 input of shape `shape`.
+absl::StatusOr<api::HostBufferSpec> PropagateShape(
+    const BucketPadTransform& transform, const api::PartialShape& shape) {
+  const std::vector<api::ShapeInferenceValue> inputs = {
+      api::HostBufferSpec{xla::ifrt::DType(xla::ifrt::DType::kF32), shape}};
+  api::ShapeInferenceContext context;
+  context.inputs = absl::MakeConstSpan(inputs);
+  if (absl::Status status = transform.PropagateSignature(context);
+      !status.ok()) {
+    return status;
+  }
+  if (context.outputs.size() != 1 || !context.outputs[0].IsSpec()) {
+    return absl::InternalError("Expected a single spec as output.");
+  }
+  return context.outputs[0].spec();
+}
+
+TEST(BucketPadTransformTest, ShapeInferenceWithUnknownPaddedDimension) {
+  ASSERT_OK_AND_ASSIGN(
+      auto transform,
+      BucketPadTransform::Create(/*target_dimensions=*/{16, 32}, /*axis=*/1));
+
+  ASSERT_OK_AND_ASSIGN(
+      api::HostBufferSpec out_spec,
+      PropagateShape(*transform, PartialShapeOrDie({api::Dim::Static(64),
+                                                    api::Dim::Unknown()})));
+  EXPECT_EQ(out_spec.dtype, xla::ifrt::DType(xla::ifrt::DType::kF32));
+  EXPECT_EQ(out_spec.shape,
+            PartialShapeOrDie({api::Dim::Static(64), api::Dim::Unknown()}));
+}
+
+TEST(BucketPadTransformTest, ShapeInferenceForwardsUnknownUnpaddedDimension) {
+  ASSERT_OK_AND_ASSIGN(
+      auto transform,
+      BucketPadTransform::Create(/*target_dimensions=*/{16, 32}, /*axis=*/-1));
+
+  ASSERT_OK_AND_ASSIGN(
+      api::HostBufferSpec out_spec,
+      PropagateShape(*transform, PartialShapeOrDie({api::Dim::Unknown(),
+                                                    api::Dim::Static(10)})));
+  EXPECT_EQ(out_spec.shape,
+            PartialShapeOrDie({api::Dim::Unknown(), api::Dim::Static(16)}));
+}
+
+TEST(BucketPadTransformTest, ShapeInferenceBeyondLargestBucketIsUnknown) {
+  ASSERT_OK_AND_ASSIGN(
+      auto transform,
+      BucketPadTransform::Create(/*target_dimensions=*/{16, 32}, /*axis=*/1));
+
+  ASSERT_OK_AND_ASSIGN(api::HostBufferSpec out_spec,
+                       PropagateShape(*transform, xla::ifrt::Shape({64, 40})));
+  EXPECT_EQ(out_spec.shape,
+            PartialShapeOrDie({api::Dim::Static(64), api::Dim::Unknown()}));
+
+  // So is a padded dimension of size 0.
+  ASSERT_OK_AND_ASSIGN(out_spec,
+                       PropagateShape(*transform, xla::ifrt::Shape({64, 0})));
+  EXPECT_EQ(out_spec.shape,
+            PartialShapeOrDie({api::Dim::Static(64), api::Dim::Unknown()}));
+}
+
+TEST(BucketPadTransformTest, ShapeInferenceForwardsScalar) {
+  ASSERT_OK_AND_ASSIGN(
+      auto transform,
+      BucketPadTransform::Create(/*target_dimensions=*/{16}, /*axis=*/0));
+
+  ASSERT_OK_AND_ASSIGN(
+      api::HostBufferSpec out_spec,
+      PropagateShape(*transform, api::PartialShape(xla::ifrt::Shape({}))));
+  EXPECT_EQ(out_spec.shape, api::PartialShape(xla::ifrt::Shape({})));
 }
 
 TEST(BucketPadTransformTest, RejectInvalidDimensions) {

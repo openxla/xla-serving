@@ -3,15 +3,18 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "Eigen/Core"
 #include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/api/shape.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/core/transform.h"  // from @xla_serving
 #include "data/processor/cc/core/transform_registry.h"  // from @xla_serving
@@ -27,7 +30,9 @@ namespace {
 using ::xla_serving::data::Resource;
 using ::xla_serving::data::composite::TransformBase;
 using ::xla_serving::data::composite::TransformConfig;
+using ::xla_serving::data::composite::api::Dim;
 using ::xla_serving::data::composite::api::HostBufferSpec;
+using ::xla_serving::data::composite::api::PartialShape;
 using ::xla_serving::data::composite::api::ShapeInferenceContext;
 
 }  // namespace
@@ -112,15 +117,17 @@ absl::Status MatMulTransform::PropagateSignatureImpl(
   if (a.shape.dims().size() != 2 || b.shape.dims().size() != 2) {
     return absl::InvalidArgumentError("Inputs must be 2D matrices");
   }
-  int64_t M = a.shape.dims()[0];
-  int64_t K = a.shape.dims()[1];
-  if (b.shape.dims()[0] != K) {
+  // The outer dimensions are forwarded, unknown ones included. The inner ones
+  // must be compatible; Execute checks the sizes.
+  if (!Dim::Merge(a.shape.dims()[1], b.shape.dims()[0]).ok()) {
     return absl::InvalidArgumentError(
-        absl::StrCat("Inner dimensions must match for MatMul. Got ", K, " and ",
-                     b.shape.dims()[0]));
+        absl::StrCat("Inner dimensions must match for MatMul. Got ",
+                     a.shape.dims()[1], " and ", b.shape.dims()[0]));
   }
-  int64_t N = b.shape.dims()[1];
-  context.outputs.push_back(HostBufferSpec{a.dtype, xla::ifrt::Shape({M, N})});
+  ASSIGN_OR_RETURN(
+      PartialShape out_shape,
+      PartialShape::Create({a.shape.dims()[0], b.shape.dims()[1]}));
+  context.outputs.push_back(HostBufferSpec{a.dtype, std::move(out_shape)});
   return absl::OkStatus();
 }
 

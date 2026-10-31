@@ -81,6 +81,26 @@ def _proto_to_tree(proto: transform_config_pb2.PyTreeProto) -> Any:
     raise ValueError(f"Unknown node type: {proto.type}")
 
 
+def _to_spec_shape(shape: Sequence[int | None]) -> list[int | None]:
+  """Returns a JAX-level signature shape as a HostBufferSpec shape.
+
+  Args:
+    shape: The sizes, in which None or a negative size is an unknown dimension.
+
+  Returns:
+    The sizes, with None for each unknown dimension, so that the C++ shape
+    functions never see a -1.
+  """
+  return [d if (d is not None and d >= 0) else None for d in shape]
+
+
+def _to_jax_shape(spec_shape: Sequence[int | None]) -> tuple[int, ...]:
+  """Returns a HostBufferSpec shape as a JAX-level signature shape."""
+  # jax.ShapeDtypeStruct rejects None, and neptune's JAX-level signatures use -1
+  # for an unknown dimension (type_conversions maps negative sizes to None).
+  return tuple(-1 if d is None else d for d in spec_shape)
+
+
 def _propagate_pybind_signature(
     composite_processor: composite_processor_pybind.CompositeProcessor,
     output_structure_proto: transform_config_pb2.PyTreeProto,
@@ -92,7 +112,7 @@ def _propagate_pybind_signature(
     if isinstance(leaf, (list, tuple)):
       specs = [
           composite_processor_pybind.HostBufferSpec(
-              item.dtype, list(item.shape)
+              item.dtype, _to_spec_shape(item.shape)
           )
           for item in leaf
       ]
@@ -101,7 +121,7 @@ def _propagate_pybind_signature(
       )
     else:
       spec = composite_processor_pybind.HostBufferSpec(
-          leaf.dtype, list(leaf.shape)
+          leaf.dtype, _to_spec_shape(leaf.shape)
       )
       pybind_inputs.append(composite_processor_pybind.ShapeInferenceValue(spec))
 
@@ -112,12 +132,16 @@ def _propagate_pybind_signature(
   def _to_shape_dtype_struct(val):
     if val.is_spec_list():
       return [
-          jax.ShapeDtypeStruct(shape=spec.shape, dtype=spec.dtype)
+          jax.ShapeDtypeStruct(
+              shape=_to_jax_shape(spec.shape), dtype=spec.dtype
+          )
           for spec in val.spec_list()
       ]
     else:
       spec = val.spec()
-      return jax.ShapeDtypeStruct(shape=spec.shape, dtype=spec.dtype)
+      return jax.ShapeDtypeStruct(
+          shape=_to_jax_shape(spec.shape), dtype=spec.dtype
+      )
 
   flat_outputs = [_to_shape_dtype_struct(val) for val in context.outputs]
   output_structure = _proto_to_tree(output_structure_proto)

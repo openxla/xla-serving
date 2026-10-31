@@ -35,6 +35,7 @@
 #include "data/kernels/cpu_embedding/dense_cpu_embedding_lookup.pb.h"  // from @xla_serving
 #include "data/kernels/cpu_embedding/safe_int_utils.h"  // from @xla_serving
 #include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/api/shape.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
 #include "data/processor/cc/core/transform.h"  // from @xla_serving
@@ -344,13 +345,16 @@ absl::Status DenseCpuEmbeddingLookupTransform::PropagateSignatureImpl(
     const auto& ids_spec = context.inputs[f].spec();
     ASSIGN_OR_RETURN(int32_t embedding_dim,
                      resource_->GetEmbeddingDim(feature_names_[f]));
-    int64_t batch_size =
-        ids_spec.shape.dims().empty() ? -1 : ids_spec.shape.dims()[0];
+    const api::Dim batch_size = ids_spec.shape.dims().empty()
+                                    ? api::Dim::Unknown()
+                                    : ids_spec.shape.dims()[0];
+    ASSIGN_OR_RETURN(const api::Dim embedding_size,
+                     api::Dim::FromSize(embedding_dim));
+    ASSIGN_OR_RETURN(api::PartialShape out_shape,
+                     api::PartialShape::Create({batch_size, embedding_size}));
 
-    std::vector<int64_t> out_dims = {batch_size, embedding_dim};
-    context.outputs.push_back(api::ShapeInferenceValue(
-        api::HostBufferSpec{xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
-                            xla::ifrt::Shape(absl::MakeConstSpan(out_dims))}));
+    context.outputs.push_back(api::ShapeInferenceValue(api::HostBufferSpec{
+        xla::ifrt::DType(xla::ifrt::DType::Kind::kF32), std::move(out_shape)}));
   }
   return absl::OkStatus();
 }

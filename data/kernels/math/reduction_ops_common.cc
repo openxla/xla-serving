@@ -22,9 +22,6 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
-#include "data/kernels/macros.h"  // from @xla_serving
-#include "data/kernels/math/reduction_ops.h"  // from @xla_serving
-#include "data/kernels/math/reduction_transform_config.pb.h"  // from @xla_serving
 #include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/memory/memory.h"  // from @abseil-cpp
@@ -35,6 +32,9 @@ limitations under the License.
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "unsupported/Eigen/CXX11/Tensor"
+#include "data/kernels/macros.h"  // from @xla_serving
+#include "data/kernels/math/reduction_ops.h"  // from @xla_serving
+#include "data/kernels/math/reduction_transform_config.pb.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
 #include "data/processor/cc/api/value.h"  // from @xla_serving
@@ -45,6 +45,12 @@ limitations under the License.
 #include "xla/python/ifrt/shape.h"  // from @xla
 
 namespace xla_serving::data::kernel {
+using ::xla_serving::data::composite::api::CreateTypeInfo;
+using ::xla_serving::data::composite::api::ExecuteContext;
+using ::xla_serving::data::composite::api::HostBufferSpec;
+using ::xla_serving::data::composite::api::ShapeInferenceContext;
+using ::xla_serving::data::composite::api::TypeInfo;
+using ::xla_serving::data::composite::api::Value;
 
 xla::ifrt::Shape ReductionHelper::out_reshape() const {
   return xla::ifrt::Shape(out_reshape_);
@@ -231,41 +237,37 @@ absl::StatusOr<xla_serving::HostBuffer> ReductionTransformBase<Derived>::operato
 }
 
 template <typename Derived>
-absl::Status ReductionTransformBase<Derived>::Execute(
-    ::xla_serving::data::composite::api::ExecuteContext& context) {
+absl::Status ReductionTransformBase<Derived>::Execute(ExecuteContext& context) {
   if (context.inputs.size() != 1) {
     return absl::InvalidArgumentError(absl::StrCat(
         Derived::kOpName, ": expected 1 input, got ", context.inputs.size()));
   }
   ASSIGN_OR_RETURN(auto out,
                    (*this)(context.inputs[0].template Get<xla_serving::HostBuffer>()));
-  ::xla_serving::data::composite::api::Value v;
+  Value v;
   v.Set(std::move(out));
   context.outputs.push_back(std::move(v));
   return absl::OkStatus();
 }
 
 template <typename Derived>
-absl::Span<const ::xla_serving::data::composite::api::TypeInfo>
-ReductionTransformBase<Derived>::InputTypes() const {
+absl::Span<const TypeInfo> ReductionTransformBase<Derived>::InputTypes() const {
   static const auto* const kOneInput =
-      new std::vector<::xla_serving::data::composite::api::TypeInfo>{
-          ::xla_serving::data::composite::api::CreateTypeInfo<xla_serving::HostBuffer>()};
+      new std::vector<TypeInfo>{CreateTypeInfo<xla_serving::HostBuffer>()};
   return *kOneInput;
 }
 
 template <typename Derived>
-absl::Span<const ::xla_serving::data::composite::api::TypeInfo>
-ReductionTransformBase<Derived>::OutputTypes() const {
+absl::Span<const TypeInfo> ReductionTransformBase<Derived>::OutputTypes()
+    const {
   static const auto* const kOneOutput =
-      new std::vector<::xla_serving::data::composite::api::TypeInfo>{
-          ::xla_serving::data::composite::api::CreateTypeInfo<xla_serving::HostBuffer>()};
+      new std::vector<TypeInfo>{CreateTypeInfo<xla_serving::HostBuffer>()};
   return *kOneOutput;
 }
 
 template <typename Derived>
 absl::Status ReductionTransformBase<Derived>::PropagateSignatureImpl(
-    ::xla_serving::data::composite::api::ShapeInferenceContext& context) const {
+    ShapeInferenceContext& context) const {
   if (context.inputs.size() != 1) {
     return absl::InvalidArgumentError(absl::StrCat(
         Derived::kOpName, " expects 1 input, got ", context.inputs.size()));
@@ -275,12 +277,13 @@ absl::Status ReductionTransformBase<Derived>::PropagateSignatureImpl(
         absl::StrCat(Derived::kOpName, " expects tensor input"));
   }
   const auto& input_spec = context.inputs[0].spec();
+  ASSIGN_OR_RETURN(const xla::ifrt::Shape input_shape,
+                   input_spec.shape.GetStatic());
   xla_serving::HostBuffer axes_hb = AxesVectorToHostBuffer(axis_);
   ReductionHelper helper;
-  RETURN_IF_ERROR(helper.Simplify(input_spec.shape, axes_hb, keep_dims_));
-  auto out_spec = input_spec;
-  out_spec.shape = helper.out_shape();
-  context.outputs.push_back(out_spec);
+  RETURN_IF_ERROR(helper.Simplify(input_shape, axes_hb, keep_dims_));
+  context.outputs.push_back(
+      HostBufferSpec{input_spec.dtype, helper.out_shape()});
   return absl::OkStatus();
 }
 

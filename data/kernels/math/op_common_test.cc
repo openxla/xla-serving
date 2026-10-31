@@ -22,16 +22,18 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
-#include "data/kernels/bitwise/op_functors.h"  // from @xla_serving
-#include "data/kernels/math/op_functors.h"  // from @xla_serving
-#include "data/kernels/test_utils.h"  // from @xla_serving
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_matchers.h"  // from @abseil-cpp
-#include "data/test_utils/status_macros.h"  // from @xla_serving
 #include "absl/status/statusor.h"  // from @abseil-cpp
+#include "data/kernels/bitwise/op_functors.h"  // from @xla_serving
+#include "data/kernels/math/op_functors.h"  // from @xla_serving
+#include "data/kernels/test_utils.h"  // from @xla_serving
+#include "data/processor/cc/api/shape.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
+#include "data/test_utils/shape.h"  // from @xla_serving
+#include "data/test_utils/status_macros.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
@@ -41,6 +43,8 @@ namespace xla_serving::data::kernel {
 namespace {
 
 using ::absl_testing::StatusIs;
+using ::xla_serving::data::composite::api::Dim;
+using ::xla_serving::data::test_utils::PartialShapeOrDie;
 using ::testing::HasSubstr;
 using ::xla::ifrt::DType;
 using ::xla::ifrt::Shape;
@@ -268,6 +272,54 @@ TEST(OpCommonTest, TestPropagateSignatureUnarySuccess) {
   ASSERT_EQ(context.outputs.size(), 1);
   EXPECT_TRUE(context.outputs[0].IsSpec());
   EXPECT_EQ(context.outputs[0].spec().shape, Shape({4, 5}));
+  EXPECT_EQ(context.outputs[0].spec().dtype, DType(DType::kF32));
+}
+
+TEST(OpCommonTest, TestPropagateSignatureRejectsUnknownDimension) {
+  const xla_serving::data::composite::api::HostBufferSpec known{
+      .dtype = DType(DType::kS32),
+      .shape = Shape({2, 3}),
+  };
+  const xla_serving::data::composite::api::HostBufferSpec unknown{
+      .dtype = DType(DType::kS32),
+      .shape = PartialShapeOrDie({Dim::Unknown(), Dim::Static(3)}),
+  };
+  const std::vector<xla_serving::data::composite::api::ShapeInferenceValue>
+      unknown_lhs = {unknown, known};
+  const std::vector<xla_serving::data::composite::api::ShapeInferenceValue>
+      unknown_rhs = {known, unknown};
+
+  xla_serving::data::composite::api::ShapeInferenceContext lhs_context;
+  lhs_context.inputs = unknown_lhs;
+  EXPECT_THAT(
+      BinaryOpShared::PropagateBinarySignature(lhs_context, "TestAddTransform"),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("is not fully known")));
+
+  xla_serving::data::composite::api::ShapeInferenceContext rhs_context;
+  rhs_context.inputs = unknown_rhs;
+  EXPECT_THAT(
+      BinaryOpShared::PropagateBinarySignature(rhs_context, "TestAddTransform"),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("is not fully known")));
+}
+
+TEST(OpCommonTest, TestPropagateSignatureUnaryForwardsUnknownDimension) {
+  std::vector<xla_serving::data::composite::api::ShapeInferenceValue> inputs;
+  inputs.push_back(xla_serving::data::composite::api::HostBufferSpec{
+      .dtype = DType(DType::kF32),
+      .shape = PartialShapeOrDie({Dim::Unknown(), Dim::Static(5)}),
+  });
+
+  xla_serving::data::composite::api::ShapeInferenceContext context;
+  context.inputs = inputs;
+
+  EXPECT_OK(
+      UnaryOpShared::PropagateUnarySignature(context, "TestNegateTransform"));
+  ASSERT_EQ(context.outputs.size(), 1);
+  EXPECT_TRUE(context.outputs[0].IsSpec());
+  EXPECT_EQ(context.outputs[0].spec().shape,
+            PartialShapeOrDie({Dim::Unknown(), Dim::Static(5)}));
   EXPECT_EQ(context.outputs[0].spec().dtype, DType(DType::kF32));
 }
 

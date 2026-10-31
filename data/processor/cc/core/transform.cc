@@ -17,7 +17,6 @@
 #include <atomic>
 #include <cstddef>
 #include <memory>
-#include <vector>
 
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
@@ -27,11 +26,9 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
-#include "data/processor/cc/api/value.h"  // from @xla_serving
 #include "data/processor/cc/core/transform_registry.h"  // from @xla_serving
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
-#include "runtime/core/host_buffer.h"  // from @xla_serving
 
 namespace xla_serving::data {
 namespace composite {
@@ -96,7 +93,13 @@ absl::Status TransformBase::PropagateSignature(
   ASSIGN_OR_RETURN(const core::TransformFactoryHolder* absl_nonnull holder,
                    GetTransformFactoryHolder());
   RETURN_IF_ERROR(holder->ValidateInputs(context.inputs));
-  return PropagateSignatureImpl(context);
+  // Shape rules share helpers, such as PartialShape::GetStatic, whose errors
+  // don't say which transform failed.
+  if (absl::Status status = PropagateSignatureImpl(context); !status.ok()) {
+    return absl::Status(status.code(),
+                        absl::StrCat(holder->name(), ": ", status.message()));
+  }
+  return absl::OkStatus();
 }
 
 // By default we will propagate unknown if a Transform does not provide

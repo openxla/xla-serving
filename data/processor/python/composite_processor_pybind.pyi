@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import types
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -115,8 +115,8 @@ class HostBufferSpec:
   @property
   def dtype(self) -> Any: ...
   @property
-  def shape(self) -> Tuple[int, ...]: ...
-  def __init__(self, dtype: Any, shape: List[int]) -> None: ...
+  def shape(self) -> Tuple[Optional[int], ...]: ...
+  def __init__(self, dtype: Any, shape: Sequence[Optional[int]]) -> None: ...
 
 class ShapeInferenceValue:
   def is_spec(self) -> bool: ...

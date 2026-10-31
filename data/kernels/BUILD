@@ -141,6 +141,7 @@ cc_library(
         "@xla_serving//data/kernels/util:shape_utils",  # build_cleaner: keep
         "@xla_serving//data/kernels/util:ttypes",
         "@xla_serving//data/processor/cc/api:registry",
+        "@xla_serving//data/processor/cc/api:shape",
         "@xla_serving//data/processor/cc/api:transform_context",
         "@xla_serving//data/processor/cc/api:type_info",
         "@xla_serving//data/processor/cc/api:value",  # build_cleaner: keep
@@ -187,6 +188,9 @@ cc_test(
         "@googletest//:gtest_main",
         "@tsl//tsl/platform:tstring",
         "@xla//xla/python/ifrt",
+        "@xla_serving//data/processor/cc/api:shape",
+        "@xla_serving//data/processor/cc/api:transform_context",
+        "@xla_serving//data/test_utils:shape",
         "@xla_serving//data/test_utils:status_macros",
         "@xla_serving//runtime/core:host_buffer",
     ],
