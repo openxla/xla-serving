@@ -51,6 +51,7 @@
 #include "tsl/platform/thread_annotations.h"  // from @tsl
 
 ABSL_DECLARE_FLAG(bool, xla_serving_support_batching_for_ragged_inputs);
+ABSL_DECLARE_FLAG(bool, jsv_warmup_bypass_batch_queue);
 
 namespace xla_serving {
 

@@ -49,6 +49,7 @@
 #include "runtime/core/batching/batch_scheduler_utils.h"  // from @xla_serving
 #include "runtime/core/batching/batch_stats.h"  // from @xla_serving
 #include "runtime/core/batching/input_split_metadata.h"  // from @xla_serving
+#include "runtime/core/batching/queue_options.h"  // from @xla_serving
 #include "runtime/core/batching/threadsafe_status.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "runtime/core/incremental_barrier.h"  // from @xla_serving
@@ -81,6 +82,10 @@
 
 ABSL_FLAG(bool, xla_serving_support_batching_for_ragged_inputs, false,
           "Whether to support composite types in batching.");
+ABSL_FLAG(bool, jsv_warmup_bypass_batch_queue, false,
+          "If true, warmup requests bypass the batch queue and form their own "
+          "batches directly, unless they need splitting. A model is in warmup "
+          "while it is registered in WarmupStateRegistry.");
 
 namespace xla_serving {
 namespace {
@@ -468,6 +473,26 @@ absl::Status BatchResourceBase::RegisterInput(
     batch_components->request_cost = request_cost_accessor->GetRequestCost();
   }
 
+  const bool is_warmup =
+      !context->metadata.model_name.empty() &&
+      GetGlobalWarmupStateRegistry().Lookup(WarmupStateRegistry::Key(
+          std::string(context->metadata.model_name),
+          context->metadata.model_version)) != nullptr;
+
+  // Bypass the batcher queue for warmup and run the warmup request as its own
+  // batch. Requests must fit in one batch, otherwise they'll go through the
+  // batch queue to be split.
+  if (is_warmup && absl::GetFlag(FLAGS_jsv_warmup_bypass_batch_queue) &&
+      (forced_warmup_batch_size > 0 ||
+       batch_components->size() <=
+           GetMaxExecutionBatchSize(batcher_queue_options_))) {
+    auto batch = std::make_unique<BatchT>();
+    batch->AddTask(std::move(batch_components), tsl::EnvTime::NowMicros());
+    batch->Close();
+    ProcessFuncBatch(std::move(batch));
+    return absl::OkStatus();
+  }
+
   BatcherQueueT* batcher_queue;
   TF_RETURN_IF_ERROR(LookupOrCreateBatcherQueue(
       /* queue_name= */ batcher_queue_name, /* queue= */ &batcher_queue,
@@ -480,12 +505,8 @@ absl::Status BatchResourceBase::RegisterInput(
   // TODO: Checking model name existence is copied form TF, and is
   // kept for compatibility. Maybe remove it.
   if (!context->metadata.model_name.empty()) {
-    // TODO: Update the serving path to use the XLA Serving warmup
-    // registry in case of Orbax models.
-    WarmupStateRegistry::Key key(std::string(context->metadata.model_name),
-                                 context->metadata.model_version);
     absl::MutexLock lock(outstanding_batch_mu_);
-    if (GetGlobalWarmupStateRegistry().Lookup(key) != nullptr) {
+    if (is_warmup) {
       outstanding_batch_mu_.Await({+[](size_t* outstanding_batch_total_size) {
                                      return *outstanding_batch_total_size == 0;
                                    },

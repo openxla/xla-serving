@@ -1070,10 +1070,96 @@ class BatchRunnerOpWarmupTest : public ::testing::Test {
   std::unique_ptr<tsl::thread::ThreadPool> batch_thread_pool_;
 };
 
+TEST_F(BatchRunnerOpWarmupTest, BypassBatchQueue) {
+  absl::SetFlag(&FLAGS_jsv_warmup_bypass_batch_queue, true);
+  queue_options_.batch_timeout_micros =
+      absl::ToInt64Microseconds(absl::Seconds(30));
+  tsl::core::RefCountPtr<TestXlaServingBatchResource> batch_resource(
+      new TestXlaServingBatchResource(CreateBatchedGraph(), batcher_,
+                                      queue_options_, allowed_batch_sizes_,
+                                      batch_thread_pool_.get()));
+  BatchRunnerOp batch_runner_op(std::move(batch_resource));
+  std::vector<Value> inputs{
+      Value(AsHostBuffer<int>({1, 2, 3}, xla::ifrt::Shape({3})))};
+  Kernel::ExecuteContext context;
+  context.inputs = absl::MakeSpan(inputs);
+  context.metadata = {.model_name = kModelName, .model_version = kModelVersion};
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto warmup_handle,
+      GetGlobalWarmupStateRegistry().Register(
+          {kModelName, kModelVersion},
+          std::make_unique<WarmupStateRegistry::PerModelData>()));
+
+  tsl::Future<> future = batch_runner_op.RunAsync(context);
+  // The request skipped the queue and ran on this thread, so the future is
+  // ready as soon as `RunAsync` returns. A queued request would still be
+  // waiting for the 30 s batch timeout.
+  ASSERT_TRUE(future.IsReady());
+  TF_ASSERT_OK(future.Await());
+  EXPECT_THAT(context.outputs,
+              ElementsAre(ValueOfType<HostBuffer>(
+                  HostBufferEq(inputs[0].Get<HostBuffer>()))));
+  // Batch size is 3, padded to 4.
+  EXPECT_EQ(executed_batch_size_reader_->Delta(
+                kModelName, absl::StrCat(kModelVersion), "4"),
+            1);
+}
+
+TEST_F(BatchRunnerOpWarmupTest, QueuedWarmup) {
+  absl::SetFlag(&FLAGS_jsv_warmup_bypass_batch_queue, false);
+  queue_options_.batch_timeout_micros =
+      absl::ToInt64Microseconds(absl::Seconds(2));
+  tsl::core::RefCountPtr<TestXlaServingBatchResource> batch_resource(
+      new TestXlaServingBatchResource(CreateBatchedGraph(), batcher_,
+                                      queue_options_, allowed_batch_sizes_,
+                                      batch_thread_pool_.get()));
+  BatchRunnerOp batch_runner_op(std::move(batch_resource));
+  std::vector<Value> inputs{
+      Value(AsHostBuffer<int>({1, 2, 3}, xla::ifrt::Shape({3})))};
+  Kernel::ExecuteContext context;
+  context.inputs = absl::MakeSpan(inputs);
+  context.metadata = {.model_name = kModelName, .model_version = kModelVersion};
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto warmup_handle,
+      GetGlobalWarmupStateRegistry().Register(
+          {kModelName, kModelVersion},
+          std::make_unique<WarmupStateRegistry::PerModelData>()));
+
+  tsl::Future<> future = batch_runner_op.RunAsync(context);
+  // The warmup request goes through the queue and only runs once the batch
+  // timeout expires, so it isn't done when `RunAsync` returns.
+  EXPECT_FALSE(future.IsReady());
+  TF_ASSERT_OK(future.Await());
+  EXPECT_THAT(context.outputs,
+              ElementsAre(ValueOfType<HostBuffer>(
+                  HostBufferEq(inputs[0].Get<HostBuffer>()))));
+  // Batch size is 3, padded to 4.
+  EXPECT_EQ(executed_batch_size_reader_->Delta(
+                kModelName, absl::StrCat(kModelVersion), "4"),
+            1);
+}
+
+// Run each test with `--jsv_warmup_bypass_batch_queue` enabled and disabled.
+class BatchRunnerOpWarmupBypassTest
+    : public BatchRunnerOpWarmupTest,
+      public ::testing::WithParamInterface<bool> {
+ protected:
+  void SetUp() override {
+    BatchRunnerOpWarmupTest::SetUp();
+    absl::SetFlag(&FLAGS_jsv_warmup_bypass_batch_queue, GetParam());
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(
+    BypassBatchQueue, BatchRunnerOpWarmupBypassTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) -> std::string {
+      return info.param ? "BypassEnabled" : "BypassDisabled";
+    });
+
 // Verifies that when parallel warmup is enabled, warmup requests are not
 // unexpectedly batched, but instead are executed separately in order to
 // successfully warm up all allowed batch sizes.
-TEST_F(BatchRunnerOpWarmupTest, ParallelWarmupRequestsNotBatched) {
+TEST_P(BatchRunnerOpWarmupBypassTest, ParallelWarmupRequestsNotBatched) {
   // Create BatchRunnerOp.
   tsl::core::RefCountPtr<TestXlaServingBatchResource> batch_resource(
       new TestXlaServingBatchResource(CreateBatchedGraph(), batcher_,
@@ -1150,7 +1236,7 @@ TEST_F(BatchRunnerOpWarmupTest, ParallelWarmupRequestsNotBatched) {
             1);
 }
 
-TEST_F(BatchRunnerOpWarmupTest, WarmupAllBatchSizes) {
+TEST_P(BatchRunnerOpWarmupBypassTest, WarmupAllBatchSizes) {
   // Create BatchRunnerOp.
   tsl::core::RefCountPtr<TestXlaServingBatchResource> batch_resource(
       new TestXlaServingBatchResource(CreateBatchedGraph(), batcher_,
@@ -1173,6 +1259,9 @@ TEST_F(BatchRunnerOpWarmupTest, WarmupAllBatchSizes) {
   // Run a single warmup request.
   tsl::Future<> future = batch_runner_op.RunAsync(context);
   TF_ASSERT_OK(future.Await());
+  EXPECT_THAT(context.outputs,
+              ElementsAre(ValueOfType<HostBuffer>(
+                  HostBufferEq(inputs[0].Get<HostBuffer>()))));
   // Verify that all batch sizes are executed.
   EXPECT_EQ(executed_batch_size_reader_->Delta(
                 kModelName, absl::StrCat(kModelVersion), "1"),
@@ -1224,7 +1313,7 @@ class FailingTestXlaServingBatchResource : public XlaServingBatchResource {
   const size_t failing_batch_size_;
 };
 
-TEST_F(BatchRunnerOpWarmupTest,
+TEST_P(BatchRunnerOpWarmupBypassTest,
        AutoWarmupBatchFailurePropagatedToOriginalRequest) {
   // Create BatchRunnerOp.
   tsl::core::RefCountPtr<FailingTestXlaServingBatchResource> batch_resource(
@@ -1250,6 +1339,47 @@ TEST_F(BatchRunnerOpWarmupTest,
   tsl::Future<> future = batch_runner_op.RunAsync(context);
   EXPECT_THAT(future.Await(), StatusIs(absl::StatusCode::kInternal,
                                        "Intentional failure for testing."));
+}
+
+TEST_P(BatchRunnerOpWarmupBypassTest, SplitLargeWarmupRequest) {
+  BatchRunnerOpOptions options;
+  options.allowed_batch_sizes = {1, 2, 4};
+  options.max_batch_size = 8;
+  options.batch_timeout_micros = 1000;
+  options.num_batch_threads = 1;
+  options.max_enqueued_batches = 10;
+  options.enable_large_batch_splitting = true;
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Kernel> runner,
+                          CreateBatchRunnerOp(CreateBatchedGraph(), options,
+                                              batch_thread_pool_.get()));
+  auto* async_runner = dynamic_cast<CancellableAsyncKernel*>(runner.get());
+  ASSERT_NE(async_runner, nullptr);
+  std::vector<Value> inputs{
+      Value(AsHostBuffer<int>({0, 1, 2, 3, 4, 5}, xla::ifrt::Shape({6})))};
+  Kernel::ExecuteContext context;
+  context.inputs = absl::MakeSpan(inputs);
+  context.metadata = {.model_name = kModelName, .model_version = kModelVersion};
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto warmup_handle,
+      GetGlobalWarmupStateRegistry().Register(
+          {kModelName, kModelVersion},
+          std::make_unique<WarmupStateRegistry::PerModelData>()));
+
+  // The warmup request (size 6) is split into 4 + 2.
+  TF_ASSERT_OK(async_runner->RunAsync(context).Await());
+
+  EXPECT_THAT(context.outputs,
+              ElementsAre(ValueOfType<HostBuffer>(
+                  HostBufferEq(inputs[0].Get<HostBuffer>()))));
+  EXPECT_EQ(executed_batch_size_reader_->Delta(
+                kModelName, absl::StrCat(kModelVersion), "4"),
+            1);
+  EXPECT_EQ(executed_batch_size_reader_->Delta(
+                kModelName, absl::StrCat(kModelVersion), "2"),
+            1);
+  EXPECT_EQ(executed_batch_size_reader_->Delta(
+                kModelName, absl::StrCat(kModelVersion), "6"),
+            0);
 }
 
 class RaggedVerifierKernel : public Kernel {
