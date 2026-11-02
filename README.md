@@ -90,7 +90,8 @@ example—including an in-process Python runner and a gRPC client—in the
   gRPC server binary (`//runtime/serving/gcp/server:xla_serving_main_{cpu,gpu,tpu}`).
 - **`examples/`** — runnable exports for Flax NNX, ViT (Keras 3), DLRM with
   embeddings, PyTorch via `torchax`, C++ composite preprocessors, AOT
-  compilation benchmarks, and Qwen3 beam search.
+  compilation and [DLRM serving](examples/dlrm_benchmark/README.md) benchmarks,
+  and Qwen3 beam search.
 
 ## Installation
 
@@ -126,6 +127,7 @@ Bazel.
   [Batching](docs/guides/batching.md) · [Warmup](docs/guides/warmup.md) ·
   [Ahead-of-time compilation](docs/guides/aot.md) ·
   [`xsm-cli`](docs/guides/xsm_cli.md)
+- **Benchmarks:** [DLRM serving: XSE vs. Python](docs/benchmarks/dlrm_serving.md)
 
 To build the HTML documentation locally:
 

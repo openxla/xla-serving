@@ -114,6 +114,11 @@ in-process check, and a Python gRPC client.
   [Warmup](guides/warmup.md), and
   [Ahead-of-time compilation](guides/aot.md), and inspect or update bundles
   with [`xsm-cli`](guides/xsm_cli.md).
+- **Evaluating performance?** Read the
+  [DLRM serving benchmark](benchmarks/dlrm_serving.md) comparing XSE against
+  single- and multi-process Python JAX servers on Cloud TPU, with end-to-end
+  reproduction instructions and full source in
+  [`examples/dlrm_benchmark/`](https://github.com/AI-Hypercomputer/xla-serving/tree/main/examples/dlrm_benchmark).
 
 ```{toctree}
 :hidden:
@@ -136,6 +141,13 @@ guides/batching
 guides/warmup
 guides/aot
 guides/xsm_cli
+```
+
+```{toctree}
+:hidden:
+:caption: Benchmarks
+
+benchmarks/dlrm_serving
 ```
 
 ```{toctree}

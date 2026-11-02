@@ -1,0 +1,21 @@
+# Python dependencies for examples/dlrm_benchmark.
+#
+# Install `xla-saved-model` and `xla-serving-data` from GitHub Releases first
+# (requires Python 3.12–3.14; see docs/installation.md):
+#   gh release download --repo AI-Hypercomputer/xla-serving --pattern '*.whl' --dir wheels
+#   pip install --find-links wheels xla-saved-model xla-serving-data
+#   pip install -r examples/dlrm_benchmark/requirements.txt
+#
+# Then install the JAX accelerator extra matching the VM:
+#   pip install "jax[tpu]" -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+#   pip install "jax[cuda12]"   # NVIDIA GPU (or jax[cuda13])
+#   pip install jax             # CPU only (smoke tests)
+#
+# The Python baseline server runs in the same environment so all arms share
+# identical JAX / XLA versions.
+absl-py
+flax
+grpcio
+numpy
+protobuf
+psutil

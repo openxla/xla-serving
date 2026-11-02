@@ -50,7 +50,8 @@ request-level throughput per chip matter:
   cores) with compute-bound dense networks on the accelerator. XSE runs both in
   a single orchestrated pipeline so embeddings stay in host RAM while the MLP
   or transformer batches on the GPU or TPU. See `examples/dlrm`,
-  `examples/nnx_jax_preprocessor`, and `examples/math_preprocessor`.
+  `examples/nnx_jax_preprocessor`, `examples/math_preprocessor`, and the
+  [DLRM serving benchmark](benchmarks/dlrm_serving.md).
 - **Vision and multimodal encoders.** Image classifiers, ViT backbones, and
   embedding extractors that decode raw inputs on the host and batch fixed-shape
   tensors onto the accelerator. See `examples/vit`.

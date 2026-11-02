@@ -1,0 +1,704 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="907.726719pt" height="415.42175pt" viewBox="0 0 907.726719 415.42175" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 415.42175 
+L 907.726719 415.42175 
+L 907.726719 -0 
+L 0 -0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 58.247969 337.843375 
+L 541.757876 337.843375 
+L 541.757876 61.051375 
+L 58.247969 61.051375 
+z
+" style="fill: #ffffff"/>
+   </g>
+   <g id="matplotlib.axis_1">
+    <g id="xtick_1">
+     <g id="line2d_1"/>
+     <g id="text_1">
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; fill: #3c4043" transform="translate(113.45525 352.468375)">1 example</text>
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; fill: #3c4043" transform="translate(110.874039 365.154312)">per request</text>
+     </g>
+    </g>
+    <g id="xtick_2">
+     <g id="line2d_2"/>
+     <g id="text_2">
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; fill: #3c4043" transform="translate(267.396829 352.468375)">16 examples</text>
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; fill: #3c4043" transform="translate(271.014837 365.154312)">per request</text>
+     </g>
+    </g>
+    <g id="xtick_3">
+     <g id="line2d_3"/>
+     <g id="text_3">
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; fill: #3c4043" transform="translate(424.305947 352.468375)">128 examples</text>
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; fill: #3c4043" transform="translate(431.155634 365.154312)">per request</text>
+     </g>
+    </g>
+   </g>
+   <g id="matplotlib.axis_2">
+    <g id="ytick_1">
+     <g id="line2d_4">
+      <path d="M 58.247969 337.843375 
+L 541.757876 337.843375 
+" clip-path="url(#pf4910f12fa)" style="fill: none; stroke: #e8eaed; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_5">
+      <defs>
+       <path id="m9885abcb15" d="M 0 0 
+L -3.5 0 
+" style="stroke: #3c4043; stroke-width: 0.8"/>
+      </defs>
+      <g>
+       <use xlink:href="#m9885abcb15" x="58.247969" y="337.843375" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_4">
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: end; fill: #3c4043" x="51.247969" y="342.155875" transform="rotate(-0 51.247969 342.155875)">0.02</text>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_6">
+      <path d="M 58.247969 289.974981 
+L 541.757876 289.974981 
+" clip-path="url(#pf4910f12fa)" style="fill: none; stroke: #e8eaed; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_7">
+      <g>
+       <use xlink:href="#m9885abcb15" x="58.247969" y="289.974981" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_5">
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: end; fill: #3c4043" x="51.247969" y="294.287481" transform="rotate(-0 51.247969 294.287481)">0.05</text>
+     </g>
+    </g>
+    <g id="ytick_3">
+     <g id="line2d_8">
+      <path d="M 58.247969 253.763938 
+L 541.757876 253.763938 
+" clip-path="url(#pf4910f12fa)" style="fill: none; stroke: #e8eaed; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_9">
+      <g>
+       <use xlink:href="#m9885abcb15" x="58.247969" y="253.763938" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_6">
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: end; fill: #3c4043" x="51.247969" y="258.076438" transform="rotate(-0 51.247969 258.076438)">0.1</text>
+     </g>
+    </g>
+    <g id="ytick_4">
+     <g id="line2d_10">
+      <path d="M 58.247969 217.552896 
+L 541.757876 217.552896 
+" clip-path="url(#pf4910f12fa)" style="fill: none; stroke: #e8eaed; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_11">
+      <g>
+       <use xlink:href="#m9885abcb15" x="58.247969" y="217.552896" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_7">
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: end; fill: #3c4043" x="51.247969" y="221.865396" transform="rotate(-0 51.247969 221.865396)">0.2</text>
+     </g>
+    </g>
+    <g id="ytick_5">
+     <g id="line2d_12">
+      <path d="M 58.247969 169.684502 
+L 541.757876 169.684502 
+" clip-path="url(#pf4910f12fa)" style="fill: none; stroke: #e8eaed; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_13">
+      <g>
+       <use xlink:href="#m9885abcb15" x="58.247969" y="169.684502" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_8">
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: end; fill: #3c4043" x="51.247969" y="173.997002" transform="rotate(-0 51.247969 173.997002)">0.5</text>
+     </g>
+    </g>
+    <g id="ytick_6">
+     <g id="line2d_14">
+      <path d="M 58.247969 133.47346 
+L 541.757876 133.47346 
+" clip-path="url(#pf4910f12fa)" style="fill: none; stroke: #e8eaed; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_15">
+      <g>
+       <use xlink:href="#m9885abcb15" x="58.247969" y="133.47346" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_9">
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: end; fill: #3c4043" x="51.247969" y="137.78596" transform="rotate(-0 51.247969 137.78596)">1</text>
+     </g>
+    </g>
+    <g id="ytick_7">
+     <g id="line2d_16">
+      <path d="M 58.247969 97.262417 
+L 541.757876 97.262417 
+" clip-path="url(#pf4910f12fa)" style="fill: none; stroke: #e8eaed; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_17">
+      <g>
+       <use xlink:href="#m9885abcb15" x="58.247969" y="97.262417" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_10">
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: end; fill: #3c4043" x="51.247969" y="101.574917" transform="rotate(-0 51.247969 101.574917)">2</text>
+     </g>
+    </g>
+    <g id="ytick_8">
+     <g id="line2d_18">
+      <defs>
+       <path id="m12c49ac8b3" d="M 0 0 
+L -2 0 
+" style="stroke: #3c4043; stroke-width: 0.6"/>
+      </defs>
+      <g>
+       <use xlink:href="#m12c49ac8b3" x="58.247969" y="316.661273" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.6"/>
+      </g>
+     </g>
+    </g>
+    <g id="ytick_9">
+     <g id="line2d_19">
+      <g>
+       <use xlink:href="#m12c49ac8b3" x="58.247969" y="301.632333" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.6"/>
+      </g>
+     </g>
+    </g>
+    <g id="ytick_10">
+     <g id="line2d_20">
+      <g>
+       <use xlink:href="#m12c49ac8b3" x="58.247969" y="280.450231" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.6"/>
+      </g>
+     </g>
+    </g>
+    <g id="ytick_11">
+     <g id="line2d_21">
+      <g>
+       <use xlink:href="#m12c49ac8b3" x="58.247969" y="272.397169" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.6"/>
+      </g>
+     </g>
+    </g>
+    <g id="ytick_12">
+     <g id="line2d_22">
+      <g>
+       <use xlink:href="#m12c49ac8b3" x="58.247969" y="265.42129" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.6"/>
+      </g>
+     </g>
+    </g>
+    <g id="ytick_13">
+     <g id="line2d_23">
+      <g>
+       <use xlink:href="#m12c49ac8b3" x="58.247969" y="259.268129" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.6"/>
+      </g>
+     </g>
+    </g>
+    <g id="ytick_14">
+     <g id="line2d_24">
+      <g>
+       <use xlink:href="#m12c49ac8b3" x="58.247969" y="196.370794" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.6"/>
+      </g>
+     </g>
+    </g>
+    <g id="ytick_15">
+     <g id="line2d_25">
+      <g>
+       <use xlink:href="#m12c49ac8b3" x="58.247969" y="181.341854" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.6"/>
+      </g>
+     </g>
+    </g>
+    <g id="ytick_16">
+     <g id="line2d_26">
+      <g>
+       <use xlink:href="#m12c49ac8b3" x="58.247969" y="160.159752" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.6"/>
+      </g>
+     </g>
+    </g>
+    <g id="ytick_17">
+     <g id="line2d_27">
+      <g>
+       <use xlink:href="#m12c49ac8b3" x="58.247969" y="152.106691" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.6"/>
+      </g>
+     </g>
+    </g>
+    <g id="ytick_18">
+     <g id="line2d_28">
+      <g>
+       <use xlink:href="#m12c49ac8b3" x="58.247969" y="145.130812" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.6"/>
+      </g>
+     </g>
+    </g>
+    <g id="ytick_19">
+     <g id="line2d_29">
+      <g>
+       <use xlink:href="#m12c49ac8b3" x="58.247969" y="138.97765" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.6"/>
+      </g>
+     </g>
+    </g>
+    <g id="ytick_20">
+     <g id="line2d_30">
+      <g>
+       <use xlink:href="#m12c49ac8b3" x="58.247969" y="76.080315" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.6"/>
+      </g>
+     </g>
+    </g>
+    <g id="ytick_21">
+     <g id="line2d_31">
+      <g>
+       <use xlink:href="#m12c49ac8b3" x="58.247969" y="61.051375" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.6"/>
+      </g>
+     </g>
+    </g>
+    <g id="text_11">
+     <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle; fill: #202124" x="22.185156" y="199.447375" transform="rotate(-90 22.185156 199.447375)">CPU-seconds per 1,000 examples (lower is better)</text>
+    </g>
+   </g>
+   <g id="patch_3">
+    <path d="M 80.225692 120423.952298 
+L 108.218303 120423.952298 
+L 108.218303 211.521444 
+L 80.225692 211.521444 
+z
+" clip-path="url(#pf4910f12fa)" style="fill: #1a73e8"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 240.366489 120423.952298 
+L 268.359101 120423.952298 
+L 268.359101 281.401217 
+L 240.366489 281.401217 
+z
+" clip-path="url(#pf4910f12fa)" style="fill: #1a73e8"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 400.507287 120423.952298 
+L 428.499898 120423.952298 
+L 428.499898 300.488273 
+L 400.507287 300.488273 
+z
+" clip-path="url(#pf4910f12fa)" style="fill: #1a73e8"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 110.652443 120423.952298 
+L 138.645055 120423.952298 
+L 138.645055 122.467897 
+L 110.652443 122.467897 
+z
+" clip-path="url(#pf4910f12fa)" style="fill: #7baaf7"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 270.793241 120423.952298 
+L 298.785852 120423.952298 
+L 298.785852 245.570434 
+L 270.793241 245.570434 
+z
+" clip-path="url(#pf4910f12fa)" style="fill: #7baaf7"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 430.934039 120423.952298 
+L 458.92665 120423.952298 
+L 458.92665 287.455742 
+L 430.934039 287.455742 
+z
+" clip-path="url(#pf4910f12fa)" style="fill: #7baaf7"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 141.079195 120423.952298 
+L 169.071806 120423.952298 
+L 169.071806 147.149753 
+L 141.079195 147.149753 
+z
+" clip-path="url(#pf4910f12fa)" style="fill: #e8710a"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 301.219993 120423.952298 
+L 329.212604 120423.952298 
+L 329.212604 263.017902 
+L 301.219993 263.017902 
+z
+" clip-path="url(#pf4910f12fa)" style="fill: #e8710a"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 461.36079 120423.952298 
+L 489.353402 120423.952298 
+L 489.353402 283.38605 
+L 461.36079 283.38605 
+z
+" clip-path="url(#pf4910f12fa)" style="fill: #e8710a"/>
+   </g>
+   <g id="patch_12">
+    <path d="M 171.505946 120423.952298 
+L 199.498558 120423.952298 
+L 199.498558 99.891245 
+L 171.505946 99.891245 
+z
+" clip-path="url(#pf4910f12fa)" style="fill: #9aa0a6"/>
+   </g>
+   <g id="patch_13">
+    <path d="M 331.646744 120423.952298 
+L 359.639355 120423.952298 
+L 359.639355 224.196714 
+L 331.646744 224.196714 
+z
+" clip-path="url(#pf4910f12fa)" style="fill: #9aa0a6"/>
+   </g>
+   <g id="patch_14">
+    <path d="M 491.787542 120423.952298 
+L 519.780153 120423.952298 
+L 519.780153 282.09647 
+L 491.787542 282.09647 
+z
+" clip-path="url(#pf4910f12fa)" style="fill: #9aa0a6"/>
+   </g>
+   <g id="patch_15">
+    <path d="M 58.247969 337.843375 
+L 58.247969 61.051375 
+" style="fill: none; stroke: #dadce0; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="patch_16">
+    <path d="M 58.247969 337.843375 
+L 541.757876 337.843375 
+" style="fill: none; stroke: #dadce0; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="text_12">
+    <text style="font-size: 8.6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle; fill: #3c4043" x="94.221998" y="205.754009" transform="rotate(-0 94.221998 205.754009)">0.22</text>
+   </g>
+   <g id="text_13">
+    <text style="font-size: 8.6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle; fill: #3c4043" x="254.362795" y="275.633783" transform="rotate(-0 254.362795 275.633783)">0.059</text>
+   </g>
+   <g id="text_14">
+    <text style="font-size: 8.6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle; fill: #3c4043" x="414.503593" y="294.720838" transform="rotate(-0 414.503593 294.720838)">0.041</text>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 8.6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle; fill: #3c4043" x="124.648749" y="116.700463" transform="rotate(-0 124.648749 116.700463)">1.2</text>
+   </g>
+   <g id="text_16">
+    <text style="font-size: 8.6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle; fill: #3c4043" x="284.789547" y="239.803" transform="rotate(-0 284.789547 239.803)">0.12</text>
+   </g>
+   <g id="text_17">
+    <text style="font-size: 8.6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle; fill: #3c4043" x="444.930344" y="281.688307" transform="rotate(-0 444.930344 281.688307)">0.052</text>
+   </g>
+   <g id="text_18">
+    <text style="font-size: 8.6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle; fill: #3c4043" x="155.075501" y="141.382319" transform="rotate(-0 155.075501 141.382319)">0.77</text>
+   </g>
+   <g id="text_19">
+    <text style="font-size: 8.6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle; fill: #3c4043" x="315.216298" y="257.250468" transform="rotate(-0 315.216298 257.250468)">0.084</text>
+   </g>
+   <g id="text_20">
+    <text style="font-size: 8.6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle; fill: #3c4043" x="475.357096" y="277.618615" transform="rotate(-0 475.357096 277.618615)">0.057</text>
+   </g>
+   <g id="text_21">
+    <text style="font-size: 8.6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle; fill: #3c4043" x="185.502252" y="94.12381" transform="rotate(-0 185.502252 94.12381)">1.9</text>
+   </g>
+   <g id="text_22">
+    <text style="font-size: 8.6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle; fill: #3c4043" x="345.64305" y="218.42928" transform="rotate(-0 345.64305 218.42928)">0.18</text>
+   </g>
+   <g id="text_23">
+    <text style="font-size: 8.6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle; fill: #3c4043" x="505.783847" y="276.329036" transform="rotate(-0 505.783847 276.329036)">0.058</text>
+   </g>
+   <g id="text_24">
+    <text style="font-weight: 500; font-size: 12.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle" x="300.002922" y="55.051375" transform="rotate(-0 300.002922 55.051375)">Host CPU cost per example at peak throughput</text>
+   </g>
+   <g id="legend_1">
+    <g id="patch_17">
+     <path d="M 301.021939 77.551375 
+L 321.021939 77.551375 
+L 321.021939 70.551375 
+L 301.021939 70.551375 
+z
+" style="fill: #1a73e8"/>
+    </g>
+    <g id="text_25">
+     <text style="font-size: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: start" x="329.021939" y="77.551375" transform="rotate(-0 329.021939 77.551375)">XSE, batching on</text>
+    </g>
+    <g id="patch_18">
+     <path d="M 301.021939 92.238875 
+L 321.021939 92.238875 
+L 321.021939 85.238875 
+L 301.021939 85.238875 
+z
+" style="fill: #7baaf7"/>
+    </g>
+    <g id="text_26">
+     <text style="font-size: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: start" x="329.021939" y="92.238875" transform="rotate(-0 329.021939 92.238875)">XSE, batching off</text>
+    </g>
+    <g id="patch_19">
+     <path d="M 425.137564 77.551375 
+L 445.137564 77.551375 
+L 445.137564 70.551375 
+L 425.137564 70.551375 
+z
+" style="fill: #e8710a"/>
+    </g>
+    <g id="text_27">
+     <text style="font-size: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: start" x="453.137564" y="77.551375" transform="rotate(-0 453.137564 77.551375)">Python, optimized</text>
+    </g>
+    <g id="patch_20">
+     <path d="M 425.137564 92.18575 
+L 445.137564 92.18575 
+L 445.137564 85.18575 
+L 425.137564 85.18575 
+z
+" style="fill: #9aa0a6"/>
+    </g>
+    <g id="text_28">
+     <text style="font-size: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: start" x="453.137564" y="92.18575" transform="rotate(-0 453.137564 92.18575)">Python, simple</text>
+    </g>
+   </g>
+  </g>
+  <g id="axes_2">
+   <g id="patch_21">
+    <path d="M 610.349126 337.843375 
+L 894.766719 337.843375 
+L 894.766719 61.051375 
+L 610.349126 61.051375 
+z
+" style="fill: #ffffff"/>
+   </g>
+   <g id="matplotlib.axis_3">
+    <g id="xtick_4">
+     <g id="line2d_32"/>
+     <g id="text_29">
+      <text style="font-size: 9.8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; fill: #3c4043" transform="translate(635.092892 351.193375)">XSE,</text>
+      <text style="font-size: 9.8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; fill: #3c4043" transform="translate(619.175548 362.004)">batching on</text>
+     </g>
+    </g>
+    <g id="xtick_5">
+     <g id="line2d_33"/>
+     <g id="text_30">
+      <text style="font-size: 9.8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; fill: #3c4043" transform="translate(706.915517 351.193375)">XSE,</text>
+      <text style="font-size: 9.8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; fill: #3c4043" transform="translate(690.29686 362.125275)">batching off</text>
+     </g>
+    </g>
+    <g id="xtick_6">
+     <g id="line2d_34"/>
+     <g id="text_31">
+      <text style="font-size: 9.8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; fill: #3c4043" transform="translate(772.29311 351.193375)">Python,</text>
+      <text style="font-size: 9.8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; fill: #3c4043" transform="translate(766.847219 362.105062)">optimized</text>
+     </g>
+    </g>
+    <g id="xtick_7">
+     <g id="line2d_35"/>
+     <g id="text_32">
+      <text style="font-size: 9.8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; fill: #3c4043" transform="translate(844.115734 351.193375)">Python,</text>
+      <text style="font-size: 9.8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; fill: #3c4043" transform="translate(845.732734 362.105062)">simple</text>
+     </g>
+    </g>
+   </g>
+   <g id="matplotlib.axis_4">
+    <g id="ytick_22">
+     <g id="line2d_36">
+      <path d="M 610.349126 337.843375 
+L 894.766719 337.843375 
+" clip-path="url(#pe6d9001ac8)" style="fill: none; stroke: #e8eaed; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_37">
+      <g>
+       <use xlink:href="#m9885abcb15" x="610.349126" y="337.843375" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_33">
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: end; fill: #3c4043" x="603.349126" y="342.155875" transform="rotate(-0 603.349126 342.155875)">0</text>
+     </g>
+    </g>
+    <g id="ytick_23">
+     <g id="line2d_38">
+      <path d="M 610.349126 302.294875 
+L 894.766719 302.294875 
+" clip-path="url(#pe6d9001ac8)" style="fill: none; stroke: #e8eaed; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_39">
+      <g>
+       <use xlink:href="#m9885abcb15" x="610.349126" y="302.294875" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_34">
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: end; fill: #3c4043" x="603.349126" y="306.607375" transform="rotate(-0 603.349126 306.607375)">5</text>
+     </g>
+    </g>
+    <g id="ytick_24">
+     <g id="line2d_40">
+      <path d="M 610.349126 266.746375 
+L 894.766719 266.746375 
+" clip-path="url(#pe6d9001ac8)" style="fill: none; stroke: #e8eaed; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_41">
+      <g>
+       <use xlink:href="#m9885abcb15" x="610.349126" y="266.746375" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_35">
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: end; fill: #3c4043" x="603.349126" y="271.058875" transform="rotate(-0 603.349126 271.058875)">10</text>
+     </g>
+    </g>
+    <g id="ytick_25">
+     <g id="line2d_42">
+      <path d="M 610.349126 231.197875 
+L 894.766719 231.197875 
+" clip-path="url(#pe6d9001ac8)" style="fill: none; stroke: #e8eaed; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_43">
+      <g>
+       <use xlink:href="#m9885abcb15" x="610.349126" y="231.197875" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_36">
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: end; fill: #3c4043" x="603.349126" y="235.510375" transform="rotate(-0 603.349126 235.510375)">15</text>
+     </g>
+    </g>
+    <g id="ytick_26">
+     <g id="line2d_44">
+      <path d="M 610.349126 195.649376 
+L 894.766719 195.649376 
+" clip-path="url(#pe6d9001ac8)" style="fill: none; stroke: #e8eaed; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_45">
+      <g>
+       <use xlink:href="#m9885abcb15" x="610.349126" y="195.649376" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_37">
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: end; fill: #3c4043" x="603.349126" y="199.961876" transform="rotate(-0 603.349126 199.961876)">20</text>
+     </g>
+    </g>
+    <g id="ytick_27">
+     <g id="line2d_46">
+      <path d="M 610.349126 160.100876 
+L 894.766719 160.100876 
+" clip-path="url(#pe6d9001ac8)" style="fill: none; stroke: #e8eaed; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_47">
+      <g>
+       <use xlink:href="#m9885abcb15" x="610.349126" y="160.100876" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_38">
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: end; fill: #3c4043" x="603.349126" y="164.413376" transform="rotate(-0 603.349126 164.413376)">25</text>
+     </g>
+    </g>
+    <g id="ytick_28">
+     <g id="line2d_48">
+      <path d="M 610.349126 124.552376 
+L 894.766719 124.552376 
+" clip-path="url(#pe6d9001ac8)" style="fill: none; stroke: #e8eaed; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_49">
+      <g>
+       <use xlink:href="#m9885abcb15" x="610.349126" y="124.552376" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_39">
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: end; fill: #3c4043" x="603.349126" y="128.864876" transform="rotate(-0 603.349126 128.864876)">30</text>
+     </g>
+    </g>
+    <g id="ytick_29">
+     <g id="line2d_50">
+      <path d="M 610.349126 89.003876 
+L 894.766719 89.003876 
+" clip-path="url(#pe6d9001ac8)" style="fill: none; stroke: #e8eaed; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_51">
+      <g>
+       <use xlink:href="#m9885abcb15" x="610.349126" y="89.003876" style="fill: #3c4043; stroke: #3c4043; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_40">
+      <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: end; fill: #3c4043" x="603.349126" y="93.316376" transform="rotate(-0 603.349126 93.316376)">35</text>
+     </g>
+    </g>
+    <g id="text_41">
+     <text style="font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle; fill: #202124" x="583.782798" y="199.447375" transform="rotate(-90 583.782798 199.447375)">peak server memory (GiB)</text>
+    </g>
+   </g>
+   <g id="patch_22">
+    <path d="M 623.277199 337.843375 
+L 666.370773 337.843375 
+L 666.370773 277.956959 
+L 623.277199 277.956959 
+z
+" clip-path="url(#pe6d9001ac8)" style="fill: #1a73e8"/>
+   </g>
+   <g id="patch_23">
+    <path d="M 695.099823 337.843375 
+L 738.193398 337.843375 
+L 738.193398 281.229286 
+L 695.099823 281.229286 
+z
+" clip-path="url(#pe6d9001ac8)" style="fill: #7baaf7"/>
+   </g>
+   <g id="patch_24">
+    <path d="M 766.922447 337.843375 
+L 810.016022 337.843375 
+L 810.016022 110.964686 
+L 766.922447 110.964686 
+z
+" clip-path="url(#pe6d9001ac8)" style="fill: #e8710a"/>
+   </g>
+   <g id="patch_25">
+    <path d="M 838.745072 337.843375 
+L 881.838646 337.843375 
+L 881.838646 278.398088 
+L 838.745072 278.398088 
+z
+" clip-path="url(#pe6d9001ac8)" style="fill: #9aa0a6"/>
+   </g>
+   <g id="patch_26">
+    <path d="M 610.349126 337.843375 
+L 610.349126 61.051375 
+" style="fill: none; stroke: #dadce0; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="patch_27">
+    <path d="M 610.349126 337.843375 
+L 894.766719 337.843375 
+" style="fill: none; stroke: #dadce0; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="text_42">
+    <text style="font-weight: 700; font-size: 10.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle; fill: #202124" x="644.823986" y="271.558327" transform="rotate(-0 644.823986 271.558327)">8.4 GiB</text>
+   </g>
+   <g id="text_43">
+    <text style="font-weight: 700; font-size: 10.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle; fill: #202124" x="716.64661" y="274.830654" transform="rotate(-0 716.64661 274.830654)">8.0 GiB</text>
+   </g>
+   <g id="text_44">
+    <text style="font-weight: 700; font-size: 10.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle; fill: #202124" x="788.469235" y="104.566054" transform="rotate(-0 788.469235 104.566054)">31.9 GiB</text>
+   </g>
+   <g id="text_45">
+    <text style="font-weight: 700; font-size: 10.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle; fill: #202124" x="860.291859" y="271.999456" transform="rotate(-0 860.291859 271.999456)">8.4 GiB</text>
+   </g>
+   <g id="text_46">
+    <text style="font-weight: 500; font-size: 12.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle" x="752.557922" y="55.051375" transform="rotate(-0 752.557922 55.051375)">Peak server memory footprint</text>
+   </g>
+  </g>
+  <g id="text_47">
+   <text style="font-size: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle; fill: #5f6368" x="453.586719" y="400.327375" transform="rotate(-0 453.586719 400.327375)">The 26 host embedding tables total 3.2 GB; the 8-process Python server holds a private copy in each frontend process.</text>
+  </g>
+  <g id="text_48">
+   <text style="font-weight: 700; font-size: 14.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-anchor: middle; fill: #202124" x="453.586719" y="23.984531" transform="rotate(-0 453.586719 23.984531)">Resource efficiency: host CPU cost per prediction and memory</text>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="pf4910f12fa">
+   <rect x="58.247969" y="61.051375" width="483.509907" height="276.792"/>
+  </clipPath>
+  <clipPath id="pe6d9001ac8">
+   <rect x="610.349126" y="61.051375" width="284.417593" height="276.792"/>
+  </clipPath>
+ </defs>
+</svg>
