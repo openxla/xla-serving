@@ -27,8 +27,21 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
+#include "absl/time/time.h"  // from @abseil-cpp
+#include "xla/tsl/lib/monitoring/sampler.h"  // from @xla
 
 namespace xla_serving {
+namespace {
+
+auto* model_warmup_latency = tsl::monitoring::Sampler<3>::New(
+    {"/orbax/serving/model_warmup_latency",
+     "Distribution of wall time (in microseconds) for warming up a model, "
+     "broken down by model name, version and status code.",
+     "model_name", "model_version", "status"},
+    // 100 ms to ~83 min.
+    tsl::monitoring::Buckets::Exponential(100000, 1.6, 24));
+
+}  // namespace
 
 void WarmupStateRegistry::Handle::Release() {
   if (!key_.has_value()) {
@@ -77,6 +90,15 @@ bool ShouldWarmupAllBatchSizes(absl::string_view model_name,
   const WarmupStateRegistry::Key key{std::string(model_name), model_version};
   const auto* per_model_data = GetGlobalWarmupStateRegistry().Lookup(key);
   return per_model_data && per_model_data->warmup_all_batch_sizes;
+}
+
+void RecordModelWarmupLatency(absl::string_view model_name,
+                              int64_t model_version, absl::Duration latency,
+                              const absl::Status& status) {
+  model_warmup_latency
+      ->GetCell(model_name, absl::StrCat(model_version),
+                absl::StatusCodeToString(status.code()))
+      ->Add(absl::ToDoubleMicroseconds(latency));
 }
 
 }  // namespace xla_serving

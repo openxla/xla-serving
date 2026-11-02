@@ -24,9 +24,11 @@
 #include "absl/base/thread_annotations.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
+#include "absl/time/time.h"  // from @abseil-cpp
 
 namespace xla_serving {
 
@@ -124,6 +126,11 @@ WarmupStateRegistry& GetGlobalWarmupStateRegistry();
 // based on the state of WarmupStateRegistry.
 bool ShouldWarmupAllBatchSizes(absl::string_view model_name,
                                int64_t model_version);
+
+// Records the wall time of one warmup run of the given model.
+void RecordModelWarmupLatency(absl::string_view model_name,
+                              int64_t model_version, absl::Duration latency,
+                              const absl::Status& status);
 
 }  // namespace xla_serving
 

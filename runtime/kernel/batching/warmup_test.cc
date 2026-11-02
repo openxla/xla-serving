@@ -19,6 +19,10 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/time/time.h"  // from @abseil-cpp
+#include "xla/tsl/lib/monitoring/cell_reader.h"  // from @xla
+#include "xla/tsl/lib/monitoring/test_utils.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 
 namespace xla_serving {
@@ -26,6 +30,8 @@ namespace {
 
 using ::testing::IsNull;
 using ::testing::NotNull;
+using ::tsl::monitoring::testing::CellReader;
+using ::tsl::monitoring::testing::Histogram;
 
 TEST(WarmupStateRegistryTest, RegisterAndLookup) {
   // Before registering, the key should not be present.
@@ -86,6 +92,22 @@ TEST(WarmupStateRegistryGlobalTest, ShouldWarmupAllBatchSizes) {
       GetGlobalWarmupStateRegistry().Register(key2, std::move(data2)));
   EXPECT_TRUE(ShouldWarmupAllBatchSizes(key1.name, key1.version));
   EXPECT_FALSE(ShouldWarmupAllBatchSizes(key2.name, key2.version));
+}
+
+TEST(RecordModelWarmupLatencyTest, RecordsLatencyByModelVersionAndStatus) {
+  CellReader<Histogram> latency("/orbax/serving/model_warmup_latency");
+
+  RecordModelWarmupLatency("model", 1, absl::Seconds(2), absl::OkStatus());
+  RecordModelWarmupLatency("model", 1, absl::Seconds(3),
+                           absl::InvalidArgumentError("warmup failed"));
+
+  const Histogram ok_latency = latency.Delta("model", "1", "OK");
+  EXPECT_EQ(ok_latency.num(), 1);
+  EXPECT_EQ(ok_latency.sum(), 2e6);
+  const Histogram failed_latency =
+      latency.Delta("model", "1", "INVALID_ARGUMENT");
+  EXPECT_EQ(failed_latency.num(), 1);
+  EXPECT_EQ(failed_latency.sum(), 3e6);
 }
 
 }  // namespace

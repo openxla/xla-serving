@@ -253,6 +253,8 @@ cc_library(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/time",
+        "@xla//xla/tsl/lib/monitoring:sampler",
     ],
 )
 
@@ -262,7 +264,11 @@ cc_test(
     defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
     deps = [
         ":warmup",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/time",
         "@googletest//:gtest_main",
+        "@xla//xla/tsl/lib/monitoring:cell_reader",
+        "@xla//xla/tsl/lib/monitoring:test_utils",
         "@xla//xla/tsl/platform:statusor",
     ],
 )
