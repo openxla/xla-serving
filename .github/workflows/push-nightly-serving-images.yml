@@ -11,11 +11,6 @@ on:
         required: false
         default: 'nightly'
         type: string
-      add_date_tag:
-        description: 'Also tag with date (nightly-YYYYMMDD)'
-        required: false
-        default: true
-        type: boolean
       add_latest_tag:
         description: 'Also tag as latest'
         required: false
@@ -112,9 +107,7 @@ jobs:
       - name: Build and Push Docker Image
         if: github.event_name != 'workflow_dispatch' || inputs.variant == 'all' || inputs.variant == matrix.variant.id
         env:
-          EVENT_NAME: ${{ github.event_name }}
           INPUT_TAG: ${{ inputs.tag }}
-          ADD_DATE_TAG: ${{ inputs.add_date_tag }}
           ADD_LATEST_TAG: ${{ inputs.add_latest_tag }}
           CACHE_CONFIG: ${{ github.ref == 'refs/heads/main' && 'remote_cache_readwrite' || 'remote_cache_readonly' }}
           FLAGS: ${{ matrix.variant.flags }}
@@ -125,12 +118,7 @@ jobs:
           PRIMARY_TAG="${INPUT_TAG:-nightly}"
           TAG_ARGS+=("--tag=${PRIMARY_TAG}")
 
-          if [ "${EVENT_NAME}" = "schedule" ] || [ "${ADD_DATE_TAG}" = "true" ]; then
-            DATE_TAG="nightly-$(date -u +%Y%m%d)"
-            TAG_ARGS+=("--tag=${DATE_TAG}")
-          fi
-
-          if [ "${ADD_LATEST_TAG}" = "true" ]; then
+          if [ "${ADD_LATEST_TAG}" = "true" ] && [ "${PRIMARY_TAG}" != "latest" ]; then
             TAG_ARGS+=("--tag=latest")
           fi
 

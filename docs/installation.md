@@ -117,7 +117,6 @@ Available tags:
 
 - `latest` — most recent release
 - `nightly` — built nightly from `main`
-- `nightly-YYYYMMDD` — pinned nightly snapshot
 
 ```bash
 docker pull us-docker.pkg.dev/xla-serving-engine/xla-serving/cpu-jax-only:latest

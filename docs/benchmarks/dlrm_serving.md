@@ -396,8 +396,7 @@ pip install jax
 
 Configure Docker authentication for Artifact Registry
 (`gcloud auth configure-docker us-docker.pkg.dev --quiet`) and invoke
-`run_benchmark.sh` with a pinned image tag (replace `nightly` with a dated
-`nightly-YYYYMMDD` tag for archival reproducibility):
+`run_benchmark.sh` with a prebuilt server image tag (`nightly` or `latest`):
 
 ::::{tab-set}
 :::{tab-item} Cloud TPU (v6e-1)

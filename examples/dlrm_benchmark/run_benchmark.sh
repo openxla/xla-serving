@@ -53,8 +53,8 @@ Required:
 
 XSE server (pass --xse_image or --xse_bin; auto-detects bazel-bin if built):
   --xse_image IMAGE       Prebuilt container image, e.g.
-                          us-docker.pkg.dev/xla-serving-engine/xla-serving/tpu-jax-only:nightly-YYYYMMDD
-                          us-docker.pkg.dev/xla-serving-engine/xla-serving/gpu-jax-cuda12:nightly-YYYYMMDD
+                          us-docker.pkg.dev/xla-serving-engine/xla-serving/tpu-jax-only:nightly
+                          us-docker.pkg.dev/xla-serving-engine/xla-serving/gpu-jax-cuda12:nightly
   --xse_bin PATH          xla_serving_main_{cpu,gpu,tpu} binary.
   --tpu_library_path PATH Host libtpu.so path. Required only for a bare
                           --xse_bin TPU server when $TPU_LIBRARY_PATH and the
@@ -320,7 +320,7 @@ fi
 if [[ "${needs_xse}" == 1 && -z "${XSE_IMAGE}" && ! -x "${XSE_BIN}" ]]; then
   if [[ "${DRY_RUN}" == 0 ]]; then
     echo "XSE server not specified and no local ${XSE_TARGET} binary found." >&2
-    echo "Pass --xse_image us-docker.pkg.dev/xla-serving-engine/xla-serving/<variant>:nightly-YYYYMMDD" >&2
+    echo "Pass --xse_image us-docker.pkg.dev/xla-serving-engine/xla-serving/<variant>:nightly" >&2
     echo "or --xse_bin /path/to/${XSE_TARGET}. See README.md." >&2
     exit 1
   fi
