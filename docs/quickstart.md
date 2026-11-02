@@ -5,12 +5,12 @@ run it in-process, serve it from a container, and query it over gRPC. Every
 command below was run as written; the model is trivial on purpose so that
 nothing here depends on an accelerator.
 
-You need Python 3.12+, Docker, and the `xla-saved-model` and
-`xla-saved-model-runner` packages from [Installation](installation.md). Flax is
-only needed for the example model:
+You need Python 3.12+ and Docker (see [Installation](installation.md) for
+details). Install the export library, in-process runner, and the example's
+dependencies (`flax` and `grpcio`):
 
 ```bash
-pip install flax grpcio
+pip install xla-saved-model xla-saved-model-runner flax grpcio
 ```
 
 ## 1. Export

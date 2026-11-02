@@ -548,9 +548,8 @@ if [[ "${TOOL_MODE}" == "python" ]]; then
 The installed xla-saved-model package is missing generated protobuf modules
 (import xla_saved_model.protos.grpc.predict_pb2 failed from ${PY_ROOT}).
 
-Install the release wheels into the active virtual environment:
-  gh release download --repo AI-Hypercomputer/xla-serving --pattern '*.whl' --dir wheels
-  pip install --force-reinstall --find-links wheels xla-saved-model xla-serving-data
+Install the release packages into the active virtual environment:
+  pip install --force-reinstall xla-saved-model xla-serving-data
 
 If building from source instead, ensure bazel is on PATH before running
 \`python -m build --wheel\`.

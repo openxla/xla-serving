@@ -57,20 +57,15 @@ preprocessing in XSE runs via `xla_serving_data`'s C++ `CompositeProcessor`
 
 ### 1. Environment setup
 
-Install Python `3.12+`, the `xla-saved-model` and `xla-serving-data` release
-wheels (see [Installation](../../docs/installation.md)), the benchmark
-dependencies, and the JAX accelerator package matching your VM:
+Install Python `3.12+`, the `xla-saved-model` and `xla-serving-data` packages
+(see [Installation](../../docs/installation.md)), the benchmark dependencies,
+and the JAX accelerator package matching your VM:
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
 
-gh release download \
-  --repo AI-Hypercomputer/xla-serving \
-  --pattern '*.whl' \
-  --dir wheels
-
-pip install --find-links wheels xla-saved-model xla-serving-data
+pip install xla-saved-model xla-serving-data
 pip install -r examples/dlrm_benchmark/requirements.txt
 
 # Choose one matching the host hardware:

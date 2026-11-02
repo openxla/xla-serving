@@ -7,7 +7,7 @@ form and in an optimized multi-process, dynamically batched design—compares
 against **XLA Serving Engine (XSE)** on the same model, weights, wire protocol,
 and hardware. All benchmark code—model export, the XSE and Python servers, the
 load generator, and the runner script—is available to inspect in
-[`examples/dlrm_benchmark/`](https://github.com/AI-Hypercomputer/xla-serving/tree/main/examples/dlrm_benchmark).
+[`examples/dlrm_benchmark/`](https://github.com/openxla/xla-serving/tree/main/examples/dlrm_benchmark).
 
 ## Summary
 
@@ -50,7 +50,7 @@ with zero errors.*
 Recommendation and ranking models combine memory-bound sparse table lookups with
 compute-bound dense interaction networks. The benchmark uses the Criteo-scale
 **DLRM-DCNv2** architecture from
-[`examples/dlrm`](https://github.com/AI-Hypercomputer/xla-serving/tree/main/examples/dlrm):
+[`examples/dlrm`](https://github.com/openxla/xla-serving/tree/main/examples/dlrm):
 
 1. **Host CPU embedding lookups.** 26 categorical embedding tables (`6.2M` rows
    total at `embedding_size = 128`, **3.2 GB** of `float32` weights) reside in
@@ -290,7 +290,7 @@ Three concrete bottlenecks govern hybrid CPU-embedding + accelerator serving:
 ## Reproducing the benchmark
 
 The complete benchmark suite lives in
-[`examples/dlrm_benchmark/`](https://github.com/AI-Hypercomputer/xla-serving/tree/main/examples/dlrm_benchmark)
+[`examples/dlrm_benchmark/`](https://github.com/openxla/xla-serving/tree/main/examples/dlrm_benchmark)
 in the repository and requires no local C++ Bazel build when using prebuilt
 wheels and server container images.
 
@@ -307,23 +307,18 @@ gcloud compute tpus tpu-vm create xse-bench-tpu \
   --version=v2-alpha-tpuv6e
 ```
 
-On the VM, create a Python 3.12 virtual environment and install the release
-wheels plus `jax[tpu]` (requires Python 3.12+; install `python3.12` or use `uv`
-if the base VM image ships Python 3.10):
+On the VM, create a Python 3.12 virtual environment and install the packages
+from PyPI plus `jax[tpu]` (requires Python 3.12+; install `python3.12` or use
+`uv` if the base VM image ships Python 3.10):
 
 ```bash
-git clone https://github.com/AI-Hypercomputer/xla-serving
+git clone https://github.com/openxla/xla-serving
 cd xla-serving
 
 python3.12 -m venv .venv
 source .venv/bin/activate
 
-gh release download \
-  --repo AI-Hypercomputer/xla-serving \
-  --pattern '*.whl' \
-  --dir wheels
-
-pip install --find-links wheels xla-saved-model xla-serving-data
+pip install xla-saved-model xla-serving-data
 pip install -r examples/dlrm_benchmark/requirements.txt
 pip install "jax[tpu]" \
   -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
@@ -347,21 +342,16 @@ gcloud compute instances create xse-bench-gpu \
   --maintenance-policy=TERMINATE
 ```
 
-On the VM, set up Python 3.12, the release wheels, and `jax[cuda12]`:
+On the VM, set up Python 3.12, the XSE packages, and `jax[cuda12]`:
 
 ```bash
-git clone https://github.com/AI-Hypercomputer/xla-serving
+git clone https://github.com/openxla/xla-serving
 cd xla-serving
 
 python3.12 -m venv .venv
 source .venv/bin/activate
 
-gh release download \
-  --repo AI-Hypercomputer/xla-serving \
-  --pattern '*.whl' \
-  --dir wheels
-
-pip install --find-links wheels xla-saved-model xla-serving-data
+pip install xla-saved-model xla-serving-data
 pip install -r examples/dlrm_benchmark/requirements.txt
 pip install "jax[cuda12]"
 
@@ -374,18 +364,13 @@ On any Linux `x86_64` workstation with Docker, verify the full pipeline with
 capped vocabulary tables in ~5 minutes:
 
 ```bash
-git clone https://github.com/AI-Hypercomputer/xla-serving
+git clone https://github.com/openxla/xla-serving
 cd xla-serving
 
 python3.12 -m venv .venv
 source .venv/bin/activate
 
-gh release download \
-  --repo AI-Hypercomputer/xla-serving \
-  --pattern '*.whl' \
-  --dir wheels
-
-pip install --find-links wheels xla-saved-model xla-serving-data
+pip install xla-saved-model xla-serving-data
 pip install -r examples/dlrm_benchmark/requirements.txt
 pip install jax
 ```
@@ -468,7 +453,7 @@ When the sweep finishes, `<work_dir>/results/` contains:
   summaries, gRPC error-code histograms, and host CPU / RSS / PSS / GPU samples.
 
 See
-[`examples/dlrm_benchmark/README.md`](https://github.com/AI-Hypercomputer/xla-serving/blob/main/examples/dlrm_benchmark/README.md)
+[`examples/dlrm_benchmark/README.md`](https://github.com/openxla/xla-serving/blob/main/examples/dlrm_benchmark/README.md)
 in the repository for individual CLI flags, custom batch-bucket sweeps, and
 troubleshooting notes.
 

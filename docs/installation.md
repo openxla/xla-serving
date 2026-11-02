@@ -30,63 +30,50 @@ lowers functions to StableHLO for `cpu`, `cuda`, and `tpu` on any CPU host.
 
 ## Python packages
 
-:::{note}
-PyPI publishing for `xla-saved-model`, `xla-saved-model-runner`, and
-`xla-serving-data` is being finalized. Once published, installing the export
-package will be a standard `pip install xla-saved-model`. Until then, download
-the wheel artifacts from [GitHub Releases](https://github.com/openxla/xla-serving/releases)
-and pass `--find-links wheels` to `pip`.
-:::
-
-Download the wheels from the latest release into `./wheels`:
+Install `xla-saved-model` and the optional runtime and data packages from PyPI:
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
 
-gh release download \
-  --repo openxla/xla-serving \
-  --pattern '*.whl' \
-  --dir wheels
-```
-
-Then install `xla-saved-model` (once on PyPI, omit `--find-links wheels`):
-
-```bash
 # Core export library and xsm-cli
-pip install \
-  --find-links wheels \
-  xla-saved-model
+pip install xla-saved-model
 
-# Optional: in-process C++ runtime wrapper for Python (picks the wheel for your Python version)
-pip install \
-  --find-links wheels \
-  xla-saved-model-runner
+# Optional: in-process C++ runtime wrapper for Python
+pip install xla-saved-model-runner
 
 # Optional: C++ feature transform library
-pip install \
-  --find-links wheels \
-  xla-serving-data
+pip install xla-serving-data
 ```
 
 `xla-saved-model` defines optional extras for the frameworks it can export:
 
 ```bash
 # TensorFlow pre/post-processing stages
-pip install \
-  --find-links wheels \
-  "xla-saved-model[tf]"
+pip install "xla-saved-model[tf]"
 
 # PyTorch models via torchax
-pip install \
-  --find-links wheels \
-  "xla-saved-model[torch]"
+pip install "xla-saved-model[torch]"
 
 # Hugging Face LLM export (xsm-llm-export)
-pip install \
-  --find-links wheels \
-  "xla-saved-model[llm]"
+pip install "xla-saved-model[llm]"
 ```
+
+:::{tip} Installing from GitHub Releases
+Wheel artifacts for each release are also attached to
+[GitHub Releases](https://github.com/openxla/xla-serving/releases). To install
+from downloaded wheels (for example, in an offline environment or from a
+pre-release tag):
+
+```bash
+gh release download \
+  --repo openxla/xla-serving \
+  --pattern '*.whl' \
+  --dir wheels
+
+pip install --find-links wheels xla-saved-model
+```
+:::
 
 Verify the installation:
 

@@ -118,7 +118,7 @@ in-process check, and a Python gRPC client.
   [DLRM serving benchmark](benchmarks/dlrm_serving.md) comparing XSE against
   single- and multi-process Python JAX servers on Cloud TPU, with end-to-end
   reproduction instructions and full source in
-  [`examples/dlrm_benchmark/`](https://github.com/AI-Hypercomputer/xla-serving/tree/main/examples/dlrm_benchmark).
+  [`examples/dlrm_benchmark/`](https://github.com/openxla/xla-serving/tree/main/examples/dlrm_benchmark).
 
 ```{toctree}
 :hidden:

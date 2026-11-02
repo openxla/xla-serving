@@ -1,9 +1,8 @@
 # Python dependencies for examples/dlrm_benchmark.
 #
-# Install `xla-saved-model` and `xla-serving-data` from GitHub Releases first
+# Install `xla-saved-model` and `xla-serving-data` from PyPI first
 # (requires Python 3.12–3.14; see docs/installation.md):
-#   gh release download --repo AI-Hypercomputer/xla-serving --pattern '*.whl' --dir wheels
-#   pip install --find-links wheels xla-saved-model xla-serving-data
+#   pip install xla-saved-model xla-serving-data
 #   pip install -r examples/dlrm_benchmark/requirements.txt
 #
 # Then install the JAX accelerator extra matching the VM:

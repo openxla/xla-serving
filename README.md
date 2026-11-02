@@ -95,19 +95,10 @@ example—including an in-process Python runner and a gRPC client—in the
 
 ## Installation
 
-Install `xla-saved-model` with `pip` (until the PyPI package is live, pass
-`--find-links` pointing at the wheels from
-[GitHub Releases](https://github.com/openxla/xla-serving/releases)):
+Install `xla-saved-model` from PyPI:
 
 ```bash
-gh release download \
-  --repo openxla/xla-serving \
-  --pattern '*.whl' \
-  --dir wheels
-
-pip install \
-  --find-links wheels \
-  xla-saved-model
+pip install xla-saved-model
 ```
 
 Prebuilt server images are published to
