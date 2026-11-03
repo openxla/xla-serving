@@ -654,8 +654,8 @@ ND_REGISTER_TRANSFORM(ShapeConstrainedDummyTransform,
           return ShapeConstrainedDummyTransform::Create();
         })
     .SetInputConstraints(
-        {{.expected_shape = std::vector<std::optional<int64_t>>{
-              2, std::nullopt}}});
+        {{.expected_shape = api::PartialShape::Dimensions{
+              api::Dim::Static(2), api::Dim::Unknown()}}});
 
 absl::Status PropagateSpec(const TransformBase& transform,
                            api::HostBufferSpec spec) {
