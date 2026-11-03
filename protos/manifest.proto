@@ -168,6 +168,13 @@ message StableHloFunctionBody {
   // signatures, and the runtime supplies them itself. Zero means the function
   // was not exported for output donation.
   int32 num_input_aliased_output = 7;
+
+  // Pre-optimization user input and output signatures when export-time TPU I/O
+  // shape optimizations (such as R1 flattening or NHWC->NCHW transpose) were
+  // applied. `Function.signature` stores the post-optimization physical
+  // signature matching the StableHLO `@main` entry point.
+  optional xla_saved_model_type.Type original_input_signature = 8;
+  optional xla_saved_model_type.Type original_output_signature = 9;
 }
 
 message UnstructuredData {

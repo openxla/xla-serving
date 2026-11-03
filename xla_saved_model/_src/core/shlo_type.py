@@ -116,6 +116,8 @@ class ShloTensorSpec:
     name: The name of the tensor.
     default_val: Optional default fallback value for function parameters.
     placement: Optional placement enum (e.g. type_pb2.HOST or type_pb2.DEVICE).
+    host_transpose: Optional dimension permutation to apply on the host before
+      passing the tensor to the compiled function.
   """
 
   shape: ShloShape
@@ -125,10 +127,13 @@ class ShloTensorSpec:
   name: str | None = None
   default_val: Any | None = None
   placement: Placement | None = None
+  host_transpose: Sequence[int] | None = None
 
   def __post_init__(self) -> None:
     if self.shape is not None:
       object.__setattr__(self, "shape", tuple(self.shape))
+    if self.host_transpose is not None:
+      object.__setattr__(self, "host_transpose", tuple(self.host_transpose))
     if not isinstance(self.dtype, ShloDType):
       raw_dt = self.dtype
       if hasattr(raw_dt, "as_numpy_dtype"):

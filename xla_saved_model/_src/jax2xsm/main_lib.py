@@ -33,6 +33,7 @@ from xla_saved_model._src.core import unstructured_data
 from xla_saved_model._src.core import value
 from xla_saved_model._src.jax2xsm import constants
 from xla_saved_model._src.jax2xsm import jax_specific_info
+from xla_saved_model._src.jax2xsm import tpu_io_optimization
 from xla_saved_model._src.jax2xsm import typing
 from xla_saved_model._src.jax2xsm import utils
 
@@ -371,6 +372,10 @@ def convert(
         jax_export.DisabledSafetyCheck
     ] = (),
     num_input_aliased_output: int = 0,
+    *,
+    enable_input_r1_optimization: bool = False,
+    enable_output_r1_optimization: bool = False,
+    max_transpose_channels: int = 0,
 ) -> shlo_function.ShloFunction:
   """Converts a JAX function to an Orbax Model `ShloFunction`.
 
@@ -409,6 +414,14 @@ def convert(
     num_input_aliased_output: The number of trailing entries of `args_spec` that
       are donated output buffers rather than caller-supplied inputs. `fun_jax`
       must already be jitted with those arguments donated.
+    enable_input_r1_optimization: If True, flattens eligible static rank >= 2
+      user inputs to 1-D at the StableHLO entry point and reshapes them back
+      inside the function.
+    enable_output_r1_optimization: If True, flattens eligible static rank >= 2
+      outputs to 1-D before returning from the StableHLO function.
+    max_transpose_channels: If > 0, transposes eligible 4-D NHWC user inputs
+      with `C <= max_transpose_channels` and `C < W` to NCHW at the StableHLO
+      entry point and transposes them back to NHWC on device.
 
   Returns:
     An Orbax Model `ShloFunction`.
@@ -439,13 +452,74 @@ def convert(
   exported = exported_creator(*args_spec, **kwargs_spec)
   if num_input_aliased_output:
     _assert_outputs_are_aliased(exported, num_input_aliased_output)
-  return jax_exported_to_shlo_fn(
+
+  opt_plan = tpu_io_optimization.build_tpu_io_optimization_plan(
+      fun_jax,
+      args_spec,
+      kwargs_spec,
+      exported,
+      model_inputs_layout=model_inputs_layout,
+      num_input_aliased_output=num_input_aliased_output,
+      enable_input_r1_optimization=enable_input_r1_optimization,
+      enable_output_r1_optimization=enable_output_r1_optimization,
+      max_transpose_channels=max_transpose_channels,
+  )
+  if opt_plan is None:
+    return jax_exported_to_shlo_fn(
+        exported,
+        xla_compile_options_per_platform,
+        model_param_names=model_param_names,
+        model_inputs_layout=model_inputs_layout,
+        num_input_aliased_output=num_input_aliased_output,
+    )
+
+  unoptimized_shlo_fn = jax_exported_to_shlo_fn(
       exported,
       xla_compile_options_per_platform,
       model_param_names=model_param_names,
       model_inputs_layout=model_inputs_layout,
       num_input_aliased_output=num_input_aliased_output,
   )
+  opt_exported_creator = jax_export.export(
+      opt_plan.wrapped_fn,  # pyrefly: ignore[bad-argument-type]
+      **jax_export_kwargs,
+  )
+  opt_exported = opt_exported_creator(
+      *opt_plan.args_spec, **opt_plan.kwargs_spec
+  )
+  if num_input_aliased_output:
+    _assert_outputs_are_aliased(opt_exported, num_input_aliased_output)
+
+  opt_shlo_fn = jax_exported_to_shlo_fn(
+      opt_exported,
+      xla_compile_options_per_platform,
+      model_param_names=model_param_names,
+      model_inputs_layout=model_inputs_layout,
+      num_input_aliased_output=num_input_aliased_output,
+  )
+  if opt_plan.transposed_input_leaf_indices:
+    opt_shlo_fn.input_signature = (
+        tpu_io_optimization.apply_host_transpose_to_full_input_sig(
+            opt_shlo_fn.input_signature,
+            opt_plan.transposed_input_leaf_indices,
+        )
+    )
+  if opt_plan.has_input_optimization:
+    pos_args_sig = unoptimized_shlo_fn.input_signature[0]
+    user_in_sig = pos_args_sig[1] if len(pos_args_sig) >= 2 else pos_args_sig[0]
+    num_weight_leaves = (
+        len(jax.tree.leaves(args_spec[0])) if len(args_spec) >= 2 else 0
+    )
+    opt_shlo_fn.original_input_signature = (
+        tpu_io_optimization.apply_host_transpose_to_user_input_sig(
+            user_in_sig,
+            num_weight_leaves,
+            opt_plan.transposed_input_leaf_indices,
+        )
+    )
+  if opt_plan.has_output_optimization:
+    opt_shlo_fn.original_output_signature = unoptimized_shlo_fn.output_signature
+  return opt_shlo_fn
 
 
 def convert_path_to_value(
@@ -493,6 +567,11 @@ def convert_apply_fn_bundle_to_shlo(
   fun_jax = apply_fn_bundle.apply_fn
   num_input_aliased_output = 0
   if apply_fn_bundle.use_input_aliasing:
+    if apply_fn_bundle.enable_output_r1_optimization:
+      raise ValueError(
+          "Output R1 optimization is incompatible with output donation"
+          " (use_input_aliasing=True)."
+      )
     fun_jax, args_specs_list, num_input_aliased_output = (
         prepare_output_donation(apply_fn_bundle.apply_fn, args_specs_list)
     )
@@ -514,6 +593,13 @@ def convert_apply_fn_bundle_to_shlo(
           xla_compile_options_per_platform=compile_options_per_platform,
           model_param_names=model_param_names,
           num_input_aliased_output=num_input_aliased_output,
+          enable_input_r1_optimization=(
+              apply_fn_bundle.enable_input_r1_optimization
+          ),
+          enable_output_r1_optimization=(
+              apply_fn_bundle.enable_output_r1_optimization
+          ),
+          max_transpose_channels=apply_fn_bundle.max_transpose_channels,
       )
       for args_spec in args_specs_list
   )

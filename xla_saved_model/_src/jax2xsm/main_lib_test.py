@@ -30,6 +30,7 @@ from xla_saved_model.protos import type_pb2
 from xla_saved_model._src.core import persistence_lib as xsm_core
 from xla_saved_model._src.core import test_utils
 from xla_saved_model._src.jax2xsm import main_lib
+from xla_saved_model._src.jax2xsm import typing
 from xla_saved_model._src.test_utils import jax_mnist
 
 os.environ['XLA_FLAGS'] = '--xla_force_host_platform_device_count=8'
@@ -518,6 +519,68 @@ class MainLibTest(test_utils.XsmTestCase):
     input_tuple = fn_sig.input.tuple.elements[0].tuple.elements[0]
     w_type = input_tuple.dict.string_to_type['w'].leaf.tensor_type
     self.assertEqual(w_type.placement, type_pb2.HOST)
+
+  def test_convert_apply_fn_bundle_with_tpu_io_optimizations_e2e(self):
+    def _apply_fn(params, x):
+      return jnp.einsum('nhwc,co->nhwo', x, params['w'])
+
+    params = {'w': jnp.ones((2, 4), dtype=jnp.float32)}
+    input_sig = jax.ShapeDtypeStruct((1, 4, 4, 2), jnp.float32)
+    bundle = typing.ApplyFnBundle(
+        apply_fn=_apply_fn,
+        enable_input_r1_optimization=True,
+        enable_output_r1_optimization=True,
+        max_transpose_channels=3,
+    )
+
+    shlo_fns = main_lib.convert_apply_fn_bundle_to_shlo(
+        bundle, params=params, input_signature=input_sig
+    )
+    self.assertLen(shlo_fns, 1)
+    shlo_fn = shlo_fns[0]
+
+    save_dir_path = self.create_tempdir().full_path
+    xsm_core.save(
+        {'serving_default': shlo_fn},
+        save_dir_path,
+        xsm_core.SaveOptions(version=2),
+    )
+
+    manifest_proto = xsm_core.load(save_dir_path)
+    fn_proto = manifest_proto.objects['serving_default'].function
+    user_in_tensor = (
+        fn_proto.signature.input.tuple.elements[0]
+        .tuple.elements[1]
+        .leaf.tensor_type
+    )
+    self.assertEqual(
+        [
+            d.size
+            for d in user_in_tensor.shape.shape_with_known_rank.dimension_sizes
+        ],
+        [32],
+    )
+    self.assertEqual(list(user_in_tensor.host_transpose), [0, 3, 1, 2])
+
+    body = fn_proto.body.stable_hlo_body
+    orig_in_tensor = body.original_input_signature.leaf.tensor_type
+    self.assertEqual(
+        [
+            d.size
+            for d in orig_in_tensor.shape.shape_with_known_rank.dimension_sizes
+        ],
+        [1, 4, 4, 2],
+    )
+    self.assertEqual(list(orig_in_tensor.host_transpose), [0, 3, 1, 2])
+
+    orig_out_tensor = body.original_output_signature.leaf.tensor_type
+    self.assertEqual(
+        [
+            d.size
+            for d in orig_out_tensor.shape.shape_with_known_rank.dimension_sizes
+        ],
+        [1, 4, 4, 4],
+    )
 
 
 if __name__ == '__main__':

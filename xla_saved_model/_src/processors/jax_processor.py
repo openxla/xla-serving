@@ -220,15 +220,25 @@ class JaxProcessor:
     # exported for output donation) as a trailing argument. We exclude them
     # here to create the external-facing input signature that only contains the
     # actual user inputs.
-    jax_input_signature = _calculate_jax_model_input_sig(
-        _infer_polymorphic_signature(
-            [func.input_signature for func in shlo_functions]
-        ),
-        has_donated_output_args=self.apply_fn_bundle.use_input_aliasing,
-    )
-    jax_output_signature = _infer_polymorphic_signature(
-        [func.output_signature for func in shlo_functions]
-    )
+    input_sigs = []
+    output_sigs = []
+    for func in shlo_functions:
+      if func.original_input_signature is not None:
+        input_sigs.append(((func.original_input_signature,), {}))
+      else:
+        input_sigs.append(
+            _calculate_jax_model_input_sig(
+                func.input_signature,
+                has_donated_output_args=self.apply_fn_bundle.use_input_aliasing,
+            )
+        )
+      if func.original_output_signature is not None:
+        output_sigs.append(func.original_output_signature)
+      else:
+        output_sigs.append(func.output_signature)
+
+    jax_input_signature = _infer_polymorphic_signature(input_sigs)
+    jax_output_signature = _infer_polymorphic_signature(output_sigs)
 
     return PreparedJaxProcessor(
         self.name,

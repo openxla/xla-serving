@@ -12,10 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from unittest import mock
+
 from absl.testing import absltest
 import jax
 import jax.numpy as jnp
 
+from xla_saved_model._src import jax2xsm
+from xla_saved_model._src.core import shlo_function
 from xla_saved_model._src.core import shlo_type
 from xla_saved_model._src.core import test_utils
 from xla_saved_model._src.export import jax_model
@@ -107,6 +111,63 @@ class JaxProcessorTest(test_utils.XsmTestCase):
         shlo_fns[0].data_names,
         ['layer1.b', 'layer1.w', 'layer2.b', 'layer2.w'],
     )
+
+  def test_prepare_uses_original_signatures_when_present(self):
+    orig_user_in = shlo_type.ShloTensorSpec(
+        shape=(2, 8, 8, 3), dtype=shlo_type.ShloDType.f32
+    )
+    orig_out = shlo_type.ShloTensorSpec(
+        shape=(2, 4), dtype=shlo_type.ShloDType.f32
+    )
+    fake_shlo_fn = shlo_function.ShloFunction(
+        input_signature=(
+            {
+                'w': shlo_type.ShloTensorSpec(
+                    shape=(1,), dtype=shlo_type.ShloDType.f32
+                )
+            },
+            (
+                (
+                    shlo_type.ShloTensorSpec(
+                        shape=(384,), dtype=shlo_type.ShloDType.f32
+                    ),
+                ),
+                {},
+            ),
+        ),
+        output_signature=shlo_type.ShloTensorSpec(
+            shape=(8,), dtype=shlo_type.ShloDType.f32
+        ),
+        mlir_module_serialized=b'shlo',
+        calling_convention_version=1,
+        module_kept_var_idx=(0, 1),
+        lowering_platforms=('tpu',),
+        supplemental_info={},
+        physical_in_dtypes=(None, None),
+        physical_out_dtypes=(None,),
+        data_names=['w'],
+        original_input_signature=orig_user_in,
+        original_output_signature=orig_out,
+    )
+    self.enter_context(
+        mock.patch.object(
+            jax2xsm,
+            'convert_apply_fn_bundle_to_shlo',
+            autospec=True,
+            spec_set=True,
+            return_value=[fake_shlo_fn],
+        )
+    )
+    processor = jax_processor.JaxProcessor(
+        name='serving_default',
+        apply_fn_bundle=jax_model.ApplyFnBundle(apply_fn=lambda p, x: x),
+        params={'w': jnp.array([1.0], dtype=jnp.float32)},
+    )
+    prepared = processor.prepare(
+        jax.ShapeDtypeStruct(shape=(2, 8, 8, 3), dtype=jnp.float32)
+    )
+    self.assertEqual(prepared.input_signature, ((orig_user_in,), {}))
+    self.assertEqual(prepared.output_signature, orig_out)
 
 
 if __name__ == '__main__':
