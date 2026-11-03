@@ -554,9 +554,10 @@ class OfflineCompilerTest(parameterized.TestCase):
     compile_options = artifacts[0].compile_options
     self.assertIsNotNone(compile_options)
     # The autotune database is a path on the compiling host.
-    self.assertEmpty(
-        compile_options.executable_build_options.debug_options.xla_gpu_per_fusion_autotune_cache_dir
+    recorded_debug_options = (
+        compile_options.executable_build_options.debug_options
     )
+    self.assertEmpty(recorded_debug_options.xla_autotune_cache_dir)
 
   def test_deviceless_multi_device_compilation_records_no_compile_options(
       self,
@@ -580,10 +581,11 @@ class OfflineCompilerTest(parameterized.TestCase):
     compile_options = jaxlib.xla_client.CompileOptions()
     compile_options.compile_portable_executable = True
     debug_options = compile_options.executable_build_options.debug_options
-    debug_options.xla_gpu_load_autotune_results_from = "/tmp/autotune.textproto"
-    debug_options.xla_gpu_per_fusion_autotune_cache_dir = "/tmp/autotune"
+    debug_options.xla_load_autotune_cache_from = "/tmp/autotune.textproto"
+    debug_options.xla_autotune_cache_dir = "/tmp/autotune"
     compile_options.env_option_overrides = [
         ("xla_gpu_require_complete_aot_autotune_results", True),
+        ("xla_fail_on_autotune_cache_miss", True),
         ("xla_gpu_autotune_level", 4),
     ]
 
@@ -591,10 +593,8 @@ class OfflineCompilerTest(parameterized.TestCase):
 
     self.assertTrue(recorded.compile_portable_executable)
     recorded_debug_options = recorded.executable_build_options.debug_options
-    self.assertEmpty(recorded_debug_options.xla_gpu_load_autotune_results_from)
-    self.assertEmpty(
-        recorded_debug_options.xla_gpu_per_fusion_autotune_cache_dir
-    )
+    self.assertEmpty(recorded_debug_options.xla_load_autotune_cache_from)
+    self.assertEmpty(recorded_debug_options.xla_autotune_cache_dir)
     self.assertEqual(
         set(recorded.env_option_overrides), {"xla_gpu_autotune_level"}
     )
