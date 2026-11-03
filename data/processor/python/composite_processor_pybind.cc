@@ -745,6 +745,14 @@ std::string HostBufferRepr(const xla_serving::HostBuffer& hb) {
 
 std::string ValueRepr(const api::Value& value) { return value.DebugString(); }
 
+py::list PyListFromDimensions(const api::PartialShape::Dimensions& dims) {
+  py::list result;
+  for (const api::Dim& dim : dims) {
+    result.append(py::cast(dim.Value()));
+  }
+  return result;
+}
+
 PYBIND11_MODULE(composite_processor_pybind, m) {
   m.doc() = "Composite Processor Python bindings";
 
@@ -1267,7 +1275,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
                py_constraint["is_list"] = constraint.is_list;
                if (constraint.expected_shape.has_value()) {
                  py_constraint["expected_shape"] =
-                     py::cast(*constraint.expected_shape);
+                     PyListFromDimensions(*constraint.expected_shape);
                }
                py_constraints.append(py_constraint);
              }

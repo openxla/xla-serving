@@ -95,11 +95,11 @@ ND_REGISTER_TRANSFORM(MatMulTransform, "MatMulTransform")
     })
     .SetInputConstraints(
         {{.allowed_dtypes = {xla::ifrt::DType::kS32, xla::ifrt::DType::kF32},
-          .expected_shape = std::vector<std::optional<int64_t>>{std::nullopt,
-                                                                std::nullopt}},
+          .expected_shape =
+              PartialShape::Dimensions{Dim::Unknown(), Dim::Unknown()}},
          {.allowed_dtypes = {xla::ifrt::DType::kS32, xla::ifrt::DType::kF32},
-          .expected_shape = std::vector<std::optional<int64_t>>{
-              std::nullopt, std::nullopt}}});
+          .expected_shape =
+              PartialShape::Dimensions{Dim::Unknown(), Dim::Unknown()}}});
 
 absl::Status MatMulTransform::PropagateSignatureImpl(
     ShapeInferenceContext& context) const {
