@@ -762,7 +762,7 @@ class UpdateTest(absltest.TestCase):
           500,
       )
 
-  def test_update_xla_flags_tpu_clear(self):
+  def test_update_xla_flags_tpu_clear_and_rollback(self):
     model_dir = self._create_test_model(with_xla_compile_options=True)
     update.update(
         model_base_dir=model_dir,
@@ -802,6 +802,39 @@ class UpdateTest(absltest.TestCase):
     self.assertEmpty(tpu_opts.executable_build_options.comp_envs.environments)
     self.assertEmpty(tpu_opts.env_option_overrides)
 
+    # Rollback to .bak restores the previous flag (=90) from '(none)'
+    update.rollback(model_base_dir=model_dir, to='bak')
+    history_proto = history_pb2.ModelHistory()
+    with open(history_path, 'r') as f:
+      text_format.Parse(f.read(), history_proto)
+    rb_bak_change = history_proto.records[-1].changes[
+        'serving_default.xla_flags.tpu'
+    ]
+    self.assertEqual(rb_bak_change.previous_value, '(none)')
+    self.assertEqual(
+        rb_bak_change.new_value,
+        '--xla_jf_rematerialization_percent_shared_memory_limit=90',
+    )
+
+    # Rollback to .orig restores initial baseline TPU compilation environment
+    update.rollback(model_base_dir=model_dir, to='orig')
+    history_proto = history_pb2.ModelHistory()
+    with open(history_path, 'r') as f:
+      text_format.Parse(f.read(), history_proto)
+    rb_orig_change = history_proto.records[-1].changes[
+        'serving_default.xla_flags.tpu'
+    ]
+    self.assertEqual(
+        rb_orig_change.previous_value,
+        '--xla_jf_rematerialization_percent_shared_memory_limit=90',
+    )
+    expected_orig = (
+        '(default)'
+        if hasattr(compile_options_util, 'tpu_comp_env_pb2')
+        else '(none)'
+    )
+    self.assertEqual(rb_orig_change.new_value, expected_orig)
+
   def test_update_xla_flags_gpu_and_cpu(self):
     model_dir = self._create_test_model(
         with_xla_compile_options=True,
@@ -836,6 +869,17 @@ class UpdateTest(absltest.TestCase):
     cpu_opts = opts_map.map['cpu']
     self.assertTrue(
         cpu_opts.env_option_overrides['xla_cpu_enable_fast_math'].bool_field
+    )
+
+    # Rollback external compile_options.pb to .bak (undoes CPU, keeps GPU)
+    update.rollback(model_base_dir=model_dir, to='bak')
+    opts_map = self._load_compile_options_map(model_dir)
+    self.assertEmpty(opts_map.map['cpu'].env_option_overrides)
+    self.assertEqual(
+        opts_map.map['cuda']
+        .env_option_overrides['xla_gpu_autotune_level']
+        .int_field,
+        2,
     )
 
   def test_update_xla_flags_function_name_and_combined_updates(self):
@@ -878,6 +922,57 @@ class UpdateTest(absltest.TestCase):
         opts_prefill.map['cpu']
         .env_option_overrides['xla_cpu_enable_fast_math']
         .bool_field
+    )
+
+    # Rollback restores both inlined batch_options and xla_compile_options
+    update.rollback(model_base_dir=model_dir, to='orig')
+    opts_prefill_restored = self._load_compile_options_map(model_dir, 'prefill')
+    self.assertEmpty(opts_prefill_restored.map['cpu'].env_option_overrides)
+
+    history_path = os.path.join(model_dir, constants.HISTORY_FILENAME)
+    history_proto = history_pb2.ModelHistory()
+    with open(history_path, 'r') as f:
+      text_format.Parse(f.read(), history_proto)
+    rb_changes = history_proto.records[-1].changes
+    self.assertEqual(
+        rb_changes['serving_default.max_batch_size'].new_value, '16'
+    )
+    self.assertEqual(rb_changes['prefill.xla_flags.cpu'].new_value, '(none)')
+
+  def test_rollback_combined_external_files(self):
+    model_dir = self._create_test_model(
+        inlined_pipelines=False,
+        with_xla_compile_options=True,
+        inlined_xla_compile_options=False,
+    )
+
+    update.update(
+        model_base_dir=model_dir,
+        max_batch_size=64,
+        platform='cpu',
+        xla_flags='--xla_cpu_enable_fast_math=true',
+    )
+
+    pipelines_path = os.path.join(model_dir, 'orchestration.pb')
+    updated_pipelines = orchestration_pb2.Pipelines()
+    with open(pipelines_path, 'rb') as f:
+      updated_pipelines.ParseFromString(f.read())
+    self.assertEqual(self._get_batch_size(updated_pipelines), 64)
+    self.assertTrue(
+        self._load_compile_options_map(model_dir)
+        .map['cpu']
+        .env_option_overrides['xla_cpu_enable_fast_math']
+        .bool_field
+    )
+
+    # Rollback restores both external orchestration.pb and compile_options.pb
+    update.rollback(model_base_dir=model_dir, to='orig')
+    restored_pipelines = orchestration_pb2.Pipelines()
+    with open(pipelines_path, 'rb') as f:
+      restored_pipelines.ParseFromString(f.read())
+    self.assertEqual(self._get_batch_size(restored_pipelines), 16)
+    self.assertEmpty(
+        self._load_compile_options_map(model_dir).map['cpu'].env_option_overrides
     )
 
   def test_update_xla_flags_polymorphic_function(self):

@@ -960,30 +960,90 @@ def _get_pipeline_batch_options(
     return {}
 
 
-def _find_backup_target(
+def _get_xla_compile_options(
+    model_base_dir: str,
+    manifest: manifest_pb2.Manifest | None = None,
+) -> dict[str, str]:
+  """Reads current XLA compile options for each StableHLO function."""
+  try:
+    if manifest is None:
+      manifest = persistence_lib.load(model_base_dir)
+    options: dict[str, str] = {}
+    for fn_label, body in _iter_all_stable_hlo_bodies(manifest):
+      opts_entry = _find_xla_compile_options_data(body)
+      if not opts_entry:
+        continue
+      unused_name, opts_data = opts_entry
+      opts_map = manifest_pb2.CompileOptionsProtoMap.FromString(
+          manifest_utils.read_unstructured_data_bytes(opts_data, model_base_dir)
+      )
+      for platform_key, compile_options in sorted(opts_map.map.items()):
+        options[f'{fn_label}.xla_flags.{platform_key}'] = _format_xla_flags(
+            compile_options
+        )
+    return options
+  except (OSError, ValueError, message.DecodeError):
+    return {}
+
+
+def _get_model_config_options(
+    model_base_dir: str,
+    manifest: manifest_pb2.Manifest | None = None,
+) -> dict[str, Any]:
+  """Reads all mutable batching and XLA compile options in the model."""
+  try:
+    if manifest is None:
+      manifest = persistence_lib.load(model_base_dir)
+  except (OSError, ValueError, message.DecodeError):
+    return {}
+  options: dict[str, Any] = {}
+  options.update(_get_pipeline_batch_options(model_base_dir, manifest=manifest))
+  options.update(_get_xla_compile_options(model_base_dir, manifest=manifest))
+  return options
+
+
+def _find_backup_targets(
     model_base_dir: str, manifest: manifest_pb2.Manifest, suffix: str
-) -> str | None:
-  """Returns the target pipeline file path if a .<suffix> backup exists."""
+) -> list[str]:
+  """Returns all target config file paths that have a .<suffix> backup."""
+  candidates: list[str] = []
   pipelines_entry = _find_pipelines_data(manifest)
-  if not pipelines_entry:
-    return None
+  if pipelines_entry:
+    unused_name, pipelines_data = pipelines_entry
+    if pipelines_data.HasField('file_system_location'):
+      candidates.append(
+          os.path.join(
+              model_base_dir, pipelines_data.file_system_location.string_path
+          )
+      )
+    elif pipelines_data.HasField('inlined_bytes'):
+      candidates.append(
+          os.path.join(model_base_dir, core_constants.MANIFEST_FILE_PATH)
+      )
 
-  unused_name, pipelines_data = pipelines_entry
-  if pipelines_data.HasField('file_system_location'):
-    target_path = os.path.join(
-        model_base_dir, pipelines_data.file_system_location.string_path
-    )
-  elif pipelines_data.HasField('inlined_bytes'):
-    target_path = os.path.join(
-        model_base_dir, core_constants.MANIFEST_FILE_PATH
-    )
-  else:
-    return None
+  for unused_fn_label, body in _iter_all_stable_hlo_bodies(manifest):
+    opts_entry = _find_xla_compile_options_data(body)
+    if not opts_entry:
+      continue
+    unused_name, opts_data = opts_entry
+    if opts_data.HasField('file_system_location'):
+      candidates.append(
+          os.path.join(
+              model_base_dir, opts_data.file_system_location.string_path
+          )
+      )
+    elif opts_data.HasField('inlined_bytes'):
+      candidates.append(
+          os.path.join(model_base_dir, core_constants.MANIFEST_FILE_PATH)
+      )
 
-  backup_path = f'{target_path}.{suffix}'
-  if file_utils.exists(backup_path):
-    return target_path
-  return None
+  targets: list[str] = []
+  seen: set[str] = set()
+  for path in candidates:
+    if path not in seen and file_utils.exists(f'{path}.{suffix}'):
+      seen.add(path)
+      targets.append(path)
+  return targets
 
 
 def history(
@@ -1069,54 +1129,62 @@ def rollback(
   except Exception as e:  # pylint: disable=broad-except
     _bail(f'Failed to load model at "{model_base_dir}": {e}')
 
-  target_path = _find_backup_target(model_base_dir, manifest, target_suffix)
-  if not target_path:
+  target_paths = _find_backup_targets(model_base_dir, manifest, target_suffix)
+  if not target_paths:
     _bail(
         f'No .{target_suffix} backup files found in "{model_base_dir}" to'
         ' rollback to.'
     )
 
-  backup_path = f'{target_path}.{target_suffix}'
-  with (
-      file_utils.open_file(target_path, 'rb') as f_cur,
-      file_utils.open_file(backup_path, 'rb') as f_bak,
-  ):
-    if f_cur.read() == f_bak.read():
-      rich.print(
-          '[yellow]Model configuration is already at the'
-          f' .{target_suffix} backup state; nothing to rollback.[/yellow]'
-      )
-      return
+  paths_to_restore: list[str] = []
+  for target_path in target_paths:
+    backup_path = f'{target_path}.{target_suffix}'
+    with (
+        file_utils.open_file(target_path, 'rb') as f_cur,
+        file_utils.open_file(backup_path, 'rb') as f_bak,
+    ):
+      if f_cur.read() != f_bak.read():
+        paths_to_restore.append(target_path)
 
-  before_options = _get_pipeline_batch_options(
-      model_base_dir, manifest=manifest
-  )
+  if not paths_to_restore:
+    rich.print(
+        '[yellow]Model configuration is already at the'
+        f' .{target_suffix} backup state; nothing to rollback.[/yellow]'
+    )
+    return
 
-  tmp_path = f'{target_path}.tmp'
-  try:
-    file_utils.copy(backup_path, tmp_path, overwrite=True)
-    file_utils.rename(tmp_path, target_path, overwrite=True)
-  finally:
-    if file_utils.exists(tmp_path):
-      file_utils.remove(tmp_path)
+  before_options = _get_model_config_options(model_base_dir, manifest=manifest)
 
-  after_options = _get_pipeline_batch_options(model_base_dir)
+  for target_path in paths_to_restore:
+    backup_path = f'{target_path}.{target_suffix}'
+    tmp_path = f'{target_path}.tmp'
+    try:
+      file_utils.copy(backup_path, tmp_path, overwrite=True)
+      file_utils.rename(tmp_path, target_path, overwrite=True)
+    finally:
+      if file_utils.exists(tmp_path):
+        file_utils.remove(tmp_path)
+
+  after_options = _get_model_config_options(model_base_dir)
 
   changes: dict[str, Any] = {}
-  for key, new_val in sorted(after_options.items()):
+  all_keys = sorted(set(before_options.keys()) | set(after_options.keys()))
+  for key in all_keys:
     prev_val = before_options.get(key)
-    if prev_val is not None and prev_val != new_val:
+    new_val = after_options.get(key)
+    if prev_val != new_val:
       changes[key] = {
-          'previous': prev_val,
-          'new': new_val,
+          'previous': prev_val if prev_val is not None else '(none)',
+          'new': new_val if new_val is not None else '(none)',
       }
 
   if not changes:
-    rel_target = os.path.relpath(target_path, model_base_dir)
-    changes[rel_target] = {
-        'previous': 'modified',
-        'new': f'restored (.{target_suffix})',
-    }
+    for target_path in paths_to_restore:
+      rel_target = os.path.relpath(target_path, model_base_dir)
+      changes[rel_target] = {
+          'previous': 'modified',
+          'new': f'restored (.{target_suffix})',
+      }
 
   record_history_entry(
       model_base_dir,
