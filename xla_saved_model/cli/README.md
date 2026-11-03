@@ -69,10 +69,10 @@ xsm-cli show /path/to/model \
   --xla_compile_options
 ```
 
-### 5. Update, Inspect History, and Rollback Pipeline Configurations
+### 5. Update, Inspect History, and Rollback Model Configurations
 
-Update batching configuration options in an exported model's orchestration
-pipelines:
+Update batching configuration options and platform-specific XLA compilation
+flags in an exported model:
 
 ```bash
 # Update maximum batch size in-place (backs up the modified config proto to .orig and .bak)
@@ -89,6 +89,17 @@ xsm-cli update /path/to/model \
     --max_enqueued_batches 16 \
     --disable_large_batch_splitting \
     --pad_variable_length_inputs
+
+# Update or add XLA compiler flags for a target platform (preserves other existing flags; defaults to --platform tpu)
+xsm-cli update /path/to/model \
+    --platform tpu \
+    --xla_flags="--xla_tpu_spmd_rng_bit_generator_unsafe=true --xla_jf_rematerialization_percent_shared_memory_limit=95"
+
+# Clear existing persisted XLA flags (or reset before applying new flags) for a specific function
+xsm-cli update /path/to/model \
+    --function_name serving_default \
+    --platform tpu \
+    --clear_xla_flags
 
 # Clone and update to a new directory (leaves original model untouched)
 xsm-cli update /path/to/model \

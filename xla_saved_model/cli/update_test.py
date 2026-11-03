@@ -25,6 +25,7 @@ from typer.testing import CliRunner
 from xla_saved_model.protos import history_pb2
 from xla_saved_model.protos import manifest_pb2
 from xla_saved_model.protos import orchestration_pb2
+from xla_saved_model._src.core import compile_options_util
 from xla_saved_model._src.core import (
     constants as core_constants,
 )
@@ -40,6 +41,8 @@ class UpdateTest(absltest.TestCase):
       inlined_pipelines: bool = False,
       with_history: bool = True,
       initial_batch_size: int = 16,
+      with_xla_compile_options: bool = False,
+      inlined_xla_compile_options: bool = True,
   ) -> str:
     """Creates a valid exported XSM model directory for testing."""
     model_dir = self.create_tempdir().full_path
@@ -82,6 +85,38 @@ class UpdateTest(absltest.TestCase):
               mime_type=constants.MIME_TYPE_PIPELINES,
           )
       )
+
+    if with_xla_compile_options:
+      opts_map = compile_options_util.generate_xla_compile_options(
+          native_serialization_platforms=['tpu', 'cuda', 'cpu'],
+          persist_xla_flags=True,
+      )
+      fn = manifest.objects['serving_default'].function
+      fn.body.stable_hlo_body.stable_hlo.inlined_bytes = b'dummy_hlo'
+      if inlined_xla_compile_options:
+        fn.body.stable_hlo_body.supplemental_info[
+            'xla_compile_options'
+        ].CopyFrom(
+            manifest_pb2.UnstructuredData(
+                inlined_bytes=opts_map.SerializeToString(),
+                mime_type=constants.MIME_TYPE_XLA_COMPILE_OPTIONS,
+            )
+        )
+      else:
+        opts_rel_path = 'compile_options.pb'
+        opts_abs_path = os.path.join(model_dir, opts_rel_path)
+        with open(opts_abs_path, 'wb') as f:
+          f.write(opts_map.SerializeToString())
+        fn.body.stable_hlo_body.supplemental_info[
+            'xla_compile_options'
+        ].CopyFrom(
+            manifest_pb2.UnstructuredData(
+                file_system_location=manifest_pb2.FileSystemLocation(
+                    string_path=opts_rel_path
+                ),
+                mime_type=constants.MIME_TYPE_XLA_COMPILE_OPTIONS,
+            )
+        )
 
     manifest_path = os.path.join(model_dir, core_constants.MANIFEST_FILE_PATH)
     with open(manifest_path, 'wb') as f:
@@ -636,6 +671,334 @@ class UpdateTest(absltest.TestCase):
           pipeline_name='non_existent',
           max_batch_size=64,
       )
+
+  def _load_compile_options_map(
+      self, model_dir: str, fn_name: str = 'serving_default'
+  ) -> manifest_pb2.CompileOptionsProtoMap:
+    manifest = manifest_pb2.Manifest()
+    manifest_path = os.path.join(model_dir, core_constants.MANIFEST_FILE_PATH)
+    with open(manifest_path, 'rb') as f:
+      manifest.ParseFromString(f.read())
+    body = manifest.objects[fn_name].function.body.stable_hlo_body
+    data = body.supplemental_info['xla_compile_options']
+    opts_map = manifest_pb2.CompileOptionsProtoMap()
+    if data.HasField('inlined_bytes'):
+      opts_map.ParseFromString(data.inlined_bytes)
+    else:
+      opts_path = os.path.join(model_dir, data.file_system_location.string_path)
+      with open(opts_path, 'rb') as f:
+        opts_map.ParseFromString(f.read())
+    return opts_map
+
+  def test_update_xla_flags_tpu_merge(self):
+    model_dir = self._create_test_model(with_xla_compile_options=True)
+
+    # 1st update: set two TPU XLA flags
+    update.update(
+        model_base_dir=model_dir,
+        platform='tpu',
+        xla_flags=(
+            '--xla_jf_rematerialization_percent_shared_memory_limit=95,'
+            ' --xla_sc_poison_buffers=false'
+        ),
+    )
+
+    opts_map = self._load_compile_options_map(model_dir)
+    tpu_opts = opts_map.map['tpu']
+    if hasattr(compile_options_util, 'tpu_comp_env_pb2'):
+      env = compile_options_util.tpu_comp_env_pb2.TpuCompilationEnvironment()
+      tpu_opts.executable_build_options.comp_envs.environments[0].Unpack(env)
+      self.assertEqual(
+          env.xla_jf_rematerialization_percent_shared_memory_limit, 95
+      )
+      self.assertFalse(env.xla_sc_poison_buffers)
+    else:
+      self.assertEqual(
+          tpu_opts.env_option_overrides[
+              'xla_jf_rematerialization_percent_shared_memory_limit'
+          ].int_field,
+          95,
+      )
+      self.assertFalse(
+          tpu_opts.env_option_overrides['xla_sc_poison_buffers'].bool_field
+      )
+
+    # 2nd update: merge (overwrite one flag, preserve the other, add a third)
+    update.update(
+        model_base_dir=model_dir,
+        platform='tpu',
+        xla_flags=(
+            '--xla_jf_rematerialization_percent_shared_memory_limit=80'
+            ' --xla_tpu_wait_n_cycles_before_program_termination=500'
+        ),
+    )
+
+    opts_map = self._load_compile_options_map(model_dir)
+    tpu_opts = opts_map.map['tpu']
+    if hasattr(compile_options_util, 'tpu_comp_env_pb2'):
+      env = compile_options_util.tpu_comp_env_pb2.TpuCompilationEnvironment()
+      tpu_opts.executable_build_options.comp_envs.environments[0].Unpack(env)
+      self.assertEqual(
+          env.xla_jf_rematerialization_percent_shared_memory_limit, 80
+      )
+      self.assertFalse(env.xla_sc_poison_buffers)
+      self.assertEqual(
+          env.xla_tpu_wait_n_cycles_before_program_termination, 500
+      )
+    else:
+      self.assertEqual(
+          tpu_opts.env_option_overrides[
+              'xla_jf_rematerialization_percent_shared_memory_limit'
+          ].int_field,
+          80,
+      )
+      self.assertFalse(
+          tpu_opts.env_option_overrides['xla_sc_poison_buffers'].bool_field
+      )
+      self.assertEqual(
+          tpu_opts.env_option_overrides[
+              'xla_tpu_wait_n_cycles_before_program_termination'
+          ].int_field,
+          500,
+      )
+
+  def test_update_xla_flags_tpu_clear(self):
+    model_dir = self._create_test_model(with_xla_compile_options=True)
+    update.update(
+        model_base_dir=model_dir,
+        platform='tpu',
+        xla_flags=(
+            '--xla_jf_rematerialization_percent_shared_memory_limit=95,'
+            ' --xla_sc_poison_buffers=false'
+        ),
+    )
+
+    # Clear existing flags and apply a single flag
+    update.update(
+        model_base_dir=model_dir,
+        platform='tpu',
+        clear_xla_flags=True,
+        xla_flags='--xla_jf_rematerialization_percent_shared_memory_limit=90',
+    )
+    history_path = os.path.join(model_dir, constants.HISTORY_FILENAME)
+    history_proto = history_pb2.ModelHistory()
+    with open(history_path, 'r') as f:
+      text_format.Parse(f.read(), history_proto)
+    self.assertEqual(
+        history_proto.records[-1]
+        .changes['serving_default.xla_flags.tpu']
+        .new_value,
+        '--xla_jf_rematerialization_percent_shared_memory_limit=90',
+    )
+
+    # Clear all persisted XLA flags without adding new ones
+    update.update(
+        model_base_dir=model_dir,
+        platform='tpu',
+        clear_xla_flags=True,
+    )
+    opts_map = self._load_compile_options_map(model_dir)
+    tpu_opts = opts_map.map['tpu']
+    self.assertEmpty(tpu_opts.executable_build_options.comp_envs.environments)
+    self.assertEmpty(tpu_opts.env_option_overrides)
+
+  def test_update_xla_flags_gpu_and_cpu(self):
+    model_dir = self._create_test_model(
+        with_xla_compile_options=True,
+        inlined_xla_compile_options=False,
+    )
+
+    # Update GPU flags via --platform gpu
+    update.update(
+        model_base_dir=model_dir,
+        platform='gpu',
+        xla_flags=(
+            '--xla_gpu_autotune_level=2, --xla_gpu_enable_triton_gemm=true'
+        ),
+    )
+
+    opts_map = self._load_compile_options_map(model_dir)
+    cuda_opts = opts_map.map['cuda']
+    self.assertEqual(
+        cuda_opts.env_option_overrides['xla_gpu_autotune_level'].int_field, 2
+    )
+    self.assertTrue(
+        cuda_opts.env_option_overrides['xla_gpu_enable_triton_gemm'].bool_field
+    )
+
+    # Update CPU flags via --platform cpu
+    update.update(
+        model_base_dir=model_dir,
+        platform='cpu',
+        xla_flags='--xla_cpu_enable_fast_math=true',
+    )
+    opts_map = self._load_compile_options_map(model_dir)
+    cpu_opts = opts_map.map['cpu']
+    self.assertTrue(
+        cpu_opts.env_option_overrides['xla_cpu_enable_fast_math'].bool_field
+    )
+
+  def test_update_xla_flags_function_name_and_combined_updates(self):
+    model_dir = self._create_test_model(
+        inlined_pipelines=True,
+        with_xla_compile_options=True,
+        inlined_xla_compile_options=True,
+    )
+
+    # Add a second StableHLO function 'prefill' to manifest.pb
+    manifest_path = os.path.join(model_dir, core_constants.MANIFEST_FILE_PATH)
+    manifest = manifest_pb2.Manifest()
+    with open(manifest_path, 'rb') as f:
+      manifest.ParseFromString(f.read())
+    manifest.objects['prefill'].CopyFrom(manifest.objects['serving_default'])
+    with open(manifest_path, 'wb') as f:
+      f.write(manifest.SerializeToString())
+
+    # Target only 'prefill' while also updating max_batch_size in a single call
+    update.update(
+        model_base_dir=model_dir,
+        max_batch_size=64,
+        function_name='prefill',
+        platform='cpu',
+        xla_flags='--xla_cpu_enable_fast_math=true',
+    )
+
+    with open(manifest_path, 'rb') as f:
+      manifest.ParseFromString(f.read())
+    updated_pipelines = orchestration_pb2.Pipelines()
+    updated_pipelines.ParseFromString(
+        manifest.supplemental_info['orchestration'].inlined_bytes
+    )
+    self.assertEqual(self._get_batch_size(updated_pipelines), 64)
+
+    opts_serving = self._load_compile_options_map(model_dir, 'serving_default')
+    opts_prefill = self._load_compile_options_map(model_dir, 'prefill')
+    self.assertEmpty(opts_serving.map['cpu'].env_option_overrides)
+    self.assertTrue(
+        opts_prefill.map['cpu']
+        .env_option_overrides['xla_cpu_enable_fast_math']
+        .bool_field
+    )
+
+  def test_update_xla_flags_polymorphic_function(self):
+    model_dir = self._create_test_model(
+        with_xla_compile_options=True,
+        inlined_xla_compile_options=True,
+    )
+    manifest_path = os.path.join(model_dir, core_constants.MANIFEST_FILE_PATH)
+    manifest = manifest_pb2.Manifest()
+    with open(manifest_path, 'rb') as f:
+      manifest.ParseFromString(f.read())
+
+    base_fn = manifest.objects['serving_default'].function
+    del manifest.objects['serving_default']
+    poly_fn = manifest.objects['poly_serving'].poly_fn
+    poly_fn.concrete_functions.append(base_fn)
+    poly_fn.concrete_functions.append(base_fn)
+    with open(manifest_path, 'wb') as f:
+      f.write(manifest.SerializeToString())
+
+    # Target only the 2nd concrete overload ('poly_serving #2')
+    update.update(
+        model_base_dir=model_dir,
+        function_name='poly_serving #2',
+        platform='cpu',
+        xla_flags='--xla_cpu_enable_fast_math=true',
+    )
+
+    with open(manifest_path, 'rb') as f:
+      manifest.ParseFromString(f.read())
+    opts_1 = manifest_pb2.CompileOptionsProtoMap.FromString(
+        manifest.objects['poly_serving']
+        .poly_fn.concrete_functions[0]
+        .body.stable_hlo_body.supplemental_info['xla_compile_options']
+        .inlined_bytes
+    )
+    opts_2 = manifest_pb2.CompileOptionsProtoMap.FromString(
+        manifest.objects['poly_serving']
+        .poly_fn.concrete_functions[1]
+        .body.stable_hlo_body.supplemental_info['xla_compile_options']
+        .inlined_bytes
+    )
+    self.assertEmpty(opts_1.map['cpu'].env_option_overrides)
+    self.assertTrue(
+        opts_2.map['cpu']
+        .env_option_overrides['xla_cpu_enable_fast_math']
+        .bool_field
+    )
+
+    # Out-of-bounds concrete index raises typer.Exit
+    with self.assertRaises(typer.Exit):
+      update.update(
+          model_base_dir=model_dir,
+          function_name='poly_serving #3',
+          platform='cpu',
+          xla_flags='--xla_cpu_enable_fast_math=true',
+      )
+
+  def test_update_xla_flags_validation_errors(self):
+    model_dir = self._create_test_model(with_xla_compile_options=True)
+
+    # Empty xla_flags
+    with self.assertRaises(typer.Exit):
+      update.update(model_base_dir=model_dir, xla_flags='   ')
+
+    # Malformed flag formats
+    for bad_flag in ('no_dashes=1', '--missing_equals', '--=val'):
+      with self.subTest(bad_flag=bad_flag):
+        with self.assertRaises(typer.Exit):
+          update.update(
+              model_base_dir=model_dir, platform='cpu', xla_flags=bad_flag
+          )
+
+    # Invalid platform
+    with self.assertRaises(typer.Exit):
+      update.update(
+          model_base_dir=model_dir,
+          platform='invalid_platform',
+          xla_flags='--xla_cpu_enable_fast_math=true',
+      )
+
+    # Non-existent function_name
+    with self.assertRaises(typer.Exit):
+      update.update(
+          model_base_dir=model_dir,
+          function_name='non_existent_fn',
+          platform='cpu',
+          xla_flags='--xla_cpu_enable_fast_math=true',
+      )
+
+    # Unknown or deprecated TPU flag (when internal TPU env is present)
+    if hasattr(compile_options_util, 'tpu_comp_env_pb2'):
+      with self.assertRaises(typer.Exit):
+        update.update(
+            model_base_dir=model_dir,
+            platform='tpu',
+            xla_flags='--xla_tpu_non_existent_flag=true',
+        )
+      with self.assertRaises(typer.Exit):
+        update.update(
+            model_base_dir=model_dir,
+            platform='tpu',
+            xla_flags='--xla_tpu_enable_experimental_fusion_cost_model=true',
+        )
+
+    # Non-GPU flag passed to GPU platform
+    with self.assertRaises(typer.Exit):
+      update.update(
+          model_base_dir=model_dir,
+          platform='gpu',
+          xla_flags='--xla_cpu_enable_fast_math=true',
+      )
+
+    # Unsupported GPU flag (when internal GPU flag allowlist is present)
+    if hasattr(compile_options_util, '_parse_env_option_overrides_for_gpu'):
+      with self.assertRaises(typer.Exit):
+        update.update(
+            model_base_dir=model_dir,
+            platform='gpu',
+            xla_flags='--xla_gpu_unsupported_flag=true',
+        )
 
 
 if __name__ == '__main__':
