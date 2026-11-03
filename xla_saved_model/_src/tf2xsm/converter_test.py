@@ -17,6 +17,7 @@ import dataclasses
 import itertools
 import os
 import types
+from unittest import mock
 
 from absl.testing import absltest
 from absl.testing import parameterized
