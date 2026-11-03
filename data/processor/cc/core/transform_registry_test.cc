@@ -16,7 +16,6 @@
 
 #include <cstdint>
 #include <memory>
-#include <optional>
 #include <string>
 #include <thread>
 #include <type_traits>
@@ -654,8 +653,9 @@ ND_REGISTER_TRANSFORM(ShapeConstrainedDummyTransform,
           return ShapeConstrainedDummyTransform::Create();
         })
     .SetInputConstraints(
-        {{.expected_shape = std::vector<std::optional<int64_t>>{
-              2, std::nullopt}}});
+        {{.name = "x",
+          .expected_shape = api::PartialShape::Dimensions{
+              api::Dim::Static(2), api::Dim::Unknown()}}});
 
 absl::Status PropagateSpec(const TransformBase& transform,
                            api::HostBufferSpec spec) {
@@ -688,12 +688,15 @@ TEST(TransformBaseTest, ExpectedShapeAcceptsUnknownDimsAtTraceTime) {
       PropagateSpec(**transform, {s32, xla::ifrt::Shape({4, 3})}),
       absl_testing::StatusIs(
           absl::StatusCode::kInvalidArgument,
-          testing::HasSubstr("has invalid shape at dim 0: 4. Expected: 2")));
+          testing::HasSubstr(
+              "Input 'x' has invalid shape at dim 0: 4. Expected: 2")));
   EXPECT_THAT(
       PropagateSpec(**transform, {s32, test_utils::PartialShapeOrDie(
                                            {api::Dim::Unknown()})}),
-      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
-                             testing::HasSubstr("Rank mismatch: 1 vs 2")));
+      absl_testing::StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          testing::HasSubstr("Input 'x' has invalid shape. Rank mismatch: 1 vs "
+                             "2")));
 
   // At run time every size is known, and checked.
   api::ExecuteContext context;
@@ -704,7 +707,8 @@ TEST(TransformBaseTest, ExpectedShapeAcceptsUnknownDimsAtTraceTime) {
       (*transform)->Execute(context),
       absl_testing::StatusIs(
           absl::StatusCode::kInvalidArgument,
-          testing::HasSubstr("has invalid shape at dim 0: 4. Expected: 2")));
+          testing::HasSubstr(
+              "Input 'x' has invalid shape at dim 0: 4. Expected: 2")));
 }
 
 template <typename T>

@@ -263,6 +263,14 @@ std::optional<int64_t> GetDim(const api::HostBufferSpec& spec, size_t d) {
   return spec.shape.dims()[d].Value();
 }
 
+std::string FormatInputLabel(size_t input_idx,
+                             const InputConstraint& constraint) {
+  if (!constraint.name.empty()) {
+    return absl::StrCat("'", constraint.name, "'");
+  }
+  return absl::StrCat(input_idx);
+}
+
 template <typename Item>
 absl::Status ValidateSingleItem(const Item& item, size_t input_idx,
                                 const InputConstraint& constraint) {
@@ -279,27 +287,31 @@ absl::Status ValidateSingleItem(const Item& item, size_t input_idx,
     if (!allowed) {
       std::ostringstream oss;
       oss << dtype;
-      return absl::InvalidArgumentError(absl::StrCat(
-          "Input ", input_idx, " has unsupported dtype: ", oss.str()));
+      return absl::InvalidArgumentError(
+          absl::StrCat("Input ", FormatInputLabel(input_idx, constraint),
+                       " has unsupported dtype: ", oss.str()));
     }
   }
   if (constraint.expected_shape.has_value()) {
-    const auto& expected_shape = *constraint.expected_shape;
+    const api::PartialShape::Dimensions& expected_shape =
+        *constraint.expected_shape;
     const size_t rank = GetRank(item);
     if (rank != expected_shape.size()) {
       return absl::InvalidArgumentError(absl::StrCat(
-          "Input ", input_idx, " has invalid shape. Rank mismatch: ", rank,
-          " vs ", expected_shape.size()));
+          "Input ", FormatInputLabel(input_idx, constraint),
+          " has invalid shape. Rank mismatch: ", rank, " vs ",
+          expected_shape.size()));
     }
     for (size_t d = 0; d < expected_shape.size(); ++d) {
       // An unknown dimension of a spec is accepted at trace time; the buffer
       // is checked when the transform executes.
       const std::optional<int64_t> dim = GetDim(item, d);
-      if (expected_shape[d].has_value() && dim.has_value() &&
-          *dim != *expected_shape[d]) {
-        return absl::InvalidArgumentError(
-            absl::StrCat("Input ", input_idx, " has invalid shape at dim ", d,
-                         ": ", *dim, ". Expected: ", *expected_shape[d]));
+      if (expected_shape[d].IsKnown() && dim.has_value() &&
+          *dim != *expected_shape[d].Value()) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Input ", FormatInputLabel(input_idx, constraint),
+            " has invalid shape at dim ", d, ": ", *dim,
+            ". Expected: ", *expected_shape[d].Value()));
       }
     }
   }
