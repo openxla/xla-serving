@@ -120,6 +120,18 @@ class ShloTensorSpecToTensorTypeProtoTest(
       restored_spec = type_proto_utils._from_tensor_type_proto(tensor_proto)
       self.assertEqual(restored_spec.placement, placement)
 
+  def test_host_transpose_bidirectional_roundtrip(self):
+    spec = shlo_type.ShloTensorSpec(
+        shape=(1, 224, 224, 3),
+        dtype=shlo_type.ShloDType.f32,
+        host_transpose=[0, 3, 1, 2],
+    )
+    self.assertEqual(spec.host_transpose, (0, 3, 1, 2))
+    tensor_proto = type_proto_utils.to_tensor_type_proto(spec)
+    self.assertSequenceEqual(tensor_proto.host_transpose, (0, 3, 1, 2))
+    restored_spec = type_proto_utils._from_tensor_type_proto(tensor_proto)
+    self.assertEqual(restored_spec.host_transpose, (0, 3, 1, 2))
+
 
 class ShloTensorSpecPyTreeToTypeProtoTest(
     test_utils.XsmTestCase, parameterized.TestCase

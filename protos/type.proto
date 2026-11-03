@@ -75,7 +75,7 @@ enum Placement {
   DEVICE = 2;
 }
 
-// Next ID: 6
+// Next ID: 7
 message TensorType {
   Shape shape = 1;
   DType dtype = 2;
@@ -87,6 +87,11 @@ message TensorType {
   optional xla.LayoutProto layout = 4;
 
   optional Placement placement = 5;
+
+  // Optional dimension permutation (e.g. [0, 3, 1, 2] for NHWC -> NCHW) that
+  // the host must apply to the original user input tensor before flattening or
+  // transferring it to the device.
+  repeated int64 host_transpose = 6;
 }
 
 message Shape {
