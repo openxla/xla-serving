@@ -44,6 +44,7 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "data/processor/cc/api/shape.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
 #include "data/processor/cc/api/value.h"  // from @xla_serving
@@ -84,8 +85,7 @@ inline Device FromDeviceProto(DeviceProto proto) {
 
 struct InputConstraint {
   std::vector<::xla::ifrt::DType::Kind> allowed_dtypes;
-  std::optional<std::vector<std::optional<int64_t>>> expected_shape =
-      std::nullopt;
+  std::optional<api::PartialShape::Dimensions> expected_shape = std::nullopt;
   bool is_list = false;
 };
 
