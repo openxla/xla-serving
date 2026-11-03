@@ -238,8 +238,36 @@ class HostBuffer {
   // none, and most other accessors must not be called on it.
   bool has_data() const { return buffer_data_.has_value(); }
 
+  // The static shape this buffer is bound to for dynamic DMA, if any. See
+  // `SetStaticShape()`.
+  const std::optional<xla::ifrt::Shape>& static_shape() const {
+    return static_shape_;
+  }
+
+  // Binds this buffer to `static_shape` for dynamic DMA: the executable that
+  // consumes the buffer is compiled for `static_shape`, the device buffer is
+  // allocated for `static_shape`, and only the `shape()` elements of this
+  // buffer are transferred. Device elements beyond `shape()` are left
+  // uninitialized, so the model must not depend on them.
+  //
+  // `shape()` must have the same rank as `static_shape`, may only be smaller
+  // along dimension 0, and must be equal on every other dimension. Returns an
+  // error otherwise, leaving the buffer unchanged. Binding `shape()` itself is
+  // allowed and is a no-op for the transfer.
+  //
+  // Views derived from this buffer (slices, reshapes, bitcasts, splits) do not
+  // inherit the static shape.
+  absl::Status SetStaticShape(xla::ifrt::Shape static_shape);
+
+  // Removes the static shape binding, if any.
+  void ClearStaticShape() { static_shape_.reset(); }
+
   std::string DebugString() const {
     if (buffer_data_) {
+      if (static_shape_.has_value()) {
+        return absl::StrCat(buffer_data_->DebugString(),
+                            ", static_shape: ", *static_shape_);
+      }
       return buffer_data_->DebugString();
     }
     return "Empty host buffer";
@@ -355,6 +383,8 @@ class HostBuffer {
   // underlying buffer data.
   xla::ifrt::DType dtype_ = xla::ifrt::DType(xla::ifrt::DType::Kind::kU8);
   std::optional<BufferData> buffer_data_;
+  // See `SetStaticShape()`.
+  std::optional<xla::ifrt::Shape> static_shape_;
 
   // Returns the base pointer of the host buffer. Use with caution as there is
   // no check on the requested type is the same as the underlying buffer data.

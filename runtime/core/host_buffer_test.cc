@@ -69,6 +69,8 @@ namespace {
 
 using ::absl_testing::StatusIs;
 using ::testing::ElementsAre;
+using ::testing::HasSubstr;
+using ::testing::Optional;
 
 TEST(HostBufferTest, NullPtrAllocator) {
   HostBuffer host_buffer(xla::ifrt::DType(xla::ifrt::DType::Kind::kU32),
@@ -196,6 +198,75 @@ TEST(HostBufferTest, DebugStringOfBfloat16Dtype) {
   HostBuffer host_buffer(data, xla::ifrt::DType(xla::ifrt::DType::Kind::kBF16),
                          xla::ifrt::Shape({2}));
   EXPECT_EQ(host_buffer.DebugString(), "BF16[2][1.5, 2.5]");
+}
+
+TEST(HostBufferTest, StaticShapeIsUnsetByDefault) {
+  HostBuffer host_buffer =
+      AsHostBuffer<int32_t>({1, 2, 3, 4}, xla::ifrt::Shape({2, 2}));
+  EXPECT_FALSE(host_buffer.static_shape().has_value());
+}
+
+TEST(HostBufferTest, SetStaticShapeAllowsSmallerDimension0) {
+  HostBuffer host_buffer =
+      AsHostBuffer<int32_t>({1, 2, 3, 4}, xla::ifrt::Shape({2, 2}));
+  ASSERT_OK(host_buffer.SetStaticShape(xla::ifrt::Shape({8, 2})));
+  EXPECT_THAT(host_buffer.static_shape(), Optional(xla::ifrt::Shape({8, 2})));
+  // The data shape is untouched.
+  EXPECT_EQ(host_buffer.shape(), xla::ifrt::Shape({2, 2}));
+  EXPECT_EQ(host_buffer.DebugString(),
+            "S32[2,2][\n  [1, 2],\n  [3, 4]\n], static_shape: [8,2]");
+
+  // Copies carry the static shape along.
+  HostBuffer copy = host_buffer;
+  EXPECT_THAT(copy.static_shape(), Optional(xla::ifrt::Shape({8, 2})));
+
+  host_buffer.ClearStaticShape();
+  EXPECT_FALSE(host_buffer.static_shape().has_value());
+}
+
+TEST(HostBufferTest, SetStaticShapeAllowsEqualShape) {
+  HostBuffer host_buffer =
+      AsHostBuffer<int32_t>({1, 2, 3, 4}, xla::ifrt::Shape({2, 2}));
+  ASSERT_OK(host_buffer.SetStaticShape(xla::ifrt::Shape({2, 2})));
+  EXPECT_THAT(host_buffer.static_shape(), Optional(xla::ifrt::Shape({2, 2})));
+}
+
+TEST(HostBufferTest, SetStaticShapeRejectsIncompatibleShapes) {
+  HostBuffer host_buffer =
+      AsHostBuffer<int32_t>({1, 2, 3, 4}, xla::ifrt::Shape({2, 2}));
+  // Rank mismatch.
+  EXPECT_THAT(
+      host_buffer.SetStaticShape(xla::ifrt::Shape({4})),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("same rank")));
+  // Dimension 0 of the data is larger than the static shape.
+  EXPECT_THAT(host_buffer.SetStaticShape(xla::ifrt::Shape({1, 2})),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("only dimension 0 may be smaller")));
+  // A non-leading dimension differs.
+  EXPECT_THAT(host_buffer.SetStaticShape(xla::ifrt::Shape({2, 4})),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("only dimension 0 may be smaller")));
+  // Failed calls leave the buffer unbound.
+  EXPECT_FALSE(host_buffer.static_shape().has_value());
+}
+
+TEST(HostBufferTest, SetStaticShapeRejectsUninitializedBuffer) {
+  HostBuffer host_buffer;
+  EXPECT_THAT(host_buffer.SetStaticShape(xla::ifrt::Shape({2, 2})),
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+}
+
+TEST(HostBufferTest, DerivedViewsDoNotInheritStaticShape) {
+  HostBuffer host_buffer =
+      AsHostBuffer<int32_t>({1, 2, 3, 4}, xla::ifrt::Shape({2, 2}));
+  ASSERT_OK(host_buffer.SetStaticShape(xla::ifrt::Shape({8, 2})));
+
+  TF_ASSERT_OK_AND_ASSIGN(HostBuffer sliced,
+                          host_buffer.SliceAlongFirstDimension(0, 1));
+  EXPECT_FALSE(sliced.static_shape().has_value());
+  TF_ASSERT_OK_AND_ASSIGN(HostBuffer reshaped,
+                          host_buffer.Reshape(xla::ifrt::Shape({4})));
+  EXPECT_FALSE(reshaped.static_shape().has_value());
 }
 
 TEST(HostBufferTest, Copy) {

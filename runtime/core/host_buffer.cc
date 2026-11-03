@@ -235,6 +235,36 @@ int64_t HostBuffer::total_storage_bytes() const {
   return *(storage_dtype().byte_size()) * shape().num_elements();
 }
 
+absl::Status HostBuffer::SetStaticShape(xla::ifrt::Shape static_shape) {
+  if (!buffer_data_.has_value()) {
+    return absl::FailedPreconditionError(
+        "Cannot set a static shape on an uninitialized host buffer.");
+  }
+  const xla::ifrt::Shape& actual_shape = shape();
+  if (static_shape.dims().size() != actual_shape.dims().size()) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Static shape ", static_shape,
+                     " must have the same rank as the host "
+                     "buffer shape ",
+                     actual_shape));
+  }
+  for (int i = 0; i < actual_shape.dims().size(); ++i) {
+    const int64_t actual_dim = actual_shape.dims()[i];
+    const int64_t static_dim = static_shape.dims()[i];
+    if (i == 0 ? actual_dim > static_dim : actual_dim != static_dim) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Host buffer shape ", actual_shape,
+          " is not compatible with static "
+          "shape ",
+          static_shape,
+          ": only dimension 0 may be smaller than the static shape; all "
+          "other dimensions must be equal."));
+    }
+  }
+  static_shape_ = std::move(static_shape);
+  return absl::OkStatus();
+}
+
 absl::StatusOr<HostBuffer> HostBuffer::SliceInDim(int dim, int64_t start,
                                                   int64_t end) const {
   if (!buffer_data_.has_value()) {

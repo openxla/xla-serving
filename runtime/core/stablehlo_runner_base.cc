@@ -73,6 +73,7 @@
 #include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_dtype.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_memory.h"  // from @xla
+#include "xla/python/pjrt_ifrt/xla_sharding.h"  // from @xla
 #include "xla/shape_util.h"  // from @xla
 #include "xla/status_macros.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
@@ -122,6 +123,22 @@ absl::Status ValidateDeviceBufferInput(const xla::ifrt::Array& original_input,
         "StableHloRunner to perform the reshape via host memory."));
   }
   return absl::OkStatus();
+}
+
+// Returns true if `sharding` places the whole array on exactly one device:
+// either a `SingleDeviceSharding`, a maximal `HloSharding`, or any sharding
+// over a one-device device list.
+bool IsSingleDeviceSharding(const xla::ifrt::Sharding& sharding) {
+  if (xla::ifrt::isa<xla::ifrt::SingleDeviceSharding>(sharding)) {
+    return true;
+  }
+  if (const auto* hlo_sharding =
+          xla::ifrt::dyn_cast<xla::ifrt::HloSharding>(&sharding);
+      hlo_sharding != nullptr &&
+      hlo_sharding->xla_hlo_sharding().IsSingleDevice()) {
+    return true;
+  }
+  return sharding.devices()->size() == 1;
 }
 
 absl::Status ValidateOutputArray(const xla::ifrt::Array& array_for_copy,
@@ -439,6 +456,7 @@ StableHloRunnerBase::DataConverter::ValidateAndResolveShardings(
 
   // Validate data types and shapes before passing to executor to prevent
   // buffer over-reads during memcpy.
+  bool has_static_shape_input = false;
   for (int i = 0; i < inputs.size(); ++i) {
     int idx_in_stablehlo_spec = stablehlo_indices[i];
     if (idx_in_stablehlo_spec >= executable_bundle.io_spec.inputs.size()) {
@@ -451,7 +469,24 @@ StableHloRunnerBase::DataConverter::ValidateAndResolveShardings(
           absl::StrCat("Input dtype mismatch. Expected: ", input_spec.dtype,
                        ", but got: ", inputs[i].dtype()));
     }
-    TF_RETURN_IF_ERROR(InputShapeEqual(input_spec.shape, inputs[i].shape()));
+    // A dynamic DMA input is validated against its static shape: that is the
+    // shape the executable was compiled for and the device buffer is allocated
+    // with. `HostBuffer::SetStaticShape()` guarantees the actual data shape is
+    // a dimension-0 prefix of it.
+    if (inputs[i].static_shape().has_value()) {
+      has_static_shape_input = true;
+      TF_RETURN_IF_ERROR(
+          InputShapeEqual(input_spec.shape, *inputs[i].static_shape()));
+    } else {
+      TF_RETURN_IF_ERROR(InputShapeEqual(input_spec.shape, inputs[i].shape()));
+    }
+  }
+  if (has_static_shape_input && h2d_transfer_executor_ == nullptr) {
+    return absl::FailedPreconditionError(
+        "An input is bound to a static shape for dynamic DMA, but no "
+        "H2DTransferExecutor is configured for this runner. Dynamic DMA "
+        "requires an H2DTransferExecutor that allocates device buffers for the "
+        "static shape; the default IFRT transfer path cannot.");
   }
 
   absl::Span<const xla::ifrt::ShardingRef> all_shardings;
@@ -484,6 +519,7 @@ StableHloRunnerBase::DataConverter::ValidateAndResolveShardings(
     }
   }
 
+  absl::Span<const xla::ifrt::ShardingRef> shardings;
   if (is_contiguous) {
     if (executable_bundle.input_offset + stablehlo_indices.size() >
         all_shardings.size()) {
@@ -491,20 +527,38 @@ StableHloRunnerBase::DataConverter::ValidateAndResolveShardings(
           "IFRT Executable arg shardings size mismatch.");
     }
     // O(1) Zero-allocation, zero-refcount-bump fast path
-    return all_shardings.subspan(executable_bundle.input_offset,
-                                 stablehlo_indices.size());
+    shardings = all_shardings.subspan(executable_bundle.input_offset,
+                                      stablehlo_indices.size());
+  } else {
+    // Fallback for mixed inputs, pushing into the caller-owned InlinedVector
+    mixed_shardings_storage.reserve(stablehlo_indices.size());
+    for (int idx : stablehlo_indices) {
+      if (idx >= all_shardings.size()) {
+        return absl::InternalError(
+            "IFRT Executable arg shardings size mismatch.");
+      }
+      mixed_shardings_storage.push_back(all_shardings[idx]);
+    }
+    shardings = absl::MakeConstSpan(mixed_shardings_storage);
   }
 
-  // Fallback for mixed inputs, pushing into the caller-owned InlinedVector
-  mixed_shardings_storage.reserve(stablehlo_indices.size());
-  for (int idx : stablehlo_indices) {
-    if (idx >= all_shardings.size()) {
-      return absl::InternalError(
-          "IFRT Executable arg shardings size mismatch.");
+  if (has_static_shape_input) {
+    // Dynamic DMA transfers the actual data as a dimension-0 prefix of the
+    // device buffer, which is only well-defined for a buffer that lives whole
+    // on one device.
+    for (int i = 0; i < inputs.size(); ++i) {
+      if (inputs[i].static_shape().has_value() &&
+          !IsSingleDeviceSharding(*shardings[i])) {
+        return absl::UnimplementedError(absl::StrCat(
+            "Input at StableHLO index ", stablehlo_indices[i],
+            " is bound to a static shape for dynamic DMA, but its sharding ",
+            *shardings[i],
+            " spans more than one device. Dynamic DMA only supports "
+            "single-device inputs."));
+      }
     }
-    mixed_shardings_storage.push_back(all_shardings[idx]);
   }
-  return absl::MakeConstSpan(mixed_shardings_storage);
+  return shardings;
 }
 
 absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
@@ -1016,7 +1070,10 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
   for (const auto& input : inputs) {
     if (input.IsType<HostBuffer>()) {
       const auto& host_buf = input.Get<HostBuffer>();
-      input_shapes.push_back(host_buf.shape());
+      // A host buffer bound to a static shape (dynamic DMA) selects the
+      // executable compiled for that shape, whatever its actual data shape is.
+      input_shapes.push_back(
+          host_buf.static_shape().value_or(host_buf.shape()));
       input_dtypes.push_back(host_buf.dtype());
     } else {
       const auto& device_buf = input.Get<xla_serving::DeviceBuffer>();
@@ -1118,16 +1175,45 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
       final_used_inputs[i] = std::move(device_buffer.ifrt_array);
     } else if (original_input_value.IsType<HostBuffer>()) {
       auto& original_input = original_input_value.Get<HostBuffer>();
-      if (auto it = executable_bundle->host_transpose_permutations.find(
-              idx_in_stablehlo_spec);
-          it != executable_bundle->host_transpose_permutations.end()) {
-        // The optimized module expects this input transposed on the host.
-        TF_ASSIGN_OR_RETURN(original_input,
-                            TransposeHostBuffer(original_input, it->second));
-      }
       const xla::ifrt::Shape target_shape =
           executable_bundle->io_spec.inputs[idx_in_stablehlo_spec]
               .GetIfrtShape();
+      const auto transpose_it =
+          executable_bundle->host_transpose_permutations.find(
+              idx_in_stablehlo_spec);
+      const bool has_host_transpose =
+          transpose_it != executable_bundle->host_transpose_permutations.end();
+      if (original_input.static_shape().has_value()) {
+        // Dynamic DMA input: the executable was compiled for the static shape
+        // and the H2D transfer executor allocates the device buffer for it, so
+        // the buffer must reach the executor with its actual (possibly smaller)
+        // shape intact. Host-side transposes and reshapes would change that
+        // shape, so they are not supported for such inputs.
+        if (has_host_transpose) {
+          return absl::UnimplementedError(absl::StrCat(
+              "Input #", original_input_idx,
+              " is bound to a static shape for dynamic DMA, but the optimized "
+              "module expects it to be transposed on the host. Host transposes "
+              "are not supported for dynamic DMA inputs."));
+        }
+        if (*original_input.static_shape() != target_shape) {
+          return absl::FailedPreconditionError(absl::StrCat(
+              "Input #", original_input_idx, " is bound to static shape ",
+              *original_input.static_shape(),
+              " for dynamic DMA, but the executable expects shape ",
+              target_shape,
+              ". The executable input shape must equal the static shape."));
+        }
+        host_buffers_to_convert.push_back(std::move(original_input));
+        host_buffers_stablehlo_indices.push_back(idx_in_stablehlo_spec);
+        continue;
+      }
+      if (has_host_transpose) {
+        // The optimized module expects this input transposed on the host.
+        TF_ASSIGN_OR_RETURN(
+            original_input,
+            TransposeHostBuffer(original_input, transpose_it->second));
+      }
       if (original_input.shape() == target_shape) {
         // Shapes match, use the buffer directly.
         host_buffers_to_convert.push_back(std::move(original_input));

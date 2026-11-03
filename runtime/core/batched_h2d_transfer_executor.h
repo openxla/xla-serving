@@ -37,6 +37,13 @@ namespace xla_serving {
 // Executor that groups and issues batched host-to-device transfers.
 // This implementation groups HostBuffers targeted for the same devices and
 // delegates them as a batched multi-slice allocation to the IFRT client.
+//
+// Inputs bound to a static shape (`HostBuffer::static_shape()`) that is larger
+// than their data shape are transferred with dynamic DMA: the device buffer is
+// allocated for the static shape, only the host data is linearized (in the
+// device layout) and copied into the front of that buffer, and the resulting
+// array has the static shape. This requires a single-device sharding and a
+// `xla::CommonPjRtClient` backend.
 class BatchedH2DTransferExecutor : public H2DTransferExecutor {
  public:
   struct Options {};
@@ -57,6 +64,11 @@ class BatchedH2DTransferExecutor : public H2DTransferExecutor {
                              xla::ifrt::DeviceListRef device_list,
                              tsl::thread::ThreadPool* absl_nonnull thread_pool,
                              Options options);
+
+  // Transfers `input`, whose static shape is larger than its data shape, with
+  // dynamic DMA (see the class comment).
+  absl::StatusOr<xla::ifrt::ArrayRef> ExecuteDynamicDmaTransfer(
+      const HostBuffer& input, const xla::ifrt::ShardingRef& sharding) const;
 
   xla::ifrt::PjRtCompatibleClient* client_;  // Not owned.
   xla::ifrt::DeviceListRef device_list_;

@@ -18,7 +18,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <iterator>
 #include <memory>
 #include <numeric>
 #include <optional>
@@ -37,8 +36,11 @@
 #include "runtime/core/sharding_utils.h"  // from @xla_serving
 #include "xla/layout_util.h"  // from @xla
 #include "xla/literal.h"  // from @xla
+#include "xla/pjrt/common_pjrt_client.h"  // from @xla
+#include "xla/pjrt/device_event.h"  // from @xla
 #include "xla/pjrt/pjrt_client.h"  // from @xla
 #include "xla/pjrt/pjrt_layout.h"  // from @xla
+#include "xla/pjrt/raw_buffer.h"  // from @xla
 #include "xla/pjrt/transpose.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
@@ -56,15 +58,83 @@
 #include "xla/python/pjrt_ifrt/xla_sharding.h"  // from @xla
 #include "xla/shape.h"  // from @xla
 #include "xla/shape_util.h"  // from @xla
+#include "xla/status_macros.h"  // from @xla
 #include "xla/tsl/concurrency/ref_count.h"  // from @xla
+#include "xla/tsl/lib/monitoring/counter.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
+#include "tsl/profiler/lib/traceme.h"  // from @tsl
+#include "tsl/profiler/lib/traceme_encode.h"  // from @tsl
 
 namespace xla_serving {
 
 namespace {
 
 using PjRtBuffers = std::vector<std::shared_ptr<xla::PjRtBuffer>>;
+
+auto* dynamic_dma_bytes_counter = ::tsl::monitoring::Counter<1>::New(
+    "/xla_serving/input_transfer/dynamic_dma_bytes",
+    "Bytes handled by dynamic DMA transfers: `allocated` is the on-device "
+    "size of the static-shape buffers, `transferred` the bytes of actual data "
+    "copied into them.",
+    "kind");
+
+// Returns true if `input` is to be transferred with dynamic DMA: it is bound to
+// a static shape that has more elements than its data shape. An input bound to
+// its own shape takes the regular path.
+bool IsDynamicDmaInput(const HostBuffer& input) {
+  return input.static_shape().has_value() &&
+         input.static_shape()->num_elements() > input.shape().num_elements();
+}
+
+// The device a whole, unpartitioned array lives on, together with the sharding
+// to create the array with.
+struct SingleDeviceTarget {
+  xla::ifrt::Device* device;
+  xla::ifrt::ShardingRef effective_sharding;
+};
+
+// Resolves `sharding` to a single device if it places the entire array on one
+// device: a `SingleDeviceSharding`, a tile-maximal `HloSharding` that assigns
+// the whole array to one device of a multi-device mesh, or any sharding over a
+// single-device list (replicating or tiling over one device still puts the
+// whole array on that device). Returns `std::nullopt` for any other sharding.
+absl::StatusOr<std::optional<SingleDeviceTarget>> GetSingleDeviceTarget(
+    const xla::ifrt::ShardingRef& sharding, xla::ifrt::Client* client) {
+  if (const auto* single_device_sharding =
+          xla::ifrt::dyn_cast_or_null<xla::ifrt::SingleDeviceSharding>(
+              sharding.get())) {
+    absl::Span<xla::ifrt::Device* const> devices =
+        single_device_sharding->devices()->devices();
+    if (devices.empty()) {
+      return std::nullopt;
+    }
+    return SingleDeviceTarget{.device = devices[0],
+                              .effective_sharding = sharding};
+  }
+  if (const auto* hlo_sharding =
+          xla::ifrt::dyn_cast_or_null<xla::ifrt::HloSharding>(sharding.get())) {
+    if (hlo_sharding->xla_hlo_sharding().IsSingleDevice()) {
+      int unique_device_id = hlo_sharding->xla_hlo_sharding().GetUniqueDevice();
+      TF_ASSIGN_OR_RETURN(
+          xla::ifrt::Device * target_device,
+          client->LookupDevice(xla::ifrt::DeviceId(unique_device_id)));
+      if (!target_device) {
+        return std::nullopt;
+      }
+      return SingleDeviceTarget{
+          .device = target_device,
+          .effective_sharding = xla::ifrt::SingleDeviceSharding::Create(
+              target_device, sharding->memory_kind())};
+    }
+  }
+  if (sharding->devices()->size() == 1) {
+    return SingleDeviceTarget{.device = sharding->devices()->devices()[0],
+                              .effective_sharding = sharding};
+  }
+  return std::nullopt;
+}
 
 // Represents a target shard destination on a device.
 struct ShardTarget {
@@ -271,16 +341,16 @@ absl::StatusOr<HostBuffer> MakeContiguousHostBuffer(
   // avoid saturating the shared pool under high concurrency; TransposePlan also
   // enforces a 1MB/64MB per-thread minimum and runs smaller buffers inline.
   constexpr int kMaxTransposeThreads = 4;
+  std::optional<xla::TransposePlan::Striding> input_striding;
+  if (input.byte_strides().has_value()) {
+    input_striding.emplace(*input.byte_strides());
+  }
   xla::TransposePlan::Options options{
       .elem_size_in_bytes = static_cast<size_t>(
           xla::ShapeUtil::ByteSizeOfPrimitiveType(primitive_type)),
       .dims = input.shape().dims(),
       .permutation = permutation,
-      .input_striding =
-          input.byte_strides().has_value()
-              ? std::optional<xla::TransposePlan::Striding>{*input
-                                                                 .byte_strides()}
-              : std::nullopt,
+      .input_striding = input_striding,
       .num_threads = std::min(kMaxTransposeThreads, thread_pool.NumThreads()),
   };
 
@@ -296,7 +366,10 @@ absl::StatusOr<HostBuffer> MakeContiguousHostBuffer(
 // Inspects the input buffer and sharding to determine if it qualifies for
 // batched transfer. If eligible, returns the batch plan with shard targets.
 // Returns std::nullopt if the input should route to the fallback path (e.g.
-// non-uniform shardings, strings, sub-byte types, 0-element tensors).
+// non-uniform shardings, strings, sub-byte types, 0-element tensors). Returns
+// an error for an input bound to a static shape whose sharding spans several
+// devices, since neither the batched nor the fallback path can honour the
+// static shape for it.
 absl::StatusOr<std::optional<BatchPlan>> GetBatchPlanIfEligible(
     const HostBuffer& original_input, const xla::ifrt::ShardingRef& sharding,
     xla::ifrt::Client* client, tsl::thread::ThreadPool& thread_pool) {
@@ -327,61 +400,40 @@ absl::StatusOr<std::optional<BatchPlan>> GetBatchPlanIfEligible(
   const HostBuffer& input =
       contiguous_input.has_value() ? *contiguous_input : original_input;
 
-  // Case 1: SingleDeviceSharding (tensor targeted to 1 device)
-  if (const auto* single_device_sharding =
-          xla::ifrt::dyn_cast_or_null<xla::ifrt::SingleDeviceSharding>(
-              sharding.get())) {
-    absl::Span<xla::ifrt::Device* const> devices =
-        single_device_sharding->devices()->devices();
-    if (devices.empty()) {
-      return std::nullopt;
-    }
+  // Case 1: The whole array lives on one device: a `SingleDeviceSharding`, a
+  // tile-maximal `HloSharding` that assigns the unpartitioned array to one
+  // device of a multi-device mesh, or any sharding over a single-device list.
+  TF_ASSIGN_OR_RETURN(std::optional<SingleDeviceTarget> single_device_target,
+                      GetSingleDeviceTarget(sharding, client));
+  if (single_device_target.has_value()) {
     xla::Shape xla_shape =
         xla::ShapeUtil::MakeShape(primitive_type, input.shape().dims());
     return BatchPlan{
         .shard_targets = {ShardTarget{
-            .device = devices[0],
+            .device = single_device_target->device,
             .shape = std::move(xla_shape),
             .source_buffer = contiguous_input.has_value()
                                  ? std::move(*contiguous_input)
                                  : input,
         }},
-        .effective_sharding = sharding,
+        .effective_sharding =
+            std::move(single_device_target->effective_sharding),
     };
   }
 
-  // Case 2: Tile-Maximal HloSharding (assigns an entire, unpartitioned tensor
-  // to 1 specific device within a multi-device mesh)
-  if (const auto* hlo_sharding =
-          xla::ifrt::dyn_cast_or_null<xla::ifrt::HloSharding>(
-              sharding.get())) {
-    if (hlo_sharding->xla_hlo_sharding().IsSingleDevice()) {
-      int unique_device_id =
-          hlo_sharding->xla_hlo_sharding().GetUniqueDevice();
-      TF_ASSIGN_OR_RETURN(
-          xla::ifrt::Device* target_device,
-          client->LookupDevice(xla::ifrt::DeviceId(unique_device_id)));
-      if (!target_device) {
-        return std::nullopt;
-      }
-      xla::Shape xla_shape =
-          xla::ShapeUtil::MakeShape(primitive_type, input.shape().dims());
-      return BatchPlan{
-          .shard_targets = {ShardTarget{
-              .device = target_device,
-              .shape = std::move(xla_shape),
-              .source_buffer = contiguous_input.has_value()
-                                   ? std::move(*contiguous_input)
-                                   : input,
-          }},
-          .effective_sharding = xla::ifrt::SingleDeviceSharding::Create(
-              target_device, sharding->memory_kind()),
-      };
-    }
+  // Beyond this point the array is spread over several devices, which is not
+  // supported for an input bound to a static shape (see
+  // `ExecuteDynamicDmaTransfer`).
+  if (original_input.static_shape().has_value()) {
+    return absl::UnimplementedError(absl::StrCat(
+        "Input of shape ", original_input.shape(), " bound to static shape ",
+        *original_input.static_shape(),
+        " has a sharding that spans more than one device (", *sharding,
+        "). Static shapes are only supported for single-device inputs."));
   }
 
-  // Case 3: Fully Replicated Sharding (covers HloSharding::Replicate() and any
-  // sharding where the entire tensor is cloned across all target devices)
+  // Case 2: Fully replicated sharding (covers `HloSharding::Replicate()` and
+  // any sharding where the entire array is cloned onto every target device).
   if (sharding->IsFullyReplicated()) {
     absl::Span<xla::ifrt::Device* const> devices =
         sharding->devices()->devices();
@@ -408,8 +460,8 @@ absl::StatusOr<std::optional<BatchPlan>> GetBatchPlanIfEligible(
     };
   }
 
-  // Case 4: Partitioned / Tiled Sharding (shards sliced and distributed across
-  // devices)
+  // Case 3: Partitioned / tiled sharding (shards sliced and distributed across
+  // devices).
   TF_ASSIGN_OR_RETURN(
       BatchPlan plan,
       GetShardedBatchPlan(input, sharding, primitive_type, thread_pool));
@@ -462,11 +514,25 @@ BatchedH2DTransferExecutor::ExecuteTransfer(
   std::vector<xla::ifrt::ArrayRef> results(inputs.size());
 
   // Phase 1: Classify inputs into per-device batches or fallback paths.
+  std::vector<int> dynamic_dma_input_indices;
   for (int i = 0; i < inputs.size(); ++i) {
+    if (IsDynamicDmaInput(inputs[i])) {
+      dynamic_dma_input_indices.push_back(i);
+      continue;
+    }
     TF_ASSIGN_OR_RETURN(std::optional<BatchPlan> batch_plan,
                         GetBatchPlanIfEligible(inputs[i], input_shardings[i],
                                                client_, *thread_pool_));
     if (!batch_plan.has_value()) {
+      if (inputs[i].static_shape().has_value()) {
+        return absl::UnimplementedError(absl::StrCat(
+            "Input of shape ", inputs[i].shape(), " and dtype ",
+            inputs[i].dtype(), " bound to static shape ",
+            *inputs[i].static_shape(),
+            " is not eligible for a batched transfer (string or packed dtype, "
+            "no elements, or non-default memory kind), and the default "
+            "transfer path does not support static shapes."));
+      }
       fallback_input_indices.push_back(i);
       continue;
     }
@@ -577,7 +643,151 @@ BatchedH2DTransferExecutor::ExecuteTransfer(
             *thread_pool_));
   }
 
+  // Phase 5: Dynamic DMA transfers for inputs bound to a larger static shape.
+  for (int idx : dynamic_dma_input_indices) {
+    TF_ASSIGN_OR_RETURN(results[idx], ExecuteDynamicDmaTransfer(
+                                          inputs[idx], input_shardings[idx]));
+  }
+
   return results;
+}
+
+absl::StatusOr<xla::ifrt::ArrayRef>
+BatchedH2DTransferExecutor::ExecuteDynamicDmaTransfer(
+    const HostBuffer& input, const xla::ifrt::ShardingRef& sharding) const {
+  const xla::ifrt::Shape& static_shape = *input.static_shape();
+  // `IsDynamicDmaInput()` only holds for arrays with a dimension 0 to shrink.
+  TF_RET_CHECK(!static_shape.dims().empty() && !input.shape().dims().empty())
+      << "Dynamic DMA input must have rank >= 1, got static shape "
+      << static_shape << " and data shape " << input.shape();
+  tsl::profiler::TraceMe trace_me([&]() {
+    return tsl::profiler::TraceMeEncode(
+        "BatchedH2DTransferExecutor::ExecuteDynamicDmaTransfer",
+        {{"shape", absl::StrCat(input.shape())},
+         {"static_shape", absl::StrCat(static_shape)}});
+  });
+
+  // Dynamic DMA linearizes the host data into the device layout of the static
+  // shape and copies it to the front of a device buffer allocated for the
+  // static shape. That only works for plain numeric data (no strings, no
+  // packed sub-byte storage) in the device's default memory.
+  if (input.dtype().kind() == xla::ifrt::DType::kString ||
+      input.dtype() != input.storage_dtype()) {
+    return absl::UnimplementedError(
+        absl::StrCat("Dynamic DMA does not support inputs of dtype ",
+                     input.dtype(), " (input of shape ", input.shape(),
+                     " bound to static shape ", static_shape, ")."));
+  }
+  if (!sharding->memory_kind().is_default()) {
+    return absl::UnimplementedError(absl::StrCat(
+        "Dynamic DMA only supports the default memory kind, but the input of "
+        "shape ",
+        input.shape(), " bound to static shape ", static_shape,
+        " has sharding ", *sharding, "."));
+  }
+  TF_ASSIGN_OR_RETURN(std::optional<SingleDeviceTarget> target,
+                      GetSingleDeviceTarget(sharding, client_));
+  if (!target.has_value()) {
+    return absl::UnimplementedError(absl::StrCat(
+        "Dynamic DMA only supports single-device inputs, but the input of "
+        "shape ",
+        input.shape(), " bound to static shape ", static_shape,
+        " has sharding ", *sharding, "."));
+  }
+  auto* common_client =
+      dynamic_cast<xla::CommonPjRtClient*>(client_->pjrt_client());
+  if (common_client == nullptr) {
+    return absl::UnimplementedError(
+        "Dynamic DMA requires a PjRt client derived from "
+        "xla::CommonPjRtClient.");
+  }
+  auto* pjrt_compatible_device =
+      xla::ifrt::dyn_cast_or_null<xla::ifrt::PjRtCompatibleDevice>(
+          target->device);
+  if (!pjrt_compatible_device || !pjrt_compatible_device->pjrt_device()) {
+    return absl::InternalError("Target device is not PJRT compatible.");
+  }
+  TF_ASSIGN_OR_RETURN(
+      xla::PjRtMemorySpace * memory_space,
+      pjrt_compatible_device->pjrt_device()->default_memory_space());
+  TF_ASSIGN_OR_RETURN(xla::PrimitiveType primitive_type,
+                      xla::ifrt::ToPrimitiveType(input.dtype()));
+
+  // The device buffer: allocated for the static shape in the device's default
+  // layout for it, exactly as the regular batched path (and
+  // `CreateBuffersForAsyncHostToDevice`) would allocate a buffer of that shape.
+  TF_ASSIGN_OR_RETURN(
+      xla::Shape device_shape,
+      common_client->MakeDefaultShapeForMemorySpace(
+          memory_space,
+          xla::ShapeUtil::MakeShape(primitive_type, static_shape.dims()),
+          /*layout=*/nullptr));
+  // The host data is linearized as if it were an array of its own (smaller)
+  // shape in the layout of the device buffer, so it lands as a prefix of the
+  // static-shape buffer. `HostBuffer::SetStaticShape()` guarantees the data
+  // shape only differs along dimension 0, and dimension 0 must be the
+  // major-most dimension of the layout for the prefix property to hold.
+  if (device_shape.layout().minor_to_major().back() != 0) {
+    return absl::UnimplementedError(absl::StrCat(
+        "Dynamic DMA requires dimension 0 to be the major-most dimension of "
+        "the device layout, but the device shape for static shape ",
+        static_shape, " is ", device_shape.ToString(/*print_layout=*/true),
+        "."));
+  }
+  xla::Shape host_device_shape = device_shape;
+  host_device_shape.set_dimensions(0, input.shape().dims()[0]);
+
+  TF_ASSIGN_OR_RETURN(
+      int64_t on_device_bytes,
+      common_client->GetOnDeviceBytesCount(memory_space, device_shape));
+  TF_ASSIGN_OR_RETURN(int64_t transferred_bytes,
+                      common_client->GetDmaByteCount(host_device_shape));
+  TF_ASSIGN_OR_RETURN(
+      xla::PjRtRawBufferRef raw_buffer,
+      common_client->AllocateRawBuffer(memory_space, on_device_bytes,
+                                       /*retry_on_oom=*/true,
+                                       /*allocate_after=*/{}));
+
+  xla::PjRtDeviceEventRef definition_event;
+  if (input.shape().num_elements() == 0) {
+    TF_ASSIGN_OR_RETURN(definition_event,
+                        raw_buffer->MakeAllocationReadyEvent());
+  } else {
+    std::optional<absl::Span<const int64_t>> byte_strides;
+    if (input.byte_strides().has_value()) {
+      byte_strides = absl::MakeConstSpan(*input.byte_strides());
+    }
+    // Keeps the host data alive until the client is done reading it.
+    HostBuffer keep_alive = input;
+    TF_ASSIGN_OR_RETURN(
+        definition_event,
+        common_client->LinearizeIntoImpl(
+            input.base(), primitive_type, input.shape().dims(), byte_strides,
+            xla::PjRtClient::HostBufferSemantics::
+                kImmutableUntilTransferCompletes,
+            /*on_done_with_host_buffer=*/
+            [keep_alive = std::move(keep_alive)]() {}, host_device_shape,
+            /*dynamic_sizes=*/{}, raw_buffer));
+  }
+  TF_ASSIGN_OR_RETURN(
+      std::unique_ptr<xla::PjRtBuffer> buffer,
+      common_client->DefineBuffer(std::move(device_shape), memory_space,
+                                  std::move(raw_buffer),
+                                  {std::move(definition_event)}));
+
+  dynamic_dma_bytes_counter->GetCell("allocated")->IncrementBy(on_device_bytes);
+  dynamic_dma_bytes_counter->GetCell("transferred")
+      ->IncrementBy(transferred_bytes);
+
+  xla::ifrt::PjRtArray::PjRtBuffers pjrt_buffers;
+  pjrt_buffers.push_back(std::shared_ptr<xla::PjRtBuffer>(buffer.release()));
+  TF_ASSIGN_OR_RETURN(
+      tsl::RCReference<xla::ifrt::PjRtArray> array,
+      xla::ifrt::PjRtArray::Create(
+          client_, input.dtype(), static_shape,
+          std::move(target->effective_sharding), std::move(pjrt_buffers),
+          /*layout=*/std::shared_ptr<const xla::PjRtLayout>()));
+  return tsl::RCReference<xla::ifrt::Array>(std::move(array));
 }
 
 absl::StatusOr<std::unique_ptr<H2DTransferExecutor>>
