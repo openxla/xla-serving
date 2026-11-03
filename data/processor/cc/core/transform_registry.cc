@@ -284,7 +284,8 @@ absl::Status ValidateSingleItem(const Item& item, size_t input_idx,
     }
   }
   if (constraint.expected_shape.has_value()) {
-    const auto& expected_shape = *constraint.expected_shape;
+    const api::PartialShape::Dimensions& expected_shape =
+        *constraint.expected_shape;
     const size_t rank = GetRank(item);
     if (rank != expected_shape.size()) {
       return absl::InvalidArgumentError(absl::StrCat(
@@ -295,11 +296,11 @@ absl::Status ValidateSingleItem(const Item& item, size_t input_idx,
       // An unknown dimension of a spec is accepted at trace time; the buffer
       // is checked when the transform executes.
       const std::optional<int64_t> dim = GetDim(item, d);
-      if (expected_shape[d].has_value() && dim.has_value() &&
-          *dim != *expected_shape[d]) {
-        return absl::InvalidArgumentError(
-            absl::StrCat("Input ", input_idx, " has invalid shape at dim ", d,
-                         ": ", *dim, ". Expected: ", *expected_shape[d]));
+      if (expected_shape[d].IsKnown() && dim.has_value() &&
+          *dim != *expected_shape[d].Value()) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Input ", input_idx, " has invalid shape at dim ", d, ": ", *dim,
+            ". Expected: ", *expected_shape[d].Value()));
       }
     }
   }
