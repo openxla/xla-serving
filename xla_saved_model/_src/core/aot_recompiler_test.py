@@ -227,11 +227,10 @@ class AotRecompilerTest(test_utils.XsmTestCase):
     options = self._get_compile_options(out_dir)
     self.assertIn("cuda", options.map)
     # The autotune database is a path on the compiling host.
-    self.assertEmpty(
-        options.map[
-            "cuda"
-        ].executable_build_options.debug_options.xla_gpu_per_fusion_autotune_cache_dir
+    cuda_debug_options = (
+        options.map["cuda"].executable_build_options.debug_options
     )
+    self.assertEmpty(cuda_debug_options.xla_autotune_cache_dir)
     # The compile options of the other platforms are kept.
     for platform, platform_options in input_options.map.items():
       self.assertEqual(options.map[platform], platform_options)
