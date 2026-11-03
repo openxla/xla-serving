@@ -60,6 +60,7 @@
 #include "xla/pjrt/pjrt_layout.h"  // from @xla
 #include "xla/pjrt/transpose.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
+#include "xla/python/ifrt/attribute_map.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
@@ -94,6 +95,13 @@ namespace {
 // in case an IFRT backend keeps per-stream-id state that is never released;
 // this is far above any realistic number of concurrent executions.
 constexpr uint32_t kNumExecutionStreams = 1024;
+
+// Name of the IFRT/PjRt execute custom option carrying the execution priority.
+// Must match `xla::kExecutionPriorityCustomOption`
+// (xla/pjrt/se/prioritized_compute_stream.h); duplicated here so that the
+// backend-agnostic runner does not depend on the StreamExecutor client.
+constexpr absl::string_view kExecutionPriorityCustomOption =
+    "execution_priority";
 
 auto* input_transfer_counter =
     ::tsl::monitoring::Counter<1>::New("/xla_serving/input_transfer/dispatched",
@@ -1202,6 +1210,14 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
         "aliasing, but this model was not.");
   }
 
+  // Forward the execution priority of the request to IFRT.
+  std::optional<xla::ifrt::AttributeMap> execute_custom_options;
+  if (run_context.execution_priority != 0) {
+    execute_custom_options.emplace(xla::ifrt::AttributeMap::Map{
+        {std::string(kExecutionPriorityCustomOption),
+         xla::ifrt::AttributeMap::Int64Value(run_context.execution_priority)}});
+  }
+
   TF_ASSIGN_OR_RETURN(
       xla::ifrt::LoadedExecutable::ExecuteResult execution_result,
       executable_bundle->ifrt_executable->Execute(
@@ -1216,9 +1232,9 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
               // Use a distinct stream per execution so that backends honoring
               // `execution_stream_id` (e.g. PjRt CPU, Pathways) do not
               // serialize concurrent requests on the default stream 0.
-              .execution_stream_id =
-                  1 + static_cast<uint32_t>(xla_launch_id) %
-                          kNumExecutionStreams,
+              .execution_stream_id = 1 + static_cast<uint32_t>(xla_launch_id) %
+                                             kNumExecutionStreams,
+              .custom_options = std::move(execute_custom_options),
           },
           // IFRT requires an explicit device mapping when executing portable
           //  or unbound executables. If the executable already has
