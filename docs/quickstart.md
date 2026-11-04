@@ -6,11 +6,17 @@ command below was run as written; the model is trivial on purpose so that
 nothing here depends on an accelerator.
 
 You need Python 3.12+ and Docker (see [Installation](installation.md) for
-details). Install the export library, in-process runner, and the example's
-dependencies (`flax` and `grpcio`):
+details). Install the export library and the example's dependencies (`flax` and
+`grpcio`) from PyPI, and `xla-saved-model-runner` from
+[GitHub Releases](https://github.com/openxla/xla-serving/releases):
 
 ```bash
-pip install xla-saved-model xla-saved-model-runner flax grpcio
+gh release download \
+  --repo openxla/xla-serving \
+  --pattern 'xla_saved_model_runner-*.whl' \
+  --dir wheels
+
+pip install --find-links wheels xla-saved-model xla-saved-model-runner flax grpcio
 ```
 
 ## 1. Export

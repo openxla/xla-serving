@@ -30,7 +30,7 @@ lowers functions to StableHLO for `cpu`, `cuda`, and `tpu` on any CPU host.
 
 ## Python packages
 
-Install `xla-saved-model` and the optional runtime and data packages from PyPI:
+Install `xla-saved-model` and the optional `xla-serving-data` package from PyPI:
 
 ```bash
 python3.12 -m venv .venv
@@ -38,9 +38,6 @@ source .venv/bin/activate
 
 # Core export library and xsm-cli
 pip install xla-saved-model
-
-# Optional: in-process C++ runtime wrapper for Python
-pip install xla-saved-model-runner
 
 # Optional: C++ feature transform library
 pip install xla-serving-data
@@ -59,10 +56,26 @@ pip install "xla-saved-model[torch]"
 pip install "xla-saved-model[llm]"
 ```
 
-:::{tip} Installing from GitHub Releases
-Wheel artifacts for each release are also attached to
-[GitHub Releases](https://github.com/openxla/xla-serving/releases). To install
-from downloaded wheels (for example, in an offline environment or from a
+Install the optional `xla-saved-model-runner` package (in-process C++ runtime
+wrapper for Python) from
+[GitHub Releases](https://github.com/openxla/xla-serving/releases):
+
+```bash
+gh release download \
+  --repo openxla/xla-serving \
+  --pattern 'xla_saved_model_runner-*.whl' \
+  --dir wheels
+
+pip install --find-links wheels xla-saved-model-runner
+```
+
+You can also download the `xla_saved_model_runner-*.whl` matching your Python
+version directly from the release page and pass it to `pip install`.
+
+:::{tip} Installing all packages from GitHub Releases
+Wheel artifacts for `xla-saved-model` and `xla-serving-data` are also attached
+to [GitHub Releases](https://github.com/openxla/xla-serving/releases). To
+install from downloaded wheels (for example, in an offline environment or from a
 pre-release tag):
 
 ```bash
