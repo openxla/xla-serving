@@ -161,7 +161,7 @@ tsl::Future<std::vector<Value>> AsyncLaunchKernel(
 }  // namespace
 
 absl::StatusOr<std::vector<Value>> ExecuteLinearGraph(
-    const RunContext run_context, absl::Span<const Value> inputs,
+    RunContext run_context, absl::Span<const Value> inputs,
     absl::Span<const std::unique_ptr<Kernel>> graph,
     absl::string_view model_name, int64_t model_version) {
   tsl::profiler::TraceMe trace_me([&]() {
@@ -175,7 +175,7 @@ absl::StatusOr<std::vector<Value>> ExecuteLinearGraph(
   execute_context.metadata.model_name = model_name;
   execute_context.metadata.model_version = model_version;
   execute_context.inputs = inputs;
-  execute_context.run_context = run_context;
+  execute_context.run_context = std::move(run_context);
   std::vector<Value> outputs;
   for (auto& kernel : graph) {
     tsl::profiler::TraceMe trace_me([&]() {
@@ -197,7 +197,7 @@ absl::StatusOr<std::vector<Value>> ExecuteLinearGraph(
 
 absl::StatusOr<absl::flat_hash_map<std::string, Value>>
 ExecuteLinearGraphWithKeywordArgs(
-    const RunContext run_context,
+    RunContext run_context,
     const absl::flat_hash_map<std::string, Value>& keyword_inputs,
     absl::Span<const std::unique_ptr<Kernel>> graph,
     absl::string_view model_name, int64_t model_version) {
@@ -211,7 +211,7 @@ ExecuteLinearGraphWithKeywordArgs(
   execute_context.metadata.model_name = model_name;
   execute_context.metadata.model_version = model_version;
   execute_context.named_values = keyword_inputs;
-  execute_context.run_context = run_context;
+  execute_context.run_context = std::move(run_context);
   std::vector<Value> outputs;
   for (auto& kernel : graph) {
     tsl::profiler::TraceMe trace_me([&]() {

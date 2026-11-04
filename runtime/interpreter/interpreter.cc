@@ -15,6 +15,7 @@
 #include "runtime/interpreter/interpreter.h"  // from @xla_serving
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <iterator>
 #include <limits>
@@ -28,8 +29,10 @@
 #include <vector>
 
 #include "absl/algorithm/container.h"  // from @abseil-cpp
+#include "absl/base/call_once.h"  // from @abseil-cpp
 #include "absl/base/no_destructor.h"  // from @abseil-cpp
 #include "absl/base/nullability.h"  // from @abseil-cpp
+#include "absl/base/optimization.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/flags/flag.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
@@ -51,7 +54,6 @@
 #include "runtime/core/batching/batch_scheduler.h"  // from @xla_serving
 #include "runtime/core/constants.h"  // from @xla_serving
 #include "runtime/core/flat_signature.h"  // from @xla_serving
-#include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "runtime/core/ifrt_device_utils.h"  // from @xla_serving
 #include "runtime/core/ifrt_loaded_variable_registry.h"  // from @xla_serving
 #include "runtime/core/stablehlo.h"  // from @xla_serving
@@ -1063,11 +1065,10 @@ absl::Status Interpreter::LoadGraphs() {
           [this, bundle,
            ctx = std::make_shared<tsl::Context>(std::move(context)),
            &counter]() mutable {
-            {
-              absl::MutexLock l(bundle->graph_mutex);
+            absl::call_once(bundle->graph_once, [&] {
               tsl::WithContext wc(*ctx);
-              bundle->graph.emplace(LoadGraph(bundle->pipeline));
-            }
+              bundle->graph = LoadGraph(bundle->pipeline);
+            });
             counter.DecrementCount();
           });
     }
@@ -1075,15 +1076,15 @@ absl::Status Interpreter::LoadGraphs() {
     // Check the status of all graphs and return error if any graph fails to
     // load.
     for (auto& [pipeline_name, graph_bundle] : graph_bundles_) {
-      absl::MutexLock l(graph_bundle->graph_mutex);
-      TF_RETURN_IF_ERROR(graph_bundle->graph->status());
+      TF_RETURN_IF_ERROR(graph_bundle->graph.status());
     }
   } else {
     // Sequentially load all graphs.
     for (auto& [pipeline_name, graph_bundle] : graph_bundles_) {
-      absl::MutexLock l(graph_bundle->graph_mutex);
-      TF_ASSIGN_OR_RETURN(graph_bundle->graph,
-                          LoadGraph(graph_bundle->pipeline));
+      GraphBundle* bundle = graph_bundle.get();
+      absl::call_once(bundle->graph_once,
+                      [&] { bundle->graph = LoadGraph(bundle->pipeline); });
+      TF_RETURN_IF_ERROR(graph_bundle->graph.status());
     }
   }
   LOG(INFO) << "Done loading graphs from pipelines";
@@ -1665,14 +1666,29 @@ absl::StatusOr<DataLoader::LoadResult> Interpreter::LoadWeights(
 
 absl::StatusOr<const KernelGraph* absl_nonnull> Interpreter::GetOrCreateGraph(
     GraphBundle& graph_bundle) {
-  absl::MutexLock lock(graph_bundle.graph_mutex);
-  if (!graph_bundle.graph.has_value()) {
-    graph_bundle.graph.emplace(LoadGraph(graph_bundle.pipeline));
+  absl::call_once(graph_bundle.graph_once, [&] {
+    graph_bundle.graph = LoadGraph(graph_bundle.pipeline);
+  });
+  if (ABSL_PREDICT_TRUE(graph_bundle.graph.ok())) {
+    return &*graph_bundle.graph;
   }
-  if (graph_bundle.graph->ok()) {
-    return &(**graph_bundle.graph);
+  return graph_bundle.graph.status();
+}
+
+tsl::monitoring::CounterCell* absl_nonnull Interpreter::GetSyncRequestCountCell(
+    absl::StatusCode code) {
+  if (ABSL_PREDICT_TRUE(code == absl::StatusCode::kOk)) {
+    absl::call_once(sync_ok_request_cell_once_, [this] {
+      sync_ok_request_cell_ = request_count->GetCell(
+          create_options_->model_name,
+          absl::StrCat(create_options_->model_version), "sync",
+          absl::StatusCodeToString(absl::StatusCode::kOk));
+    });
+    return sync_ok_request_cell_;
   }
-  return graph_bundle.graph->status();
+  return request_count->GetCell(create_options_->model_name,
+                                absl::StrCat(create_options_->model_version),
+                                "sync", absl::StatusCodeToString(code));
 }
 
 absl::StatusOr<std::vector<Value>> Interpreter::Run(
@@ -1696,7 +1712,7 @@ absl::StatusOr<std::vector<Value>> Interpreter::Run(
   }
 
   auto result = [this, pipeline_name, &positional_inputs, &keyword_inputs,
-                 run_options]() -> absl::StatusOr<std::vector<Value>> {
+                 &run_options]() -> absl::StatusOr<std::vector<Value>> {
     TF_ASSIGN_OR_RETURN(GraphBundle * graph_bundle,
                         GetGraphBundle(pipeline_name));
     TF_RETURN_IF_ERROR(ValidatePreallocatedOutputs(*graph_bundle, run_options));
@@ -1744,11 +1760,7 @@ absl::StatusOr<std::vector<Value>> Interpreter::Run(
                               create_options_->model_version);
   }();
 
-  request_count
-      ->GetCell(create_options_->model_name,
-                absl::StrCat(create_options_->model_version), "sync",
-                absl::StatusCodeToString(result.status().code()))
-      ->IncrementBy(1);
+  GetSyncRequestCountCell(result.status().code())->IncrementBy(1);
   return result;
 }
 
@@ -1986,16 +1998,15 @@ absl::Status Interpreter::MarkFullyInitialized() {
       "lazy loading is enabled). Cannot load new pipeline after full "
       "initialization.");
   for (auto& [unused, graph_bundle] : graph_bundles_) {
-    absl::MutexLock lock(graph_bundle->graph_mutex);
-    if (graph_bundle->graph.has_value()) {
-      if (!graph_bundle->graph->ok()) {
-        continue;
-      }
-      for (auto& kernel : **graph_bundle->graph) {
+    bool was_unloaded = false;
+    absl::call_once(graph_bundle->graph_once, [&] {
+      graph_bundle->graph = unloaded_pipeline_status;
+      was_unloaded = true;
+    });
+    if (!was_unloaded && graph_bundle->graph.ok()) {
+      for (auto& kernel : *graph_bundle->graph) {
         TF_RETURN_IF_ERROR(kernel->MarkFullyInitialized());
       }
-    } else {
-      graph_bundle->graph.emplace(unloaded_pipeline_status);
     }
   }
   return absl::OkStatus();

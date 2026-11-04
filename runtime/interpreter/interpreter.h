@@ -23,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/base/call_once.h"  // from @abseil-cpp
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/base/thread_annotations.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
@@ -45,10 +46,10 @@
 #include "runtime/interpreter/run_options.h"  // from @xla_serving
 #include "runtime/kernel/kernel.h"  // from @xla_serving
 #include "runtime/kernel/kernel_io_data_type.h"  // from @xla_serving
-#include "google/protobuf/repeated_ptr_field.h"
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/executable.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
+#include "xla/tsl/lib/monitoring/counter.h"  // from @xla
 #include "xla/tsl/platform/file_system.h"  // from @xla
 
 namespace xla_serving {
@@ -214,10 +215,11 @@ class Interpreter {
     std::string pipeline_name;
     xla_saved_model_orchestration::Pipeline pipeline;
     FunctionFlatSignature signature;
-    mutable absl::Mutex graph_mutex;
-    // nullopt if the graph is not loaded yet.
-    std::optional<absl::StatusOr<KernelGraph>> graph
-        ABSL_GUARDED_BY(graph_mutex);
+    // Populated at most once via `absl::call_once(graph_once, ...)` by
+    // `LoadGraphs()`, `GetOrCreateGraph()`, or `MarkFullyInitialized()`, and
+    // read without locking afterwards.
+    absl::once_flag graph_once;
+    absl::StatusOr<KernelGraph> graph;
     // Whether the graph is executed based on keyword arguments.
     bool keyword_arguments_execution = false;
 
@@ -263,11 +265,6 @@ class Interpreter {
   // yet, it will be loaded.
   absl::StatusOr<const KernelGraph* absl_nonnull> GetOrCreateGraph(
       GraphBundle& graph_bundle);
-
-  // Loads the graph from the given pipeline asynchronously. The graph will be
-  // stored in the graph bundle.
-  void LoadGraphAsync(GraphBundle& graph_bundle)
-      ABSL_EXCLUSIVE_LOCKS_REQUIRED(graph_bundle.graph_mutex);
 
   // Loads the graph from the given pipeline.
   absl::StatusOr<KernelGraph> LoadGraph(
@@ -373,6 +370,14 @@ class Interpreter {
       absl::Span<const Value> positional_inputs,
       const absl::flat_hash_map<std::string, Value>& keyword_inputs);
 
+  // Returns the `/orbax/serving/request_count` cell for synchronous `Run`
+  // calls finishing with `code`. Caches the `kOk` cell via `absl::call_once`
+  // on the first success so steady-state requests avoid `GetCell()`'s
+  // process-global mutex, label formatting, and hash lookup (without
+  // exporting a zero-valued OK stream before then).
+  tsl::monitoring::CounterCell* absl_nonnull GetSyncRequestCountCell(
+      absl::StatusCode code);
+
   xla_saved_model_manifest::Manifest manifest_;
   absl::flat_hash_map<std::string,
                       const xla_saved_model_manifest::TopLevelObject*>
@@ -408,6 +413,10 @@ class Interpreter {
 
   std::atomic<int32_t> request_id_counter_{1};
   std::optional<int64_t> callback_id_;
+  // Lazily initialized `/orbax/serving/request_count` cell for `kOk` sync
+  // `Run` calls; see `GetSyncRequestCountCell`.
+  absl::once_flag sync_ok_request_cell_once_;
+  tsl::monitoring::CounterCell* sync_ok_request_cell_ = nullptr;
 };
 
 }  // namespace xla_serving
