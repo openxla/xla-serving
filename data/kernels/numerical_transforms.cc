@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <memory>
-#include <optional>
 #include <utility>
 #include <vector>
 
@@ -94,12 +93,14 @@ ND_REGISTER_TRANSFORM(MatMulTransform, "MatMulTransform")
       return MatMulTransform::Create();
     })
     .SetInputConstraints(
-        {{.allowed_dtypes = {xla::ifrt::DType::kS32, xla::ifrt::DType::kF32},
-          .expected_shape = std::vector<std::optional<int64_t>>{std::nullopt,
-                                                                std::nullopt}},
-         {.allowed_dtypes = {xla::ifrt::DType::kS32, xla::ifrt::DType::kF32},
-          .expected_shape = std::vector<std::optional<int64_t>>{
-              std::nullopt, std::nullopt}}});
+        {{.name = "a",
+          .allowed_dtypes = {xla::ifrt::DType::kS32, xla::ifrt::DType::kF32},
+          .expected_shape =
+              PartialShape::Dimensions{Dim::Unknown(), Dim::Unknown()}},
+         {.name = "b",
+          .allowed_dtypes = {xla::ifrt::DType::kS32, xla::ifrt::DType::kF32},
+          .expected_shape =
+              PartialShape::Dimensions{Dim::Unknown(), Dim::Unknown()}}});
 
 absl::Status MatMulTransform::PropagateSignatureImpl(
     ShapeInferenceContext& context) const {

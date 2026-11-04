@@ -581,18 +581,55 @@ py::tuple IfrtShapeToPyTuple(const xla::ifrt::Shape& shape) {
   return py_shape;
 }
 
-// Returns a tuple of `int | None`, with None for an unknown dimension.
-py::tuple PartialShapeToPyTuple(const api::PartialShape& shape) {
-  py::tuple py_shape(shape.dims().size());
-  for (size_t i = 0; i < shape.dims().size(); ++i) {
-    const std::optional<int64_t> size = shape.dims()[i].Value();
+template <typename PySeq>
+PySeq DimensionsToPySequence(absl::Span<const api::Dim> dims) {
+  PySeq py_dims(dims.size());
+  for (size_t i = 0; i < dims.size(); ++i) {
+    const std::optional<int64_t> size = dims[i].Value();
     if (size.has_value()) {
-      py_shape[i] = *size;
+      py_dims[i] = *size;
     } else {
-      py_shape[i] = py::none();
+      py_dims[i] = py::none();
     }
   }
-  return py_shape;
+  return py_dims;
+}
+
+// Returns a list of `int | None`, with None for an unknown dimension.
+py::list DimensionsToPyList(absl::Span<const api::Dim> dims) {
+  return DimensionsToPySequence<py::list>(dims);
+}
+
+// Returns a tuple of `int | None`, with None for an unknown dimension.
+py::tuple PartialShapeToPyTuple(const api::PartialShape& shape) {
+  return DimensionsToPySequence<py::tuple>(shape.dims());
+}
+
+py::list InputConstraintsToPyList(const TransformBase& self) {
+  absl::StatusOr<const core::TransformFactoryHolder* absl_nonnull> holder =
+      self.GetTransformFactoryHolder();
+  if (!holder.ok()) {
+    return py::list();
+  }
+  py::list py_constraints;
+  for (const auto& constraint : (*holder)->InputConstraints()) {
+    py::list allowed_dtypes;
+    for (auto dtype : constraint.allowed_dtypes) {
+      allowed_dtypes.append(IfrtDTypeToPyObject(xla::ifrt::DType(dtype)));
+    }
+    py::dict py_constraint;
+    if (!constraint.name.empty()) {
+      py_constraint["name"] = constraint.name;
+    }
+    py_constraint["allowed_dtypes"] = allowed_dtypes;
+    py_constraint["is_list"] = constraint.is_list;
+    if (constraint.expected_shape.has_value()) {
+      py_constraint["expected_shape"] =
+          DimensionsToPyList(*constraint.expected_shape);
+    }
+    py_constraints.append(py_constraint);
+  }
+  return py_constraints;
 }
 
 // Converts a HostBufferSpec shape from Python, a sequence of `int | None` with
@@ -1248,31 +1285,7 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
              auto span = self.OutputTypes();
              return std::vector<api::TypeInfo>(span.begin(), span.end());
            })
-      .def("input_constraints",
-           [](const TransformBase& self) -> py::list {
-             absl::StatusOr<const core::TransformFactoryHolder* absl_nonnull>
-                 holder = self.GetTransformFactoryHolder();
-             if (!holder.ok()) {
-               return py::list();
-             }
-             py::list py_constraints;
-             for (const auto& constraint : (*holder)->InputConstraints()) {
-               py::list allowed_dtypes;
-               for (auto dtype : constraint.allowed_dtypes) {
-                 allowed_dtypes.append(
-                     IfrtDTypeToPyObject(xla::ifrt::DType(dtype)));
-               }
-               py::dict py_constraint;
-               py_constraint["allowed_dtypes"] = allowed_dtypes;
-               py_constraint["is_list"] = constraint.is_list;
-               if (constraint.expected_shape.has_value()) {
-                 py_constraint["expected_shape"] =
-                     py::cast(*constraint.expected_shape);
-               }
-               py_constraints.append(py_constraint);
-             }
-             return py_constraints;
-           })
+      .def("input_constraints", &InputConstraintsToPyList)
       .def("to_proto",
            [](const TransformBase& self) -> py::object {
              // Manual workaround for ImportNativeProtoCasters not generating
