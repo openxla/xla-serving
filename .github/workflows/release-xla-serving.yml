@@ -33,6 +33,12 @@ on:
         type: boolean
         default: false
 
+      publish_pypi:
+        description: "Publish wheels to PyPI via OSS Exit Gate (skipped when dry_run=true or draft=true)"
+        required: true
+        type: boolean
+        default: true
+
 concurrency:
   group: release-xla-serving
   cancel-in-progress: false
@@ -79,9 +85,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INPUT_VERSION: ${{ inputs.version }}
           DRY_RUN: ${{ inputs.dry_run }}
+          PUBLISH_PYPI: ${{ !inputs.dry_run && !inputs.draft && inputs.publish_pypi }}
         run: |
           TARGET_COMMIT=$(git rev-parse HEAD)
           echo "Target commit SHA: ${TARGET_COMMIT}"
+
+          if [ "${PUBLISH_PYPI}" = "true" ] && ! git merge-base --is-ancestor "${TARGET_COMMIT}" origin/main; then
+            echo "❌ Error: Commit ${TARGET_COMMIT} is not on main! PyPI releases must be built from main."
+            exit 1
+          fi
 
           CLEAN_VERSION=$(python3 -c '
           import os, re, sys
@@ -154,6 +166,21 @@ jobs:
           git config --global --add safe.directory "${GITHUB_WORKSPACE}" || true
           git config --global --add safe.directory "*" || true
 
+      - name: Sync version.bzl with Resolved Release Version
+        env:
+          RESOLVED_VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          python3 -c '
+          import os, pathlib, re
+          v = os.environ["RESOLVED_VERSION"]
+          p = pathlib.Path("version.bzl")
+          text = p.read_text()
+          new_text, n = re.subn(r"^VERSION\s*=\s*[\x27\"][^\x27\"]+[\x27\"]", f"VERSION = \"{v}\"", text, flags=re.M)
+          assert n == 1, "Failed to update VERSION in version.bzl"
+          p.write_text(new_text)
+          print(f"version.bzl synced to VERSION = \"{v}\"")
+          '
+
       - name: Install uv and Set up Python
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
@@ -175,7 +202,7 @@ jobs:
           repository-cache: true
 
       - name: Install Python Build Dependencies
-        run: uv pip install build setuptools wheel grpcio-tools
+        run: uv pip install build setuptools wheel grpcio-tools twine
 
       - name: Test and Build Data & Runner Wheels
         run: |
@@ -257,9 +284,10 @@ jobs:
           if [ "${{ matrix.python-version }}" = "${PURE_WHEEL_PYTHON}" ]; then
             cp dist/*.whl release_artifacts/
           fi
-          cp bazel-bin/data/xla_serving_data*.whl release_artifacts/
+          cp bazel-bin/data/xla_serving_data-*.whl release_artifacts/
           cp bazel-bin/runtime/python/xla_saved_model_runner*.whl release_artifacts/
           ls -la release_artifacts/
+          twine check release_artifacts/*.whl
 
       - name: Upload Release Wheels Artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -277,6 +305,7 @@ jobs:
     runs-on: linux-x86-n4-16
     permissions:
       contents: write # Required to create release & git tag
+      id-token: write # Required for OSS Exit Gate WIF authentication
     container:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:0ad60e35d5870853c4c463f1c23dff6ed2dbfe3b1f708406c25a7606a5cae078
 
@@ -337,3 +366,74 @@ jobs:
             "${FLAGS[@]}"
 
           echo "🚀 Release ${TAG_NAME} successfully created!"
+
+      - name: Check Wheel Sizes Against PyPI File Limit
+        if: ${{ !inputs.dry_run && !inputs.draft && inputs.publish_pypi }}
+        env:
+          PYPI_FILE_LIMIT_MB: ${{ vars.PYPI_FILE_LIMIT_MB || '100' }}
+        run: |
+          python3 - <<'PY'
+          import glob, os, sys
+          limit = int(os.environ['PYPI_FILE_LIMIT_MB']) * 1024 * 1024
+          wheels = sorted(glob.glob('wheels/*.whl'))
+          assert wheels, 'no wheels found in wheels/'
+          too_big = []
+          for w in wheels:
+              size = os.path.getsize(w)
+              print(f'{size / 1048576:8.1f} MB  {os.path.basename(w)}')
+              if size > limit:
+                  too_big.append(w)
+          if too_big:
+              print(f'WARNING: skipping wheels above the PyPI per-file limit of {limit // 1048576} MB: '
+                    + ', '.join(os.path.basename(w) for w in too_big), file=sys.stderr)
+              print('       Request a higher limit from PyPI and record it in the '
+                    'PYPI_FILE_LIMIT_MB repository variable.', file=sys.stderr)
+              # Create GitHub Release has already uploaded wheels/*.whl above.
+              for w in too_big:
+                  os.remove(w)
+          PY
+
+      - name: Authenticate with OSS Exit Gate (WIF)
+        if: ${{ !inputs.dry_run && !inputs.draft && inputs.publish_pypi }}
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: "projects/305452601764/locations/global/workloadIdentityPools/builders/providers/github"
+
+      - name: Stage Wheels in OSS Exit Gate Artifact Registry
+        if: ${{ !inputs.dry_run && !inputs.draft && inputs.publish_pypi }}
+        env:
+          EXIT_GATE_REPOSITORY_URL: https://us-python.pkg.dev/oss-exit-gate-prod/xla-serving--pypi/
+        run: |
+          uv run --isolated \
+            --with twine \
+            --with keyrings.google-artifactregistry-auth \
+            twine upload \
+            --repository-url "${EXIT_GATE_REPOSITORY_URL}" \
+            wheels/*.whl
+
+      - name: Write and Upload OSS Exit Gate Publishing Manifest
+        if: ${{ !inputs.dry_run && !inputs.draft && inputs.publish_pypi }}
+        env:
+          EXIT_GATE_MANIFEST_PREFIX: gs://oss-exit-gate-prod-projects-bucket/xla-serving/pypi/manifests
+          MANIFEST_NAME: manifest-${{ github.run_id }}-${{ github.run_attempt }}.json
+        run: |
+          python3 - <<'PY'
+          import glob, json, re, zipfile
+          seen = set()
+          packages = []
+          for whl in sorted(glob.glob('wheels/*.whl')):
+              with zipfile.ZipFile(whl) as z:
+                  meta = next(n for n in z.namelist() if n.endswith('.dist-info/METADATA'))
+                  fields = dict(l.split(': ', 1) for l in z.read(meta).decode().splitlines()
+                                if l.startswith(('Name: ', 'Version: ')))
+              name = re.sub(r'[-_.]+', '-', fields['Name']).lower()
+              key = (name, fields['Version'])
+              if key not in seen:
+                  seen.add(key)
+                  packages.append({'name': name, 'version': fields['Version']})
+          manifest = {'publish_all': False, 'publishing_groups': [{'packages': packages}]}
+          open('wheels/manifest.json', 'w').write(json.dumps(manifest, indent=2) + '\n')
+          print(json.dumps(manifest, indent=2))
+          PY
+          gcloud storage cp wheels/manifest.json "${EXIT_GATE_MANIFEST_PREFIX}/${MANIFEST_NAME}"
+          echo "✅ Triggered OSS Exit Gate release: ${EXIT_GATE_MANIFEST_PREFIX}/${MANIFEST_NAME}"
