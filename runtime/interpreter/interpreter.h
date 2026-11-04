@@ -282,8 +282,10 @@ class Interpreter {
   absl::StatusOr<KernelGraph> LoadGraphFromComponentProto(
       const xla_saved_model_orchestration::Pipeline& pipeline);
 
-  // Loads a StableHloRunnerOp kernel based on the model function name and
-  // weights name.
+  // Loads a StableHloRunnerOp kernel based on the model function name. Weights
+  // are resolved from `Function.weights_name` in the manifest first, falling
+  // back to `legacy_weights_name` for models exported before `weights_name`
+  // moved from `orchestration.proto` to `manifest.proto`.
   // TODO: Remove the `platform_name` parameter once XLA Serving
   // supports running processors on TPU. Currently, when models are exported
   // using older binaries without specifying a platform name, existing models
@@ -294,7 +296,8 @@ class Interpreter {
   // `host_ifrt_client` would incorrectly route execution to CPU, which fails
   // for TPU workloads.
   absl::StatusOr<std::unique_ptr<Kernel>> LoadStableHloRunnerOp(
-      absl::string_view model_function_name, absl::string_view weights_name,
+      absl::string_view model_function_name,
+      absl::string_view legacy_weights_name = "",
       const xla_saved_model_orchestration::NamedTensorTypeList* named_inputs =
           nullptr,
       const xla_saved_model_orchestration::NamedTensorTypeList* named_outputs =

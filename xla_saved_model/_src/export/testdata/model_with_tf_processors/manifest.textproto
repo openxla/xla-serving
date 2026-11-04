@@ -77,6 +77,7 @@ objects {
       }
       data_names: "w"
       visibility: PUBLIC
+      weights_name: "jax_model_weights"
     }
   }
 }

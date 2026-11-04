@@ -71,6 +71,11 @@ class JaxModel:
     return f'{self._name}_{constants.WEIGHTS_NAME}'
 
   @property
+  def has_weights(self) -> bool:
+    """Whether this model has parameters or an external checkpoint path."""
+    return self._params is not None or self._checkpoint_path is not None
+
+  @property
   def params(self) -> jaxtyping.PyTree | None:
     return self._params
 

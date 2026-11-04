@@ -157,8 +157,8 @@ class JaxProcessor:
     apply_fn_bundle: The ApplyFnBundle containing the function and export
       settings.
     params: Parameters associated with the function, if any.
-    weights_name: The name of the weights file. If None, a default name will be
-      used.
+    weights_name: Optional manifest object key for the weights bound to this
+      processor. If None or empty, no weights are bound.
     jax_mesh: The JAX mesh for compilation.
   """
 
@@ -210,6 +210,7 @@ class JaxProcessor:
         input_signature=jax2xsm.utils.to_jax_spec(input_signature),
         model_param_names=model_param_names,
         jax_mesh=self.jax_mesh,
+        weights_name=self.weights_name or None,
     )
 
     if not shlo_functions:

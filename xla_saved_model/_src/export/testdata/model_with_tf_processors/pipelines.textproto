@@ -84,7 +84,6 @@ name_to_pipeline {
     components {
       function_name: "jax_model_serving_default"
       role: ROLE_MODEL
-      weights_name: "_weights"
     }
     components {
       function_name: "post_serving_default"

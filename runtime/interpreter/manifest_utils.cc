@@ -694,6 +694,28 @@ absl::StatusOr<std::optional<xla::CompileOptionsProto>> GetCompileOptions(
   return compile_options;
 }
 
+absl::StatusOr<std::string> GetWeightsName(
+    absl::Span<const xla_saved_model_manifest::Function* absl_nonnull const>
+        stablehlo_funcs) {
+  if (stablehlo_funcs.empty()) {
+    return "";
+  }
+  if (stablehlo_funcs[0] == nullptr) {
+    return absl::InvalidArgumentError("Function should not be null.");
+  }
+  const absl::string_view expected = stablehlo_funcs[0]->weights_name();
+  for (size_t i = 1; i < stablehlo_funcs.size(); ++i) {
+    if (stablehlo_funcs[i] == nullptr) {
+      return absl::InvalidArgumentError("Function should not be null.");
+    }
+    if (stablehlo_funcs[i]->weights_name() != expected) {
+      return absl::InvalidArgumentError(
+          "Weights name is not consistent across all functions.");
+    }
+  }
+  return std::string(expected);
+}
+
 absl::StatusOr<std::vector<std::string>> GetInputNames(
     absl::string_view orchestration_path, absl::string_view pipeline_name) {
   // Get the pipeline.

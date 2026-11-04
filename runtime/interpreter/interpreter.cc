@@ -289,6 +289,27 @@ void CreateAuxiliaryComponents(
   }
 }
 
+// Resolves `weights_name` from `Function.weights_name` in the manifest, falling
+// back to `legacy_weights_name` from `orchestration.proto` for older models.
+absl::StatusOr<std::string> ResolveWeightsName(
+    absl::Span<const xla_saved_model_manifest::Function* absl_nonnull const>
+        stablehlo_funcs,
+    absl::string_view legacy_weights_name) {
+  TF_ASSIGN_OR_RETURN(std::string manifest_weights_name,
+                      GetWeightsName(stablehlo_funcs));
+  if (!manifest_weights_name.empty()) {
+    if (!legacy_weights_name.empty() &&
+        legacy_weights_name != manifest_weights_name) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Conflicting weights_name between manifest (\"",
+          manifest_weights_name, "\") and orchestration component (\"",
+          legacy_weights_name, "\")."));
+    }
+    return manifest_weights_name;
+  }
+  return std::string(legacy_weights_name);
+}
+
 // Build a BatchKernel from a list of kernels to be batched.
 
 absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
@@ -1121,7 +1142,8 @@ absl::StatusOr<std::vector<std::string>> Interpreter::GetOrLoadWeightNames(
 }
 
 absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadStableHloRunnerOp(
-    absl::string_view model_function_name, absl::string_view weights_name,
+    absl::string_view model_function_name,
+    absl::string_view legacy_weights_name,
     const xla_saved_model_orchestration::NamedTensorTypeList* named_inputs,
     const xla_saved_model_orchestration::NamedTensorTypeList* named_outputs,
     const std::string& platform_name) {
@@ -1162,6 +1184,8 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadStableHloRunnerOp(
                                     : create_options_->ifrt_client)
                              : create_options_->ifrt_client;
 
+  TF_ASSIGN_OR_RETURN(std::string weights_name,
+                      ResolveWeightsName(stablehlo_funcs, legacy_weights_name));
   TF_ASSIGN_OR_RETURN(std::vector<std::string> loaded_weight_names,
                       GetOrLoadWeightNames(weights_name, stablehlo_funcs,
                                            assigned_devices, ifrt_client));
@@ -1209,8 +1233,11 @@ absl::StatusOr<Interpreter::AotLoadResult> Interpreter::LoadAotExecutable(
   // 2. Load Weights outside the bucket loop
   // TODO: Support multiple weight sets in AOT mode.
   TF_ASSIGN_OR_RETURN(
+      std::string weights_name,
+      ResolveWeightsName(stablehlo_funcs, component.weights_name()));
+  TF_ASSIGN_OR_RETURN(
       result.loaded_weight_names,
-      GetOrLoadWeightNames(component.weights_name(), stablehlo_funcs,
+      GetOrLoadWeightNames(weights_name, stablehlo_funcs,
                            *result.shared_assigned_devices,
                            create_options_->ifrt_client));
 

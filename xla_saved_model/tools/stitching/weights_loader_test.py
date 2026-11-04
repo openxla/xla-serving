@@ -174,7 +174,7 @@ def _replace_pipelines(
 
 class FindCheckpointPathTest(absltest.TestCase):
 
-  def test_follows_the_pipeline_binding(self):
+  def test_follows_the_manifest_binding(self):
     export_path = self.create_tempdir().full_path
     _save_model(
         {'w': jnp.ones((2,)), 'b': jnp.zeros((2,))}, _dense, export_path
@@ -185,7 +185,34 @@ class FindCheckpointPathTest(absltest.TestCase):
     self.assertTrue(path.startswith(export_path))
     self.assertTrue(os.path.isdir(path))
 
-  def test_rejects_a_model_without_pipelines(self):
+  def test_loads_from_a_model_without_pipelines(self):
+    spec = jax.ShapeDtypeStruct((), jnp.float32)
+    export_path = self.create_tempdir().full_path
+    ckpt_dir = os.path.join(export_path, 'my_checkpoint')
+    os.makedirs(ckpt_dir, exist_ok=True)
+    xsm.save(
+        {
+            'fn': jax2xsm_lib.convert(
+                jax.jit(lambda p, x: p['w'] * x),
+                ({'w': spec}, spec),
+                {},
+                platforms=[xsm.manifest_pb2.Platform.CPU],
+                weights_name='my_weights',
+            ),
+            'my_weights': jax2xsm_lib.convert_path_to_value(
+                'my_checkpoint', mime_type='application/x.orbax-checkpoint'
+            ),
+        },
+        export_path,
+        xsm.SaveOptions(version=2),
+    )
+
+    self.assertEqual(
+        weights_loader.find_checkpoint_path(export_path, 'fn'),
+        ckpt_dir,
+    )
+
+  def test_rejects_a_model_without_pipelines_or_manifest_weights(self):
     spec = jax.ShapeDtypeStruct((), jnp.float32)
     export_path = self.create_tempdir().full_path
     xsm.save(
@@ -204,9 +231,9 @@ class FindCheckpointPathTest(absltest.TestCase):
         xsm.SaveOptions(version=2),
     )
 
-    with self.assertRaisesRegex(ValueError, 'no orchestration pipelines'):
+    with self.assertRaisesRegex(ValueError, "No weights are bound to 'fn'"):
       weights_loader.find_checkpoint_path(export_path, 'fn')
-    with self.assertRaisesRegex(ValueError, 'no orchestration pipelines'):
+    with self.assertRaisesRegex(ValueError, "No weights are bound to 'fn'"):
       weights_loader.load_params(export_path, 'fn', {'w': spec})
 
   def test_rejects_a_function_without_bound_weights(self):
@@ -215,8 +242,28 @@ class FindCheckpointPathTest(absltest.TestCase):
         {'w': jnp.ones((2,)), 'b': jnp.zeros((2,))}, _dense, export_path
     )
 
-    with self.assertRaisesRegex(ValueError, "No pipeline binds weights to 'f'"):
+    with self.assertRaisesRegex(ValueError, "No weights are bound to 'f'"):
       weights_loader.find_checkpoint_path(export_path, 'f')
+
+  def test_follows_a_legacy_component_binding(self):
+    export_path = self.create_tempdir().full_path
+    _save_dense_model(export_path)
+    expected = weights_loader.find_checkpoint_path(export_path, _FUNCTION_NAME)
+
+    def edit(manifest):
+      manifest.objects[_FUNCTION_NAME].function.ClearField('weights_name')
+      pipelines = orchestration_pb2.Pipelines()
+      pipelines.name_to_pipeline['p'].components.add(
+          function_name=_FUNCTION_NAME, weights_name=_weights_name(manifest)
+      )
+      _replace_pipelines(manifest, pipelines)
+
+    _edit_manifest(export_path, edit)
+
+    self.assertEqual(
+        weights_loader.find_checkpoint_path(export_path, _FUNCTION_NAME),
+        expected,
+    )
 
   def test_follows_a_legacy_binding_under_the_orbax_mime_type(self):
     export_path = self.create_tempdir().full_path
@@ -242,6 +289,38 @@ class FindCheckpointPathTest(absltest.TestCase):
         weights_loader.find_checkpoint_path(export_path, 'legacy_fn'), expected
     )
 
+  def test_follows_a_polymorphic_function_manifest_binding(self):
+    export_path = self.create_tempdir().full_path
+    _save_dense_model(export_path)
+    expected = weights_loader.find_checkpoint_path(export_path, _FUNCTION_NAME)
+
+    def edit(manifest):
+      poly_fn = manifest.objects['poly'].poly_fn
+      poly_fn.concrete_functions.add(weights_name=_weights_name(manifest))
+      poly_fn.concrete_functions.add(weights_name=_weights_name(manifest))
+
+    _edit_manifest(export_path, edit)
+
+    self.assertEqual(
+        weights_loader.find_checkpoint_path(export_path, 'poly'), expected
+    )
+
+  def test_rejects_inconsistent_polymorphic_weights_names(self):
+    export_path = self.create_tempdir().full_path
+    _save_dense_model(export_path)
+
+    def edit(manifest):
+      poly_fn = manifest.objects['poly'].poly_fn
+      poly_fn.concrete_functions.add(weights_name='weights_a')
+      poly_fn.concrete_functions.add(weights_name='weights_b')
+
+    _edit_manifest(export_path, edit)
+
+    with self.assertRaisesRegex(
+        ValueError, "Concrete functions of 'poly' bind inconsistent weights"
+    ):
+      weights_loader.find_checkpoint_path(export_path, 'poly')
+
   def test_ignores_bindings_without_weights(self):
     export_path = self.create_tempdir().full_path
     _save_dense_model(export_path)
@@ -255,9 +334,7 @@ class FindCheckpointPathTest(absltest.TestCase):
 
     _edit_manifest(export_path, edit)
 
-    with self.assertRaisesRegex(
-        ValueError, "No pipeline binds weights to 'fn'"
-    ):
+    with self.assertRaisesRegex(ValueError, "No weights are bound to 'fn'"):
       weights_loader.find_checkpoint_path(export_path, 'fn')
 
   def test_rejects_weights_missing_from_the_manifest(self):

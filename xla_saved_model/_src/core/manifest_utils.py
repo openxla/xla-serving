@@ -221,6 +221,8 @@ def _build_function(
 
   if fn.data_names:
     fn_proto.data_names.extend(fn.data_names)
+  if fn.weights_name:
+    fn_proto.weights_name = fn.weights_name
 
   fn_proto.signature.CopyFrom(
       type_proto_utils.to_function_signature_proto(

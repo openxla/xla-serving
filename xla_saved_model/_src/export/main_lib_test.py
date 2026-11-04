@@ -164,6 +164,7 @@ class SaveModelTest(test_utils.XsmTestCase):
               }
               data_names: "w"
               visibility: PUBLIC
+              weights_name: "weights"
             }
           }
         }
@@ -298,7 +299,6 @@ class SaveModelTest(test_utils.XsmTestCase):
             components {
               role: ROLE_MODEL
               function_name: "serving_default"
-              weights_name: "weights"
             }
             batch_options {
               batch_component: MODEL_FUNCTION
@@ -354,6 +354,8 @@ class SaveModelTest(test_utils.XsmTestCase):
       obj = manifest_proto.objects['serving_default']
       self.assertTrue(obj.HasField('poly_fn'))
       self.assertLen(obj.poly_fn.concrete_functions, 2)
+      for concrete_fn in obj.poly_fn.concrete_functions:
+        self.assertEqual(concrete_fn.weights_name, 'weights')
       # Check the signature of one of the concrete functions (e.g., b=1).
       # Input is ((params, inputs), kwargs)
       input_tuple = obj.poly_fn.concrete_functions[0].signature.input.tuple

@@ -71,6 +71,7 @@ def jax_exported_to_shlo_fn(
     *,
     model_inputs_layout: Sequence[jax_layout.Layout] | None = None,
     num_input_aliased_output: int = 0,
+    weights_name: str | None = None,
 ) -> shlo_function.ShloFunction:
   """Converts a `jax.export.Exported` to an Orbax Model `ShloFunction`.
 
@@ -88,6 +89,8 @@ def jax_exported_to_shlo_fn(
       specifying the layouts for the model inputs.
     num_input_aliased_output: The number of trailing arguments of `exported`
       that are donated output buffers rather than caller-supplied inputs.
+    weights_name: Optional. The name of the weights object in the manifest bound
+      to this function.
 
   Returns:
     An Orbax Model `ShloFunction`.
@@ -179,6 +182,7 @@ def jax_exported_to_shlo_fn(
       input_signature=shlo_in_sig,
       output_signature=shlo_out_sig,
       data_names=model_param_names,
+      weights_name=weights_name,
       mlir_module_serialized=exported.mlir_module_serialized,
       calling_convention_version=exported.calling_convention_version,
       module_kept_var_idx=exported.module_kept_var_idx,
@@ -371,6 +375,7 @@ def convert(
         jax_export.DisabledSafetyCheck
     ] = (),
     num_input_aliased_output: int = 0,
+    weights_name: str | None = None,
 ) -> shlo_function.ShloFunction:
   """Converts a JAX function to an Orbax Model `ShloFunction`.
 
@@ -409,6 +414,8 @@ def convert(
     num_input_aliased_output: The number of trailing entries of `args_spec` that
       are donated output buffers rather than caller-supplied inputs. `fun_jax`
       must already be jitted with those arguments donated.
+    weights_name: Optional. The name of the weights object in the manifest bound
+      to this function.
 
   Returns:
     An Orbax Model `ShloFunction`.
@@ -445,6 +452,7 @@ def convert(
       model_param_names=model_param_names,
       model_inputs_layout=model_inputs_layout,
       num_input_aliased_output=num_input_aliased_output,
+      weights_name=weights_name,
   )
 
 
@@ -472,6 +480,7 @@ def convert_apply_fn_bundle_to_shlo(
     input_signature: jaxtyping.PyTree[shlo_type.ShloTensorSpec],
     model_param_names: Sequence[str] | None = None,
     jax_mesh: jax.sharding.Mesh | None = None,
+    weights_name: str | None = None,
 ) -> Sequence[shlo_function.ShloFunction]:
   """Converts an ApplyFnBundle to SHLO functions."""
   args_specs = jax_export.symbolic_args_specs(
@@ -514,6 +523,7 @@ def convert_apply_fn_bundle_to_shlo(
           xla_compile_options_per_platform=compile_options_per_platform,
           model_param_names=model_param_names,
           num_input_aliased_output=num_input_aliased_output,
+          weights_name=weights_name,
       )
       for args_spec in args_specs_list
   )

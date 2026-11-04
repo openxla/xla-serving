@@ -249,7 +249,11 @@ def _show_details(
 
   if details in manifest.supplemental_info:
     _show_supplemental_details(
-        model_base_dir, details, manifest.supplemental_info[details], verbose
+        model_base_dir,
+        details,
+        manifest.supplemental_info[details],
+        verbose,
+        manifest=manifest,
     )
 
   if (
@@ -505,6 +509,8 @@ def _show_function_details(
     table.add_row(
         'Calling convention version', f'{body.calling_convention_version}'
     )
+    if fn.HasField('weights_name') and fn.weights_name:
+      table.add_row('Weights name', rich.markup.escape(fn.weights_name))
     if fn.data_names:
       if verbose:
         table.add_row(
@@ -594,10 +600,11 @@ def _show_supplemental_details(
     name: str,
     data: manifest_pb2.UnstructuredData,
     verbose: bool,
+    manifest: manifest_pb2.Manifest | None = None,
 ) -> None:
   match data.mime_type:
     case constants.MIME_TYPE_PIPELINES | constants.MIME_TYPE_ORBAX_PIPELINES:
-      _show_pipelines(model_base_dir, data, verbose)
+      _show_pipelines(model_base_dir, data, verbose, manifest=manifest)
     case _:
       table = rich.table.Table('Suppemental', 'Type', padding=(0, 1, 1, 1))
       table.add_row(name, printer.unstructured_data(data))
@@ -618,10 +625,30 @@ def _read_proto_from_data(
     _bail(str(e))
 
 
+def _function_weights_name(
+    manifest: manifest_pb2.Manifest | None,
+    function_name: str,
+    fallback_weights_name: str = '',
+) -> str:
+  """Resolves `weights_name` from `manifest` first, falling back to pipeline."""
+  if manifest is not None and function_name in manifest.objects:
+    obj = manifest.objects[function_name]
+    if obj.HasField('function') and obj.function.weights_name:
+      return obj.function.weights_name
+    if obj.HasField('poly_fn') and obj.poly_fn.concrete_functions:
+      names = [fn.weights_name for fn in obj.poly_fn.concrete_functions]
+      if len(set(names)) > 1:
+        return f'<inconsistent: {", ".join(names)}>'
+      if names[0]:
+        return names[0]
+  return fallback_weights_name
+
+
 def _show_pipelines(
     model_base_dir: str,
     data: manifest_pb2.UnstructuredData,
     verbose: bool,
+    manifest: manifest_pb2.Manifest | None = None,
 ) -> None:
   """Shows the summary of the pipelines referenced in the manifest."""
   pipelines = orchestration_pb2.Pipelines()
@@ -653,7 +680,8 @@ def _show_pipelines(
           if c.role == orchestration_pb2.ROLE_PREPROCESSOR
       ]
       model_fns = [
-          f'name: {c.function_name}\nweights: {c.weights_name}'
+          f'name: {rich.markup.escape(c.function_name)}\nweights:'
+          f' {rich.markup.escape(_function_weights_name(manifest, c.function_name, c.weights_name))}'
           for c in pipeline.components
           if c.role == orchestration_pb2.ROLE_MODEL
       ]
@@ -665,7 +693,8 @@ def _show_pipelines(
     else:
       pre_processor_names = pipeline.pre_processor_names
       model_fns = [
-          f'name: {fn.model_function_name}\nweights: {fn.weights_name}'
+          f'name: {rich.markup.escape(fn.model_function_name)}\nweights:'
+          f' {rich.markup.escape(_function_weights_name(manifest, fn.model_function_name, fn.weights_name))}'
           for fn in pipeline.model_functions
       ]
       post_processor_names = pipeline.post_processor_names
