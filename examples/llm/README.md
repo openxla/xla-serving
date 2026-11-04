@@ -129,16 +129,10 @@ Prompt: The most unexpected thing happened when I opened the door,
 You can also run the exported bundle locally in Python without the gRPC server
 using XSE's `xla_saved_model_runner` Python bindings.
 
-Install `xla-saved-model-runner` from
-[GitHub Releases](https://github.com/openxla/xla-serving/releases):
+You can install `xla-saved-model-runner` from PyPI:
 
 ```bash
-gh release download \
-  --repo openxla/xla-serving \
-  --pattern 'xla_saved_model_runner-*.whl' \
-  --dir wheels
-
-pip install --find-links wheels xla-saved-model-runner
+pip install xla-saved-model-runner
 ```
 
 Or build the wheel from source with Bazel:
