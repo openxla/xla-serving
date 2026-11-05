@@ -120,7 +120,10 @@ def _to_pytree_proto(tree: Any) -> transform_config_pb2.PyTreeProto:
       proto.children.append(_to_pytree_proto(child))
   else:
     proto.type = transform_config_pb2.PyTreeProto.LEAF
-    proto.leaf_value.shape.extend(tree.shape)
+    # Every dim of these signatures is known, so every size is set.
+    proto.leaf_value.partial_shape.SetInParent()
+    for size in tree.shape:
+      proto.leaf_value.partial_shape.dims.add(size=size)
     proto.leaf_value.dtype = np.dtype(tree.dtype).name
   return proto
 

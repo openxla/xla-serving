@@ -67,8 +67,14 @@ message PartialShapeProto {
 }
 
 message ShapeDtypeStructProto {
+  // Static sizes. Still used where a static shape is meant, e.g. BroadcastTo's
+  // detail. Signature leaves (PyTreeProto.leaf_value) use partial_shape
+  // instead; in plans written before partial_shape existed, a signature leaf's
+  // shape may hold -1 for an unknown dimension.
   repeated int64 shape = 1;
   string dtype = 2;
+  // The shape of a signature leaf, with an unset size for an unknown dimension.
+  PartialShapeProto partial_shape = 3;
 }
 
 message PyTreeProto {
