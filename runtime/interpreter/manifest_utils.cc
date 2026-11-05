@@ -306,6 +306,30 @@ absl::StatusOr<ArgSpec> ConvertToArgSpec(
       placement = Placement::kHost;
     }
   }
+  bool leading_dim_is_upper_bound = false;
+  const google::protobuf::RepeatedPtrField<xla_saved_model_type::DimensionSize>&
+      dimension_sizes = type.shape().shape_with_known_rank().dimension_sizes();
+  for (int i = 0; i < dimension_sizes.size(); ++i) {
+    const xla_saved_model_type::DimensionSize& dim = dimension_sizes[i];
+    if (!dim.is_upper_bound()) {
+      continue;
+    }
+    if (!dim.has_size()) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Dimension #", i,
+          " is marked as an upper bound but has no size; an upper bound "
+          "requires a concrete size: ",
+          type.ShortDebugString()));
+    }
+    if (i != 0) {
+      return absl::UnimplementedError(absl::StrCat(
+          "Dimension #", i,
+          " is marked as an upper bound, but only the leading dimension can "
+          "be an upper bound: ",
+          type.ShortDebugString()));
+    }
+    leading_dim_is_upper_bound = true;
+  }
   return ArgSpec{
       .dtype = std::move(dtype),
       .shape = std::move(shape),
@@ -313,6 +337,7 @@ absl::StatusOr<ArgSpec> ConvertToArgSpec(
       .sharding = std::move(hlo_sharding),
       .layout = std::move(layout),
       .placement = placement,
+      .leading_dim_is_upper_bound = leading_dim_is_upper_bound,
   };
 }
 

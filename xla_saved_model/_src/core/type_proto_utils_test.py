@@ -120,6 +120,47 @@ class ShloTensorSpecToTensorTypeProtoTest(
       restored_spec = type_proto_utils._from_tensor_type_proto(tensor_proto)
       self.assertEqual(restored_spec.placement, placement)
 
+  def test_upper_bound_dims_roundtrip(self):
+    spec = shlo_type.ShloTensorSpec(
+        shape=(4, 2),
+        dtype=shlo_type.ShloDType.f32,
+        upper_bound_dims=(0,),
+    )
+
+    tensor_proto = type_proto_utils.to_tensor_type_proto(spec)
+
+    expected_proto = text_format.Parse(
+        textwrap.dedent("""
+        shape: {
+          shape_with_known_rank: {
+            dimension_sizes: { size: 4 is_upper_bound: true }
+            dimension_sizes: { size: 2 }
+          }
+        }
+        dtype: f32
+        """),
+        type_pb2.TensorType(),
+    )
+    self.assertEqual(tensor_proto, expected_proto)
+    restored_spec = type_proto_utils._from_tensor_type_proto(tensor_proto)
+    self.assertEqual(restored_spec.shape, (4, 2))
+    self.assertEqual(restored_spec.upper_bound_dims, (0,))
+
+  def test_no_upper_bound_dims_restores_none(self):
+    spec = shlo_type.ShloTensorSpec(shape=(4, 2), dtype=shlo_type.ShloDType.f32)
+    tensor_proto = type_proto_utils.to_tensor_type_proto(spec)
+    self.assertFalse(
+        tensor_proto.shape.shape_with_known_rank.dimension_sizes[
+            0
+        ].is_upper_bound
+    )
+    restored_spec = type_proto_utils._from_tensor_type_proto(tensor_proto)
+    self.assertIsNone(restored_spec.upper_bound_dims)
+
+  def test_upper_bound_dim_without_size_is_rejected(self):
+    with self.assertRaisesRegex(ValueError, "no concrete size"):
+      type_proto_utils.to_shape_proto((None, 2), upper_bound_dims=(0,))
+
 
 class ShloTensorSpecPyTreeToTypeProtoTest(
     test_utils.XsmTestCase, parameterized.TestCase

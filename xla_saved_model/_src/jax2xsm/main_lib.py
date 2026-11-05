@@ -514,16 +514,29 @@ def convert_apply_fn_bundle_to_shlo(
           jax_mesh=jax_mesh,
       )
   )
-  return tuple(
-      convert(
-          fun_jax=fun_jax,
-          args_spec=args_spec,
-          kwargs_spec={},
-          jax_export_kwargs=apply_fn_bundle.jax_export_kwargs,
-          xla_compile_options_per_platform=compile_options_per_platform,
-          model_param_names=model_param_names,
-          num_input_aliased_output=num_input_aliased_output,
-          weights_name=weights_name,
-      )
-      for args_spec in args_specs_list
-  )
+  shlo_fns = []
+  for args_spec in args_specs_list:
+    shlo_fn = convert(
+        fun_jax=fun_jax,
+        args_spec=args_spec,
+        kwargs_spec={},
+        jax_export_kwargs=apply_fn_bundle.jax_export_kwargs,
+        xla_compile_options_per_platform=compile_options_per_platform,
+        model_param_names=model_param_names,
+        num_input_aliased_output=num_input_aliased_output,
+        weights_name=weights_name,
+    )
+    # `convert()` rebuilds the signature from JAX avals, which drops
+    # `ShloTensorSpec.upper_bound_dims`; re-attach them from the user's
+    # `input_signature`, which is the second positional argument of
+    # `apply_fn(params, inputs)`.
+    positional_args, kwargs = shlo_fn.input_signature
+    positional_args = list(positional_args)
+    positional_args[1] = utils.apply_upper_bound_dims(
+        input_signature, positional_args[1]
+    )
+    shlo_fn = dataclasses.replace(
+        shlo_fn, input_signature=(tuple(positional_args), kwargs)
+    )
+    shlo_fns.append(shlo_fn)
+  return tuple(shlo_fns)

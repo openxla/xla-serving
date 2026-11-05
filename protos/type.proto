@@ -100,6 +100,18 @@ message ShapeWithKnownRank {
 
 message DimensionSize {
   optional uint64 size = 1;  // Absence indicates unknown dimension size.
+
+  // If true, `size` is an upper bound rather than the exact size at serving
+  // time. The function is compiled for `size` elements along this dimension,
+  // and a caller may pass an input with fewer elements along it. The runtime
+  // then allocates the device buffer for `size` elements and transfers only
+  // the elements that are present (dynamic DMA); the remaining elements are
+  // left uninitialized, so the function must not depend on them. Requires
+  // `size` to be set.
+  //
+  // Currently only supported on the leading (0th) dimension of a model
+  // function input.
+  bool is_upper_bound = 2;
 }
 
 // LINT: LEGACY_NAMES
