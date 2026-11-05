@@ -60,10 +60,6 @@ message Function {
 
   Visibility visibility = 4;
   optional string gradient_function_name = 5;
-  // If set, specifies the name (in `Manifest.objects`) of the value
-  // representing the weights PyTree bound to this function (e.g., passed as the
-  // 1st argument to a model function).
-  optional string weights_name = 6;
 }
 
 message Value {

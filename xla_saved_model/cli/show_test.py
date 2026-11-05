@@ -27,7 +27,6 @@ import typer
 from typer.testing import CliRunner
 
 from xla_saved_model.protos import manifest_pb2
-from xla_saved_model.protos import orchestration_pb2
 from xla_saved_model.protos import type_pb2
 from xla_saved_model.cli import constants
 from xla_saved_model.cli import show
@@ -314,70 +313,6 @@ class ShowTest(absltest.TestCase):
     finally:
       importlib.reload(show)
       self.assertEqual(show.transform_config_pb2, transform_config_pb2)
-
-  def test_show_stablehlo_function_renders_weights_name(self):
-    fn = manifest_pb2.Function(weights_name='model_weights')
-    fn.body.stable_hlo_body.calling_convention_version = 10
-    fn.body.stable_hlo_body.lowering_platforms.append('cpu')
-
-    output = _render_function_details(fn, verbose=False)
-
-    self.assertIn('Weights name', output)
-    self.assertIn('model_weights', output)
-
-  def test_show_stablehlo_function_omits_unset_weights_name(self):
-    fn = manifest_pb2.Function()
-    fn.body.stable_hlo_body.calling_convention_version = 10
-    fn.body.stable_hlo_body.lowering_platforms.append('cpu')
-
-    output = _render_function_details(fn, verbose=False)
-
-    self.assertNotIn('Weights name', output)
-
-  def test_show_pipelines_resolves_weights_from_manifest_with_fallback(self):
-    manifest = manifest_pb2.Manifest()
-    manifest.objects['manifest_fn'].function.weights_name = 'manifest_weights'
-    poly = manifest.objects['poly_fn'].poly_fn
-    poly.concrete_functions.add(weights_name='poly_weights')
-    poly.concrete_functions.add(weights_name='poly_weights')
-
-    pipelines = orchestration_pb2.Pipelines()
-    p1 = pipelines.name_to_pipeline['p_manifest']
-    p1.components.add(
-        function_name='manifest_fn',
-        role=orchestration_pb2.ROLE_MODEL,
-    )
-    p_poly = pipelines.name_to_pipeline['p_poly']
-    p_poly.components.add(
-        function_name='poly_fn',
-        role=orchestration_pb2.ROLE_MODEL,
-    )
-    p2 = pipelines.name_to_pipeline['p_legacy']
-    p2.components.add(
-        function_name='legacy_fn',
-        role=orchestration_pb2.ROLE_MODEL,
-        weights_name='legacy_weights',
-    )
-    p3 = pipelines.name_to_pipeline['p_legacy_model_fn']
-    p3.model_functions.add(
-        model_function_name='legacy_bound_fn',
-        weights_name='legacy_bound_weights',
-    )
-
-    data = manifest_pb2.UnstructuredData(
-        inlined_bytes=pipelines.SerializeToString(),
-        mime_type=constants.MIME_TYPE_PIPELINES,
-    )
-    buf = io.StringIO()
-    console = rich.console.Console(file=buf, width=120, force_terminal=False)
-    with mock.patch.object(rich, 'print', side_effect=console.print):
-      show._show_pipelines('/base/dir', data, verbose=False, manifest=manifest)
-    output = buf.getvalue()
-
-    self.assertIn('weights: manifest_weights', output)
-    self.assertIn('weights: poly_weights', output)
-    self.assertIn('weights: legacy_weights', output)
-    self.assertIn('weights: legacy_bound_weights', output)
 
 
 if __name__ == '__main__':

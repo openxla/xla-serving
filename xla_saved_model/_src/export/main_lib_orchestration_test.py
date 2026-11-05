@@ -264,29 +264,14 @@ class MainLibOrchestrationTest(test_utils.XsmTestCase):
         pipeline.components[1].function_name,
         'serving_default_model2_serving_default',
     )
-    self.assertFalse(pipeline.components[0].HasField('weights_name'))
-    self.assertFalse(pipeline.components[1].HasField('weights_name'))
-
-    manifest = persistence_lib.load(str(export_path))
-    self.assertEqual(
-        manifest.objects[pipeline.components[0].function_name]
-        .function.weights_name,
-        'model1_weights',
-    )
-    self.assertEqual(
-        manifest.objects[pipeline.components[1].function_name]
-        .function.weights_name,
-        'model2_weights',
-    )
 
   def test_save_single_jax_model_with_orchestration_names_its_weights(self):
     """A single-model export must name the weights key its checkpoint uses.
 
     `save` keeps the flat legacy `weights` key when there is exactly one model,
-    and namespaces per model otherwise. `Function.weights_name` in the manifest
-    has to follow the same rule: a function naming a key the manifest does not
-    hold fails at interpreter load time, not at export, so nothing here would
-    catch it.
+    and namespaces per model otherwise. `Component.weights_name` has to follow
+    the same rule: a component naming a key the manifest does not hold fails at
+    interpreter load time, not at export, so nothing here would catch it.
     """
     model = jax_model.JaxModel(
         name='solo',
@@ -326,19 +311,16 @@ class MainLibOrchestrationTest(test_utils.XsmTestCase):
       pipelines_proto = orchestration_pb2.Pipelines.FromString(f.read())
     pipeline = pipelines_proto.name_to_pipeline['serving_default']
     self.assertLen(pipeline.components, 1)
-    self.assertFalse(pipeline.components[0].HasField('weights_name'))
 
     manifest = persistence_lib.load(str(export_path))
-    fn = manifest.objects[pipeline.components[0].function_name].function
-    self.assertEqual(fn.weights_name, 'weights')
-    self.assertIn(fn.weights_name, manifest.objects)
+    self.assertIn(pipeline.components[0].weights_name, manifest.objects)
 
   def test_save_single_weightless_jax_model_references_no_weights(self):
     """A model with an empty `weights_name` must not get a weights key.
 
-    An empty `weights_name` opts the model out of a checkpoint, so its manifest
-    function must not reference one either: the interpreter would otherwise fail
-    at load time looking for weights the manifest does not hold.
+    An empty `weights_name` opts the model out of a checkpoint, so its component
+    must not reference one either: the interpreter would otherwise fail at load
+    time looking for weights the manifest does not hold.
     """
 
     class WeightlessJaxModel(jax_model.JaxModel):
@@ -381,42 +363,7 @@ class MainLibOrchestrationTest(test_utils.XsmTestCase):
       pipelines_proto = orchestration_pb2.Pipelines.FromString(f.read())
     pipeline = pipelines_proto.name_to_pipeline['serving_default']
     self.assertLen(pipeline.components, 1)
-    self.assertFalse(pipeline.components[0].HasField('weights_name'))
-    manifest = persistence_lib.load(str(export_path))
-    fn = manifest.objects[pipeline.components[0].function_name].function
-    self.assertFalse(fn.HasField('weights_name'))
-
-  def test_save_jax_model_without_params_or_checkpoint_has_no_weights_name(
-      self,
-  ):
-    """A plain JaxModel with params=None and checkpoint_path=None binds no weights."""
-    model = jax_model.JaxModel(
-        name='stateless',
-        apply_fn_bundle=jax_model.ApplyFnBundle(
-            apply_fn=lambda params, inputs: {'y': inputs['x'] + 1.0},
-            jax_export_kwargs={'platforms': ['cpu']},
-        ),
-        params=None,
-    )
-    cfg = serving_config.ServingConfig(
-        serving_signature='serving_default',
-        input_signature={
-            'x': jax.ShapeDtypeStruct(shape=(4,), dtype=jnp.float32)
-        },
-    )
-
-    export_path = pathlib.Path(self.create_tempdir().full_path)
-    main_lib.save(
-        models=model,
-        export_path=str(export_path),
-        serving_configs=[cfg],
-    )
-
-    manifest = persistence_lib.load(str(export_path))
-    self.assertFalse(
-        manifest.objects['serving_default'].function.HasField('weights_name')
-    )
-    self.assertNotIn('weights', manifest.objects)
+    self.assertEmpty(pipeline.components[0].weights_name)
 
   def test_duplicate_model_names(self):
     model1 = jax_model.JaxModel(

@@ -117,12 +117,11 @@ def _checkpoint_weights_name(
 
   A single-model export keeps the flat legacy `weights` key; a multi-model
   export namespaces the key per model so that the checkpoints stay apart. Both
-  `save` and the exported `Function` protos in the manifest have to agree, or
-  the interpreter fails at load time looking for weights the manifest does not
-  hold under that name.
+  `save` and the `Component` protos have to agree, or the interpreter fails at
+  load time looking for weights the manifest does not hold under that name.
 
   A model whose `weights_name` is empty has opted out of a checkpoint, so the
-  empty name is kept and its function does not reference any weights.
+  empty name is kept and its component does not reference any weights.
 
   Args:
     model: The JAX model whose checkpoint key is wanted.
@@ -132,8 +131,8 @@ def _checkpoint_weights_name(
     The manifest object key for this model's checkpoint, or an empty string if
     the model has opted out of one.
   """
-  if not model.has_weights or not model.weights_name:
-    return ''
+  if not model.weights_name:
+    return model.weights_name
   return constants.WEIGHTS_NAME if is_single_model else model.weights_name
 
 
@@ -247,9 +246,7 @@ def _build_pipeline_nodes(
               name=cfg.serving_signature,
               apply_fn_bundle=next(iter(model.apply_fn_bundles.values())),
               params=model.params,
-              weights_name=_checkpoint_weights_name(
-                  model, is_single_model=len(models) == 1
-              ),
+              weights_name=constants.WEIGHTS_NAME,
               jax_mesh=model.jax_mesh,
           ),
           role=orchestration_pb2.ROLE_MODEL,
@@ -325,6 +322,7 @@ def _update_save_bundle_with_pipeline_node(
   component = orchestration_pb2.Component(
       function_name=prepared_processor.name,
       role=pipeline_node.role,
+      weights_name=prepared_processor.weights_name,
       use_batching=pipeline_node.use_batching,
   )
   if is_graph_based:

@@ -46,52 +46,29 @@ def _read_pipelines(
   """Returns every `Pipelines` supplemental of the manifest."""
   return [
       orchestration_pb2.Pipelines.FromString(
-          manifest_utils.read_unstructured_data_bytes(data, model_dir, manifest)
+          manifest_utils.read_unstructured_data_bytes(
+              data, model_dir, manifest
+          )
       )
       for data in manifest.supplemental_info.values()
       if data.mime_type in _PIPELINES_MIME_TYPES
   ]
 
 
-def _manifest_weights_name(
-    manifest: manifest_pb2.Manifest, function_name: str
-) -> str | None:
-  """Returns the weights name bound to `function_name` in `manifest`, if any."""
-  obj = manifest.objects.get(function_name)
-  if obj is None:
-    return None
-  match obj.WhichOneof("case"):
-    case "function":
-      if obj.function.HasField("weights_name") and obj.function.weights_name:
-        return obj.function.weights_name
-      return None
-    case "poly_fn":
-      if not obj.poly_fn.concrete_functions:
-        return None
-      names = [fn.weights_name for fn in obj.poly_fn.concrete_functions]
-      if len(set(names)) > 1:
-        raise ValueError(
-            f"Concrete functions of '{function_name}' bind inconsistent"
-            f" weights: {names}."
-        )
-      return names[0] or None
-    case _:
-      return None
-
-
-# TODO: Delete once all models in use carry `Function.weights_name`
-# in the manifest and the deprecated orchestration bindings are removed.
 def _bound_weights_name(
     pipelines: Sequence[orchestration_pb2.Pipelines], function_name: str
 ) -> str | None:
-  """Returns the weights name legacy pipelines bind to `function_name`, if any."""
+  """Returns the name of the weights the pipelines bind to a function, if any.
+
+  A function is bound to at most one weights object, so the first binding found
+  is returned.
+  """
   for multi_pipeline in pipelines:
     for pipeline in multi_pipeline.name_to_pipeline.values():
       for component in pipeline.components:
         if (
             component.function_name == function_name
             and component.HasField("weights_name")
-            and component.weights_name
         ):
           return component.weights_name
       # Pipelines written before `components` existed.
@@ -99,7 +76,6 @@ def _bound_weights_name(
         if (
             model_function.model_function_name == function_name
             and model_function.HasField("weights_name")
-            and model_function.weights_name
         ):
           return model_function.weights_name
   return None
@@ -111,8 +87,8 @@ def find_checkpoint_path(
 ) -> str:
   """Returns the path of the Orbax checkpoint holding a function's weights.
 
-  The weights are resolved from `Function.weights_name` in the manifest first,
-  falling back to legacy orchestration pipeline bindings for older models.
+  The weights are the ones the model's orchestration pipelines bind to the
+  function.
 
   Args:
     model_dir: Directory where the XLA SavedModel was saved.
@@ -122,18 +98,19 @@ def find_checkpoint_path(
     The checkpoint path.
 
   Raises:
-    ValueError: If no weights are bound to the function, or the weights do not
-      name an Orbax checkpoint on the file system.
+    ValueError: If the model has no orchestration pipelines, none of them binds
+      weights to the function, or the weights do not name an Orbax checkpoint
+      on the file system.
   """
   model_dir = str(model_dir)
   manifest = persistence_lib.load(model_dir)
 
-  weights_name = _manifest_weights_name(manifest, function_name)
+  pipelines = _read_pipelines(model_dir, manifest)
+  if not pipelines:
+    raise ValueError("The model has no orchestration pipelines.")
+  weights_name = _bound_weights_name(pipelines, function_name)
   if weights_name is None:
-    pipelines = _read_pipelines(model_dir, manifest)
-    weights_name = _bound_weights_name(pipelines, function_name)
-  if weights_name is None:
-    raise ValueError(f"No weights are bound to '{function_name}'.")
+    raise ValueError(f"No pipeline binds weights to '{function_name}'.")
 
   obj = manifest.objects.get(weights_name)
   if obj is None or obj.WhichOneof("case") != "value":
@@ -343,17 +320,17 @@ def load_params(
   Args:
     model_dir: Directory where the XLA SavedModel was saved.
     function_name: Name of the function in the model manifest.
-    params_structure: The parameters the function expects, with any custom nodes
-      such as `qwix.QArray` in place. Its leaves only need `shape` and `dtype`,
-      so `jax.ShapeDtypeStruct`s (e.g. from `jax.eval_shape`) or concrete arrays
-      both work.
+    params_structure: The parameters the function expects, with any custom
+      nodes such as `qwix.QArray` in place. Its leaves only need `shape` and
+      `dtype`, so `jax.ShapeDtypeStruct`s (e.g. from `jax.eval_shape`) or
+      concrete arrays both work.
 
   Returns:
     The restored weights, arranged in the structure of `params_structure`.
 
   Raises:
-    ValueError: If no weights are bound to the function, or the checkpoint does
-      not match `params_structure`.
+    ValueError: If no pipeline binds a checkpoint to the function, or the
+      checkpoint does not match `params_structure`.
   """
   checkpoint_path = find_checkpoint_path(model_dir, function_name)
   with ocp.StandardCheckpointer() as checkpointer:

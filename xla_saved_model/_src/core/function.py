@@ -32,15 +32,12 @@ class Function:
     input_signature: the input signature of the function.
     output_signature: the output signature of the function.
     data_names: checkpoint data names used by the function.
-    weights_name: name of the weights object in the manifest bound to the
-      function, if any.
     signature: the pair `(input_signature, output_signature)`.
   """
 
   input_signature: jaxtyping.PyTree[ShloTensorSpec]
   output_signature: jaxtyping.PyTree[ShloTensorSpec]
   data_names: Sequence[str] | None = None
-  weights_name: str | None = None
 
   @property
   def signature(

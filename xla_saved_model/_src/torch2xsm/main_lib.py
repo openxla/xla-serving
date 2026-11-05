@@ -34,7 +34,6 @@ def convert_to_jax(pytorch_model: torch.nn.Module) -> tuple[Any, Any]:
 def convert_to_shlo_fn(
     pytorch_model: torch.nn.Module,
     input_tensor: torch.Tensor,
-    weights_name: str | None = None,
 ) -> shlo_function.ShloFunction:
   """Converts a PyTorch model and sample input to an XSE ShloFunction."""
   weights, jfunc = convert_to_jax(pytorch_model)
@@ -43,6 +42,4 @@ def convert_to_shlo_fn(
   input_spec = (jax.ShapeDtypeStruct(input_tensor_shape, input_tensor_dtype),)
 
   exported = jax.export.export(jax.jit(jfunc))(weights, input_spec)
-  return jax2xsm_lib.jax_exported_to_shlo_fn(
-      exported, weights_name=weights_name
-  )
+  return jax2xsm_lib.jax_exported_to_shlo_fn(exported)

@@ -145,15 +145,6 @@ absl::StatusOr<std::optional<xla::CompileOptionsProto>> GetCompileOptions(
     absl::Span<const xla_saved_model_manifest::Function* const> stablehlo_funcs,
     absl::string_view platform_name);
 
-// Gets the bound weights object name from the StableHLO function(s) in the
-// manifest. When there are multiple concretized StableHLO functions for a
-// polymorphic function, `weights_name` must be consistent across all of them,
-// otherwise an error is returned. Returns an empty string if no `weights_name`
-// is set.
-absl::StatusOr<std::string> GetWeightsName(
-    absl::Span<const xla_saved_model_manifest::Function* absl_nonnull const>
-        stablehlo_funcs);
-
 // Gets the input names for a given pipeline from the orchestration file. The
 // returned names are ordered and correspond to the pipeline's input arguments.
 //
