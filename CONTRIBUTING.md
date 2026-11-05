@@ -1,11 +1,6 @@
 # How to contribute
-we do not accept external contribution at this moment,
-as we are setting up the initial repository.
 
-We'd love to accept your patches and contributions to this
-project in the future. We will update the guidelines accordingly.
-
-Below are general Google OSS contribution guidelines.
+We'd love to accept your patches and contributions to this project.
 
 ## Before you begin
 
