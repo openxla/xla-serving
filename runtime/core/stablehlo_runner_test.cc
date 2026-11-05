@@ -63,6 +63,7 @@
 #include "runtime/core/stablehlo_optimizer.h"  // from @xla_serving
 #include "runtime/core/stablehlo_utils.h"  // from @xla_serving
 #include "runtime/core/value.h"  // from @xla_serving
+#include "runtime/core/value_matcher.h"  // from @xla_serving
 #include "runtime/interpreter/context.h"  // from @xla_serving
 #include "runtime/interpreter/manifest_utils.h"  // from @xla_serving
 #include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @xla_serving
@@ -333,12 +334,16 @@ std::shared_ptr<StableHlo> CreateMockStableHloTestHelper(
       StableHlo::Create(std::move(specs)).value().release());
 }
 
+using ::absl_testing::IsOk;
+using ::absl_testing::IsOkAndHolds;
 using ::absl_testing::StatusIs;
 using ::testing::_;
+using ::testing::ElementsAre;
 using ::testing::Eq;
 using ::testing::HasSubstr;
 using ::testing::Optional;
 using ::testing::Return;
+using ::testing::SizeIs;
 using ::testing::TestWithParam;
 using ::testing::Unused;
 using ::tsl::monitoring::testing::CellReader;
@@ -2213,6 +2218,485 @@ module @main {
                                        xla::ifrt::Shape({1, 2, 3, 2}))));
 }
 
+constexpr absl::string_view kExportOptimizedTwoArgMlir = R"mlir(
+module @main {
+  func.func @main(%arg0: tensor<12xf32>, %arg1: tensor<12xf32>)
+      -> (tensor<12xf32>, tensor<12xf32>) {
+    %0 = stablehlo.reshape %arg0 : (tensor<12xf32>) -> tensor<1x2x2x3xf32>
+    %1 = stablehlo.transpose %0, dims = [0, 2, 3, 1]
+        : (tensor<1x2x2x3xf32>) -> tensor<1x2x3x2xf32>
+    %2 = stablehlo.reshape %1 : (tensor<1x2x3x2xf32>) -> tensor<12xf32>
+    return %2, %arg1 : tensor<12xf32>, tensor<12xf32>
+  }
+}
+)mlir";
+
+constexpr absl::string_view kIdentityR1SixElementMlir = R"mlir(
+module @main {
+  func.func @main(%arg0: tensor<6xf32>) -> tensor<6xf32> {
+    return %arg0 : tensor<6xf32>
+  }
+}
+)mlir";
+
+constexpr absl::string_view kTranspose2x2Mlir = R"mlir(
+module @main {
+  func.func @main(%arg0: tensor<2x2xf32>) -> tensor<2x2xf32> {
+    %0 = stablehlo.transpose %arg0, dims = [1, 0]
+        : (tensor<2x2xf32>) -> tensor<2x2xf32>
+    return %0 : tensor<2x2xf32>
+  }
+}
+)mlir";
+
+class CountingStablehloOptimizer : public StablehloOptimizer {
+ public:
+  absl::Status Optimize(const Args& args, mlir::ModuleOp module) override {
+    ++optimize_call_count_;
+    return absl::InternalError("Runtime optimizer should not be invoked");
+  }
+
+  int optimize_call_count() const { return optimize_call_count_; }
+
+ private:
+  int optimize_call_count_ = 0;
+};
+
+TEST_F(StableHloRunnerExecuteOptionsTest,
+       ExecuteAdaptsExportOptimizedInputsToLogicalOutputs) {
+  // Simulates a model where NCHW input transpose + R1 input flattening and R1
+  // output flattening were already applied at export time:
+  // - `@main` takes 1D `tensor<12xf32>` and `tensor<12xf32>`, reshapes `%arg0`
+  //   to NCHW `tensor<1x2x2x3xf32>`, transposes back to NHWC
+  //   `tensor<1x2x3x2xf32>`, and returns flattened 1D `tensor<12xf32>` outputs.
+  // - `original_inputs` carries the user-facing 4D shapes and `host_transpose =
+  //   {0, 3, 1, 2}` on input 0.
+  // - `original_outputs` carries the user-facing 2D shapes `{3, 4}`.
+  const xla::ifrt::DType f32(xla::ifrt::DType::kF32);
+  const xla::HloSharding replicated = xla::HloSharding::Replicate();
+  StableHlo::Spec stablehlo_spec = {
+      .inputs = {{.dtype = f32,
+                  .shape = ArgShape(1, 12),
+                  .sharding = replicated,
+                  .host_transpose = {0, 3, 1, 2}},
+                 {.dtype = f32,
+                  .shape = ArgShape(1, 12),
+                  .sharding = replicated}},
+      .outputs = {{.dtype = f32,
+                   .shape = ArgShape(1, 12),
+                   .sharding = replicated},
+                  {.dtype = f32,
+                   .shape = ArgShape(1, 12),
+                   .sharding = replicated}},
+      .original_inputs = {{.dtype = f32,
+                           .shape = ArgShape({1, 2, 3, 2}),
+                           .sharding = replicated,
+                           .host_transpose = {0, 3, 1, 2}},
+                          {.dtype = f32,
+                           .shape = ArgShape({1, 2, 2, 3}),
+                           .sharding = replicated}},
+      .original_outputs = {{.dtype = f32,
+                            .shape = ArgShape({3, 4}),
+                            .sharding = replicated},
+                           {.dtype = f32,
+                            .shape = ArgShape({3, 4}),
+                            .sharding = replicated}},
+      .optimized_at_export = true,
+      .mlir_module = kExportOptimizedTwoArgMlir,
+      .mlir_module_kept_var_idx = {0, 1},
+  };
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHlo> stablehlo,
+                          StableHlo::Create({std::move(stablehlo_spec)}));
+
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<StableHloRunner> runner,
+      StableHloRunner::Create(
+          std::move(stablehlo), GetCompileOptions(assigned_devices_),
+          ifrt_client_, /*persistent_compilation_cache=*/nullptr,
+          &ifrt_loaded_variable_registry_, {},
+          /*compilation_environment_proto=*/nullptr, thread_pool_.get(),
+          /*optimizer=*/nullptr, assigned_devices_,
+          /*serving_core_selector=*/nullptr));
+
+  EXPECT_THAT(
+      runner->Execute(
+          {Value(AsHostBuffer<float>({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f,
+                                      8.0f, 9.0f, 10.0f, 11.0f, 12.0f},
+                                     xla::ifrt::Shape({1, 2, 3, 2}))),
+           Value(AsHostBuffer<float>({10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f,
+                                      70.0f, 80.0f, 90.0f, 100.0f, 110.0f,
+                                      120.0f},
+                                     xla::ifrt::Shape({1, 2, 2, 3})))},
+          RunContext{}),
+      IsOkAndHolds(ElementsAre(
+          ValueOfType<HostBuffer>(HostBufferEq(AsHostBuffer<float>(
+              {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+               11.0f, 12.0f},
+              xla::ifrt::Shape({3, 4})))),
+          ValueOfType<HostBuffer>(HostBufferEq(AsHostBuffer<float>(
+              {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f, 70.0f, 80.0f, 90.0f,
+               100.0f, 110.0f, 120.0f},
+              xla::ifrt::Shape({3, 4})))))));
+}
+
+TEST_F(StableHloRunnerExecuteOptionsTest,
+       ExecuteSkipsRuntimeOptimizerWhenOptimizedAtExport) {
+  const xla::ifrt::DType f32(xla::ifrt::DType::kF32);
+  const xla::HloSharding replicated = xla::HloSharding::Replicate();
+  StableHlo::Spec stablehlo_spec = {
+      .inputs = {{.dtype = f32,
+                  .shape = ArgShape(1, 12),
+                  .sharding = replicated,
+                  .host_transpose = {0, 3, 1, 2}},
+                 {.dtype = f32,
+                  .shape = ArgShape(1, 12),
+                  .sharding = replicated}},
+      .outputs = {{.dtype = f32,
+                   .shape = ArgShape(1, 12),
+                   .sharding = replicated},
+                  {.dtype = f32,
+                   .shape = ArgShape(1, 12),
+                   .sharding = replicated}},
+      .original_inputs = {{.dtype = f32,
+                           .shape = ArgShape({1, 2, 3, 2}),
+                           .sharding = replicated,
+                           .host_transpose = {0, 3, 1, 2}},
+                          {.dtype = f32,
+                           .shape = ArgShape({1, 2, 2, 3}),
+                           .sharding = replicated}},
+      .original_outputs = {{.dtype = f32,
+                            .shape = ArgShape({3, 4}),
+                            .sharding = replicated},
+                           {.dtype = f32,
+                            .shape = ArgShape({3, 4}),
+                            .sharding = replicated}},
+      .optimized_at_export = true,
+      .mlir_module = kExportOptimizedTwoArgMlir,
+      .mlir_module_kept_var_idx = {0, 1},
+  };
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHlo> stablehlo,
+                          StableHlo::Create({std::move(stablehlo_spec)}));
+
+  CountingStablehloOptimizer optimizer;
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<StableHloRunner> runner,
+      StableHloRunner::Create(
+          std::move(stablehlo), GetCompileOptions(assigned_devices_),
+          ifrt_client_, /*persistent_compilation_cache=*/nullptr,
+          &ifrt_loaded_variable_registry_, {},
+          /*compilation_environment_proto=*/nullptr, thread_pool_.get(),
+          &optimizer, assigned_devices_,
+          /*serving_core_selector=*/nullptr));
+
+  ASSERT_THAT(
+      runner->Execute(
+          {Value(AsHostBuffer<float>({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f,
+                                      8.0f, 9.0f, 10.0f, 11.0f, 12.0f},
+                                     xla::ifrt::Shape({1, 2, 3, 2}))),
+           Value(AsHostBuffer<float>({10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f,
+                                      70.0f, 80.0f, 90.0f, 100.0f, 110.0f,
+                                      120.0f},
+                                     xla::ifrt::Shape({1, 2, 2, 3})))},
+          RunContext{}),
+      IsOk());
+  EXPECT_EQ(optimizer.optimize_call_count(), 0);
+}
+
+TEST_F(StableHloRunnerExecuteOptionsTest,
+       ExecuteAdaptsExportOptimizedInputsWithPrunedKeptVarIndices) {
+  // Input 0 is pruned by DCE (`mlir_module_kept_var_idx = {1}`), while kept
+  // input 1 requires host transpose `{1, 0}` and R1 reshape `{2, 3} -> {6}`.
+  const xla::ifrt::DType f32(xla::ifrt::DType::kF32);
+  const xla::HloSharding replicated = xla::HloSharding::Replicate();
+  StableHlo::Spec stablehlo_spec = {
+      .inputs = {{.dtype = f32,
+                  .shape = ArgShape(1, 4),
+                  .sharding = replicated},
+                 {.dtype = f32,
+                  .shape = ArgShape(1, 6),
+                  .sharding = replicated,
+                  .host_transpose = {1, 0}}},
+      .outputs = {{.dtype = f32,
+                   .shape = ArgShape(1, 6),
+                   .sharding = replicated}},
+      .original_inputs = {{.dtype = f32,
+                           .shape = ArgShape(1, 4),
+                           .sharding = replicated},
+                          {.dtype = f32,
+                           .shape = ArgShape({2, 3}),
+                           .sharding = replicated,
+                           .host_transpose = {1, 0}}},
+      .original_outputs = {{.dtype = f32,
+                            .shape = ArgShape({3, 2}),
+                            .sharding = replicated}},
+      .optimized_at_export = true,
+      .mlir_module = kIdentityR1SixElementMlir,
+      .mlir_module_kept_var_idx = {1},
+  };
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHlo> stablehlo,
+                          StableHlo::Create({std::move(stablehlo_spec)}));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<StableHloRunner> runner,
+      StableHloRunner::Create(
+          std::move(stablehlo), GetCompileOptions(assigned_devices_),
+          ifrt_client_, /*persistent_compilation_cache=*/nullptr,
+          &ifrt_loaded_variable_registry_, {},
+          /*compilation_environment_proto=*/nullptr, thread_pool_.get(),
+          /*optimizer=*/nullptr, assigned_devices_,
+          /*serving_core_selector=*/nullptr));
+
+  EXPECT_THAT(
+      runner->Execute(
+          {Value(AsHostBuffer<float>({99.0f, 98.0f, 97.0f, 96.0f},
+                                     xla::ifrt::Shape({4}))),
+           Value(AsHostBuffer<float>({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f},
+                                     xla::ifrt::Shape({2, 3})))},
+          RunContext{}),
+      IsOkAndHolds(ElementsAre(
+          ValueOfType<HostBuffer>(HostBufferEq(AsHostBuffer<float>(
+              {1.0f, 4.0f, 2.0f, 5.0f, 3.0f, 6.0f},
+              xla::ifrt::Shape({3, 2})))))));
+}
+
+TEST_F(StableHloRunnerExecuteOptionsTest,
+       ExecuteAdaptsExportOptimizedInputsWhenKeptVarIndicesOmitted) {
+  const xla::ifrt::DType f32(xla::ifrt::DType::kF32);
+  const xla::HloSharding replicated = xla::HloSharding::Replicate();
+  StableHlo::Spec stablehlo_spec = {
+      .inputs = {{.dtype = f32,
+                  .shape = ArgShape(1, 6),
+                  .sharding = replicated,
+                  .host_transpose = {1, 0}}},
+      .outputs = {{.dtype = f32,
+                   .shape = ArgShape(1, 6),
+                   .sharding = replicated}},
+      .original_inputs = {{.dtype = f32,
+                           .shape = ArgShape({2, 3}),
+                           .sharding = replicated,
+                           .host_transpose = {1, 0}}},
+      .original_outputs = {{.dtype = f32,
+                            .shape = ArgShape({3, 2}),
+                            .sharding = replicated}},
+      .optimized_at_export = true,
+      .mlir_module = kIdentityR1SixElementMlir,
+      .mlir_module_kept_var_idx = {},
+  };
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHlo> stablehlo,
+                          StableHlo::Create({std::move(stablehlo_spec)}));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<StableHloRunner> runner,
+      StableHloRunner::Create(
+          std::move(stablehlo), GetCompileOptions(assigned_devices_),
+          ifrt_client_, /*persistent_compilation_cache=*/nullptr,
+          &ifrt_loaded_variable_registry_, {},
+          /*compilation_environment_proto=*/nullptr, thread_pool_.get(),
+          /*optimizer=*/nullptr, assigned_devices_,
+          /*serving_core_selector=*/nullptr));
+
+  EXPECT_THAT(
+      runner->Execute(
+          {Value(AsHostBuffer<float>({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f},
+                                     xla::ifrt::Shape({2, 3})))},
+          RunContext{}),
+      IsOkAndHolds(ElementsAre(
+          ValueOfType<HostBuffer>(HostBufferEq(AsHostBuffer<float>(
+              {1.0f, 4.0f, 2.0f, 5.0f, 3.0f, 6.0f},
+              xla::ifrt::Shape({3, 2})))))));
+}
+
+TEST(StableHloTest, CreateReturnsErrorWhenHostTransposeHasDuplicateAxis) {
+  const xla::ifrt::DType f32(xla::ifrt::DType::kF32);
+  const xla::HloSharding replicated = xla::HloSharding::Replicate();
+  StableHlo::Spec stablehlo_spec = {
+      .inputs = {{.dtype = f32,
+                  .shape = ArgShape(1, 6),
+                  .sharding = replicated,
+                  .host_transpose = {0, 0}}},
+      .outputs = {{.dtype = f32,
+                   .shape = ArgShape(1, 6),
+                   .sharding = replicated}},
+      .original_inputs = {{.dtype = f32,
+                           .shape = ArgShape({2, 3}),
+                           .sharding = replicated,
+                           .host_transpose = {0, 0}}},
+      .original_outputs = {{.dtype = f32,
+                            .shape = ArgShape({2, 3}),
+                            .sharding = replicated}},
+      .optimized_at_export = true,
+      .mlir_module = kIdentityR1SixElementMlir,
+      .mlir_module_kept_var_idx = {0},
+  };
+
+  EXPECT_THAT(StableHlo::Create({std::move(stablehlo_spec)}),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("invalid host_transpose permutation")));
+}
+
+TEST(StableHloTest,
+     CreateReturnsErrorWhenOptimizedSignatureElementCountMismatches) {
+  const xla::ifrt::DType f32(xla::ifrt::DType::kF32);
+  const xla::HloSharding replicated = xla::HloSharding::Replicate();
+  StableHlo::Spec stablehlo_spec = {
+      .inputs = {{.dtype = f32,
+                  .shape = ArgShape(1, 10),
+                  .sharding = replicated}},
+      .outputs = {{.dtype = f32,
+                   .shape = ArgShape(1, 6),
+                   .sharding = replicated}},
+      .original_inputs = {{.dtype = f32,
+                           .shape = ArgShape({2, 3}),
+                           .sharding = replicated}},
+      .original_outputs = {{.dtype = f32,
+                            .shape = ArgShape({2, 3}),
+                            .sharding = replicated}},
+      .optimized_at_export = true,
+      .mlir_module = kIdentityR1SixElementMlir,
+      .mlir_module_kept_var_idx = {0},
+  };
+
+  EXPECT_THAT(StableHlo::Create({std::move(stablehlo_spec)}),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("static element count mismatch")));
+}
+
+TEST(StableHloTest,
+     CreateReturnsErrorWhenOptimizedAtExportHasDynamicDimension) {
+  const xla::ifrt::DType f32(xla::ifrt::DType::kF32);
+  const xla::HloSharding replicated = xla::HloSharding::Replicate();
+  StableHlo::Spec stablehlo_spec = {
+      .inputs = {{.dtype = f32,
+                  .shape = ArgShape(1, 6),
+                  .sharding = replicated}},
+      .outputs = {{.dtype = f32,
+                   .shape = ArgShape(1, 1),
+                   .sharding = replicated}},
+      .original_inputs = {{.dtype = f32,
+                           .shape = ArgShape({2, 3}),
+                           .sharding = replicated}},
+      .original_outputs = {{.dtype = f32,
+                            .shape = ArgShape({std::nullopt, std::nullopt}),
+                            .sharding = replicated}},
+      .optimized_at_export = true,
+      .mlir_module = kIdentityR1SixElementMlir,
+      .mlir_module_kept_var_idx = {0},
+  };
+
+  EXPECT_THAT(StableHlo::Create({std::move(stablehlo_spec)}),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("must have static non-negative dimensions")));
+}
+
+TEST_F(StableHloRunnerExecuteOptionsTest,
+       ExecuteReturnsErrorWhenStridedHostBufferRequiresZeroCopyReshape) {
+  const xla::ifrt::DType f32(xla::ifrt::DType::kF32);
+  const xla::HloSharding replicated = xla::HloSharding::Replicate();
+  StableHlo::Spec stablehlo_spec = {
+      .inputs = {{.dtype = f32,
+                  .shape = ArgShape(1, 6),
+                  .sharding = replicated}},
+      .outputs = {{.dtype = f32,
+                   .shape = ArgShape(1, 6),
+                   .sharding = replicated}},
+      .original_inputs = {{.dtype = f32,
+                           .shape = ArgShape({2, 3}),
+                           .sharding = replicated}},
+      .original_outputs = {{.dtype = f32,
+                            .shape = ArgShape({2, 3}),
+                            .sharding = replicated}},
+      .optimized_at_export = true,
+      .mlir_module = kIdentityR1SixElementMlir,
+      .mlir_module_kept_var_idx = {0},
+  };
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHlo> stablehlo,
+                          StableHlo::Create({std::move(stablehlo_spec)}));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<StableHloRunner> runner,
+      StableHloRunner::Create(
+          std::move(stablehlo), GetCompileOptions(assigned_devices_),
+          ifrt_client_, /*persistent_compilation_cache=*/nullptr,
+          &ifrt_loaded_variable_registry_, {},
+          /*compilation_environment_proto=*/nullptr, thread_pool_.get(),
+          /*optimizer=*/nullptr, assigned_devices_,
+          /*serving_core_selector=*/nullptr));
+
+  auto backing_storage = std::make_shared<std::vector<float>>(12, 1.0f);
+  const absl::InlinedVector<int64_t, 4> non_contiguous_byte_strides = {
+      6 * static_cast<int64_t>(sizeof(float)),
+      static_cast<int64_t>(sizeof(float))};
+  HostBuffer strided_input(backing_storage->data(), f32,
+                           xla::ifrt::Shape({2, 3}),
+                           non_contiguous_byte_strides, backing_storage);
+
+  EXPECT_THAT(
+      runner->Execute({Value(std::move(strided_input))}, RunContext{}),
+      StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          HasSubstr(
+              "Cannot zero-copy reshape non-contiguous strided HostBuffer")));
+}
+
+TEST_F(StableHloRunnerExecuteOptionsTest,
+       ExecuteReturnsErrorWhenDeviceBufferInputHasHostTranspose) {
+  const xla::ifrt::DType f32(xla::ifrt::DType::kF32);
+  const xla::HloSharding replicated = xla::HloSharding::Replicate();
+  StableHlo::Spec stablehlo_spec = {
+      .inputs = {{.dtype = f32,
+                  .shape = ArgShape({2, 2}),
+                  .sharding = replicated,
+                  .host_transpose = {1, 0}}},
+      .outputs = {{.dtype = f32,
+                   .shape = ArgShape({2, 2}),
+                   .sharding = replicated}},
+      .original_inputs = {{.dtype = f32,
+                           .shape = ArgShape({2, 2}),
+                           .sharding = replicated,
+                           .host_transpose = {1, 0}}},
+      .original_outputs = {{.dtype = f32,
+                            .shape = ArgShape({2, 2}),
+                            .sharding = replicated}},
+      .optimized_at_export = true,
+      .mlir_module = kTranspose2x2Mlir,
+      .mlir_module_kept_var_idx = {0},
+  };
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHlo> stablehlo,
+                          StableHlo::Create({std::move(stablehlo_spec)}));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<StableHloRunner> runner,
+      StableHloRunner::Create(
+          std::move(stablehlo), GetCompileOptions(assigned_devices_),
+          ifrt_client_, /*persistent_compilation_cache=*/nullptr,
+          &ifrt_loaded_variable_registry_, {},
+          /*compilation_environment_proto=*/nullptr, thread_pool_.get(),
+          /*optimizer=*/nullptr, assigned_devices_,
+          /*serving_core_selector=*/nullptr));
+
+  TF_ASSERT_OK_AND_ASSIGN(
+      xla::ifrt::DeviceListRef device_list,
+      xla::ifrt::test_util::GetDevices(
+          ifrt_client_.get(), *(assigned_devices_->device_assignment)));
+  xla::ifrt::ShardingRef sharding = xla::ifrt::SingleDeviceSharding::Create(
+      device_list->devices().front(), xla::ifrt::MemoryKind());
+  TF_ASSERT_OK_AND_ASSIGN(
+      xla::ifrt::ArrayRef ifrt_array,
+      sharding_internal::MakeArrayFromHostBuffer(
+          *ifrt_client_,
+          AsHostBuffer<float>({1.0f, 2.0f, 3.0f, 4.0f},
+                              xla::ifrt::Shape({2, 2})),
+          device_list, sharding, *thread_pool_));
+
+  EXPECT_THAT(
+      runner->Execute(
+          {Value(DeviceBuffer{
+              .ifrt_client = ifrt_client_,
+              .ifrt_array = std::move(ifrt_array),
+              .sharding = std::move(sharding),
+              .device_list = std::move(device_list),
+          })},
+          RunContext{}),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("host_transpose")));
+}
+
 TEST_F(StableHloRunnerExecuteOptionsTest, ExecuteWithMixedInputsPasses) {
   TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHloRunner> runner,
                           CreateRunner());
@@ -3582,6 +4066,145 @@ TEST_F(StableHloRunnerAotTest, AotCreateIoSpecInputsSmallerThanWeightsFails) {
   EXPECT_THAT(AotStableHloRunner::Create(std::move(options)),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("StableHLO module has fewer inputs")));
+}
+
+constexpr absl::string_view kMockExecutableName = "mock_exec";
+constexpr absl::string_view kMockMlir = "mock_mlir";
+
+xla::ifrt::LoadedExecutableRef CreateSingleArgEchoMockExecutable(
+    xla::ifrt::Client* client) {
+  auto mock_executable = std::make_unique<xla::ifrt::MockLoadedExecutable>();
+  EXPECT_CALL(*mock_executable, client()).WillRepeatedly(Return(client));
+  EXPECT_CALL(*mock_executable, name())
+      .WillRepeatedly(Return(kMockExecutableName));
+  EXPECT_CALL(*mock_executable, devices()).WillRepeatedly(Return(std::nullopt));
+  EXPECT_CALL(*mock_executable, Execute(SizeIs(1), _, Optional(_)))
+      .WillOnce([](absl::Span<xla::ifrt::ArrayRef> args,
+                   const xla::ifrt::ExecuteOptions& /*options*/,
+                   std::optional<xla::ifrt::DeviceListRef> /*devices*/)
+                    -> absl::StatusOr<
+                        xla::ifrt::LoadedExecutable::ExecuteResult> {
+        return xla::ifrt::LoadedExecutable::ExecuteResult{
+            .status = tsl::Future<>(absl::OkStatus()),
+            .outputs = {args[0]},
+        };
+      });
+  return xla::ifrt::LoadedExecutableRef(std::move(mock_executable));
+}
+
+TEST_F(StableHloRunnerAotTest,
+       AotExecuteAdaptsExportOptimizedInputsToLogicalOutputs) {
+  const xla::ifrt::DType f32(xla::ifrt::DType::kF32);
+  const xla::HloSharding replicated = xla::HloSharding::Replicate();
+  StableHlo::Spec stablehlo_spec = {
+      .inputs = {{.dtype = f32,
+                  .shape = ArgShape(1, 12),
+                  .sharding = replicated,
+                  .host_transpose = {0, 3, 1, 2}}},
+      .outputs = {{.dtype = f32,
+                   .shape = ArgShape(1, 12),
+                   .sharding = replicated}},
+      .original_inputs = {{.dtype = f32,
+                           .shape = ArgShape({1, 2, 3, 2}),
+                           .sharding = replicated,
+                           .host_transpose = {0, 3, 1, 2}}},
+      .original_outputs = {{.dtype = f32,
+                            .shape = ArgShape({3, 4}),
+                            .sharding = replicated}},
+      .optimized_at_export = true,
+      .mlir_module = kMockMlir,
+      .mlir_module_kept_var_idx = {0},
+  };
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHlo> stablehlo,
+                          StableHlo::Create({std::move(stablehlo_spec)}));
+
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<AotStableHloRunner> runner,
+      AotStableHloRunner::Create(StableHloRunnerAotOptions{
+          .base_options =
+              {
+                  .client = ifrt_client,
+                  .thread_pool = thread_pool.get(),
+                  .ifrt_loaded_variable_registry =
+                      &ifrt_loaded_variable_registry,
+                  .weights = {},
+                  .assigned_devices = assigned_devices,
+              },
+          .executables = {CreateSingleArgEchoMockExecutable(ifrt_client.get())},
+          .stablehlo = std::shared_ptr<StableHlo>(std::move(stablehlo)),
+          .aot_memory_regions = {},
+      }));
+
+  EXPECT_THAT(
+      runner->Execute(
+          {Value(AsHostBuffer<float>({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f,
+                                      8.0f, 9.0f, 10.0f, 11.0f, 12.0f},
+                                     xla::ifrt::Shape({1, 2, 3, 2})))},
+          RunContext{}),
+      IsOkAndHolds(ElementsAre(
+          ValueOfType<HostBuffer>(HostBufferEq(AsHostBuffer<float>(
+              {1.0f, 3.0f, 5.0f, 7.0f, 9.0f, 11.0f, 2.0f, 4.0f, 6.0f, 8.0f,
+               10.0f, 12.0f},
+              xla::ifrt::Shape({3, 4})))))));
+}
+
+TEST_F(StableHloRunnerAotTest,
+       AotExecutePreservesDevicePlacementFromOriginalOutputs) {
+  const xla::ifrt::DType f32(xla::ifrt::DType::kF32);
+  const xla::HloSharding replicated = xla::HloSharding::Replicate();
+  StableHlo::Spec stablehlo_spec = {
+      .inputs = {{.dtype = f32,
+                  .shape = ArgShape(1, 12),
+                  .sharding = replicated}},
+      .outputs = {{.dtype = f32,
+                   .shape = ArgShape(1, 12),
+                   .sharding = replicated}},
+      .original_inputs = {{.dtype = f32,
+                           .shape = ArgShape({3, 4}),
+                           .sharding = replicated}},
+      .original_outputs = {{.dtype = f32,
+                            .shape = ArgShape({3, 4}),
+                            .sharding = replicated,
+                            .placement = Placement::kDevice}},
+      .optimized_at_export = true,
+      .mlir_module = kMockMlir,
+      .mlir_module_kept_var_idx = {0},
+  };
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHlo> stablehlo,
+                          StableHlo::Create({std::move(stablehlo_spec)}));
+
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<AotStableHloRunner> runner,
+      AotStableHloRunner::Create(StableHloRunnerAotOptions{
+          .base_options =
+              {
+                  .client = ifrt_client,
+                  .thread_pool = thread_pool.get(),
+                  .ifrt_loaded_variable_registry =
+                      &ifrt_loaded_variable_registry,
+                  .weights = {},
+                  .assigned_devices = assigned_devices,
+              },
+          .executables = {CreateSingleArgEchoMockExecutable(ifrt_client.get())},
+          .stablehlo = std::shared_ptr<StableHlo>(std::move(stablehlo)),
+          .aot_memory_regions = {},
+      }));
+
+  EXPECT_THAT(
+      runner->Execute(
+          {Value(AsHostBuffer<float>({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f,
+                                      8.0f, 9.0f, 10.0f, 11.0f, 12.0f},
+                                     xla::ifrt::Shape({3, 4})))},
+          RunContext{}),
+      IsOkAndHolds(ElementsAre(ValueOfType<DeviceBuffer>(::testing::ResultOf(
+          [](const DeviceBuffer& device_buffer)
+              -> std::optional<xla::ifrt::Shape> {
+            if (device_buffer.ifrt_array == nullptr) {
+              return std::nullopt;
+            }
+            return device_buffer.ifrt_array->shape();
+          },
+          Optional(xla::ifrt::Shape({12})))))));
 }
 
 //===----------------------------------------------------------------------===//

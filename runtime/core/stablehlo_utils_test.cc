@@ -1014,6 +1014,25 @@ INSTANTIATE_TEST_SUITE_P(
              .module_kept_var_idx = {1},
              .expected_status = absl::InvalidArgumentError(
                  "Module kept var idx 1 is out of range [0, 1).")},
+            {.test_name = "IOArgSpecMatchIgnoresModelHostTranspose",
+             .stablehlo_arg_specs =
+                 {
+                     ArgSpec{
+                         .dtype = xla::ifrt::DType(kF32),
+                         .shape = ArgShape({2, 3}),
+                         .sharding = xla::HloSharding::Replicate(),
+                     },
+                 },
+             .model_arg_specs =
+                 {
+                     ArgSpec{
+                         .dtype = xla::ifrt::DType(kF32),
+                         .shape = ArgShape({2, 3}),
+                         .sharding = xla::HloSharding::Replicate(),
+                         .host_transpose = {1, 0},
+                     },
+                 },
+             .expected_status = absl::OkStatus()},
         }),
     [](const testing::TestParamInfo<ValidateIOSpecTestParam>& info) {
       return info.param.test_name;
@@ -1065,6 +1084,49 @@ INSTANTIATE_TEST_SUITE_P(
     [](const testing::TestParamInfo<InputShapeEqualTestParam>& info) {
       return info.param.test_name;
     });
+
+TEST(ArgSpecTest, EqualityOperatorReturnsFalseWhenHostTransposeDiffers) {
+  EXPECT_NE((ArgSpec{
+                .dtype = xla::ifrt::DType(kF32),
+                .shape = ArgShape({2, 3}),
+                .sharding = xla::HloSharding::Replicate(),
+                .host_transpose = {1, 0},
+            }),
+            (ArgSpec{
+                .dtype = xla::ifrt::DType(kF32),
+                .shape = ArgShape({2, 3}),
+                .sharding = xla::HloSharding::Replicate(),
+            }));
+}
+
+TEST(ArgSpecTest, EqualityOperatorReturnsTrueWhenHostTransposeMatches) {
+  EXPECT_EQ((ArgSpec{
+                .dtype = xla::ifrt::DType(kF32),
+                .shape = ArgShape({2, 3}),
+                .sharding = xla::HloSharding::Replicate(),
+                .host_transpose = {1, 0},
+            }),
+            (ArgSpec{
+                .dtype = xla::ifrt::DType(kF32),
+                .shape = ArgShape({2, 3}),
+                .sharding = xla::HloSharding::Replicate(),
+                .host_transpose = {1, 0},
+            }));
+}
+
+TEST(ArgSpecTest, IsMlirSpecEqualReturnsTrueWhenOnlyHostTransposeDiffers) {
+  EXPECT_TRUE((ArgSpec{
+                   .dtype = xla::ifrt::DType(kF32),
+                   .shape = ArgShape({2, 3}),
+                   .sharding = xla::HloSharding::Replicate(),
+               })
+                  .IsMlirSpecEqual(ArgSpec{
+                      .dtype = xla::ifrt::DType(kF32),
+                      .shape = ArgShape({2, 3}),
+                      .sharding = xla::HloSharding::Replicate(),
+                      .host_transpose = {1, 0},
+                  }));
+}
 
 }  // namespace
 }  // namespace xla_serving

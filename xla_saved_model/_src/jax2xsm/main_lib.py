@@ -15,10 +15,10 @@
 """A converter from JAX to ML Exported Model (EM)."""
 
 # pylint: disable=protected-access
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 import dataclasses
 import re
-from typing import Any, Dict, Sequence
+from typing import Any
 
 import jax
 from jax import export as jax_export
@@ -33,6 +33,7 @@ from xla_saved_model._src.core import unstructured_data
 from xla_saved_model._src.core import value
 from xla_saved_model._src.jax2xsm import constants
 from xla_saved_model._src.jax2xsm import jax_specific_info
+from xla_saved_model._src.jax2xsm import tpu_io_optimization
 from xla_saved_model._src.jax2xsm import typing
 from xla_saved_model._src.jax2xsm import utils
 
@@ -69,7 +70,7 @@ def jax_exported_to_shlo_fn(
     ) = None,
     model_param_names: Sequence[str] | None = None,
     *,
-    model_inputs_layout: Sequence[jax_layout.Layout] | None = None,
+    model_inputs_layout: Sequence[jax_layout.Layout | None] | None = None,
     num_input_aliased_output: int = 0,
     weights_name: str | None = None,
 ) -> shlo_function.ShloFunction:
@@ -85,8 +86,8 @@ def jax_exported_to_shlo_fn(
       dot-separated key path format (e.g. "params.key.subkey"). If provided,
       only these parameters will be loaded from the checkpoint when the function
       is executed.
-    model_inputs_layout: Optional. A sequence of `jax_layout.Layout` objects
-      specifying the layouts for the model inputs.
+    model_inputs_layout: Optional. A sequence of `jax_layout.Layout | None`
+      entries specifying the layouts for the model inputs.
     num_input_aliased_output: The number of trailing arguments of `exported`
       that are donated output buffers rather than caller-supplied inputs.
     weights_name: Optional. The name of the weights object in the manifest bound
@@ -360,22 +361,47 @@ def prepare_output_donation(
   return donating_fn, donating_args_specs_list, num_input_aliased_output
 
 
+def _infer_num_weight_leaves(
+    args_spec: Sequence[Any],
+    kwargs_spec: Mapping[str, Any],
+    model_param_names: Sequence[str] | None,
+    weights_name: str | None,
+    num_input_aliased_output: int,
+) -> int:
+  """Infers leading weight leaf count in `(args_spec, kwargs_spec)`."""
+  if model_param_names is not None:
+    return len(model_param_names)
+  if weights_name is not None and args_spec:
+    return len(jax.tree.leaves(args_spec[0]))
+  num_user_pos_args = len(args_spec) - (
+      1 if num_input_aliased_output > 0 else 0
+  )
+  if num_user_pos_args >= 2 or (num_user_pos_args == 1 and bool(kwargs_spec)):
+    return len(jax.tree.leaves(args_spec[0]))
+  return 0
+
+
 def convert(
     fun_jax: Callable[..., Any],
     args_spec: Sequence[Any],
-    kwargs_spec: Dict[str, Any],
+    kwargs_spec: dict[str, Any],
     jax_export_kwargs: Mapping[str, Any] | None = None,
     xla_compile_options_per_platform: (
         manifest_pb2.CompileOptionsProtoMap | None
     ) = None,
     model_param_names: Sequence[str] | None = None,
-    model_inputs_layout: Sequence[jax_layout.Layout] | None = None,
+    model_inputs_layout: Sequence[jax_layout.Layout | None] | None = None,
     platforms: Sequence[manifest_pb2.Platform] | None = None,
     native_serialization_disabled_checks: Sequence[
         jax_export.DisabledSafetyCheck
     ] = (),
     num_input_aliased_output: int = 0,
     weights_name: str | None = None,
+    *,
+    enable_input_r1_optimization: bool = False,
+    enable_output_r1_optimization: bool = False,
+    max_transpose_channels: int = 0,
+    num_weight_leaves: int | None = None,
 ) -> shlo_function.ShloFunction:
   """Converts a JAX function to an Orbax Model `ShloFunction`.
 
@@ -406,8 +432,9 @@ def convert(
       dot-separated key path format (e.g. "params.key.subkey"). If provided,
       only these parameters will be loaded from the checkpoint when the function
       is executed.
-    model_inputs_layout: Optional. A sequence of `jax_layout.Layout` objects
-      specifying the layouts for the model inputs (weights and user inputs)
+    model_inputs_layout: Optional. A sequence of `jax_layout.Layout | None`
+      entries specifying the layouts for the model inputs (weights and user
+      inputs).
     platforms: Optional sequence of platforms for compatibility.
     native_serialization_disabled_checks: Optional disabled checks for
       compatibility.
@@ -416,9 +443,27 @@ def convert(
       must already be jitted with those arguments donated.
     weights_name: Optional. The name of the weights object in the manifest bound
       to this function.
+    enable_input_r1_optimization: If True, flattens eligible static rank >= 2
+      user inputs to 1-D at the StableHLO entry point and reshapes them back
+      inside the function. Enabling any export-time TPU I/O optimization makes
+      export-time optimization authoritative, so the serving runtime skips its
+      legacy `StablehloTpuOptimizer` MLIR passes for the exported function.
+    enable_output_r1_optimization: If True, flattens eligible static rank >= 2
+      outputs to 1-D before returning from the StableHLO function.
+    max_transpose_channels: If > 0, transposes eligible 4-D NHWC user inputs
+      with `C <= max_transpose_channels` and `C < W` to NCHW at the StableHLO
+      entry point and transposes them back to NHWC on device.
+    num_weight_leaves: Optional explicit count of leading flattened weight
+      leaves in `(args_spec, kwargs_spec)`. If None, inferred from
+      `model_param_names`, `weights_name`, and `(args_spec, kwargs_spec)`.
 
   Returns:
     An Orbax Model `ShloFunction`.
+
+  Raises:
+    ValueError: If `enable_output_r1_optimization` is enabled alongside output
+      donation (`num_input_aliased_output > 0`), or if output donation fails to
+      alias all outputs.
   """
   if not hasattr(fun_jax, "trace"):
     fun_jax = jax.jit(fun_jax)
@@ -446,7 +491,39 @@ def convert(
   exported = exported_creator(*args_spec, **kwargs_spec)
   if num_input_aliased_output:
     _assert_outputs_are_aliased(exported, num_input_aliased_output)
-  return jax_exported_to_shlo_fn(
+  if num_weight_leaves is not None:
+    resolved_num_weight_leaves = num_weight_leaves
+  else:
+    resolved_num_weight_leaves = _infer_num_weight_leaves(
+        args_spec,
+        kwargs_spec,
+        model_param_names,
+        weights_name,
+        num_input_aliased_output,
+    )
+  opt_plan = tpu_io_optimization.build_tpu_io_optimization_plan(
+      fun_jax,
+      args_spec,
+      kwargs_spec,
+      exported,
+      num_weight_leaves=resolved_num_weight_leaves,
+      model_inputs_layout=model_inputs_layout,
+      num_input_aliased_output=num_input_aliased_output,
+      enable_input_r1_optimization=enable_input_r1_optimization,
+      enable_output_r1_optimization=enable_output_r1_optimization,
+      max_transpose_channels=max_transpose_channels,
+  )
+  if opt_plan is None:
+    return jax_exported_to_shlo_fn(
+        exported,
+        xla_compile_options_per_platform,
+        model_param_names=model_param_names,
+        model_inputs_layout=model_inputs_layout,
+        num_input_aliased_output=num_input_aliased_output,
+        weights_name=weights_name,
+    )
+
+  unoptimized_shlo_fn = jax_exported_to_shlo_fn(
       exported,
       xla_compile_options_per_platform,
       model_param_names=model_param_names,
@@ -454,6 +531,46 @@ def convert(
       num_input_aliased_output=num_input_aliased_output,
       weights_name=weights_name,
   )
+  opt_exported_creator = jax_export.export(
+      opt_plan.wrapped_fn,  # pyrefly: ignore[bad-argument-type]
+      **jax_export_kwargs,
+  )
+  opt_exported = opt_exported_creator(
+      *opt_plan.args_spec, **opt_plan.kwargs_spec
+  )
+  if num_input_aliased_output:
+    _assert_outputs_are_aliased(opt_exported, num_input_aliased_output)
+
+  opt_shlo_fn = jax_exported_to_shlo_fn(
+      opt_exported,
+      xla_compile_options_per_platform,
+      model_param_names=model_param_names,
+      model_inputs_layout=model_inputs_layout,
+      num_input_aliased_output=num_input_aliased_output,
+      weights_name=weights_name,
+  )
+  physical_in_sig = opt_shlo_fn.input_signature
+  physical_out_sig = opt_shlo_fn.output_signature
+  if opt_plan.transposed_input_leaf_indices:
+    physical_in_sig = (
+        tpu_io_optimization.apply_host_transpose_to_full_input_sig(
+            physical_in_sig,
+            opt_plan.transposed_input_leaf_indices,
+        )
+    )
+  opt_shlo_fn.input_signature = unoptimized_shlo_fn.input_signature
+  opt_shlo_fn.output_signature = unoptimized_shlo_fn.output_signature
+  if constants.JAX_SPECIFIC_INFO in unoptimized_shlo_fn.supplemental_info:
+    merged_supplemental = dict(opt_shlo_fn.supplemental_info)
+    merged_supplemental[constants.JAX_SPECIFIC_INFO] = (
+        unoptimized_shlo_fn.supplemental_info[constants.JAX_SPECIFIC_INFO]
+    )
+    opt_shlo_fn.supplemental_info = merged_supplemental
+  if opt_plan.has_input_optimization:
+    opt_shlo_fn.optimized_input_signature = physical_in_sig
+  if opt_plan.has_output_optimization:
+    opt_shlo_fn.optimized_output_signature = physical_out_sig
+  return opt_shlo_fn
 
 
 def convert_path_to_value(
@@ -482,7 +599,28 @@ def convert_apply_fn_bundle_to_shlo(
     jax_mesh: jax.sharding.Mesh | None = None,
     weights_name: str | None = None,
 ) -> Sequence[shlo_function.ShloFunction]:
-  """Converts an ApplyFnBundle to SHLO functions."""
+  """Converts an `ApplyFnBundle` into one or more `ShloFunction` instances.
+
+  Args:
+    apply_fn_bundle: Bundle containing `apply_fn`, polymorphic shape settings,
+      output donation flag, and TPU I/O optimization flags.
+    params: Model parameter PyTree (or `None` when weightless).
+    input_signature: Caller-facing user input `ShloTensorSpec` PyTree.
+    model_param_names: Optional dot-separated parameter names matching `params`
+      leaves.
+    jax_mesh: Optional JAX device mesh used for XLA compile options generation.
+    weights_name: Optional manifest weights key bound to the exported functions.
+
+  Returns:
+    A tuple of exported `ShloFunction` objects (one per concretized shape bucket
+    when `input_polymorphic_shape_symbol_values` is provided, else a single-item
+    tuple).
+
+  Raises:
+    ValueError: If incompatible options are configured (e.g.,
+      `use_input_aliasing=True` with `enable_output_r1_optimization=True` or
+      unconcretized symbolic shapes).
+  """
   args_specs = jax_export.symbolic_args_specs(
       args=utils.to_jax_spec((params, input_signature)),
       shapes_specs=(
@@ -502,10 +640,18 @@ def convert_apply_fn_bundle_to_shlo(
   fun_jax = apply_fn_bundle.apply_fn
   num_input_aliased_output = 0
   if apply_fn_bundle.use_input_aliasing:
+    if apply_fn_bundle.enable_output_r1_optimization:
+      raise ValueError(
+          "Output R1 optimization is incompatible with output donation"
+          " (use_input_aliasing=True)."
+      )
     fun_jax, args_specs_list, num_input_aliased_output = (
         prepare_output_donation(apply_fn_bundle.apply_fn, args_specs_list)
     )
 
+  num_weight_leaves = (
+      len(jax.tree.leaves(params)) if params is not None else 0
+  )
   compile_options_per_platform = (
       compile_options_util.generate_xla_compile_options(
           native_serialization_platforms=apply_fn_bundle.jax_export_kwargs.get(
@@ -524,6 +670,14 @@ def convert_apply_fn_bundle_to_shlo(
           model_param_names=model_param_names,
           num_input_aliased_output=num_input_aliased_output,
           weights_name=weights_name,
+          enable_input_r1_optimization=(
+              apply_fn_bundle.enable_input_r1_optimization
+          ),
+          enable_output_r1_optimization=(
+              apply_fn_bundle.enable_output_r1_optimization
+          ),
+          max_transpose_channels=apply_fn_bundle.max_transpose_channels,
+          num_weight_leaves=num_weight_leaves,
       )
       for args_spec in args_specs_list
   )

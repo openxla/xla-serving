@@ -55,6 +55,13 @@ class StableHlo {
     // Specs of outputs.
     std::vector<ArgSpec> outputs;
 
+    // Pre-optimization input/output specifications (populated when TPU I/O
+    // shape optimizations are applied at export time). When empty,
+    // `StableHlo::Create` defaults them to `inputs` / `outputs`.
+    std::vector<ArgSpec> original_inputs;
+    std::vector<ArgSpec> original_outputs;
+    bool optimized_at_export = false;
+
     // The MLIR module (in StableHLO dialect). Can be owned string or view.
     std::variant<std::string, absl::string_view> mlir_module;
 
@@ -67,7 +74,11 @@ class StableHlo {
     }
 
     // Sorted indices of inputs that are actually passed to the main function in
-    // MLIR module. The other inputs are unused and don't need to be passed.
+    // the MLIR module. Unused inputs are omitted.
+    // Note: In JIT loading (`LoadedStableHlo::Create`), an empty list defaults
+    // to `[0..inputs.size()-1]` when `@main` takes arguments; in AOT loading
+    // (`AotStableHloRunner`), an empty list denotes 0 kept arguments (from
+    // `aot_kept_var_idx`).
     std::vector<int> mlir_module_kept_var_idx;
 
     // A list of target platforms for which the MLIR module is lowered to

@@ -14,10 +14,12 @@
 
 """Utils for converting from XSE back to JAX."""
 
-from typing import Any, List, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any
 
 import jax
 import jax.extend as jex
+import jax.numpy as jnp
 import jaxtyping
 import numpy as np
 
@@ -27,6 +29,9 @@ from xla_saved_model._src.jax2xsm import pytree_proto
 from xla_saved_model._src.jax2xsm import typing as xsm_typing
 
 ApplyFn = xsm_typing.ApplyFn
+_InputAdapter = tuple[
+    tuple[int, ...], tuple[int, ...] | None, tuple[int, ...]
+]
 
 
 def _deserialize_disabled_safety_check(disabled_check):  # pylint: disable=missing-function-docstring
@@ -170,7 +175,7 @@ def _refine_dtype(
   return xsm.shlo_dtype_to_np_dtype(shlo_dtype)
 
 
-_JaxShapeDtype = Tuple[_JaxShape, np.dtype]
+_JaxShapeDtype = tuple[_JaxShape, np.dtype]
 
 
 def _refine_tensor_spec(
@@ -201,7 +206,7 @@ def _get_refinement(
 def _refine_tensor_specs(
     shlo_tensor_specs: Sequence[xsm.ShloTensorSpec],
     refinements: jax_supplemental_pb2.ShapeDTypeRefinements | None,
-) -> List[_JaxShapeDtype]:
+) -> list[_JaxShapeDtype]:
   """Refines/converts a sequence of XSE tensor specs into JAX array specs.
 
   Args:
@@ -240,16 +245,27 @@ def _shlo_tensor_spec_to_hlo_sharding(
   )
 
 
+def _concrete_int_shape(
+    shape: Sequence[Any] | None, context: str
+) -> tuple[int, ...]:
+  """Validates and converts `shape` into a tuple of concrete `int` dims."""
+  if shape is None or any(not isinstance(d, int) for d in shape):
+    raise ValueError(
+        f"Expected static integer shape for {context}, got {shape}."
+    )
+  return tuple(int(d) for d in shape)
+
+
 def _restore_spec(
     manifest_signature: xsm.type_pb2.FunctionSignature,
     signature_field: str,
     supplemental: jax_supplemental_pb2.Function,
     supplemental_field: str,
     tree_field: str,
-) -> Tuple[
+) -> tuple[
     jax.tree_util.PyTreeDef,
-    List[_JaxShapeDtype],
-    Tuple[Any | None, ...],
+    list[_JaxShapeDtype],
+    tuple[Any | None, ...],
 ]:
   """Restores an input or output signature (and its refinement) into JAX.
 
@@ -385,11 +401,36 @@ def _validate_arg_count(
 class ExportedApplyFn:
   """A callable wrapper around `jax.export.Exported` acting as an `ApplyFn`.
 
-  Delegates `__call__` to `exported.call` while preserving access
-  to all attributes and methods of the underlying `Exported` object.
+  Delegates `__call__` to `exported.call` while preserving access to all
+  attributes and methods of the underlying `Exported` object. When the exported
+  module uses export-time physical TPU I/O layouts, `__call__` adapts logical
+  caller inputs (host transpose and/or R1 flattening) and reshapes physical
+  outputs back to logical shapes transparently, while `exported.in_avals` and
+  `exported.out_avals` reflect the physical `@main` shapes.
   """
 
-  def __init__(self, exported: jax.export.Exported):
+  def __init__(
+      self,
+      exported: jax.export.Exported,
+      *,
+      in_adapters: Sequence[_InputAdapter] | None = None,
+      out_logical_shapes: Sequence[tuple[int, ...]] | None = None,
+  ):
+    """Initializes `ExportedApplyFn`.
+
+    Args:
+      exported: The underlying `jax.export.Exported` function taking `(params,
+        inputs)`.
+      in_adapters: Optional per-leaf `(logical_shape, host_transpose_perm,
+        physical_shape)` adapters aligned with `exported.in_avals`.
+      out_logical_shapes: Optional per-leaf logical output shapes aligned with
+        `exported.out_avals`.
+
+    Raises:
+      TypeError: If `exported` is not a `jax.export.Exported` instance.
+      ValueError: If `exported` does not take 2 arguments, or if `in_adapters` /
+        `out_logical_shapes` length mismatches `exported`.
+    """
     if not isinstance(exported, jax.export.Exported):
       raise TypeError(
           "ExportedApplyFn expects a jax.export.Exported object, got"
@@ -397,13 +438,87 @@ class ExportedApplyFn:
       )
     _validate_arg_count(exported)
     self._exported = exported
+    self._in_adapters = (
+        tuple(in_adapters) if in_adapters is not None else None
+    )
+    if self._in_adapters is not None and len(self._in_adapters) != len(
+        exported.in_avals
+    ):
+      raise ValueError(
+          f"`in_adapters` has {len(self._in_adapters)} entries, expected"
+          f" {len(exported.in_avals)} to match `exported.in_avals`."
+      )
+    self._out_logical_shapes = (
+        tuple(out_logical_shapes) if out_logical_shapes is not None else None
+    )
+    if (
+        self._out_logical_shapes is not None
+        and len(self._out_logical_shapes) != exported.out_tree.num_leaves
+    ):
+      raise ValueError(
+          f"`out_logical_shapes` has {len(self._out_logical_shapes)} entries,"
+          f" expected {exported.out_tree.num_leaves} to match"
+          " `exported.out_tree`."
+      )
 
   def __call__(
       self,
       params: jaxtyping.PyTree,
       inputs: jaxtyping.PyTree,
   ) -> jaxtyping.PyTree:
-    return self._exported.call(params, inputs)
+    call_params = params
+    call_inputs = inputs
+    if self._in_adapters is not None:
+      leaves, call_tree = jax.tree.flatten(((params, inputs), {}))
+      if call_tree != self._exported.in_tree or len(leaves) != len(
+          self._in_adapters
+      ):
+        raise ValueError(
+            "Input PyTree structure mismatch: expected"
+            f" {self._exported.in_tree}, got {call_tree}."
+        )
+      adapted_leaves = []
+      for leaf, (logical_shape, perm, phys_shape) in zip(
+          leaves, self._in_adapters, strict=True
+      ):
+        is_numpy_host = isinstance(leaf, (np.ndarray, np.generic))
+        actual_shape = np.shape(leaf) if is_numpy_host else jnp.shape(leaf)
+        if actual_shape != logical_shape:
+          raise ValueError(
+              "Input leaf shape mismatch: expected"
+              f" {logical_shape}, got {actual_shape}."
+          )
+        if perm is not None:
+          leaf = (
+              np.transpose(leaf, perm)
+              if is_numpy_host
+              else jnp.transpose(leaf, perm)
+          )
+          actual_shape = np.shape(leaf) if is_numpy_host else jnp.shape(leaf)
+        if actual_shape != phys_shape:
+          leaf = (
+              np.reshape(leaf, phys_shape)
+              if is_numpy_host
+              else jnp.reshape(leaf, phys_shape)
+          )
+        adapted_leaves.append(leaf)
+      (call_params, call_inputs), _ = self._exported.in_tree.unflatten(
+          adapted_leaves
+      )
+
+    out = self._exported.call(call_params, call_inputs)
+    if self._out_logical_shapes is not None:
+      out_leaves = self._exported.out_tree.flatten_up_to(out)
+      reshaped_leaves = [
+          jnp.reshape(leaf, logical_shape)
+          if jnp.shape(leaf) != logical_shape
+          else leaf
+          for leaf, logical_shape in zip(
+              out_leaves, self._out_logical_shapes, strict=True
+          )
+      ]
+      out = self._exported.out_tree.unflatten(reshaped_leaves)
+    return out
 
   @property
   def exported(self) -> jax.export.Exported:
@@ -453,6 +568,69 @@ def xsm_fn_to_apply_fn(
       "output_tree",
   )
 
+  stable_hlo_body = manifest_function.body.stable_hlo_body
+  in_adapters: list[_InputAdapter] | None = None
+  if stable_hlo_body.HasField("optimized_input_signature"):
+    opt_in_specs, _ = jax.tree.flatten(
+        xsm.from_type_proto(stable_hlo_body.optimized_input_signature)
+    )
+    if len(opt_in_specs) != len(in_avals):
+      raise ValueError(
+          "The `optimized_input_signature` in the manifest has"
+          f" {len(opt_in_specs)} leaves, but the logical `input` signature has"
+          f" {len(in_avals)}."
+      )
+    in_adapters = []
+    phys_in_avals: list[_JaxShapeDtype] = []
+    for (logical_shape, logical_dtype), spec in zip(
+        in_avals, opt_in_specs, strict=True
+    ):
+      concrete_logical = _concrete_int_shape(
+          logical_shape, "logical input signature"
+      )
+      phys_shape = _concrete_int_shape(
+          spec.shape, "optimized_input_signature"
+      )
+      perm = (
+          tuple(int(p) for p in spec.host_transpose)
+          if spec.host_transpose
+          else None
+      )
+      in_adapters.append((concrete_logical, perm, phys_shape))
+      phys_in_avals.append((phys_shape, logical_dtype))
+    in_avals = phys_in_avals
+    in_shardings_hlo = tuple(
+        map(_shlo_tensor_spec_to_hlo_sharding, opt_in_specs)
+    )
+
+  out_logical_shapes: list[tuple[int, ...]] | None = None
+  if stable_hlo_body.HasField("optimized_output_signature"):
+    opt_out_specs, _ = jax.tree.flatten(
+        xsm.from_type_proto(stable_hlo_body.optimized_output_signature)
+    )
+    if len(opt_out_specs) != len(out_avals):
+      raise ValueError(
+          "The `optimized_output_signature` in the manifest has"
+          f" {len(opt_out_specs)} leaves, but the logical `output` signature"
+          f" has {len(out_avals)}."
+      )
+    out_logical_shapes = [
+        _concrete_int_shape(logical_shape, "logical output signature")
+        for logical_shape, _ in out_avals
+    ]
+    out_avals = [
+        (
+            _concrete_int_shape(spec.shape, "optimized_output_signature"),
+            logical_dtype,
+        )
+        for (_, logical_dtype), spec in zip(
+            out_avals, opt_out_specs, strict=True
+        )
+    ]
+    out_shardings_hlo = tuple(
+        map(_shlo_tensor_spec_to_hlo_sharding, opt_out_specs)
+    )
+
   # Uses the same symbolic-shape scope setup as in `jax.export.deserialize`.
   scope = jax.export.SymbolicScope(())
 
@@ -476,22 +654,18 @@ def xsm_fn_to_apply_fn(
               jax_supplemental_function.disabled_checks,
           )
       ),
-      mlir_module_serialized=(
-          manifest_function.body.stable_hlo_body.stable_hlo.inlined_bytes
-      ),
-      calling_convention_version=(
-          manifest_function.body.stable_hlo_body.calling_convention_version
-      ),
-      module_kept_var_idx=tuple(
-          manifest_function.body.stable_hlo_body.module_kept_var_idx
-      ),
-      platforms=tuple(
-          manifest_function.body.stable_hlo_body.lowering_platforms
-      ),
+      mlir_module_serialized=stable_hlo_body.stable_hlo.inlined_bytes,
+      calling_convention_version=stable_hlo_body.calling_convention_version,
+      module_kept_var_idx=tuple(stable_hlo_body.module_kept_var_idx),
+      platforms=tuple(stable_hlo_body.lowering_platforms),
       uses_global_constants=jax_supplemental_function.uses_shape_polymorphism,
       _get_vjp=None,
       _in_named_shardings=(None,) * len(in_avals),
       _out_named_shardings=(None,) * len(out_avals),
   )
 
-  return ExportedApplyFn(exported)
+  return ExportedApplyFn(
+      exported,
+      in_adapters=in_adapters,
+      out_logical_shapes=out_logical_shapes,
+  )

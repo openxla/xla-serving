@@ -257,10 +257,15 @@ StableHloRunner::CreateExecutableSynchronously(
     // step_id of different requests as inputs; for unbatched single request, a
     // 0D scalar shape {} (dims().size() == 0) was appended. This is only valid
     // for streaming models.
-    bool is_batched_in_streaming =
+    const bool is_batched_in_streaming =
         !input_shapes.empty() && input_shapes.back().dims().size() == 1;
+    const std::optional<int64_t> streaming_batch_size =
+        is_batched_in_streaming
+            ? std::make_optional(input_shapes.back().dims()[0])
+            : std::nullopt;
     TF_RETURN_IF_ERROR(PropagateStreamingStepId(module_bundle->module.get(),
-                                                is_batched_in_streaming));
+                                                is_batched_in_streaming,
+                                                streaming_batch_size));
 
     if (VLOG_IS_ON(1)) {
       DumpMlirOpToFile("stablehlo_module_after_streaming_step_id_propagation",
@@ -280,14 +285,20 @@ StableHloRunner::CreateExecutableSynchronously(
                                             *streaming_host_callback_id_));
   }
 
-  TF_ASSIGN_OR_RETURN(
-      StableHloIOSpec original_io_spec,
-      GetStableHloIOSpec(*module_bundle->module, compile_options_.has_value()
-                                                     ? &compile_options_.value()
-                                                     : nullptr));
+  StableHloIOSpec original_io_spec;
+  if (module_bundle->original_io_spec.has_value()) {
+    original_io_spec = *module_bundle->original_io_spec;
+  } else {
+    TF_ASSIGN_OR_RETURN(
+        original_io_spec,
+        GetStableHloIOSpec(*module_bundle->module,
+                           compile_options_.has_value() ? &*compile_options_
+                                                        : nullptr));
+  }
 
-  absl::flat_hash_map<int, std::vector<int64_t>> host_transpose_permutations;
-  if (optimizer_ != nullptr) {
+  absl::flat_hash_map<int, std::vector<int64_t>> host_transpose_permutations =
+      module_bundle->host_transpose_permutations;
+  if (optimizer_ != nullptr && !module_bundle->optimized_at_export) {
     TF_RETURN_IF_ERROR(optimizer_->Optimize(args, module_bundle->module.get()));
   }
   if (mlir::func::FuncOp main_func =
@@ -318,6 +329,10 @@ StableHloRunner::CreateExecutableSynchronously(
       GetStableHloIOSpec(*module_bundle->module, compile_options_.has_value()
                                                      ? &compile_options_.value()
                                                      : nullptr));
+  if (module_bundle->original_io_spec.has_value() &&
+      original_io_spec.inputs.size() + 1 == io_spec.inputs.size()) {
+    original_io_spec.inputs.push_back(io_spec.inputs.back());
+  }
 
   // Output placement metadata is propagated from the loaded StableHLO specs so
   // that output conversion (ConvertOutput) can honor manifest-declared

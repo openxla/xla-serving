@@ -483,7 +483,8 @@ absl::Status ValidateIOSpecs(absl::Span<const ArgSpec> stablehlo_arg_specs,
           absl::StrCat("Module kept var idx ", idx_in_model_arg_specs,
                        " is out of range [0, ", model_arg_specs.size(), ")."));
     }
-    if (stablehlo_arg_specs[i] != model_arg_specs[idx_in_model_arg_specs]) {
+    if (!stablehlo_arg_specs[i].IsMlirSpecEqual(
+            model_arg_specs[idx_in_model_arg_specs])) {
       return absl::FailedPreconditionError(absl::StrCat(
           "StableHlo expected arg#", i, " to have ArgSpec: {",
           stablehlo_arg_specs[i].DebugString(), "}, but got {",

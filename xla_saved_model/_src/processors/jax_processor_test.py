@@ -24,28 +24,46 @@ from xla_saved_model._src.processors import jax_processor
 
 class JaxProcessorTest(test_utils.XsmTestCase):
 
-  def test_calculate_jax_model_input_sig(self):
+  def test_calculate_jax_model_input_sig_excludes_leading_params(self):
     params_spec = shlo_type.ShloTensorSpec(
         shape=[1], dtype=shlo_type.ShloDType.f32
     )
     input_spec = shlo_type.ShloTensorSpec(
         shape=[4], dtype=shlo_type.ShloDType.f32
     )
+    full_sig = ((params_spec, input_spec), {})
 
-    with self.subTest(name='with_params'):
-      full_sig = (params_spec, input_spec)
-      params_tree = {'w': jnp.array([1.0])}
-      input_sig = jax_processor._calculate_jax_model_input_sig(full_sig)
-      self.assertEqual(input_sig, ((input_spec,), {}))
+    input_sig = jax_processor._calculate_jax_model_input_sig(full_sig)
 
-    with self.subTest(name='without_params'):
-      full_sig = (input_spec,)
-      # When without_params is passed, wrap in ((input_spec,), {}) as expected
-      # for argument-keyword split without model parameters.
-      self.assertEqual(((input_spec,), {}), ((input_spec,), {}))
+    self.assertEqual(input_sig, ((input_spec,), {}))
+
+  def test_calculate_jax_model_input_sig_excludes_donated_output_args(self):
+    params_spec = shlo_type.ShloTensorSpec(
+        shape=[1], dtype=shlo_type.ShloDType.f32
+    )
+    input_spec = shlo_type.ShloTensorSpec(
+        shape=[4], dtype=shlo_type.ShloDType.f32
+    )
+    donated_spec = (input_spec,)
+    full_sig = ((params_spec, input_spec, donated_spec), {})
+
+    input_sig = jax_processor._calculate_jax_model_input_sig(
+        full_sig, has_donated_output_args=True
+    )
+
+    self.assertEqual(input_sig, ((input_spec,), {}))
+
+  def test_calculate_jax_model_input_sig_raises_on_invalid_arg_count(self):
+    input_spec = shlo_type.ShloTensorSpec(
+        shape=[4], dtype=shlo_type.ShloDType.f32
+    )
+
+    with self.assertRaisesRegex(
+        ValueError, 'must have exactly 2 elements'
+    ):
+      jax_processor._calculate_jax_model_input_sig((input_spec,))
 
   def test_input_signature_with_polymorphic_shape(self):
-    """Tests that JaxProcessor.prepare works with polymorphic shapes."""
     model = jax_model.JaxModel(
         apply_fn_bundle=jax_model.ApplyFnBundle(
             apply_fn=lambda params, x: x * params['w'],
@@ -107,6 +125,65 @@ class JaxProcessorTest(test_utils.XsmTestCase):
         shlo_fns[0].data_names,
         ['layer1.b', 'layer1.w', 'layer2.b', 'layer2.w'],
     )
+
+  def test_prepare_preserves_user_signatures_when_tpu_io_optimized(self):
+    processor = jax_processor.JaxProcessor(
+        name='serving_default',
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=lambda p, x: x * p['w'],
+            jax_export_kwargs={'platforms': ['cpu']},
+            enable_input_r1_optimization=True,
+            enable_output_r1_optimization=True,
+            max_transpose_channels=3,
+        ),
+        params={'w': jnp.array([2.0], dtype=jnp.float32)},
+    )
+    prepared = processor.prepare(
+        jax.ShapeDtypeStruct(shape=(2, 3, 5, 2), dtype=jnp.float32)
+    )
+    self.assertEqual(prepared.input_signature[0][0].shape, (2, 3, 5, 2))
+    self.assertIsNone(prepared.input_signature[0][0].host_transpose)
+    self.assertEqual(prepared.output_signature.shape, (2, 3, 5, 2))
+
+    shlo_fn = prepared.shlo_fns[0]
+    opt_in_sig = shlo_fn.optimized_input_signature
+    opt_out_sig = shlo_fn.optimized_output_signature
+    self.assertIsNotNone(opt_in_sig)
+    self.assertEqual(opt_in_sig[0][1].shape, (60,))
+    self.assertEqual(opt_in_sig[0][1].host_transpose, (0, 3, 1, 2))
+    self.assertIsNotNone(opt_out_sig)
+    self.assertEqual(opt_out_sig.shape, (60,))
+
+  def test_prepare_multi_bucket_polymorphic_optimizes_each_bucket(self):
+    processor = jax_processor.JaxProcessor(
+        name='serving_default',
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=lambda p, x: x * p['w'],
+            input_polymorphic_shapes='(b, _, _, _)',
+            input_polymorphic_shape_symbol_values={'b': [1, 4]},
+            jax_export_kwargs={'platforms': ['cpu']},
+            enable_input_r1_optimization=True,
+            enable_output_r1_optimization=True,
+            max_transpose_channels=3,
+        ),
+        params={'w': jnp.array([2.0], dtype=jnp.float32)},
+    )
+    prepared = processor.prepare(
+        jax.ShapeDtypeStruct(shape=('b', 3, 5, 2), dtype=jnp.float32)
+    )
+    self.assertEqual(prepared.input_signature[0][0].shape, (None, 3, 5, 2))
+    self.assertEqual(prepared.output_signature.shape, (None, 3, 5, 2))
+    self.assertLen(prepared.shlo_fns, 2)
+
+    for shlo_fn, batch in zip(prepared.shlo_fns, (1, 4), strict=True):
+      opt_in = shlo_fn.optimized_input_signature
+      opt_out = shlo_fn.optimized_output_signature
+      self.assertIsNotNone(opt_in)
+      self.assertIsNotNone(opt_out)
+      self.assertEqual(shlo_fn.input_signature[0][1].shape, (batch, 3, 5, 2))
+      self.assertEqual(opt_in[0][1].shape, (batch * 30,))
+      self.assertEqual(opt_in[0][1].host_transpose, (0, 3, 1, 2))
+      self.assertEqual(opt_out.shape, (batch * 30,))
 
 
 if __name__ == '__main__':

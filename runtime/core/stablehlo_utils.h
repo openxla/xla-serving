@@ -15,6 +15,7 @@
 #ifndef XLA_SERVING_RUNTIME_STABLEHLO_UTILS_H_
 #define XLA_SERVING_RUNTIME_STABLEHLO_UTILS_H_
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
@@ -24,6 +25,7 @@
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
@@ -57,6 +59,7 @@ struct ArgSpec {
   xla::HloSharding sharding;
   std::optional<xla::Layout> layout;
   std::optional<Placement> placement = std::nullopt;
+  std::vector<int64_t> host_transpose = {};
 
   xla::ifrt::Shape GetIfrtShape() const {
     if (ifrt_shape.has_value()) {
@@ -67,7 +70,8 @@ struct ArgSpec {
 
   bool operator==(const ArgSpec& other) const {
     return dtype == other.dtype && shape == other.shape &&
-           sharding == other.sharding;
+           sharding == other.sharding &&
+           host_transpose == other.host_transpose;
   }
 
   // Before c++ 20, the compiler is not smart enough to deduce the
@@ -79,6 +83,14 @@ struct ArgSpec {
   // Checks if the `dtype` and `shape` of two ArgSpec are equal.
   bool IsDTypeAndShapeEqual(const ArgSpec& other) const {
     return dtype == other.dtype && shape == other.shape;
+  }
+
+  // Checks if the MLIR-level fields (`dtype`, `shape`, and `sharding`) of
+  // two `ArgSpec`s are equal, ignoring runtime-only metadata such as
+  // `host_transpose` and `placement`.
+  bool IsMlirSpecEqual(const ArgSpec& other) const {
+    return dtype == other.dtype && shape == other.shape &&
+           sharding == other.sharding;
   }
 
   std::string DebugString() const {
@@ -94,8 +106,14 @@ struct ArgSpec {
       }
     }
     absl::StrAppend(&shape_str, "}");
+    if (host_transpose.empty()) {
+      return absl::StrCat("dtype: ", dtype, ", shape: ", shape_str,
+                          ", sharding: ", sharding.ToString());
+    }
     return absl::StrCat("dtype: ", dtype, ", shape: ", shape_str,
-                        ", sharding: ", sharding.ToString());
+                        ", sharding: ", sharding.ToString(),
+                        ", host_transpose: {",
+                        absl::StrJoin(host_transpose, ", "), "}");
   }
 };
 

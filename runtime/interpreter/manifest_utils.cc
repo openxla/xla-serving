@@ -70,6 +70,9 @@ using type::Type;
 
 namespace {
 
+constexpr absl::string_view kOnlyStableHloFunctionSupported =
+    "Only StableHLO function is supported.";
+
 // Orbax model version metadata (internal representation).
 struct ModelVersionMetadata {
   std::string version;
@@ -284,6 +287,79 @@ absl::StatusOr<ModelVersionMetadata> ParseModelVersionFile(
                               .manifest_file_path = manifest_file_path};
 }
 
+absl::Status ValidateHostTransposePermutation(
+    absl::Span<const int64_t> permutation,
+    std::optional<size_t> expected_rank) {
+  if (permutation.empty()) {
+    return absl::OkStatus();
+  }
+  if (expected_rank.has_value() && permutation.size() != *expected_rank) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "host_transpose length (", permutation.size(),
+        ") does not match logical tensor rank (", *expected_rank, ")."));
+  }
+  const size_t rank = permutation.size();
+  std::vector<bool> seen_axes(rank, false);
+  for (int64_t axis : permutation) {
+    if (axis < 0 || static_cast<size_t>(axis) >= rank) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "host_transpose axis ", axis, " is out of range for rank ", rank,
+          " in [", absl::StrJoin(permutation, ", "), "]."));
+    }
+    if (seen_axes[axis]) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "host_transpose contains duplicate axis ", axis, " in [",
+          absl::StrJoin(permutation, ", "), "]."));
+    }
+    seen_axes[axis] = true;
+  }
+  return absl::OkStatus();
+}
+
+absl::Status RejectOutputHostTranspose(absl::Span<const ArgSpec> output_specs) {
+  for (const ArgSpec& spec : output_specs) {
+    if (!spec.host_transpose.empty()) {
+      return absl::InvalidArgumentError(
+          "host_transpose is not supported on output specs.");
+    }
+  }
+  return absl::OkStatus();
+}
+
+enum class SignatureKind {
+  kInput,
+  kOutput,
+};
+
+absl::StatusOr<std::vector<ArgSpec>> ResolveOptimizedSpec(
+    const xla_saved_model_type::Type* optimized_signature,
+    absl::Span<const ArgSpec> default_specs, SignatureKind signature_kind) {
+  if (optimized_signature == nullptr) {
+    return std::vector<ArgSpec>(default_specs.begin(), default_specs.end());
+  }
+  const absl::string_view kind_name =
+      signature_kind == SignatureKind::kOutput ? "output" : "input";
+  std::vector<xla_saved_model_type::LeafType> flatten_types;
+  TF_RETURN_IF_ERROR(FlattenType(*optimized_signature, flatten_types));
+  if (flatten_types.size() != default_specs.size()) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "optimized_", kind_name, "_signature leaf count (",
+        flatten_types.size(), ") does not match ", kind_name,
+        "_signature leaf count (", default_specs.size(), ")."));
+  }
+  TF_ASSIGN_OR_RETURN(std::vector<ArgSpec> optimized_specs,
+                      ConvertToArgSpecs(flatten_types));
+  if (signature_kind == SignatureKind::kOutput) {
+    TF_RETURN_IF_ERROR(RejectOutputHostTranspose(optimized_specs));
+  } else {
+    for (size_t i = 0; i < optimized_specs.size(); ++i) {
+      TF_RETURN_IF_ERROR(ValidateHostTransposePermutation(
+          optimized_specs[i].host_transpose, default_specs[i].shape.size()));
+    }
+  }
+  return optimized_specs;
+}
+
 }  // namespace
 
 absl::StatusOr<ArgSpec> ConvertToArgSpec(
@@ -306,6 +382,10 @@ absl::StatusOr<ArgSpec> ConvertToArgSpec(
       placement = Placement::kHost;
     }
   }
+  std::vector<int64_t> host_transpose(type.host_transpose().begin(),
+                                      type.host_transpose().end());
+  TF_RETURN_IF_ERROR(
+      ValidateHostTransposePermutation(host_transpose, std::nullopt));
   return ArgSpec{
       .dtype = std::move(dtype),
       .shape = std::move(shape),
@@ -313,6 +393,7 @@ absl::StatusOr<ArgSpec> ConvertToArgSpec(
       .sharding = std::move(hlo_sharding),
       .layout = std::move(layout),
       .placement = placement,
+      .host_transpose = std::move(host_transpose),
   };
 }
 
@@ -398,15 +479,51 @@ absl::StatusOr<std::vector<ArgSpec>> GetInputSpec(
     const xla_saved_model_manifest::Function& func) {
   std::vector<xla_saved_model_type::LeafType> flatten_types;
   TF_RETURN_IF_ERROR(FlattenType(func.signature().input(), flatten_types));
-  return ConvertToArgSpecs(flatten_types);
+  TF_ASSIGN_OR_RETURN(std::vector<ArgSpec> input_specs,
+                      ConvertToArgSpecs(flatten_types));
+  for (const ArgSpec& spec : input_specs) {
+    TF_RETURN_IF_ERROR(ValidateHostTransposePermutation(spec.host_transpose,
+                                                        spec.shape.size()));
+  }
+  return input_specs;
 }
 
 absl::StatusOr<std::vector<ArgSpec>> GetOutputSpec(
     const xla_saved_model_manifest::Function& func) {
   std::vector<xla_saved_model_type::LeafType> flatten_types;
   TF_RETURN_IF_ERROR(FlattenType(func.signature().output(), flatten_types));
+  TF_ASSIGN_OR_RETURN(std::vector<ArgSpec> output_specs,
+                      ConvertToArgSpecs(flatten_types));
+  TF_RETURN_IF_ERROR(RejectOutputHostTranspose(output_specs));
+  return output_specs;
+}
 
-  return ConvertToArgSpecs(flatten_types);
+absl::StatusOr<std::vector<ArgSpec>> GetOptimizedInputSpec(
+    const xla_saved_model_manifest::Function& function,
+    absl::Span<const ArgSpec> input_specs) {
+  if (!function.body().has_stable_hlo_body()) {
+    return absl::InvalidArgumentError(kOnlyStableHloFunctionSupported);
+  }
+  const xla_saved_model_manifest::StableHloFunctionBody& body =
+      function.body().stable_hlo_body();
+  return ResolveOptimizedSpec(
+      body.has_optimized_input_signature() ? &body.optimized_input_signature()
+                                           : nullptr,
+      input_specs, SignatureKind::kInput);
+}
+
+absl::StatusOr<std::vector<ArgSpec>> GetOptimizedOutputSpec(
+    const xla_saved_model_manifest::Function& function,
+    absl::Span<const ArgSpec> output_specs) {
+  if (!function.body().has_stable_hlo_body()) {
+    return absl::InvalidArgumentError(kOnlyStableHloFunctionSupported);
+  }
+  const xla_saved_model_manifest::StableHloFunctionBody& body =
+      function.body().stable_hlo_body();
+  return ResolveOptimizedSpec(
+      body.has_optimized_output_signature() ? &body.optimized_output_signature()
+                                            : nullptr,
+      output_specs, SignatureKind::kOutput);
 }
 
 absl::Status CheckMimeType(

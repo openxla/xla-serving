@@ -16,10 +16,11 @@
 
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 import dataclasses
+import inspect
 import io
 import pathlib
 import re
-from typing import Protocol, TypeGuard
+from typing import Any, Protocol, TypeGuard
 
 from absl import logging
 
@@ -189,6 +190,40 @@ class CompilerHook(Protocol):
     ...
 
 
+def _call_compiler_hook(
+    compiler_hook: CompilerHook,
+    mlir_module_serialized: bytes,
+    module_kept_var_idx: Sequence[int],
+    num_weights: int,
+    *,
+    optimized_at_export: bool,
+) -> Iterable[CompiledArtifact]:
+  """Invokes `compiler_hook`, passing `optimized_at_export` when supported."""
+  try:
+    params = inspect.signature(compiler_hook).parameters
+  except (TypeError, ValueError):
+    params = {}
+  hook_any: Any = compiler_hook
+  opt_param = params.get("optimized_at_export")
+  if opt_param is not None:
+    if opt_param.kind == inspect.Parameter.POSITIONAL_ONLY:
+      return hook_any(
+          mlir_module_serialized,
+          module_kept_var_idx,
+          num_weights,
+          optimized_at_export,
+      )
+    return hook_any(
+        mlir_module_serialized,
+        module_kept_var_idx,
+        num_weights,
+        optimized_at_export=optimized_at_export,
+    )
+  return compiler_hook(
+      mlir_module_serialized, module_kept_var_idx, num_weights
+  )
+
+
 def _build_function(
     fn: function.Function,
     target_dir: str,
@@ -284,8 +319,16 @@ def _build_function(
     if compiler_hook:
       num_weights = len(fn.data_names or [])
       safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
-      artifacts = compiler_hook(
-          fn.mlir_module_serialized, fn.module_kept_var_idx, num_weights
+      optimized_at_export = (
+          fn.optimized_input_signature is not None
+          or fn.optimized_output_signature is not None
+      )
+      artifacts = _call_compiler_hook(
+          compiler_hook,
+          fn.mlir_module_serialized,
+          fn.module_kept_var_idx,
+          num_weights,
+          optimized_at_export=optimized_at_export,
       )
       for artifact in artifacts:
         safe_label = re.sub(

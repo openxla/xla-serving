@@ -15,6 +15,7 @@
 #ifndef XLA_SERVING_RUNTIME_LOADED_STABLEHLO_H_
 #define XLA_SERVING_RUNTIME_LOADED_STABLEHLO_H_
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -61,6 +62,12 @@ class LoadedStableHlo {
     // of weights, since some weights may be unused and don't need to be passed
     // to the main function.
     int input_offset;
+    // Pre-optimization I/O specification for kept module inputs and outputs
+    // when TPU I/O shape optimizations were applied at export time.
+    std::optional<StableHloIOSpec> original_io_spec;
+    // Maps an argument index in `@main` to its host transpose permutation.
+    absl::flat_hash_map<int, std::vector<int64_t>> host_transpose_permutations;
+    bool optimized_at_export = false;
 
     // Creates a copy of the ModuleBundle.
     ModuleBundle Clone() {
@@ -68,6 +75,9 @@ class LoadedStableHlo {
           .module = module->clone(),
           .module_kept_var_indices = module_kept_var_indices,
           .input_offset = input_offset,
+          .original_io_spec = original_io_spec,
+          .host_transpose_permutations = host_transpose_permutations,
+          .optimized_at_export = optimized_at_export,
       };
     }
   };

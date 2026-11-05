@@ -19,6 +19,9 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/status/status_matchers.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "llvm/include/llvm/Support/Casting.h"  // from @llvm-project
 #include "mlir/include/mlir/Dialect/Func/IR/FuncOps.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/Block.h"  // from @llvm-project
@@ -36,7 +39,9 @@
 namespace xla_serving {
 namespace {
 
+using ::absl_testing::StatusIs;
 using ::testing::Eq;
+using ::testing::HasSubstr;
 
 TEST(StableHloStreamResultsBatchingTest, BasicPropagation) {
   const std::string mlir_src = R"mlir(
@@ -522,6 +527,53 @@ TEST(CreateRequestIdsBufferTest, Success) {
   for (int i = 0; i < batch_size; ++i) {
     EXPECT_THAT(data[i], Eq(request_id));
   }
+}
+
+constexpr absl::string_view kFlattenedR1StreamingMlir = R"mlir(
+  module {
+    func.func @main(%arg0: tensor<12xf32>) {
+      stablehlo.custom_call @xla_serving_stream(%arg0) {
+        mhlo.backend_config = {callback_id = 123 : i64, output_names = "out"}
+      } : (tensor<12xf32>) -> ()
+      return
+    }
+  }
+)mlir";
+
+TEST(StableHloStreamResultsBatchingTest,
+     PropagateStreamingStepIdUsesExplicitBatchSizeForFlattenedR1Input) {
+  xla_serving::StableHloLoader loader;
+  TF_ASSERT_OK_AND_ASSIGN(mlir::OwningOpRef<mlir::ModuleOp> module,
+                          loader.Load(kFlattenedR1StreamingMlir));
+  ASSERT_TRUE(module);
+
+  ASSERT_OK(PropagateStreamingStepId(*module, /*is_batched=*/true,
+                                     /*batch_size=*/3));
+
+  mlir::func::FuncOp main_func =
+      module->lookupSymbol<mlir::func::FuncOp>("main");
+  ASSERT_TRUE(main_func);
+  ASSERT_THAT(main_func.getNumArguments(), Eq(2));
+
+  auto step_id_type = llvm::dyn_cast<mlir::RankedTensorType>(
+      main_func.getArgument(1).getType());
+  ASSERT_TRUE(step_id_type);
+  EXPECT_THAT(step_id_type.getRank(), Eq(1));
+  EXPECT_THAT(step_id_type.getShape()[0], Eq(3));
+  EXPECT_TRUE(step_id_type.getElementType().isSignlessInteger(32));
+}
+
+TEST(StableHloStreamResultsBatchingTest,
+     PropagateStreamingStepIdReturnsErrorWhenExplicitBatchSizeIsNonPositive) {
+  xla_serving::StableHloLoader loader;
+  TF_ASSERT_OK_AND_ASSIGN(mlir::OwningOpRef<mlir::ModuleOp> module,
+                          loader.Load(kFlattenedR1StreamingMlir));
+  ASSERT_TRUE(module);
+
+  EXPECT_THAT(PropagateStreamingStepId(*module, /*is_batched=*/true,
+                                       /*batch_size=*/0),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Streaming batch_size must be positive")));
 }
 
 }  // namespace

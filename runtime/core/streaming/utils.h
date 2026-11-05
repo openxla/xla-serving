@@ -15,8 +15,13 @@
 #ifndef XLA_SERVING_RUNTIME_CORE_STREAMING_UTILS_H_
 #define XLA_SERVING_RUNTIME_CORE_STREAMING_UTILS_H_
 
+#include <cstdint>
+#include <optional>
+
+#include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 
@@ -30,8 +35,12 @@ inline constexpr absl::string_view kStreamedResultBatchedStepIdName =
 // `xla_serving_stream` custom calls.
 // Returns an error if the propagation fails.
 // This function assumes that the shape refinements have already been performed.
-absl::Status PropagateStreamingStepId(mlir::ModuleOp module,
-                                      bool is_batched = false);
+// When `is_batched` is true and `batch_size` is provided, uses `*batch_size`
+// directly instead of inferring the batch dimension from `@main`'s arguments
+// (which may already be R1-flattened at export time).
+absl::Status PropagateStreamingStepId(
+    mlir::ModuleOp module, bool is_batched = false,
+    std::optional<int64_t> batch_size = std::nullopt);
 
 // Creates a HostBuffer containing request_ids for streaming.
 absl::StatusOr<xla_serving::HostBuffer> CreateRequestIdsBuffer(int64_t batch_size,

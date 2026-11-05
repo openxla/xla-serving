@@ -600,13 +600,14 @@ absl::StatusOr<FlatSignature> LoadPipelineOutputSignature(
   return GetOutputFlatSignature(pipeline.signature().output());
 }
 
-absl::StatusOr<std::variant<std::string, absl::string_view>>
-GetStableHloMlirString(
+using MlirModuleStorage = std::variant<std::string, absl::string_view>;
+
+absl::StatusOr<MlirModuleStorage> GetStableHloMlirString(
     absl::string_view model_path,
     const xla_saved_model_manifest::StableHloFunctionBody& stable_hlo_body) {
   switch (stable_hlo_body.stable_hlo().data_case()) {
     case xla_saved_model_manifest::UnstructuredData::kInlinedBytes:
-      return std::variant<std::string, absl::string_view>(
+      return MlirModuleStorage(
           absl::string_view(stable_hlo_body.stable_hlo().inlined_bytes()));
     case xla_saved_model_manifest::UnstructuredData::kFileSystemLocation: {
       // The file system location should contain a relative path with respect to
@@ -622,8 +623,7 @@ GetStableHloMlirString(
                    << status;
         return status;
       }
-      return std::variant<std::string, absl::string_view>(
-          std::move(mlir_module_string));
+      return MlirModuleStorage(std::move(mlir_module_string));
     }
     default:
       return absl::InvalidArgumentError(
@@ -641,33 +641,56 @@ absl::StatusOr<std::unique_ptr<StableHlo>> BuildStableHloFromFunctions(
   std::vector<StableHlo::Spec> stablehlo_specs;
   stablehlo_specs.reserve(stable_hlo_funcs.size());
   for (const auto& func : stable_hlo_funcs) {
-    TF_ASSIGN_OR_RETURN(std::vector<ArgSpec> input_specs, GetInputSpec(*func));
-    TF_ASSIGN_OR_RETURN(std::vector<ArgSpec> output_specs,
+    TF_ASSIGN_OR_RETURN(std::vector<ArgSpec> original_input_specs,
+                        GetInputSpec(*func));
+    TF_ASSIGN_OR_RETURN(std::vector<ArgSpec> original_output_specs,
                         GetOutputSpec(*func));
+    TF_ASSIGN_OR_RETURN(std::vector<ArgSpec> optimized_input_specs,
+                        GetOptimizedInputSpec(*func, original_input_specs));
+    TF_ASSIGN_OR_RETURN(std::vector<ArgSpec> optimized_output_specs,
+                        GetOptimizedOutputSpec(*func, original_output_specs));
+    const xla_saved_model_manifest::StableHloFunctionBody& stable_hlo_body =
+        func->body().stable_hlo_body();
     TF_RETURN_IF_ERROR(CheckMimeAndDataType(
-        func->body().stable_hlo_body().stable_hlo(), {kStableHloMimeType},
+        stable_hlo_body.stable_hlo(), {kStableHloMimeType},
         {xla_saved_model_manifest::UnstructuredData::kInlinedBytes,
          xla_saved_model_manifest::UnstructuredData::kFileSystemLocation},
         "StableHlo MLIR module"));
-    std::variant<std::string, absl::string_view> mlir_module;
-    TF_ASSIGN_OR_RETURN(
-        mlir_module,
-        GetStableHloMlirString(model_path, func->body().stable_hlo_body()));
+    TF_ASSIGN_OR_RETURN(MlirModuleStorage mlir_blob,
+                        GetStableHloMlirString(model_path, stable_hlo_body));
+    if (stable_hlo_body.num_input_aliased_output() < 0) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("num_input_aliased_output must be non-negative: ",
+                       stable_hlo_body.num_input_aliased_output()));
+    }
+    constexpr uint32_t kMaxInt =
+        static_cast<uint32_t>(std::numeric_limits<int>::max());
+    std::vector<int> kept_var_indices;
+    kept_var_indices.reserve(stable_hlo_body.module_kept_var_idx().size());
+    for (uint32_t kept_index : stable_hlo_body.module_kept_var_idx()) {
+      if (kept_index > kMaxInt) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("module_kept_var_idx exceeds INT_MAX: ", kept_index));
+      }
+      kept_var_indices.push_back(static_cast<int>(kept_index));
+    }
     stablehlo_specs.push_back(StableHlo::Spec{
-        .inputs = std::move(input_specs),
-        .outputs = std::move(output_specs),
-        .mlir_module = std::move(mlir_module),
-        .mlir_module_kept_var_idx =
-            {func->body().stable_hlo_body().module_kept_var_idx().begin(),
-             func->body().stable_hlo_body().module_kept_var_idx().end()},
-        .target_platforms =
-            {func->body().stable_hlo_body().lowering_platforms().begin(),
-             func->body().stable_hlo_body().lowering_platforms().end()},
-        .num_input_aliased_output = static_cast<int>(
-            func->body().stable_hlo_body().num_input_aliased_output()),
+        .inputs = std::move(optimized_input_specs),
+        .outputs = std::move(optimized_output_specs),
+        .original_inputs = std::move(original_input_specs),
+        .original_outputs = std::move(original_output_specs),
+        .optimized_at_export =
+            stable_hlo_body.has_optimized_input_signature() ||
+            stable_hlo_body.has_optimized_output_signature(),
+        .mlir_module = std::move(mlir_blob),
+        .mlir_module_kept_var_idx = std::move(kept_var_indices),
+        .target_platforms = {stable_hlo_body.lowering_platforms().begin(),
+                             stable_hlo_body.lowering_platforms().end()},
+        .num_input_aliased_output =
+            static_cast<int>(stable_hlo_body.num_input_aliased_output()),
     });
   }
-  return StableHlo::Create(stablehlo_specs);
+  return StableHlo::Create(std::move(stablehlo_specs));
 }
 
 // Loads the signature from the given pipeline.
@@ -826,25 +849,45 @@ absl::StatusOr<BucketAotData> LoadAotExecutableForBucket(
       static_cast<const char*>(memory_region->data()), memory_region->length());
   memory_regions.push_back(memory_region);
 
-  std::vector<int> aot_kept_var_idx(compiled_exec->aot_kept_var_idx().begin(),
-                                    compiled_exec->aot_kept_var_idx().end());
-
-  TF_ASSIGN_OR_RETURN(auto input_specs, GetInputSpec(func));
-  TF_ASSIGN_OR_RETURN(auto output_specs, GetOutputSpec(func));
+  TF_ASSIGN_OR_RETURN(std::vector<ArgSpec> original_input_specs,
+                      GetInputSpec(func));
+  TF_ASSIGN_OR_RETURN(std::vector<ArgSpec> original_output_specs,
+                      GetOutputSpec(func));
+  TF_ASSIGN_OR_RETURN(std::vector<ArgSpec> optimized_input_specs,
+                      GetOptimizedInputSpec(func, original_input_specs));
+  TF_ASSIGN_OR_RETURN(std::vector<ArgSpec> optimized_output_specs,
+                      GetOptimizedOutputSpec(func, original_output_specs));
 
   TF_RETURN_IF_ERROR(
-      ValidateCompiledExecutable(*compiled_exec, input_specs.size()));
+      ValidateCompiledExecutable(*compiled_exec, optimized_input_specs.size()));
 
+  const xla_saved_model_manifest::StableHloFunctionBody& stable_hlo_body =
+      func.body().stable_hlo_body();
+  if (stable_hlo_body.num_input_aliased_output() < 0) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("num_input_aliased_output must be non-negative: ",
+                     stable_hlo_body.num_input_aliased_output()));
+  }
   StableHlo::Spec spec;
-  spec.inputs = std::move(input_specs);
-  spec.outputs = std::move(output_specs);
-  spec.mlir_module_kept_var_idx = std::move(aot_kept_var_idx);
-  spec.num_input_aliased_output = static_cast<int>(
-      func.body().stable_hlo_body().num_input_aliased_output());
-  spec.target_platforms.reserve(
-      func.body().stable_hlo_body().lowering_platforms().size());
-  for (const auto& platform :
-       func.body().stable_hlo_body().lowering_platforms()) {
+  spec.inputs = std::move(optimized_input_specs);
+  spec.outputs = std::move(optimized_output_specs);
+  spec.original_inputs = std::move(original_input_specs);
+  spec.original_outputs = std::move(original_output_specs);
+  spec.optimized_at_export = stable_hlo_body.has_optimized_input_signature() ||
+                             stable_hlo_body.has_optimized_output_signature();
+  spec.mlir_module_kept_var_idx.reserve(
+      compiled_exec->aot_kept_var_idx().size());
+  for (int32_t kept_index : compiled_exec->aot_kept_var_idx()) {
+    if (kept_index < 0) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("aot_kept_var_idx must be non-negative: ", kept_index));
+    }
+    spec.mlir_module_kept_var_idx.push_back(static_cast<int>(kept_index));
+  }
+  spec.num_input_aliased_output =
+      static_cast<int>(stable_hlo_body.num_input_aliased_output());
+  spec.target_platforms.reserve(stable_hlo_body.lowering_platforms().size());
+  for (const auto& platform : stable_hlo_body.lowering_platforms()) {
     spec.target_platforms.push_back(platform);
   }
 
