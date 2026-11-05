@@ -17,7 +17,9 @@
 // This file is responsible for setting up the server, loading models, and
 // handling requests.
 #include <cstddef>
+#if ENABLE_TF == 1
 #include <cstdint>
+#endif
 #include <memory>
 #include <string>
 
@@ -61,6 +63,7 @@ ABSL_FLAG(bool, use_insecure_grpc_credentials, false,
           "Whether to use insecure credentials for the server. WARNING: THIS "
           "SHOULD NOT BE USED IN PRODUCTION.");
 
+#if ENABLE_TF == 1
 ABSL_FLAG(bool, enable_lazy_loading, true, "Enable lazy loading");
 ABSL_FLAG(bool, lazy_loading_use_graph_executor, true,
           "Lazy loading use graph executor");
@@ -69,6 +72,7 @@ ABSL_FLAG(bool, allow_xla_cpu, true, "Allow XLA CPU");
 ABSL_FLAG(bool, hoist_invariant_ops, true, "Hoist invariant ops");
 ABSL_FLAG(bool, sink_in_invariant_ops, true, "Sink in invariant ops");
 ABSL_FLAG(int64_t, cost_threshold, 10000, "Cost threshold");
+#endif
 ABSL_FLAG(int, xprof_port, 8888, "Port for the XProf server to listen on.");
 ABSL_FLAG(bool, warmup_server, false,
           "Warmup server on startup. This requires the warmup requests file "
@@ -127,6 +131,7 @@ void RunServer() {
   }
 
   xla_serving::serving::OrbaxCallbackGrpcServerOptions options;
+#if ENABLE_TF == 1
   options.enable_lazy_loading = absl::GetFlag(FLAGS_enable_lazy_loading);
   options.lazy_loading_use_graph_executor =
       absl::GetFlag(FLAGS_lazy_loading_use_graph_executor);
@@ -135,6 +140,7 @@ void RunServer() {
   options.hoist_invariant_ops = absl::GetFlag(FLAGS_hoist_invariant_ops);
   options.sink_in_invariant_ops = absl::GetFlag(FLAGS_sink_in_invariant_ops);
   options.cost_threshold = absl::GetFlag(FLAGS_cost_threshold);
+#endif
   options.warmup_server = absl::GetFlag(FLAGS_warmup_server);
   options.warmup_all_batch_sizes = absl::GetFlag(FLAGS_warmup_all_batch_sizes);
   options.thread_pool_num_threads =

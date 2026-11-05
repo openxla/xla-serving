@@ -15,6 +15,7 @@
 #include "runtime/serving/gcp/server/orbax_callback_grpc_server.h"  // from @xla_serving
 
 #include <cstdint>
+#include <initializer_list>
 #include <memory>
 #include <string>
 #include <utility>
@@ -51,6 +52,12 @@
 #include "tsl/platform/cpu_info.h"  // from @tsl
 #if ENABLE_TF == 1
 #include "runtime/tensorflow/tf_compatible_interpreter_create_options.h"  // from @xla_serving
+#include "runtime/tensorflow/utils/tf_to_host_buffer.h"  // from @xla_serving
+#include "tensorflow/core/framework/tensor.h"  // from @org_tensorflow
+#include "tensorflow/core/tfrt/runtime/runtime.h"  // from @org_tensorflow
+#include "tensorflow/core/tfrt/runtime/work_queue_interface.h"  // from @org_tensorflow
+#include "tensorflow/core/tfrt/saved_model/saved_model.h"  // from @org_tensorflow
+#include "include/tfrt/host_context/concurrent_work_queue.h"  // from @tf_runtime
 #else
 #include "runtime/interpreter/interpreter_create_options.h"  // from @xla_serving
 #endif
@@ -58,16 +65,13 @@
 #include "runtime/serving/gcp/server/flags.h"  // from @xla_serving
 #include "runtime/serving/gcp/server/grpc_status_utils.h"  // from @xla_serving
 #include "runtime/serving/gcp/server/ifrt_client_creator.h"  // from @xla_serving
-#include "runtime/tensorflow/utils/tf_to_host_buffer.h"  // from @xla_serving
 #include "xla/pjrt/pjrt_api.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
-#include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
-#include "tensorflow/core/framework/tensor.h"  // from @org_tensorflow
 #include "tsl/profiler/lib/traceme.h"  // from @tsl
 
 namespace xla_serving {
@@ -143,16 +147,28 @@ absl::StatusOr<absl::flat_hash_map<std::string, xla_serving::Value>> PrepareInpu
       (input_data_type == xla_serving::KernelIODataType::kTensor);
 
   absl::flat_hash_map<std::string, xla_serving::Value> input_with_names;
+  if (input_expects_tensor) {
+#if ENABLE_TF == 1
+    input_with_names.reserve(request.inputs().size());
+    for (const auto& [name, host_buffer_proto] : request.inputs()) {
+      TF_ASSIGN_OR_RETURN(xla_serving::HostBuffer host_buffer,
+                          xla_serving::HostBuffer::FromProto(host_buffer_proto));
+      TF_ASSIGN_OR_RETURN(tensorflow::Tensor tensor, ToTFTensor(host_buffer));
+      input_with_names[name] = xla_serving::Value(std::move(tensor));
+    }
+    return input_with_names;
+#else
+    return absl::UnimplementedError(
+        "TensorFlow tensor inputs require building the server with "
+        "--define=ENABLE_TF=1.");
+#endif
+  }
+
   input_with_names.reserve(request.inputs().size());
   for (const auto& [name, host_buffer_proto] : request.inputs()) {
     TF_ASSIGN_OR_RETURN(xla_serving::HostBuffer host_buffer,
                         xla_serving::HostBuffer::FromProto(host_buffer_proto));
-    if (input_expects_tensor) {
-      TF_ASSIGN_OR_RETURN(tensorflow::Tensor tensor, ToTFTensor(host_buffer));
-      input_with_names[name] = xla_serving::Value(std::move(tensor));
-    } else {
-      input_with_names[name] = xla_serving::Value(std::move(host_buffer));
-    }
+    input_with_names[name] = xla_serving::Value(std::move(host_buffer));
   }
   return input_with_names;
 }
@@ -162,19 +178,24 @@ absl::Status ConvertOutputsToResponse(
     bool output_is_tensor, absl::string_view pipeline_name,
     absl::string_view model_name, xla_serving::serving::PredictResponse* response) {
   tsl::profiler::TraceMe traceme_serialization("ConvertOutputs");
-  for (auto& [name, value] : output_with_names) {
-    absl::StatusOr<xla_serving::HostBuffer> host_buffer;
-    if (output_is_tensor) {
-      host_buffer = ToHostBuffer(value.Get<tensorflow::Tensor>());
-    } else {
-      host_buffer = value.Get<xla_serving::HostBuffer>();
+  if (output_is_tensor) {
+#if ENABLE_TF == 1
+    for (auto& [name, value] : output_with_names) {
+      TF_ASSIGN_OR_RETURN(xla_serving::HostBuffer host_buffer,
+                          ToHostBuffer(value.Get<tensorflow::Tensor>()));
+      (*response->mutable_outputs())[name] =
+          HostBuffer::ToHostBufferProto(host_buffer);
     }
-    if (!host_buffer.ok()) {
-      return host_buffer.status();
+#else
+    return absl::UnimplementedError(
+        "TensorFlow tensor outputs require building the server with "
+        "--define=ENABLE_TF=1.");
+#endif
+  } else {
+    for (const auto& [name, value] : output_with_names) {
+      (*response->mutable_outputs())[name] =
+          HostBuffer::ToHostBufferProto(value.Get<xla_serving::HostBuffer>());
     }
-    HostBufferProto host_buffer_proto =
-        HostBuffer::ToHostBufferProto(std::move(*host_buffer));
-    (*response->mutable_outputs())[name] = std::move(host_buffer_proto);
   }
 
   response->mutable_model_spec()->set_name(std::string(model_name));
@@ -438,6 +459,18 @@ grpc::ServerUnaryReactor* OrbaxCallbackGrpcServer::Predict(
     return reactor;
   }
   bool output_is_tensor = (*output_data_type == xla_serving::KernelIODataType::kTensor);
+#if ENABLE_TF == 1
+  // Tensor outputs are converted via ToHostBuffer after execution.
+#else
+  if (output_is_tensor) {
+    absl::Status status = absl::UnimplementedError(
+        "TensorFlow tensor outputs require building the server with "
+        "--define=ENABLE_TF=1.");
+    record_metrics(status);
+    reactor->Finish(ToGrpcStatus(status));
+    return reactor;
+  }
+#endif
 
   xla_serving::RunOptions run_options;
   run_options.deadline = absl::FromChrono(context->deadline());
