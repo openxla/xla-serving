@@ -30,8 +30,11 @@ from xla_saved_model._src.core import (
     constants as core_constants,
 )
 from xla_saved_model._src.core import metadata
+from xla_saved_model._src.core import persistence_lib
+from xla_saved_model._src.core import test_utils
 from xla_saved_model.cli import constants
 from xla_saved_model.cli import update
+from xla_saved_model.cli import xsm_cli
 
 
 class UpdateTest(absltest.TestCase):
@@ -972,7 +975,9 @@ class UpdateTest(absltest.TestCase):
       restored_pipelines.ParseFromString(f.read())
     self.assertEqual(self._get_batch_size(restored_pipelines), 16)
     self.assertEmpty(
-        self._load_compile_options_map(model_dir).map['cpu'].env_option_overrides
+        self._load_compile_options_map(model_dir)
+        .map['cpu']
+        .env_option_overrides
     )
 
   def test_update_xla_flags_polymorphic_function(self):
@@ -1094,6 +1099,248 @@ class UpdateTest(absltest.TestCase):
             platform='gpu',
             xla_flags='--xla_gpu_unsupported_flag=true',
         )
+
+  def test_update_dry_run_in_place(self):
+    model_dir = self._create_test_model(
+        initial_batch_size=16,
+        with_xla_compile_options=True,
+        inlined_xla_compile_options=False,
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        xsm_cli.cli,
+        [
+            'update',
+            model_dir,
+            '--max_batch_size',
+            '64',
+            '--platform',
+            'cpu',
+            '--xla_flags',
+            '--xla_cpu_enable_fast_math=true',
+            '--dry_run',
+            '--verbose',
+        ],
+    )
+    self.assertEqual(result.exit_code, 0, msg=result.output)
+    self.assertIn('Model Update Preview (Dry Run)', result.output)
+    self.assertIn('Target files (dry run):', result.output)
+    self.assertIn('History record preview:', result.output)
+    self.assertIn('[DRY RUN] No files were modified', result.output)
+
+    # Verify no files on disk were modified or backed up
+    pipelines_path = os.path.join(model_dir, 'orchestration.pb')
+    pipelines = orchestration_pb2.Pipelines()
+    with open(pipelines_path, 'rb') as f:
+      pipelines.ParseFromString(f.read())
+    self.assertEqual(self._get_batch_size(pipelines), 16)
+    self.assertFalse(os.path.exists(f'{pipelines_path}.orig'))
+    self.assertFalse(os.path.exists(f'{pipelines_path}.bak'))
+
+    opts_path = os.path.join(model_dir, 'compile_options.pb')
+    self.assertEmpty(
+        self._load_compile_options_map(model_dir)
+        .map['cpu']
+        .env_option_overrides
+    )
+    self.assertFalse(os.path.exists(f'{opts_path}.orig'))
+    self.assertFalse(os.path.exists(f'{opts_path}.bak'))
+
+    history_path = os.path.join(model_dir, constants.HISTORY_FILENAME)
+    history_proto = history_pb2.ModelHistory()
+    with open(history_path, 'r') as f:
+      text_format.Parse(f.read(), history_proto)
+    self.assertLen(history_proto.records, 1)
+    self.assertEqual(history_proto.records[0].action, 'EXPORT')
+
+  def test_update_dry_run_output_dir(self):
+    model_dir = self._create_test_model(initial_batch_size=16)
+    runner = CliRunner()
+
+    out_dir = os.path.join(self.create_tempdir().full_path, 'dry_run_clone')
+    update.update(
+        model_base_dir=model_dir,
+        max_batch_size=64,
+        output_dir=out_dir,
+        dry_run=True,
+    )
+    self.assertFalse(os.path.exists(out_dir))
+
+    same_dir_res = runner.invoke(
+        xsm_cli.cli,
+        [
+            'update',
+            model_dir,
+            '--max_batch_size',
+            '64',
+            '--output_dir',
+            model_dir,
+            '--dry_run',
+        ],
+    )
+    self.assertNotEqual(same_dir_res.exit_code, 0)
+    self.assertIn(
+        '--output_dir cannot be the same as model_base_dir',
+        same_dir_res.output,
+    )
+
+  def test_update_verbose_and_quiet_mutually_exclusive(self):
+    model_dir = self._create_test_model(initial_batch_size=16)
+    runner = CliRunner()
+
+    conflict_res = runner.invoke(
+        xsm_cli.cli,
+        [
+            'update',
+            model_dir,
+            '--max_batch_size',
+            '32',
+            '--verbose',
+            '--quiet',
+        ],
+    )
+    self.assertNotEqual(conflict_res.exit_code, 0)
+    self.assertIn(
+        'Cannot specify both --verbose and --quiet', conflict_res.output
+    )
+
+  def test_update_quiet_suppresses_output(self):
+    model_dir = self._create_test_model(initial_batch_size=16)
+    runner = CliRunner()
+
+    quiet_res = runner.invoke(
+        xsm_cli.cli,
+        ['update', model_dir, '--max_batch_size', '32', '--quiet'],
+    )
+    self.assertEqual(quiet_res.exit_code, 0, msg=quiet_res.output)
+    self.assertEqual(quiet_res.output, '')
+
+    pipelines_path = os.path.join(model_dir, 'orchestration.pb')
+    pipelines = orchestration_pb2.Pipelines()
+    with open(pipelines_path, 'rb') as f:
+      pipelines.ParseFromString(f.read())
+    self.assertEqual(self._get_batch_size(pipelines), 32)
+
+  def test_update_verbose_prints_files_and_history(self):
+    model_dir = self._create_test_model(initial_batch_size=16)
+    runner = CliRunner()
+
+    verbose_res = runner.invoke(
+        xsm_cli.cli,
+        ['update', model_dir, '--max_batch_size', '64', '--verbose'],
+    )
+    self.assertEqual(verbose_res.exit_code, 0, msg=verbose_res.output)
+    self.assertIn('Modified target files:', verbose_res.output)
+    self.assertIn('orchestration.pb', verbose_res.output)
+    self.assertIn(constants.HISTORY_FILENAME, verbose_res.output)
+    self.assertIn('Recorded history entry:', verbose_res.output)
+    self.assertIn('action: "UPDATE"', verbose_res.output)
+
+  def test_end_to_end_exported_jax_model_lifecycle(self):
+    export_dir = os.path.join(self.create_tempdir().full_path, 'exported_model')
+    test_utils.create_test_xla_saved_model(export_dir)
+    manifest = persistence_lib.load(export_dir)
+    pipelines_path = os.path.join(
+        export_dir,
+        manifest.supplemental_info[
+            'orchestration'
+        ].file_system_location.string_path,
+    )
+    pipelines = orchestration_pb2.Pipelines()
+    with open(pipelines_path, 'rb') as f:
+      pipelines.ParseFromString(f.read())
+    bo = pipelines.name_to_pipeline['serving_default'].batch_options
+    bo.batch_component = orchestration_pb2.BatchOptions.MODEL_FUNCTION
+    bo.max_batch_size = 16
+    with open(pipelines_path, 'wb') as f:
+      f.write(pipelines.SerializeToString())
+
+    runner = CliRunner()
+
+    # 1. Update batching and CPU XLA compilation flags via CLI
+    update_res = runner.invoke(
+        xsm_cli.cli,
+        [
+            'update',
+            export_dir,
+            '--max_batch_size',
+            '32',
+            '--batch_timeout_micros',
+            '2000',
+            '--allowed_batch_sizes',
+            '8,16,32',
+            '--platform',
+            'cpu',
+            '--xla_flags',
+            '--xla_cpu_enable_fast_math=true',
+        ],
+    )
+    self.assertEqual(update_res.exit_code, 0, msg=update_res.output)
+
+    # 2. Verify `show` displays updated batching and XLA compile options
+    show_orch_res = runner.invoke(
+        xsm_cli.cli,
+        ['show', export_dir, '--details', 'orchestration'],
+    )
+    self.assertEqual(show_orch_res.exit_code, 0, msg=show_orch_res.output)
+    self.assertIn('32', show_orch_res.output)
+    self.assertIn('2000', show_orch_res.output)
+
+    show_xla_res = runner.invoke(
+        xsm_cli.cli,
+        [
+            'show',
+            export_dir,
+            '--details',
+            'serving_default',
+            '--xla_compile_options',
+        ],
+    )
+    self.assertEqual(show_xla_res.exit_code, 0, msg=show_xla_res.output)
+    self.assertIn('xla_cpu_enable_fast_math', show_xla_res.output)
+
+    # 3. Verify updated model compiles cleanly via `recompile` on CPU runtime
+    recompiled_dir = os.path.join(
+        self.create_tempdir().full_path, 'recompiled_cpu'
+    )
+    recompile_res = runner.invoke(
+        xsm_cli.cli,
+        [
+            'recompile',
+            '-i',
+            export_dir,
+            '-o',
+            recompiled_dir,
+            '-p',
+            'cpu',
+            '-l',
+            'cpu_target',
+            '--no-auto-timestamp',
+        ],
+    )
+    self.assertEqual(recompile_res.exit_code, 0, msg=recompile_res.output)
+    recompiled_manifest = persistence_lib.load(recompiled_dir)
+    recompiled_fn = recompiled_manifest.objects['serving_default'].function
+    self.assertLen(recompiled_fn.body.stable_hlo_body.compiled_executables, 1)
+
+    # 4. Rollback to original exported state and verify via `history`
+    rollback_res = runner.invoke(
+        xsm_cli.cli,
+        ['rollback', export_dir, '--to', 'orig'],
+    )
+    self.assertEqual(rollback_res.exit_code, 0, msg=rollback_res.output)
+    self.assertEmpty(
+        self._load_compile_options_map(export_dir)
+        .map['cpu']
+        .env_option_overrides
+    )
+
+    history_res = runner.invoke(xsm_cli.cli, ['history', export_dir])
+    self.assertEqual(history_res.exit_code, 0, msg=history_res.output)
+    self.assertIn('EXPORT', history_res.output)
+    self.assertIn('UPDATE', history_res.output)
+    self.assertIn('ROLLBACK', history_res.output)
 
 
 if __name__ == '__main__':

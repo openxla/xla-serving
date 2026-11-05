@@ -17,6 +17,7 @@
 from collections.abc import MutableSequence
 
 from google.protobuf import descriptor
+from google.protobuf import descriptor_pool
 from google.protobuf import message
 from google.protobuf import text_format
 
@@ -202,7 +203,9 @@ def xla_compile_options(
   opts_copy = compile_options_pb2.CompileOptionsProto()
   opts_copy.CopyFrom(options)
   redact_byte_fields(opts_copy)
-  return text_format.MessageToString(opts_copy)
+  return text_format.MessageToString(
+      opts_copy, descriptor_pool=descriptor_pool.DescriptorPool()
+  )
 
 
 def collapse(

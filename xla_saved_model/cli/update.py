@@ -131,14 +131,12 @@ def ensure_history(model_base_dir: str) -> history_pb2.ModelHistory:
   )
 
 
-def record_history_entry(
-    model_base_dir: str,
+def _build_history_record(
     action: str,
     description: str,
     changes: Mapping[str, Any],
-) -> None:
-  """Appends an entry to history.txtpb and writes it atomically."""
-  history_proto = ensure_history(model_base_dir)
+) -> history_pb2.HistoryRecord:
+  """Constructs a HistoryRecord proto for the given modification."""
   now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
   user = _get_current_user()
 
@@ -150,15 +148,29 @@ def record_history_entry(
       for k, v in changes.items()
   }
 
-  history_proto.records.append(
-      history_pb2.HistoryRecord(
-          timestamp=now_iso,
-          action=action,
-          user=user,
-          description=description,
-          changes=change_protos,
-      )
+  return history_pb2.HistoryRecord(
+      timestamp=now_iso,
+      action=action,
+      user=user,
+      description=description,
+      changes=change_protos,
   )
+
+
+def record_history_entry(
+    model_base_dir: str,
+    action: str,
+    description: str,
+    changes: Mapping[str, Any],
+) -> history_pb2.HistoryRecord:
+  """Appends an entry to history.txtpb and writes it atomically."""
+  history_proto = ensure_history(model_base_dir)
+  record = _build_history_record(
+      action=action,
+      description=description,
+      changes=changes,
+  )
+  history_proto.records.append(record)
 
   history_path = os.path.join(model_base_dir, constants.HISTORY_FILENAME)
   tmp_path = f'{history_path}.tmp'
@@ -169,6 +181,7 @@ def record_history_entry(
   finally:
     if file_utils.exists(tmp_path):
       file_utils.remove(tmp_path)
+  return record
 
 
 def _find_pipelines_data(
@@ -672,8 +685,40 @@ def update(
             ),
         ),
     ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            '--dry_run',
+            help=(
+                'Validate options and preview planned changes without'
+                ' modifying any files on disk.'
+            ),
+        ),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            '--verbose',
+            '-v',
+            help=(
+                'Print detailed output, including target file paths and'
+                ' history record entry.'
+            ),
+        ),
+    ] = False,
+    quiet: Annotated[
+        bool,
+        typer.Option(
+            '--quiet',
+            '-q',
+            help='Suppress non-error console output.',
+        ),
+    ] = False,
 ) -> None:
   """Updates batching configs and XLA compilation flags in an exported model."""
+  if verbose and quiet:
+    _bail('Cannot specify both --verbose and --quiet.')
+
   if max_batch_size is not None and max_batch_size <= 0:
     _bail(f'max_batch_size must be positive, got {max_batch_size}')
 
@@ -886,30 +931,48 @@ def update(
       _bail('--output_dir cannot be the same as model_base_dir.')
     if file_utils.exists(output_dir):
       _bail(f'Output directory "{output_dir}" already exists.')
-    file_utils.copytree(model_base_dir, output_dir)
     target_dir = output_dir
 
-  for rel_path, proto_msg in sorted(external_writes.items()):
-    abs_path = os.path.join(target_dir, rel_path)
-    _atomic_write_proto(abs_path, proto_msg, backup=(not output_dir))
-
-  if manifest_dirty:
-    manifest_file_path = os.path.join(
-        target_dir, core_constants.MANIFEST_FILE_PATH
-    )
-    _atomic_write_proto(manifest_file_path, manifest, backup=(not output_dir))
-
-  # Record change in history.txtpb
   fields_summary = ', '.join(updated_fields)
-  record_history_entry(
-      target_dir,
-      action='UPDATE',
-      description=f'Updated {fields_summary} via CLI.',
-      changes=changes,
-  )
+  description = f'Updated {fields_summary} via CLI.'
+
+  if dry_run:
+    ensure_history(model_base_dir)
+    history_record = _build_history_record(
+        action='UPDATE',
+        description=description,
+        changes=changes,
+    )
+  else:
+    if output_dir:
+      file_utils.copytree(model_base_dir, output_dir)
+
+    for rel_path, proto_msg in sorted(external_writes.items()):
+      abs_path = os.path.join(target_dir, rel_path)
+      _atomic_write_proto(abs_path, proto_msg, backup=(not output_dir))
+
+    if manifest_dirty:
+      manifest_file_path = os.path.join(
+          target_dir, core_constants.MANIFEST_FILE_PATH
+      )
+      _atomic_write_proto(manifest_file_path, manifest, backup=(not output_dir))
+
+    # Record change in history.txtpb
+    history_record = record_history_entry(
+        target_dir,
+        action='UPDATE',
+        description=description,
+        changes=changes,
+    )
+
+  if quiet:
+    return
 
   # Output confirmation table
-  table = rich.table.Table(title='Model Update Applied', padding=(0, 1))
+  table_title = (
+      'Model Update Preview (Dry Run)' if dry_run else 'Model Update Applied'
+  )
+  table = rich.table.Table(title=table_title, padding=(0, 1))
   table.add_column('Target / Parameter', style='cyan')
   table.add_column('Previous Value', style='red')
   table.add_column('Updated Value', style='green')
@@ -918,13 +981,37 @@ def update(
     table.add_row(key, str(change['previous']), str(change['new']))
 
   rich.print(table)
+
+  if verbose:
+    modified_rel_paths = sorted(external_writes.keys())
+    if manifest_dirty:
+      modified_rel_paths.append(core_constants.MANIFEST_FILE_PATH)
+    modified_rel_paths.append(constants.HISTORY_FILENAME)
+    files_header = (
+        'Target files (dry run):' if dry_run else 'Modified target files:'
+    )
+    rich.print(f'[bold cyan]{files_header}[/bold cyan]')
+    for rel_path in modified_rel_paths:
+      rich.print(f'  - {os.path.join(target_dir, rel_path)}')
+    record_header = (
+        'History record preview:' if dry_run else 'Recorded history entry:'
+    )
+    rich.print(f'[bold cyan]{record_header}[/bold cyan]')
+    rich.print(text_format.MessageToString(history_record).rstrip())
+
   if output_dir:
     mode_str = f'Cloned to `{target_dir}`'
   else:
     mode_str = f'In-place at `{target_dir}`'
-  rich.print(
-      f'[bold green]Successfully updated model ({mode_str})[/bold green]'
-  )
+  if dry_run:
+    rich.print(
+        f'[bold yellow][DRY RUN] No files were modified ({mode_str})[/bold'
+        ' yellow]'
+    )
+  else:
+    rich.print(
+        f'[bold green]Successfully updated model ({mode_str})[/bold green]'
+    )
 
 
 def _get_pipeline_batch_options(

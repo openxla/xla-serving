@@ -106,6 +106,17 @@ xsm-cli update /path/to/model \
   --max_batch_size 64 \
   --output_dir /path/to/updated_model
 
+# Preview planned changes and history entry without modifying any files on disk
+xsm-cli update /path/to/model \
+  --max_batch_size 64 \
+  --dry_run \
+  --verbose
+
+# Suppress non-error console output (e.g., in automated scripts)
+xsm-cli update /path/to/model \
+  --max_batch_size 64 \
+  --quiet
+
 # View the model's modification audit log (history.txtpb)
 xsm-cli history /path/to/model
 
