@@ -1,3 +1,10 @@
+<p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/_static/xse-logo-dark.png">
+    <img alt="XLA Serving Engine for OpenXLA" src="docs/_static/xse-logo.png" width="340">
+  </picture>
+</p>
+
 # XLA Serving Engine
 
 XLA Serving Engine (XSE) is a C++ inference runtime and model packaging toolkit for

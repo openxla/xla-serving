@@ -79,11 +79,17 @@ copybutton_prompt_is_regexp = True
 
 html_theme = "sphinx_book_theme"
 html_title = f"XLA Serving Engine {release}"
+html_favicon = "_static/favicon.png"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
 html_last_updated_fmt = ""
 
 html_theme_options = {
+    "logo": {
+        "image_light": "_static/xse-logo.png",
+        "image_dark": "_static/xse-logo-dark.png",
+        "alt_text": "XLA Serving Engine for OpenXLA",
+    },
     "repository_url": _GITHUB_URL,
     "repository_branch": "main",
     "path_to_docs": "docs",
