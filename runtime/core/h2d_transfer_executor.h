@@ -16,6 +16,7 @@
 #define XLA_SERVING_RUNTIME_CORE_H2D_TRANSFER_EXECUTOR_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
@@ -24,6 +25,7 @@
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
@@ -47,9 +49,22 @@ class H2DTransferExecutor {
   //
   // `inputs`: The user-provided HostBuffers to transfer.
   // `input_shardings`: The exact IFRT Shardings required for these arrays.
+  // `static_shapes`: Either empty, or one entry per input. A set entry
+  //   requests dynamic DMA for that input: the returned array must have the
+  //   static shape (that is what the executable was compiled for) while only
+  //   the `shape()` elements of the host buffer are transferred as a
+  //   dimension-0 prefix of the device buffer; the remaining device elements
+  //   are left uninitialized. The host buffer has the same rank as the static
+  //   shape, is no larger along dimension 0, and equal along every other
+  //   dimension. The runner only hands such inputs to an executor with
+  //   single-device shardings. Implementations that do not support dynamic
+  //   DMA must return an error for such inputs rather than transfer the buffer
+  //   with its actual shape.
   virtual absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ExecuteTransfer(
       absl::Span<const HostBuffer> inputs,
-      absl::Span<const xla::ifrt::ShardingRef> input_shardings) const = 0;
+      absl::Span<const xla::ifrt::ShardingRef> input_shardings,
+      absl::Span<const std::optional<xla::ifrt::Shape>> static_shapes)
+      const = 0;
 };
 
 // Factory interface for creating an `H2DTransferExecutor`.

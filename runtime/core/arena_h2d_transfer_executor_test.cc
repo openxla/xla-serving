@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "gmock/gmock.h"
@@ -173,8 +174,9 @@ TEST_F(ArenaH2DTransferExecutorTest, SizeMismatchReturnsInvalidArgument) {
       device_list_->devices()[0], xla::ifrt::MemoryKind());
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding};
 
-  EXPECT_THAT(executor->ExecuteTransfer(inputs, shardings),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}),
+      StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST_F(ArenaH2DTransferExecutorTest, EmptyInputsSucceeds) {
@@ -185,8 +187,9 @@ TEST_F(ArenaH2DTransferExecutorTest, EmptyInputsSucceeds) {
   std::vector<HostBuffer> inputs = {};
   std::vector<xla::ifrt::ShardingRef> shardings = {};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   EXPECT_TRUE(results.empty());
 }
 
@@ -207,8 +210,9 @@ TEST_F(ArenaH2DTransferExecutorTest, FallbackTransferSingleDevice) {
   std::vector<HostBuffer> inputs = {in0, in1};
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding, sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 2);
 
   for (int i = 0; i < 2; ++i) {
@@ -219,6 +223,29 @@ TEST_F(ArenaH2DTransferExecutorTest, FallbackTransferSingleDevice) {
             .Await());
     EXPECT_THAT(out, HostBufferEq(inputs[i]));
   }
+}
+
+TEST_F(ArenaH2DTransferExecutorTest, StaticShapeIsUnimplemented) {
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto executor,
+      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get()));
+
+  xla::ifrt::ShardingRef sharding = xla::ifrt::SingleDeviceSharding::Create(
+      device_list_->devices()[0], xla::ifrt::MemoryKind());
+  HostBuffer in =
+      AsHostBuffer<float>({1.0f, 2.0f, 3.0f}, xla::ifrt::Shape({1, 3}));
+
+  EXPECT_THAT(
+      executor->ExecuteTransfer({in}, {sharding}, {xla::ifrt::Shape({4, 3})}),
+      StatusIs(absl::StatusCode::kUnimplemented));
+  // Size mismatch between inputs and static shapes.
+  EXPECT_THAT(
+      executor->ExecuteTransfer({in}, {sharding}, {std::nullopt, std::nullopt}),
+      StatusIs(absl::StatusCode::kInvalidArgument));
+  // Unset entries leave the transfer unaffected.
+  TF_ASSERT_OK_AND_ASSIGN(auto results, executor->ExecuteTransfer(
+                                            {in}, {sharding}, {std::nullopt}));
+  ASSERT_EQ(results.size(), 1);
 }
 
 TEST_F(ArenaH2DTransferExecutorTest, FactoryCreate) {
@@ -233,8 +260,9 @@ TEST_F(ArenaH2DTransferExecutorTest, FactoryCreate) {
       device_list_->devices()[0], xla::ifrt::MemoryKind());
   HostBuffer in = AsHostBuffer<float>({42.0f}, xla::ifrt::Shape({1}));
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer({in}, {sharding}));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer({in}, {sharding}, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
 
   TF_ASSERT_OK_AND_ASSIGN(

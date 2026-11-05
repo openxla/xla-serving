@@ -15,6 +15,7 @@
 """Common utils shared between jax_to_polymorphic_function.py and main_lib.py."""
 
 from collections.abc import Iterable, Mapping, Sequence
+import dataclasses
 import itertools
 from typing import Any, TypeVar
 
@@ -376,6 +377,91 @@ def to_jax_spec(tree: jaxtyping.PyTree) -> jaxtyping.PyTree:
       ) from err
 
   return jax.tree.map(_convert_leaf, tree)
+
+
+def apply_upper_bound_dims(
+    input_signature: jaxtyping.PyTree,
+    converted_signature: jaxtyping.PyTree[shlo_type.ShloTensorSpec],
+) -> jaxtyping.PyTree[shlo_type.ShloTensorSpec]:
+  """Copies `ShloTensorSpec.upper_bound_dims` from a user signature onto a converted one.
+
+  `convert()` rebuilds the input signature of the exported function from JAX
+  avals, which carry no `upper_bound_dims`. This re-attaches the annotation from
+  the user's `input_signature` to the matching leaves of the signature produced
+  by the exporter, so that it reaches the manifest.
+
+  Args:
+    input_signature: The user-provided input signature. Leaves may be
+      `ShloTensorSpec`s (whose `upper_bound_dims` are applied) or any other
+      tensor-like specs (ignored).
+    converted_signature: The exporter-produced input signature with the same
+      tree structure as `input_signature`.
+
+  Returns:
+    `converted_signature` with `upper_bound_dims` set on the leaves whose
+    counterpart in `input_signature` has them. Unchanged if no leaf has them.
+
+  Raises:
+    ValueError: If a leaf with `upper_bound_dims` has a different shape in the
+      converted signature (e.g. because the bounded dimension was made
+      polymorphic), or if the two trees have different structures.
+  """
+  user_leaves, user_tree_def = jax.tree_util.tree_flatten(
+      input_signature,
+      is_leaf=lambda x: isinstance(x, shlo_type.ShloTensorSpec),
+  )
+  if not any(
+      isinstance(leaf, shlo_type.ShloTensorSpec) and leaf.upper_bound_dims
+      for leaf in user_leaves
+  ):
+    return converted_signature
+  converted_leaves, converted_tree_def = jax.tree_util.tree_flatten(
+      converted_signature,
+      is_leaf=lambda x: isinstance(x, shlo_type.ShloTensorSpec),
+  )
+  if user_tree_def != converted_tree_def:
+    raise ValueError(
+        "Cannot apply upper_bound_dims: the user input signature and the"
+        f" converted signature have different structures: {user_tree_def} vs"
+        f" {converted_tree_def}"
+    )
+  new_leaves = []
+  for user_leaf, converted_leaf in zip(user_leaves, converted_leaves):
+    if not (
+        isinstance(user_leaf, shlo_type.ShloTensorSpec)
+        and user_leaf.upper_bound_dims
+    ):
+      new_leaves.append(converted_leaf)
+      continue
+    if not isinstance(converted_leaf, shlo_type.ShloTensorSpec):
+      raise ValueError(
+          "Cannot apply upper_bound_dims: expected a ShloTensorSpec in the"
+          f" converted signature, got {converted_leaf!r}"
+      )
+    # `ShloTensorSpec.__post_init__` guarantees a known-rank shape whenever
+    # `upper_bound_dims` is set.
+    user_shape = user_leaf.shape
+    assert user_shape is not None
+    for dim in user_leaf.upper_bound_dims:
+      if (
+          converted_leaf.shape is None
+          or dim >= len(converted_leaf.shape)
+          or converted_leaf.shape[dim] != user_shape[dim]
+      ):
+        raise ValueError(
+            f"Cannot apply upper_bound_dims {user_leaf.upper_bound_dims}: the"
+            f" bounded dimension {dim} of the input spec {user_leaf} has size"
+            f" {user_shape[dim]}, but the exported function has shape"
+            f" {converted_leaf.shape} for it. An upper-bound dimension must"
+            " keep its concrete size through export (it cannot be made"
+            " polymorphic)."
+        )
+    new_leaves.append(
+        dataclasses.replace(
+            converted_leaf, upper_bound_dims=user_leaf.upper_bound_dims
+        )
+    )
+  return jax.tree_util.tree_unflatten(converted_tree_def, new_leaves)
 
 
 def _concretize_polymorphic_shapes(
