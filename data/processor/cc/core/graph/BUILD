@@ -9,6 +9,7 @@ cc_library(
     hdrs = ["execution_graph.h"],
     defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS"],
     deps = [
+        "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:status_macros",
         "@abseil-cpp//absl/status:statusor",

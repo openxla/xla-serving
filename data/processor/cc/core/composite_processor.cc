@@ -136,6 +136,12 @@ absl::StatusOr<CompositeProcessorConfig> CompositeProcessor::ToProto() const {
     *config.mutable_io_structure() = graph_.io_structure();
   }
 
+  // Only a declared input count is recorded: an inferred one is inferred again
+  // from the edges by `FromProto`.
+  if (graph_.declared_num_inputs().has_value()) {
+    config.set_num_inputs(*graph_.declared_num_inputs());
+  }
+
   for (const auto& node : graph_.nodes()) {
     absl::StatusOr<TransformConfig> transform_config =
         node.transform->ToProto();
@@ -225,6 +231,7 @@ absl::StatusOr<ExecutionGraph> DeserializeV0(
         ASSIGN_OR_RETURN(auto edge, GraphEdge::GraphInput(i));
         input_edges.push_back(std::move(edge));
       }
+      graph.SetNumInputs(input_size);
     } else {
       int prev_node_idx = graph.size() - 1;
       for (int i = 0; i < input_size; ++i) {
@@ -353,6 +360,16 @@ absl::StatusOr<CompositeProcessor> CompositeProcessor::FromProto(
                    graph_version == 0
                        ? DeserializeV0(config, *resource_manager)
                        : DeserializeV1(config, *resource_manager));
+
+  if (config.has_num_inputs()) {
+    if (config.num_inputs() < 0) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("CompositeProcessorConfig.num_inputs must be "
+                       "non-negative, got ",
+                       config.num_inputs()));
+    }
+    graph.SetNumInputs(config.num_inputs());
+  }
 
   if (!graph.empty()) {
     RETURN_IF_ERROR(GraphValidator::Validate(graph));

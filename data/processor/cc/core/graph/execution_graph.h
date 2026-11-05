@@ -18,10 +18,12 @@
 #include <algorithm>
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"  // from @abseil-cpp
@@ -150,7 +152,9 @@ class ExecutionGraph {
     outputs_ = std::move(outputs);
   }
 
-  void SetIOStructure(GraphIOStructureProto s) { io_structure_ = std::move(s); }
+  void SetIOStructure(GraphIOStructureProto s) {
+    io_structure_ = std::move(s);
+  }
 
   // Only here for backwards compatibility. Assumes all inputs of the previous
   // transform are fed into this transform.
@@ -164,6 +168,7 @@ class ExecutionGraph {
         ASSIGN_OR_RETURN(auto edge, GraphEdge::GraphInput(i));
         input_edges.push_back(std::move(edge));
       }
+      SetNumInputs(input_size);
     } else {
       int prev_node_idx = size() - 1;
       for (int i = 0; i < input_size; ++i) {
@@ -185,8 +190,45 @@ class ExecutionGraph {
     return absl::OkStatus();
   }
 
-  // Returns the number of input arguments to the execution graph.
+  // Declares the number of input arguments to the execution graph. Unlike the
+  // inferred count, it includes trailing inputs that no node or graph output
+  // reads, so that the graph keeps the arity it was built with (e.g. a traced
+  // function with an unused trailing argument). `GraphValidator` rejects graph
+  // input edges whose index is not below the declared count.
+  void SetNumInputs(size_t num_inputs) { num_inputs_ = num_inputs; }
+
+  // Returns the declared number of inputs (from `SetNumInputs`, or from
+  // `io_structure()` if `SetNumInputs` was not called), or `std::nullopt` if
+  // neither was provided.
+  std::optional<size_t> declared_num_inputs() const {
+    if (num_inputs_.has_value()) {
+      return num_inputs_;
+    }
+    if (io_structure_.input_structure().type() != PyTreeProto::INVALID) {
+      return CountLeaves(io_structure_.input_structure()) +
+             CountLeaves(io_structure_.captured_structure());
+    }
+    return std::nullopt;
+  }
+
+  // Returns the number of input arguments to the execution graph: the declared
+  // count if any, otherwise the inferred one (see `GetNumReferencedInputs`).
   size_t GetNumInputs() const {
+    if (std::optional<size_t> declared = declared_num_inputs();
+        declared.has_value()) {
+      return *declared;
+    }
+    // TODO: clean up the num_input inference path. num_inputs should be set
+    // when building the graph. For now, we leave the inference path so that
+    // affected users can switch from FATAL to ERROR here and move on.
+    LOG(FATAL) << "ExecutionGraph::GetNumInputs() is inferring num_inputs "
+                  "from graph edges because SetNumInputs() was not called.";
+    return GetNumReferencedInputs();
+  }
+
+  // Returns one more than the largest graph input index read by a node or a
+  // graph output, or 0 if no graph input is read.
+  size_t GetNumReferencedInputs() const {
     int max_input_idx = -1;
     for (const auto& node : nodes_) {
       for (const auto& edge : node.input_edges) {
@@ -235,11 +277,26 @@ class ExecutionGraph {
   void clear() {
     nodes_.clear();
     outputs_.clear();
+    num_inputs_.reset();
+    io_structure_.Clear();
   }
 
  private:
+  static size_t CountLeaves(const PyTreeProto& tree) {
+    if (tree.type() == PyTreeProto::LEAF) {
+      return 1;
+    }
+    size_t count = 0;
+    for (const auto& child : tree.children()) {
+      count += CountLeaves(child);
+    }
+    return count;
+  }
+
   std::vector<GraphNode> nodes_;
   std::vector<GraphEdge> outputs_;
+  // The declared number of graph inputs, if any. See `SetNumInputs`.
+  std::optional<size_t> num_inputs_;
   GraphIOStructureProto io_structure_;
 };
 
