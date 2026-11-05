@@ -47,6 +47,15 @@ class H2DTransferExecutor {
   //
   // `inputs`: The user-provided HostBuffers to transfer.
   // `input_shardings`: The exact IFRT Shardings required for these arrays.
+  //
+  // An input whose `HostBuffer::static_shape()` is set requests dynamic DMA:
+  // the returned array must have the static shape (that is what the executable
+  // was compiled for) while only the `shape()` elements of the host buffer are
+  // transferred as a dimension-0 prefix of the device buffer; the remaining
+  // device elements are left uninitialized. The runner only hands such inputs
+  // to an executor with single-device shardings. Implementations that do not
+  // support dynamic DMA must return an error for such inputs rather than
+  // transfer the buffer with its actual shape.
   virtual absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ExecuteTransfer(
       absl::Span<const HostBuffer> inputs,
       absl::Span<const xla::ifrt::ShardingRef> input_shardings) const = 0;
