@@ -367,6 +367,32 @@ jobs:
 
           echo "🚀 Release ${TAG_NAME} successfully created!"
 
+      - name: Tag Nightly Docker Images with Release Version
+        if: ${{ !inputs.dry_run && !inputs.draft }}
+        env:
+          TAG_NAME: ${{ needs.resolve-version.outputs.tag_name }}
+          IS_PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          VARIANTS=(
+            cpu-jax-only
+            cpu-jax-with-tf
+            gpu-jax-cuda12
+            gpu-jax-cuda12-with-tf
+            gpu-jax-cuda13
+            gpu-jax-cuda13-with-tf
+            tpu-jax-only
+          )
+          for VARIANT in "${VARIANTS[@]}"; do
+            REPO="us-docker.pkg.dev/xla-serving-engine/xla-serving/${VARIANT}"
+            echo "Tagging ${REPO}:nightly as ${REPO}:${TAG_NAME}..."
+            gcloud artifacts docker tags add "${REPO}:nightly" "${REPO}:${TAG_NAME}" --quiet
+            if [ "${IS_PRERELEASE}" != "true" ]; then
+              echo "Tagging ${REPO}:nightly as ${REPO}:latest..."
+              gcloud artifacts docker tags add "${REPO}:nightly" "${REPO}:latest" --quiet
+            fi
+          done
+          echo "✅ Tagged nightly Docker images with ${TAG_NAME}$([ "${IS_PRERELEASE}" != "true" ] && echo ' and latest')."
+
       - name: Check Wheel Sizes Against PyPI File Limit
         if: ${{ !inputs.dry_run && !inputs.draft && inputs.publish_pypi }}
         env:
@@ -392,7 +418,6 @@ jobs:
               for w in too_big:
                   os.remove(w)
           PY
-
       - name: Authenticate with OSS Exit Gate (WIF)
         if: ${{ !inputs.dry_run && !inputs.draft && inputs.publish_pypi }}
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
