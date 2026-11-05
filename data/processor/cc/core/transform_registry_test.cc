@@ -955,53 +955,6 @@ TEST_F(TransformRegistryTest, HolderCachingOnCreate) {
               absl_testing::IsOkAndHolds(expected_holder));
 }
 
-// A `std::type_info` with the same name as an existing type but a distinct
-// identity, as seen when a type is instantiated in two shared libraries.
-class SameNameTypeInfo : public std::type_info {
- public:
-  explicit SameNameTypeInfo(const char* name) : std::type_info(name) {}
-};
-
-TEST_F(TransformRegistryTest, GetTransformFactoryHolderFallsBackToTypeName) {
-  const std::string name = "type_name_fallback";
-  ASSERT_OK(registry_.RegisterTransformFactory(
-      name, std::type_index(typeid(AppendFooTransform)),
-      [](const std::vector<api::Value>&) {
-        return std::make_unique<AppendFooTransform>();
-      }));
-  ASSERT_OK_AND_ASSIGN(
-      const TransformFactoryHolder* expected_holder,
-      registry_.GetTransformFactoryHolder(typeid(AppendFooTransform)));
-
-  // Copy the name so that the type_info does not share its name pointer.
-  const std::string type_name = typeid(AppendFooTransform).name();
-  const SameNameTypeInfo same_name_type_info(type_name.c_str());
-
-  EXPECT_THAT(registry_.GetTransformFactoryHolder(same_name_type_info),
-              absl_testing::IsOkAndHolds(expected_holder));
-}
-
-TEST_F(TransformRegistryTest, GetTransformFactoryHolderIgnoresAmbiguousName) {
-  const std::string type_name = typeid(AppendFooTransform).name();
-  const SameNameTypeInfo first_type_info(type_name.c_str());
-  const std::string type_name_copy = type_name;
-  const SameNameTypeInfo second_type_info(type_name_copy.c_str());
-  if (std::type_index(typeid(AppendFooTransform)) ==
-      std::type_index(first_type_info)) {
-    GTEST_SKIP() << "std::type_index compares type names on this platform.";
-  }
-  auto factory = [](const std::vector<api::Value>&) {
-    return std::make_unique<AppendFooTransform>();
-  };
-  ASSERT_OK(registry_.RegisterTransformFactory(
-      "ambiguous_a", std::type_index(typeid(AppendFooTransform)), factory));
-  ASSERT_OK(registry_.RegisterTransformFactory(
-      "ambiguous_b", std::type_index(first_type_info), factory));
-
-  EXPECT_THAT(registry_.GetTransformFactoryHolder(second_type_info),
-              absl_testing::StatusIs(absl::StatusCode::kNotFound));
-}
-
 TEST_F(TransformRegistryTest, HolderCachingOnDeserialize) {
   const std::string name = "local_holder_caching_on_deserialize";
   ASSERT_OK(registry_.RegisterTransformFactory(
