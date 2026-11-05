@@ -205,26 +205,13 @@ use_repo(python_version_ext, "python_version_repo")
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
 oci.pull(
     name = "distroless_cc",
-    # gcr.io/distroless/cc-debian13:latest as of 2026-10-14. To refresh, run:
+    # gcr.io/distroless/cc-debian13:latest as of 2026-11-05. To refresh, run:
     #   crane digest gcr.io/distroless/cc-debian13:latest
-    digest = "sha256:159783207c2cd44c2aa5715961d13c8612368ac9bd450f887e3f08fc8ea461e3",
+    digest = "sha256:58e12be899275afaa05f1b03051ab19037ed7f252528e57a3a9ad7e220a62578",
     image = "gcr.io/distroless/cc-debian13",
     platforms = ["linux/amd64"],
 )
 use_repo(oci, "distroless_cc")
-
-oci.pull(
-    name = "cuda_base",
-    # docker.io/nvidia/cuda:13.4.2-base-ubuntu24.04 as of 2026-10-14. To refresh, run:
-    #   crane digest docker.io/nvidia/cuda:<tag>
-    digest = "sha256:b395ba681833b0a9837674516abe258b2934d6ec5511f78745d71ea177da14a4",
-    image = "docker.io/nvidia/cuda",
-    platforms = [
-        "linux/amd64",
-        "linux/arm64",
-    ],
-)
-use_repo(oci, "cuda_base")
 
 ##############################################################
 # Dependencies defined in rules_ml_toolchain

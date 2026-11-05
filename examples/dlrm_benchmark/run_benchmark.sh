@@ -728,7 +728,7 @@ start_xse() {
       cuda) docker_args+=(--gpus all -e PJRT_DEVICE=cuda
               -e NVIDIA_VISIBLE_DEVICES=all
               -e NVIDIA_DRIVER_CAPABILITIES=all,compute,utility
-              -e LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/cuda/lib64) ;;
+              -e LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/lib/x86_64-linux-gnu:/usr/local/cuda/lib64) ;;
       tpu) docker_args+=(--privileged)
            if [[ -n "${TPU_LIBRARY_PATH_FLAG}" ]]; then
              docker_args+=(

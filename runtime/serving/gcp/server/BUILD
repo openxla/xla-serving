@@ -97,10 +97,28 @@ tar(
 )
 
 # Define the GPU Image
+# CUDA toolkit and cuDNN shared libraries are bundled in the binary runfiles
+# (`include_cuda_libs=true` in `.bazelrc`), so `@distroless_cc` suffices; the
+# host NVIDIA kernel driver (`libcuda.so.1`, `libnvidia-ml.so.1`) is injected
+# at `docker run --gpus` time by nvidia-container-toolkit.
 oci_image(
     name = "xla_serving_image_gpu",
-    base = "@cuda_base",
+    base = "@distroless_cc",
     entrypoint = ["/runtime/serving/gcp/server/xla_serving_main_gpu"],
+    env = {
+        # Ensure host-injected NVIDIA driver libraries on COS/GKE
+        # (`/usr/local/nvidia/lib64`) and Debian/Ubuntu
+        # (`/usr/lib/x86_64-linux-gnu`) take precedence over bundled CUDA
+        # stub/UMD libraries in `DT_RUNPATH`.
+        "LD_LIBRARY_PATH": "/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/lib/x86_64-linux-gnu",
+        "NVIDIA_DRIVER_CAPABILITIES": "compute,utility",
+        "NVIDIA_VISIBLE_DEVICES": "all",
+    },
+    labels = {
+        "org.opencontainers.image.title": "XLA Serving Engine (GPU)",
+        "org.opencontainers.image.description": "XLA Serving gRPC server for NVIDIA GPU",
+        "org.opencontainers.image.source": "https://github.com/openxla/xla-serving",
+    },
     tags = ["manual"],
     tars = [":xla_serving_gpu"],
 )
