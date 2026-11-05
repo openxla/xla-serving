@@ -14,7 +14,9 @@
 
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 
+#include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <numeric>
 #include <string>
 #include <utility>
@@ -29,6 +31,7 @@
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_matchers.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "protos/grpc/host_buffer.pb.h"  // from @xla_serving
@@ -69,6 +72,7 @@ namespace {
 
 using ::absl_testing::StatusIs;
 using ::testing::ElementsAre;
+using ::testing::HasSubstr;
 
 TEST(HostBufferTest, NullPtrAllocator) {
   HostBuffer host_buffer(xla::ifrt::DType(xla::ifrt::DType::Kind::kU32),
@@ -1155,6 +1159,241 @@ TEST(HostBufferProtoTest, FromProtoByteSizeOverflowForStringReturnsError) {
 
   EXPECT_THAT(HostBuffer::FromProto(proto),
               StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+class RecordingAllocator : public Allocator {
+ public:
+  explicit RecordingAllocator(bool fail_allocations = false)
+      : fail_allocations_(fail_allocations) {}
+
+  void* Allocate(size_t size, size_t alignment) override {
+    ++allocation_count_;
+    last_requested_bytes_ = size;
+    if (fail_allocations_) {
+      return nullptr;
+    }
+    return DefaultAllocator::GetInstance()->Allocate(size, alignment);
+  }
+
+  void Free(void* ptr, size_t alignment) override {
+    DefaultAllocator::GetInstance()->Free(ptr, alignment);
+  }
+
+  int allocation_count() const { return allocation_count_; }
+  size_t last_requested_bytes() const { return last_requested_bytes_; }
+
+ private:
+  bool fail_allocations_ = false;
+  int allocation_count_ = 0;
+  size_t last_requested_bytes_ = 0;
+};
+
+TEST(HostBufferProtoTest, FromProtoMismatchedRawDataDoesNotAllocate) {
+  // Regression test: a tiny proto claiming max_elements (2^32 f32 = 16 GiB)
+  // with mismatched raw_data must be rejected before allocating memory.
+  HostBufferProto proto;
+  *proto.mutable_dtype() =
+      xla::ifrt::DType(xla::ifrt::DType::Kind::kF32).ToProto();
+  proto.mutable_shape()->add_dims(int64_t{1} << 32);
+  proto.set_raw_data("abcd");
+
+  RecordingAllocator allocator(/*fail_allocations=*/true);
+  EXPECT_THAT(HostBuffer::FromProto(proto, &allocator),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_EQ(allocator.allocation_count(), 0);
+  EXPECT_THAT(HostBuffer::FromProto(proto),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(HostBufferProtoTest, FromProtoMismatchedStringDataDoesNotAllocate) {
+  // Regression test: a tiny proto claiming max_elements (2^32 tstring = 96 GiB)
+  // with mismatched string_data must be rejected before allocating memory.
+  HostBufferProto proto;
+  *proto.mutable_dtype() =
+      xla::ifrt::DType(xla::ifrt::DType::Kind::kString).ToProto();
+  proto.mutable_shape()->add_dims(int64_t{1} << 32);
+  proto.mutable_string_data()->add_elements("x");
+
+  RecordingAllocator allocator(/*fail_allocations=*/true);
+  EXPECT_THAT(HostBuffer::FromProto(proto, &allocator),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_EQ(allocator.allocation_count(), 0);
+  EXPECT_THAT(HostBuffer::FromProto(proto),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(HostBufferProtoTest, FromProtoMissingPayloadWithMaxShapeDoesNotAllocate) {
+  HostBufferProto f32_proto;
+  *f32_proto.mutable_dtype() =
+      xla::ifrt::DType(xla::ifrt::DType::Kind::kF32).ToProto();
+  f32_proto.mutable_shape()->add_dims(int64_t{1} << 32);
+
+  RecordingAllocator allocator(/*fail_allocations=*/true);
+  EXPECT_THAT(HostBuffer::FromProto(f32_proto, &allocator),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_EQ(allocator.allocation_count(), 0);
+
+  HostBufferProto str_proto;
+  *str_proto.mutable_dtype() =
+      xla::ifrt::DType(xla::ifrt::DType::Kind::kString).ToProto();
+  str_proto.mutable_shape()->add_dims(int64_t{1} << 32);
+
+  EXPECT_THAT(HostBuffer::FromProto(str_proto, &allocator),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_EQ(allocator.allocation_count(), 0);
+}
+
+TEST(HostBufferProtoTest, FromProtoWrongDataVariantDoesNotAllocate) {
+  HostBufferProto str_with_raw;
+  *str_with_raw.mutable_dtype() =
+      xla::ifrt::DType(xla::ifrt::DType::Kind::kString).ToProto();
+  str_with_raw.mutable_shape()->add_dims(int64_t{1} << 32);
+  str_with_raw.set_raw_data("abcd");
+
+  RecordingAllocator allocator(/*fail_allocations=*/true);
+  EXPECT_THAT(HostBuffer::FromProto(str_with_raw, &allocator),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_EQ(allocator.allocation_count(), 0);
+
+  HostBufferProto f32_with_strings;
+  *f32_with_strings.mutable_dtype() =
+      xla::ifrt::DType(xla::ifrt::DType::Kind::kF32).ToProto();
+  f32_with_strings.mutable_shape()->add_dims(int64_t{1} << 32);
+  f32_with_strings.mutable_string_data()->add_elements("abcd");
+
+  EXPECT_THAT(HostBuffer::FromProto(f32_with_strings, &allocator),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_EQ(allocator.allocation_count(), 0);
+}
+
+TEST(HostBufferProtoTest, FromProtoUnsupportedDTypeDoesNotAllocate) {
+  RecordingAllocator allocator(/*fail_allocations=*/true);
+
+  // Unspecified dtype deserializes to kInvalid in xla::ifrt::DType::FromProto.
+  HostBufferProto unspecified_dtype_proto;
+  unspecified_dtype_proto.mutable_shape()->add_dims(1);
+  unspecified_dtype_proto.set_raw_data("x");
+  EXPECT_THAT(HostBuffer::FromProto(unspecified_dtype_proto, &allocator),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_EQ(allocator.allocation_count(), 0);
+
+  HostBufferProto token_proto;
+  *token_proto.mutable_dtype() =
+      xla::ifrt::DType(xla::ifrt::DType::Kind::kToken).ToProto();
+  token_proto.mutable_shape()->add_dims(0);
+  EXPECT_THAT(HostBuffer::FromProto(token_proto, &allocator),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_EQ(allocator.allocation_count(), 0);
+}
+
+TEST(HostBufferProtoTest, ToAndFromProtoZeroElements) {
+  HostBuffer empty_f32(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+                       xla::ifrt::Shape({0, 4}));
+  HostBufferProto f32_proto = HostBuffer::ToHostBufferProto(empty_f32);
+  TF_ASSERT_OK_AND_ASSIGN(HostBuffer roundtrip_f32,
+                          HostBuffer::FromProto(f32_proto));
+  EXPECT_EQ(roundtrip_f32.dtype(), empty_f32.dtype());
+  EXPECT_EQ(roundtrip_f32.shape(), empty_f32.shape());
+  EXPECT_TRUE(roundtrip_f32.raw_data().empty());
+
+  HostBuffer empty_str(xla::ifrt::DType(xla::ifrt::DType::Kind::kString),
+                       xla::ifrt::Shape({0, 2}));
+  HostBufferProto str_proto = HostBuffer::ToHostBufferProto(empty_str);
+  TF_ASSERT_OK_AND_ASSIGN(HostBuffer roundtrip_str,
+                          HostBuffer::FromProto(str_proto));
+  EXPECT_EQ(roundtrip_str.dtype(), empty_str.dtype());
+  EXPECT_EQ(roundtrip_str.shape(), empty_str.shape());
+}
+
+TEST(HostBufferTest, CreateValidatesShapesAndAllocationFailures) {
+  TF_ASSERT_OK_AND_ASSIGN(
+      HostBuffer valid,
+      HostBuffer::Create(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+                         xla::ifrt::Shape({2, 3})));
+  EXPECT_EQ(valid.shape(), xla::ifrt::Shape({2, 3}));
+  EXPECT_EQ(valid.total_storage_bytes(), 24);
+
+  EXPECT_THAT(HostBuffer::Create(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+                                 xla::ifrt::Shape({-1, 4})),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+
+  EXPECT_THAT(
+      HostBuffer::Create(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+                         xla::ifrt::Shape({2000000000LL, 5000000000LL})),
+      StatusIs(absl::StatusCode::kInvalidArgument));
+
+  {
+    absl::SetFlag(&FLAGS_xla_serving_host_buffer_max_elements,
+                  int64_t{1} << 62);
+    absl::Cleanup reset_flag = [] {
+      absl::SetFlag(&FLAGS_xla_serving_host_buffer_max_elements,
+                    int64_t{1} << 32);
+    };
+    EXPECT_THAT(
+        HostBuffer::Create(xla::ifrt::DType(xla::ifrt::DType::Kind::kString),
+                           xla::ifrt::Shape({int64_t{1} << 62})),
+        StatusIs(absl::StatusCode::kInvalidArgument,
+                 HasSubstr("byte size overflow")));
+  }
+
+  RecordingAllocator failing_allocator(/*fail_allocations=*/true);
+  EXPECT_THAT(HostBuffer::Create(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+                                 xla::ifrt::Shape({4}), &failing_allocator),
+              StatusIs(absl::StatusCode::kResourceExhausted));
+  EXPECT_EQ(failing_allocator.allocation_count(), 1);
+  EXPECT_EQ(failing_allocator.last_requested_bytes(), 16);
+
+  HostBufferProto valid_proto = HostBuffer::ToHostBufferProto(valid);
+  EXPECT_THAT(HostBuffer::FromProto(valid_proto, &failing_allocator),
+              StatusIs(absl::StatusCode::kResourceExhausted));
+}
+
+TEST(HostBufferTest, ConcatAndSplitRejectInvalidOrTooLargeSizes) {
+  HostBuffer a(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+               xla::ifrt::Shape({6}));
+  HostBuffer b(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+               xla::ifrt::Shape({6}));
+
+  // Lower max_elements so Concat's output shape ({12}) exceeds the limit.
+  {
+    absl::SetFlag(&FLAGS_xla_serving_host_buffer_max_elements, 10);
+    absl::Cleanup reset_flag = [] {
+      absl::SetFlag(&FLAGS_xla_serving_host_buffer_max_elements,
+                    int64_t{1} << 32);
+    };
+    EXPECT_THAT(Concat(/*threadpool=*/nullptr, {a, b}),
+                StatusIs(absl::StatusCode::kInvalidArgument));
+  }
+
+  // Negative and overflowing split sizes must return InvalidArgumentError.
+  EXPECT_THAT(a.SplitAlongFirstDimension({-1, 7}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(
+      a.SplitAlongFirstDimension({2, std::numeric_limits<int64_t>::max()}),
+      StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(HostBufferTest, ShapedRejectsNegativeAndOverflowingDimensions) {
+  HostBuffer host_buffer(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+                         xla::ifrt::Shape({4, 4}));
+  const HostBuffer& const_host_buffer = host_buffer;
+
+  // Negative dimensions with an even count whose product matches 16 must fail.
+  EXPECT_THAT((host_buffer.shaped<int32_t, 2>({-2, -8})),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("negative dimension")));
+  EXPECT_THAT((const_host_buffer.shaped<int32_t, 2>({-2, -8})),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("negative dimension")));
+
+  // Dimensions whose product overflows int64_t must fail cleanly.
+  EXPECT_THAT((host_buffer.shaped<int32_t, 2>({2000000000LL, 5000000000LL})),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Shape overflow")));
+  EXPECT_THAT(
+      (const_host_buffer.shaped<int32_t, 2>({2000000000LL, 5000000000LL})),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("Shape overflow")));
 }
 
 TEST(HostBufferTest, Reshape) {

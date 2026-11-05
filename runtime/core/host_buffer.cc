@@ -14,11 +14,12 @@
 
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <new>
-#include <numeric>
 #include <optional>
 #include <string>
 #include <utility>
@@ -28,6 +29,7 @@
 #include "absl/flags/flag.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
@@ -95,8 +97,14 @@ bool DataTypeCanUseMemCpy(xla::ifrt::DType dtype) {
   }
 }
 
-absl::Status ValidateHostBufferShape(xla::ifrt::DType dtype,
-                                     const xla::ifrt::Shape& shape) {
+absl::StatusOr<int64_t> ValidateAndGetStorageBytes(
+    xla::ifrt::DType dtype, const xla::ifrt::Shape& shape) {
+  if (!DataTypeCanUseMemCpy(dtype) &&
+      dtype.kind() != xla::ifrt::DType::Kind::kString) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Unsupported HostBuffer dtype: ", dtype));
+  }
+
   int64_t num_elements = 1;
   for (int64_t d : shape.dims()) {
     if (d < 0) {
@@ -133,12 +141,18 @@ absl::Status ValidateHostBufferShape(xla::ifrt::DType dtype,
 
   auto [byte_size, overflow] =
       xla::OverflowSafeMultiply(element_size, num_elements);
-  if (overflow) {
-    return absl::InvalidArgumentError(absl::StrCat(
-        "HostBuffer byte size overflow for shape: ", absl::StrCat(shape)));
+  if (overflow ||
+      static_cast<uint64_t>(byte_size) > std::numeric_limits<size_t>::max()) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("HostBuffer byte size overflow for shape: ", shape));
   }
 
-  return absl::OkStatus();
+  return byte_size;
+}
+
+absl::Status ValidateHostBufferShape(xla::ifrt::DType dtype,
+                                     const xla::ifrt::Shape& shape) {
+  return ValidateAndGetStorageBytes(dtype, shape).status();
 }
 
 }  // namespace
@@ -168,22 +182,39 @@ HostBuffer::HostBuffer(const xla::ifrt::DType& dtype,
   if (allocator == nullptr) {
     allocator = DefaultAllocator::GetInstance();
   }
+  int64_t num_elements = 1;
+  for (int64_t d : shape.dims()) {
+    CHECK_GE(d, 0) << "Invalid negative dimension in shape";
+    auto [next_num_elements, dim_overflow] =
+        xla::OverflowSafeMultiply(num_elements, d);
+    // Prefer HostBuffer::Create() when constructing from untrusted shapes to
+    // return absl::Status instead of crashing.
+    CHECK(!dim_overflow) << "Integer overflow in shape dimensions";
+    num_elements = next_num_elements;
+  }
+
   if (dtype.kind() == xla::ifrt::DType::Kind::kString) {
     auto [size, overflow] =
-        xla::OverflowSafeMultiply(sizeof(tsl::tstring), shape.num_elements());
-    // TODO: Refactor HostBuffer to use static factory methods
-    // to return absl::Status on overflow instead of crashing (DoS).
-    CHECK(!overflow) << "Integer overflow in buffer allocation";
-    void* aligned_raw_ptr = allocator->Allocate(size, EIGEN_MAX_ALIGN_BYTES);
-    // Initialize empty tstring.
-    new (aligned_raw_ptr) tsl::tstring[shape.num_elements()];
+        xla::OverflowSafeMultiply(sizeof(tsl::tstring), num_elements);
+    CHECK(!overflow &&
+          static_cast<uint64_t>(size) <= std::numeric_limits<size_t>::max())
+        << "Integer overflow in buffer allocation";
+    void* aligned_raw_ptr =
+        allocator->Allocate(static_cast<size_t>(size), EIGEN_MAX_ALIGN_BYTES);
+    CHECK(size == 0 || aligned_raw_ptr != nullptr)
+        << "Failed to allocate buffer of size " << size;
+    if (num_elements > 0) {
+      // Initialize empty tstring.
+      new (aligned_raw_ptr) tsl::tstring[num_elements];
+    }
     buffer_data_.emplace(
         aligned_raw_ptr, dtype, shape,
         CreateDefaultStrides(shape.dims(), dtype),
         std::shared_ptr<void>(
-            aligned_raw_ptr, [n = shape.num_elements(), allocator](void* ptr) {
+            aligned_raw_ptr, [n = num_elements, allocator](void* ptr) {
+              if (ptr == nullptr) return;
               tsl::tstring* tstring_ptr = reinterpret_cast<tsl::tstring*>(ptr);
-              for (int i = 0; i < n; ++i) {
+              for (int64_t i = 0; i < n; ++i) {
                 tstring_ptr[i].~tstring();
               }
               allocator->Free(ptr, EIGEN_MAX_ALIGN_BYTES);
@@ -196,18 +227,74 @@ HostBuffer::HostBuffer(const xla::ifrt::DType& dtype,
     storage_dtype = xla::ifrt::DType(xla::ifrt::DType::Kind::kU8);
   }
 
-  auto [size, overflow] = xla::OverflowSafeMultiply(*storage_dtype.byte_size(),
-                                                    shape.num_elements());
-  // TODO: Refactor HostBuffer to use static factory methods
-  // to return absl::Status on overflow instead of crashing (DoS).
-  CHECK(!overflow) << "Integer overflow in buffer allocation";
-  void* aligned_raw_ptr = allocator->Allocate(size, EIGEN_MAX_ALIGN_BYTES);
+  auto [size, overflow] =
+      xla::OverflowSafeMultiply(*storage_dtype.byte_size(), num_elements);
+  CHECK(!overflow &&
+        static_cast<uint64_t>(size) <= std::numeric_limits<size_t>::max())
+      << "Integer overflow in buffer allocation";
+  void* aligned_raw_ptr =
+      allocator->Allocate(static_cast<size_t>(size), EIGEN_MAX_ALIGN_BYTES);
+  CHECK(size == 0 || aligned_raw_ptr != nullptr)
+      << "Failed to allocate buffer of size " << size;
   auto owner = std::shared_ptr<void>(aligned_raw_ptr, [allocator](void* ptr) {
+    if (ptr == nullptr) return;
     allocator->Free(ptr, EIGEN_MAX_ALIGN_BYTES);
   });
   auto strides = CreateDefaultStrides(shape.dims(), storage_dtype);
   buffer_data_.emplace(aligned_raw_ptr, storage_dtype, shape, strides,
                        std::move(owner));
+}
+
+absl::StatusOr<HostBuffer> HostBuffer::Create(xla::ifrt::DType dtype,
+                                              xla::ifrt::Shape shape,
+                                              Allocator* allocator) {
+  if (allocator == nullptr) {
+    allocator = DefaultAllocator::GetInstance();
+  }
+  TF_ASSIGN_OR_RETURN(int64_t size, ValidateAndGetStorageBytes(dtype, shape));
+  const int64_t num_elements = shape.num_elements();
+
+  xla::ifrt::DType storage_dtype = dtype;
+  if (dtype.kind() != xla::ifrt::DType::Kind::kString &&
+      !dtype.byte_size().has_value()) {
+    storage_dtype = xla::ifrt::DType(xla::ifrt::DType::Kind::kU8);
+  }
+  auto strides = CreateDefaultStrides(shape.dims(), storage_dtype);
+  if (!strides.has_value()) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Failed to compute default strides for ", dtype, shape));
+  }
+
+  void* aligned_raw_ptr =
+      allocator->Allocate(static_cast<size_t>(size), EIGEN_MAX_ALIGN_BYTES);
+  if (size > 0 && aligned_raw_ptr == nullptr) {
+    return absl::ResourceExhaustedError(absl::StrCat(
+        "Failed to allocate ", size, " bytes for HostBuffer ", dtype, shape));
+  }
+
+  if (dtype.kind() == xla::ifrt::DType::Kind::kString) {
+    if (num_elements > 0) {
+      new (aligned_raw_ptr) tsl::tstring[num_elements];
+    }
+    auto owner = std::shared_ptr<void>(
+        aligned_raw_ptr, [n = num_elements, allocator](void* ptr) {
+          if (ptr == nullptr) return;
+          tsl::tstring* tstring_ptr = reinterpret_cast<tsl::tstring*>(ptr);
+          for (int64_t i = 0; i < n; ++i) {
+            tstring_ptr[i].~tstring();
+          }
+          allocator->Free(ptr, EIGEN_MAX_ALIGN_BYTES);
+        });
+    return HostBuffer(aligned_raw_ptr, dtype, std::move(shape), strides,
+                      std::move(owner));
+  }
+
+  auto owner = std::shared_ptr<void>(aligned_raw_ptr, [allocator](void* ptr) {
+    if (ptr == nullptr) return;
+    allocator->Free(ptr, EIGEN_MAX_ALIGN_BYTES);
+  });
+  return HostBuffer(aligned_raw_ptr, dtype, std::move(shape), strides,
+                    std::move(owner));
 }
 
 HostBuffer::HostBuffer(
@@ -287,7 +374,7 @@ absl::StatusOr<HostBuffer> HostBuffer::SliceAlongFirstDimension(
     return *this;
   }
   if (dim0_size == 0 || !buffer_data_)
-    return HostBuffer(dtype(), shape(), allocator);
+    return HostBuffer::Create(dtype(), shape(), allocator);
 
   if (dtype() == xla::ifrt::DType(xla::ifrt::DType::Kind::kString)) {
     std::vector<int64_t> output_dims{shape().dims().begin(),
@@ -420,16 +507,19 @@ absl::Status HostBuffer::SplitAlongFirstDimensionInternal(
   }
   if (dtype() == xla::ifrt::DType(xla::ifrt::DType::Kind::kString)) {
     auto from_strings = flat<tsl::tstring>();
-    int offset = 0;
+    int64_t offset = 0;
     for (int64_t size : sizes) {
       std::vector<int64_t> output_dims{shape().dims().begin(),
                                        shape().dims().end()};
       output_dims[0] = size;
-      HostBuffer split(dtype(), xla::ifrt::Shape(output_dims), allocator);
+      TF_ASSIGN_OR_RETURN(
+          HostBuffer split,
+          HostBuffer::Create(dtype(), xla::ifrt::Shape(output_dims),
+                             allocator));
       tsl::tstring* to_strings = split.unaligned_flat<tsl::tstring>().data();
-      int num_elements_in_split = split.shape().num_elements();
+      int64_t num_elements_in_split = split.shape().num_elements();
       CHECK_LE(offset + num_elements_in_split, shape().num_elements());
-      for (int i = 0; i < num_elements_in_split; ++i) {
+      for (int64_t i = 0; i < num_elements_in_split; ++i) {
         to_strings[i] = from_strings(offset + i);
       }
       offset += num_elements_in_split;
@@ -443,7 +533,9 @@ absl::Status HostBuffer::SplitAlongFirstDimensionInternal(
     std::vector<int64_t> output_dims{shape().dims().begin(),
                                      shape().dims().end()};
     output_dims[0] = size;
-    HostBuffer split(dtype(), xla::ifrt::Shape(output_dims), allocator);
+    TF_ASSIGN_OR_RETURN(
+        HostBuffer split,
+        HostBuffer::Create(dtype(), xla::ifrt::Shape(output_dims), allocator));
 
     // We use string_view as a convenient map over the tensor buffer,
     // but we cast the type to get to the underlying buffer to do the
@@ -453,8 +545,10 @@ absl::Status HostBuffer::SplitAlongFirstDimensionInternal(
       return absl::InternalError(
           "Splitting host buffer failed: to_data out of range.");
     }
-    memcpy(const_cast<char*>(to_data.data()), from_data.data() + offset,
-           to_data.size());
+    if (!to_data.empty()) {
+      memcpy(const_cast<char*>(to_data.data()), from_data.data() + offset,
+             to_data.size());
+    }
 
     offset += to_data.size();
     output->push_back(std::move(split));
@@ -468,7 +562,18 @@ absl::StatusOr<std::vector<HostBuffer>> HostBuffer::SplitAlongFirstDimension(
     return absl::InvalidArgumentError(
         "Host buffer must have at least one dimension for splitting.");
   }
-  int64_t total_size = std::accumulate(sizes.begin(), sizes.end(), 0ll);
+  int64_t total_size = 0;
+  for (int64_t size : sizes) {
+    if (size < 0) {
+      return absl::InvalidArgumentError(
+          "Split sizes must be non-negative.");
+    }
+    std::optional<int64_t> next_total = xla::OverflowSafeAdd(total_size, size);
+    if (!next_total.has_value()) {
+      return absl::InvalidArgumentError("Split sizes overflow.");
+    }
+    total_size = *next_total;
+  }
   if (total_size != shape().dims()[0]) {
     return absl::InvalidArgumentError(
         "The values in 'sizes' do not sum to the zeroth-dimension size of "
@@ -510,26 +615,40 @@ absl::StatusOr<HostBuffer> Concat(tsl::thread::ThreadPool* threadpool,
 }
 
 absl::StatusOr<HostBuffer> HostBuffer::FromProto(const HostBufferProto& proto) {
+  return FromProto(proto, DefaultAllocator::GetInstance());
+}
+
+absl::StatusOr<HostBuffer> HostBuffer::FromProto(const HostBufferProto& proto,
+                                                 Allocator* allocator) {
   TF_ASSIGN_OR_RETURN(xla::ifrt::DType dtype,
                       xla::ifrt::DType::FromProto(proto.dtype()));
   TF_ASSIGN_OR_RETURN(xla::ifrt::Shape shape,
                       xla::ifrt::Shape::FromProto(proto.shape()));
-  TF_RETURN_IF_ERROR(ValidateHostBufferShape(dtype, shape));
-  HostBuffer host_buffer(dtype, shape);
+  TF_ASSIGN_OR_RETURN(int64_t expected_bytes,
+                      ValidateAndGetStorageBytes(dtype, shape));
+  const int64_t num_elements = shape.num_elements();
+
+  // Validate payload variant and size before allocating host memory so a small
+  // malformed proto claiming a huge shape cannot trigger multi-GB allocations.
   switch (proto.data_case()) {
     case HostBufferProto::kRawData: {
       if (dtype.kind() == xla::ifrt::DType::Kind::kString) {
         return absl::InvalidArgumentError(
             "Proto has raw_data but dtype is string.");
       }
-      absl::string_view raw_data = host_buffer.raw_data();
-      if (raw_data.size() != proto.raw_data().size()) {
-        return absl::InternalError(
-            absl::StrCat("Mismatched raw data size: expected ", raw_data.size(),
+      if (static_cast<uint64_t>(expected_bytes) != proto.raw_data().size()) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("Mismatched raw data size: expected ", expected_bytes,
                          " but got ", proto.raw_data().size()));
       }
-      memcpy(const_cast<char*>(raw_data.data()), proto.raw_data().data(),
-             raw_data.size());
+      TF_ASSIGN_OR_RETURN(
+          HostBuffer host_buffer,
+          HostBuffer::Create(dtype, std::move(shape), allocator));
+      absl::string_view raw_data = host_buffer.raw_data();
+      if (!raw_data.empty()) {
+        memcpy(const_cast<char*>(raw_data.data()), proto.raw_data().data(),
+               raw_data.size());
+      }
       return host_buffer;
     }
     case HostBufferProto::kStringData: {
@@ -537,25 +656,31 @@ absl::StatusOr<HostBuffer> HostBuffer::FromProto(const HostBufferProto& proto) {
         return absl::InvalidArgumentError(
             "Proto has string_data but dtype is not string.");
       }
-      if (shape.num_elements() != proto.string_data().elements_size()) {
+      if (num_elements != proto.string_data().elements_size()) {
         return absl::InvalidArgumentError(
             absl::StrCat("Mismatched number of string elements: expected ",
-                         shape.num_elements(), " but got ",
+                         num_elements, " but got ",
                          proto.string_data().elements_size()));
       }
-      auto tstrings = host_buffer.unaligned_flat<tsl::tstring>();
-      for (int i = 0; i < shape.num_elements(); ++i) {
-        tstrings(i) = proto.string_data().elements(i);
+      TF_ASSIGN_OR_RETURN(
+          HostBuffer host_buffer,
+          HostBuffer::Create(dtype, std::move(shape), allocator));
+      if (num_elements > 0) {
+        auto tstrings = host_buffer.unaligned_flat<tsl::tstring>();
+        for (int64_t i = 0; i < num_elements; ++i) {
+          tstrings(i) = proto.string_data().elements(i);
+        }
       }
       return host_buffer;
     }
     case HostBufferProto::DATA_NOT_SET:
-      if (shape.num_elements() != 0) {
+      if (num_elements != 0) {
         return absl::InvalidArgumentError(
             "HostBuffer is non-empty but has no data.");
       }
-      return host_buffer;
+      return HostBuffer::Create(dtype, std::move(shape), allocator);
   }
+  return absl::InvalidArgumentError("Unknown HostBufferProto data_case.");
 }
 
 HostBufferProto HostBuffer::ToHostBufferProto(const HostBuffer& host_buffer) {
@@ -566,7 +691,7 @@ HostBufferProto HostBuffer::ToHostBufferProto(const HostBuffer& host_buffer) {
   *proto.mutable_shape() = shape.ToProto();
   if (dtype.kind() == xla::ifrt::DType::Kind::kString) {
     auto tstrings = host_buffer.unaligned_flat<tsl::tstring>();
-    for (int i = 0; i < shape.num_elements(); ++i) {
+    for (int64_t i = 0; i < shape.num_elements(); ++i) {
       proto.mutable_string_data()->add_elements(std::string(tstrings(i)));
     }
   } else {

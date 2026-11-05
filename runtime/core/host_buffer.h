@@ -38,6 +38,7 @@
 #include "protos/grpc/host_buffer.pb.h"  // from @xla_serving
 #include "runtime/core/allocator.h"  // from @xla_serving
 #include "runtime/core/default_allocator.h"  // from @xla_serving
+#include "xla/overflow_util.h"  // from @xla
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
@@ -143,6 +144,13 @@ class HostBuffer {
              const std::optional<absl::InlinedVector<int64_t, 4>>& byte_strides,
              std::shared_ptr<void> owner);
 
+  // Allocates a new HostBuffer, returning an error if `dtype` or `shape` is
+  // invalid, overflows, exceeds `--xla_serving_host_buffer_max_elements`, or if
+  // `allocator` fails to allocate memory.
+  static absl::StatusOr<HostBuffer> Create(
+      xla::ifrt::DType dtype, xla::ifrt::Shape shape,
+      Allocator* allocator = DefaultAllocator::GetInstance());
+
   /// Returns a `string_view` mapping the current host buffer.
   ///
   /// The returned `string_view` may point to memory location on devices
@@ -246,6 +254,8 @@ class HostBuffer {
   }
 
   static absl::StatusOr<HostBuffer> FromProto(const HostBufferProto& proto);
+  static absl::StatusOr<HostBuffer> FromProto(const HostBufferProto& proto,
+                                              Allocator* allocator);
 
   // Serializes a HostBuffer to a HostBufferProto, copying the underlying data.
   static HostBufferProto ToHostBufferProto(const HostBuffer& host_buffer);
@@ -341,7 +351,16 @@ class HostBuffer {
     }
     int64_t new_num_elements = 1;
     for (size_t d = 0; d < NDIMS; d++) {
-      new_num_elements *= new_shape[d];
+      if (new_shape[d] < 0) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Invalid negative dimension in shape: ", new_shape[d]));
+      }
+      auto [next_num_elements, overflow] =
+          xla::OverflowSafeMultiply(new_num_elements, new_shape[d]);
+      if (overflow) {
+        return absl::InvalidArgumentError("Shape overflow in shaped()");
+      }
+      new_num_elements = next_num_elements;
       (*dims)[d] = new_shape[d];
     }
     if (new_num_elements != shape().num_elements()) {
@@ -412,7 +431,7 @@ void ConcatCPUImpl(
       size = std::min(size, out_end - out);
       if (size <= 0) break;
       if (std::is_same_v<T, tsl::tstring>) {
-        for (int i = 0; i < size; ++i) {
+        for (ptrdiff_t i = 0; i < size; ++i) {
           out[i] = inp[i];
         }
       } else {
@@ -491,15 +510,22 @@ absl::StatusOr<HostBuffer> Concat(
       inputs_flat.emplace_back(new
                                typename TTypes<T, 2>::ConstMatrix(*reshaped));
     }
-    output_dim0 += input.shape().dims()[0];
+    std::optional<int64_t> next_dim0 =
+        xla::OverflowSafeAdd(output_dim0, input.shape().dims()[0]);
+    if (!next_dim0.has_value()) {
+      return absl::InvalidArgumentError("Concat output dimension overflow");
+    }
+    output_dim0 = *next_dim0;
   }
 
   std::vector<int64_t> output_shape_vec = {input_shape.dims().begin(),
                                            input_shape.dims().end()};
 
   output_shape_vec[0] = output_dim0;
-  HostBuffer output_buffer(input_dtype, xla::ifrt::Shape(output_shape_vec),
-                           allocator);
+  TF_ASSIGN_OR_RETURN(
+      HostBuffer output_buffer,
+      HostBuffer::Create(input_dtype, xla::ifrt::Shape(output_shape_vec),
+                         allocator));
   if (!output_buffer.storage_dtype().byte_size().has_value() &&
       output_buffer.dtype().kind() != xla::ifrt::DType::Kind::kString) {
     return absl::InvalidArgumentError(
