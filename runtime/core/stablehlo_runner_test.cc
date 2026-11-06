@@ -16,6 +16,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <optional>
 #include <string>
@@ -86,6 +87,7 @@
 #include "xla/tsl/framework/test_util/mock_serving_device_selector.h"  // from @xla
 #include "xla/tsl/lib/monitoring/cell_reader.h"  // from @xla
 #include "xla/tsl/platform/env.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
@@ -103,7 +105,9 @@ class MockH2DTransferExecutor : public H2DTransferExecutor {
 
   absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ExecuteTransfer(
       absl::Span<const xla_serving::HostBuffer> inputs,
-      absl::Span<const xla::ifrt::ShardingRef> input_shardings) const override {
+      absl::Span<const xla::ifrt::ShardingRef> input_shardings,
+      absl::Span<const std::optional<xla::ifrt::Shape>> static_shapes)
+      const override {
     std::vector<xla::ifrt::ArrayRef> result;
     for (int i = 0; i < inputs.size(); ++i) {
       TF_ASSIGN_OR_RETURN(auto array_result,
@@ -141,7 +145,9 @@ class MockErrorH2DTransferExecutor : public H2DTransferExecutor {
 
   absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ExecuteTransfer(
       absl::Span<const xla_serving::HostBuffer> inputs,
-      absl::Span<const xla::ifrt::ShardingRef> input_shardings) const override {
+      absl::Span<const xla::ifrt::ShardingRef> input_shardings,
+      absl::Span<const std::optional<xla::ifrt::Shape>> static_shapes)
+      const override {
     return absl::InternalError("Simulated Arena Transfer Failure");
   }
 };
@@ -155,6 +161,81 @@ class MockErrorH2DTransferExecutorFactory : public H2DTransferExecutorFactory {
     return std::make_unique<MockErrorH2DTransferExecutor>(
         std::move(client), std::move(device_list), thread_pool);
   }
+};
+
+// Records the (shape, static shape) of every transferred input.
+struct RecordedTransfer {
+  xla::ifrt::Shape shape;
+  std::optional<xla::ifrt::Shape> static_shape;
+};
+
+// Emulates dynamic DMA without a backend that supports it: an input bound to a
+// static shape is zero-padded on the host to the static shape before the
+// transfer, so the resulting array has the static shape and the executable can
+// consume it. Real executors allocate the static shape on the device instead
+// and transfer only the actual data (see `H2DTransferExecutor`).
+class MockPaddingH2DTransferExecutor : public H2DTransferExecutor {
+ public:
+  MockPaddingH2DTransferExecutor(
+      xla::ifrt::Client* client, xla::ifrt::DeviceListRef device_list,
+      tsl::thread::ThreadPool* thread_pool,
+      std::shared_ptr<std::vector<RecordedTransfer>> recorded_transfers)
+      : client_(client),
+        device_list_(std::move(device_list)),
+        thread_pool_(thread_pool),
+        recorded_transfers_(std::move(recorded_transfers)) {}
+
+  absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ExecuteTransfer(
+      absl::Span<const xla_serving::HostBuffer> inputs,
+      absl::Span<const xla::ifrt::ShardingRef> input_shardings,
+      absl::Span<const std::optional<xla::ifrt::Shape>> static_shapes)
+      const override {
+    std::vector<xla::ifrt::ArrayRef> result;
+    for (int i = 0; i < inputs.size(); ++i) {
+      const std::optional<xla::ifrt::Shape> static_shape =
+          static_shapes.empty() ? std::nullopt : static_shapes[i];
+      recorded_transfers_->push_back(
+          {.shape = inputs[i].shape(), .static_shape = static_shape});
+      HostBuffer to_transfer = inputs[i];
+      if (static_shape.has_value()) {
+        HostBuffer padded(inputs[i].dtype(), *static_shape);
+        std::memset(padded.base(), 0, padded.total_storage_bytes());
+        std::memcpy(padded.base(), inputs[i].raw_data().data(),
+                    inputs[i].raw_data().size());
+        to_transfer = std::move(padded);
+      }
+      TF_ASSIGN_OR_RETURN(auto array_result,
+                          sharding_internal::MakeArrayFromHostBuffer(
+                              *client_, to_transfer, device_list_,
+                              input_shardings[i], *thread_pool_));
+      result.push_back(std::move(array_result));
+    }
+    return result;
+  }
+
+ private:
+  xla::ifrt::Client* client_;
+  xla::ifrt::DeviceListRef device_list_;
+  tsl::thread::ThreadPool* thread_pool_;
+  std::shared_ptr<std::vector<RecordedTransfer>> recorded_transfers_;
+};
+
+class MockPaddingH2DTransferExecutorFactory
+    : public H2DTransferExecutorFactory {
+ public:
+  explicit MockPaddingH2DTransferExecutorFactory(
+      std::shared_ptr<std::vector<RecordedTransfer>> recorded_transfers)
+      : recorded_transfers_(std::move(recorded_transfers)) {}
+
+  absl::StatusOr<std::unique_ptr<H2DTransferExecutor>> Create(
+      xla::ifrt::Client* client, xla::ifrt::DeviceListRef device_list,
+      tsl::thread::ThreadPool* thread_pool) override {
+    return std::make_unique<MockPaddingH2DTransferExecutor>(
+        client, std::move(device_list), thread_pool, recorded_transfers_);
+  }
+
+ private:
+  std::shared_ptr<std::vector<RecordedTransfer>> recorded_transfers_;
 };
 
 class MockStablehloOptimizer : public StablehloOptimizer {
@@ -1423,6 +1504,210 @@ TEST(StableHloRunnerTest, ArenaTransferFailure) {
   EXPECT_THAT(runner->Execute(value_inputs, RunContext{}),
               StatusIs(absl::StatusCode::kInternal,
                        HasSubstr("Simulated Arena Transfer Failure")));
+}
+
+// Creates a runner for `simple.mlir` (`dot(arg0: f32[2,2], arg1: f32[2,8])`,
+// returning the product and the product minus one) on a single device.
+absl::StatusOr<std::unique_ptr<StableHloRunner>> CreateSimpleModelRunner(
+    std::shared_ptr<xla::ifrt::Client> ifrt_client,
+    IfrtLoadedVariableRegistry* ifrt_loaded_variable_registry,
+    tsl::thread::ThreadPool* thread_pool,
+    std::unique_ptr<H2DTransferExecutorFactory> h2d_factory) {
+  const std::string file_path =
+      tsl::GetDataDependencyFilepath(kSimpleModelPath);
+  std::string hlo_str;
+  TF_RETURN_IF_ERROR(
+      tsl::ReadFileToString(tsl::Env::Default(), file_path, &hlo_str));
+  StableHlo::Spec stablehlo_spec = {
+      .inputs = {{.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                  .shape = ArgShape({2, 2}),
+                  .sharding = xla::HloSharding::Replicate()},
+                 {.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                  .shape = ArgShape({2, 8}),
+                  .sharding = xla::HloSharding::Replicate()}},
+      .outputs = {{.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                   .shape = ArgShape({2, 8}),
+                   .sharding = xla::HloSharding::Replicate()},
+                  {.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                   .shape = ArgShape({2, 8}),
+                   .sharding = xla::HloSharding::Replicate()}},
+      .mlir_module_kept_var_idx = {0, 1},
+  };
+  stablehlo_spec.mlir_module = hlo_str;
+  TF_ASSIGN_OR_RETURN(std::unique_ptr<StableHlo> stablehlo,
+                      StableHlo::Create({stablehlo_spec}));
+  auto assigned_devices =
+      std::make_shared<const AssignedDevices>(AssignedDevices{
+          .device_assignment = std::vector<int>{/*device0*/ 0, 0, 0, 0},
+          .num_replicas = 1,
+          .num_cores_per_replica = 1});
+  return StableHloRunner::Create(
+      std::move(stablehlo), GetCompileOptions(assigned_devices),
+      std::move(ifrt_client),
+      /*persistent_compilation_cache=*/nullptr, ifrt_loaded_variable_registry,
+      {},
+      /*compilation_environment_proto=*/nullptr, thread_pool,
+      /*optimizer=*/nullptr, assigned_devices,
+      /*serving_core_selector=*/nullptr, std::move(h2d_factory));
+}
+
+TEST(StableHloRunnerTest, DynamicDmaInputUsesExecutableOfStaticShape) {
+  TF_ASSERT_OK_AND_ASSIGN(auto ifrt_client, xla::ifrt::test_util::GetClient());
+  IfrtLoadedVariableRegistry ifrt_loaded_variable_registry;
+  auto thread_pool = std::make_unique<tsl::thread::ThreadPool>(
+      tsl::Env::Default(), tsl::ThreadOptions(), "IfrtWorkerThreadPool", 16);
+  auto recorded_transfers = std::make_shared<std::vector<RecordedTransfer>>();
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<StableHloRunner> runner,
+      CreateSimpleModelRunner(
+          ifrt_client, &ifrt_loaded_variable_registry, thread_pool.get(),
+          std::make_unique<MockPaddingH2DTransferExecutorFactory>(
+              recorded_transfers)));
+
+  // arg0 carries a single row of data but is bound to the executable's static
+  // shape f32[2,2] for this call; the second row is padding the model never
+  // sees from the host.
+  HostBuffer arg0 = AsHostBuffer<float>({1.0, 2.0}, xla::ifrt::Shape({1, 2}));
+  HostBuffer arg1 =
+      AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0,
+                           11.0, 12.0, 13.0, 14.0, 15.0, 16.0},
+                          xla::ifrt::Shape({2, 8}));
+  const StableHloRunner::ExecuteOptions bind_arg0{
+      .input_static_shapes = {xla::ifrt::Shape({2, 2}), std::nullopt}};
+  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla_serving::Value> outputs,
+                          runner->Execute({xla_serving::Value(arg0), xla_serving::Value(arg1)},
+                                          bind_arg0, RunContext{}));
+
+  // The executor saw the actual data shape together with the static shape.
+  ASSERT_EQ(recorded_transfers->size(), 2);
+  EXPECT_EQ((*recorded_transfers)[0].shape, xla::ifrt::Shape({1, 2}));
+  EXPECT_THAT((*recorded_transfers)[0].static_shape,
+              Optional(xla::ifrt::Shape({2, 2})));
+  EXPECT_EQ((*recorded_transfers)[1].shape, xla::ifrt::Shape({2, 8}));
+  EXPECT_EQ((*recorded_transfers)[1].static_shape, std::nullopt);
+
+  // Outputs have the static batch size; row 0 is the real result and row 1 is
+  // whatever the padding produced (zeros, with the padding mock).
+  ASSERT_EQ(outputs.size(), 2);
+  EXPECT_THAT(outputs[0].Get<HostBuffer>(),
+              HostBufferEq(AsHostBuffer<float>(
+                  {19.0, 22.0, 25.0, 28.0, 31.0, 34.0, 37.0, 40.0,  //
+                   0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+                  xla::ifrt::Shape({2, 8}))));
+  EXPECT_THAT(outputs[1].Get<HostBuffer>(),
+              HostBufferEq(AsHostBuffer<float>(
+                  {18.0, 21.0, 24.0, 27.0, 30.0, 33.0, 36.0, 39.0,  //
+                   -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0},
+                  xla::ifrt::Shape({2, 8}))));
+
+  // A full f32[2,2] input (no static shape) reuses the executable compiled
+  // for the static shape.
+  HostBuffer full_arg0 =
+      AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0}, xla::ifrt::Shape({2, 2}));
+  TF_ASSERT_OK_AND_ASSIGN(
+      outputs,
+      runner->Execute({xla_serving::Value(full_arg0), xla_serving::Value(arg1)}, RunContext{}));
+  EXPECT_THAT(outputs[0].Get<HostBuffer>(),
+              HostBufferEq(AsHostBuffer<float>(
+                  {19.0, 22.0, 25.0, 28.0, 31.0, 34.0, 37.0, 40.0,  //
+                   39.0, 46.0, 53.0, 60.0, 67.0, 74.0, 81.0, 88.0},
+                  xla::ifrt::Shape({2, 8}))));
+  // `GetProgramFingerprint` fails unless exactly one executable was cached.
+  EXPECT_OK(StableHloRunnerTestPeer::GetProgramFingerprint(*runner));
+}
+
+TEST(StableHloRunnerTest, DynamicDmaRejectsInvalidStaticShapeOptions) {
+  TF_ASSERT_OK_AND_ASSIGN(auto ifrt_client, xla::ifrt::test_util::GetClient());
+  IfrtLoadedVariableRegistry ifrt_loaded_variable_registry;
+  auto thread_pool = std::make_unique<tsl::thread::ThreadPool>(
+      tsl::Env::Default(), tsl::ThreadOptions(), "IfrtWorkerThreadPool", 16);
+  auto recorded_transfers = std::make_shared<std::vector<RecordedTransfer>>();
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<StableHloRunner> runner,
+      CreateSimpleModelRunner(
+          ifrt_client, &ifrt_loaded_variable_registry, thread_pool.get(),
+          std::make_unique<MockPaddingH2DTransferExecutorFactory>(
+              recorded_transfers)));
+  HostBuffer arg0 = AsHostBuffer<float>({1.0, 2.0}, xla::ifrt::Shape({1, 2}));
+  HostBuffer arg1 =
+      AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0,
+                           11.0, 12.0, 13.0, 14.0, 15.0, 16.0},
+                          xla::ifrt::Shape({2, 8}));
+  const std::vector<xla_serving::Value> inputs = {xla_serving::Value(arg0), xla_serving::Value(arg1)};
+
+  // Wrong number of entries.
+  EXPECT_THAT(
+      runner->Execute(inputs,
+                      StableHloRunner::ExecuteOptions{
+                          .input_static_shapes = {xla::ifrt::Shape({2, 2})}},
+                      RunContext{}),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("one entry per user input")));
+
+  // Host buffer does not fit the static shape (rank, dim 0, other dims).
+  for (const xla::ifrt::Shape& bad_static_shape :
+       {xla::ifrt::Shape({2}), xla::ifrt::Shape({0, 2}),
+        xla::ifrt::Shape({2, 4})}) {
+    EXPECT_THAT(runner->Execute(inputs,
+                                StableHloRunner::ExecuteOptions{
+                                    .input_static_shapes = {bad_static_shape,
+                                                            std::nullopt}},
+                                RunContext{}),
+                StatusIs(absl::StatusCode::kInvalidArgument))
+        << bad_static_shape;
+  }
+
+  // A static shape for a device-buffer input is rejected.
+  xla::ifrt::ShardingRef sharding = xla::ifrt::SingleDeviceSharding::Create(
+      ifrt_client->addressable_devices().front(), xla::ifrt::MemoryKind());
+  TF_ASSERT_OK_AND_ASSIGN(xla::ifrt::DeviceListRef device_list,
+                          ifrt_client->MakeDeviceList(
+                              {ifrt_client->addressable_devices().front()}));
+  HostBuffer full_arg0 =
+      AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0}, xla::ifrt::Shape({2, 2}));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto arg0_array,
+      sharding_internal::MakeArrayFromHostBuffer(
+          *ifrt_client, full_arg0, device_list, sharding, *thread_pool));
+  EXPECT_THAT(
+      runner->Execute(
+          {xla_serving::Value(xla_serving::DeviceBuffer{.ifrt_client = ifrt_client,
+                                        .ifrt_array = std::move(arg0_array),
+                                        .sharding = sharding,
+                                        .device_list = device_list}),
+           xla_serving::Value(arg1)},
+          StableHloRunner::ExecuteOptions{
+              .input_static_shapes = {xla::ifrt::Shape({2, 2}), std::nullopt}},
+          RunContext{}),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("is a device buffer")));
+  EXPECT_TRUE(recorded_transfers->empty());
+}
+
+TEST(StableHloRunnerTest, DynamicDmaInputRequiresH2DTransferExecutor) {
+  TF_ASSERT_OK_AND_ASSIGN(auto ifrt_client, xla::ifrt::test_util::GetClient());
+  IfrtLoadedVariableRegistry ifrt_loaded_variable_registry;
+  auto thread_pool = std::make_unique<tsl::thread::ThreadPool>(
+      tsl::Env::Default(), tsl::ThreadOptions(), "IfrtWorkerThreadPool", 16);
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<StableHloRunner> runner,
+      CreateSimpleModelRunner(ifrt_client, &ifrt_loaded_variable_registry,
+                              thread_pool.get(),
+                              /*h2d_factory=*/nullptr));
+
+  HostBuffer arg0 = AsHostBuffer<float>({1.0, 2.0}, xla::ifrt::Shape({1, 2}));
+  HostBuffer arg1 =
+      AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0,
+                           11.0, 12.0, 13.0, 14.0, 15.0, 16.0},
+                          xla::ifrt::Shape({2, 8}));
+  EXPECT_THAT(
+      runner->Execute(
+          {xla_serving::Value(arg0), xla_serving::Value(arg1)},
+          StableHloRunner::ExecuteOptions{
+              .input_static_shapes = {xla::ifrt::Shape({2, 2}), std::nullopt}},
+          RunContext{}),
+      StatusIs(absl::StatusCode::kFailedPrecondition,
+               HasSubstr("no H2DTransferExecutor is configured")));
 }
 
 class StableHloRunnerExecuteOptionsTest : public ::testing::Test {
