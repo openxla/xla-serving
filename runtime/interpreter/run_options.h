@@ -77,13 +77,17 @@ struct RunOptions {
   // Device memory, written into directly through input aliasing. The
   // component's StableHLO function must have been exported for input aliasing.
   // Each array must match the dtype, shape, sharding and layout of the output
-  // it backs, and must be solely owned by the caller.
+  // it backs, and belong to the PjRt-backed IFRT client the model runs on.
   //
-  // Lifecycle: the array is donated to the execution. It is deleted when the
-  // run starts and must never be reused; from then on the runtime manages its
-  // device memory. If the output is placed on the device, the returned
-  // `DeviceBuffer` is backed by that memory. If it is placed on the host, the
-  // result is copied off it and the memory is released after the run.
+  // Lifecycle: the run writes the result into the array's memory in place,
+  // and shares ownership of that memory with the caller rather than taking it
+  // over. The array stays valid and holds the result once the run completes,
+  // so it can be read, reused for later runs, or passed to other models. If
+  // the output is placed on the device, the returned `DeviceBuffer` is backed
+  // by the same memory. If it is placed on the host, the result is copied off
+  // it. The memory is released once the array and any `DeviceBuffer` backed by
+  // it are gone. The caller must not use the array while the run is in
+  // progress, nor pass it to a run while anything may still be reading it.
   absl::flat_hash_map<std::string, xla::ifrt::ArrayRef>
       preallocated_output_arrays;
 
@@ -97,7 +101,7 @@ struct RunOptions {
   // the caller's memory. The caller must not touch the buffer until the run
   // completes. The device memory the execution writes into is the output's
   // entry in `preallocated_output_arrays` if it has one, and is allocated by
-  // the runtime otherwise; either way it is released after the copy.
+  // the runtime and released after the copy otherwise.
   absl::flat_hash_map<std::string, HostBuffer> preallocated_output_host_buffers;
 
   // The unique identifier for this execution request. Internal-only field,

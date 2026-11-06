@@ -301,11 +301,57 @@ cc_library(
 )
 
 cc_library(
+    name = "aliasing_array",
+    srcs = ["aliasing_array.cc"],
+    hdrs = ["aliasing_array.h"],
+    visibility = [":core_users"],
+    deps = [
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@xla//xla:shape_util",
+        "@xla//xla/pjrt:common_pjrt_client",
+        "@xla//xla/pjrt:pjrt_client",
+        "@xla//xla/pjrt:pjrt_layout",
+        "@xla//xla/pjrt:raw_buffer",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/python/pjrt_ifrt",
+        "@xla//xla/tsl/concurrency:ref_count",
+        "@xla//xla/tsl/platform:errors",
+        "@xla//xla/tsl/platform:statusor",
+    ],
+)
+
+cc_test(
+    name = "aliasing_array_test",
+    srcs = ["aliasing_array_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":aliasing_array",
+        ":host_buffer",
+        ":host_buffer_test_utils",
+        ":pjrt_ifrt_cpu_client_test_lib",  # buildcleaner: keep
+        ":sharding_utils",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@abseil-cpp//absl/status:statusor",
+        "@googletest//:gtest_main",
+        "@xla//xla/pjrt:pjrt_client",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/python/ifrt:test_util",
+        "@xla//xla/python/pjrt_ifrt",
+        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:statusor",
+    ],
+)
+
+cc_library(
     name = "stablehlo_runner_base",
     srcs = ["stablehlo_runner_base.cc"],
     hdrs = ["stablehlo_runner_base.h"],
     visibility = [":core_users"],
     deps = [
+        ":aliasing_array",
         ":device_buffer",
         ":h2d_transfer_executor",
         ":host_buffer",
