@@ -21,9 +21,7 @@ filegroup(
 cc_library(
     name = "constants",
     hdrs = ["constants.h"],
-    visibility = [
-        ":core_users",
-    ],
+    visibility = [":core_users"],
 )
 
 cc_library(
@@ -103,7 +101,7 @@ cc_library(
     name = "sharding_utils_core",
     srcs = ["sharding_utils_core.cc"],
     hdrs = ["sharding_utils_core.h"],
-    visibility = [":core_users"],
+    visibility = ["//visibility:private"],
     deps = [
         ":host_buffer",
         "@abseil-cpp//absl/status",
@@ -203,7 +201,7 @@ cc_test(
 cc_library(
     name = "h2d_transfer_executor",
     hdrs = ["h2d_transfer_executor.h"],
-    visibility = [":core_users"],
+    visibility = ["//visibility:private"],
     deps = [
         ":host_buffer",
         "@abseil-cpp//absl/status:statusor",
@@ -846,7 +844,7 @@ cc_library(
     name = "loaded_stablehlo",
     srcs = ["loaded_stablehlo.cc"],
     hdrs = ["loaded_stablehlo.h"],
-    visibility = [":core_users"],
+    visibility = ["//visibility:private"],
     deps = [
         ":stablehlo",
         ":stablehlo_utils",
