@@ -299,6 +299,7 @@ class SaveModelTest(test_utils.XsmTestCase):
             components {
               role: ROLE_MODEL
               function_name: "serving_default"
+              weights_name: "weights"
             }
             batch_options {
               batch_component: MODEL_FUNCTION

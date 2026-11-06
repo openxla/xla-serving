@@ -302,7 +302,7 @@ def _update_save_bundle_with_pipeline_node(
     raise ValueError(
         f'Processor {prepared_processor.name!r} was exported for output'
         ' donation, which requires graph-based orchestration so that the'
-        ' component\'s output names are recorded in the artifact: a caller'
+        " component's output names are recorded in the artifact: a caller"
         ' supplying donated output buffers addresses them by name. Set'
         ' `ServingConfig.orchestration` to an'
         ' `Orchestration(..., graph_based=True)`, or export without'
@@ -327,6 +327,12 @@ def _update_save_bundle_with_pipeline_node(
       role=pipeline_node.role,
       use_batching=pipeline_node.use_batching,
   )
+  # TODO: Stop dual-writing the deprecated
+  # `Component.weights_name` once all deployed runtimes resolve
+  # `Function.weights_name` from the manifest. Until then, runtimes predating
+  # the manifest field need it to bind the function's weights.
+  if prepared_processor.weights_name:
+    component.weights_name = prepared_processor.weights_name
   if is_graph_based:
     shlo_input_sig = type_conversions.to_shlo_tensor_spec(
         prepared_processor.input_signature

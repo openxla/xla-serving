@@ -264,18 +264,21 @@ class MainLibOrchestrationTest(test_utils.XsmTestCase):
         pipeline.components[1].function_name,
         'serving_default_model2_serving_default',
     )
-    self.assertFalse(pipeline.components[0].HasField('weights_name'))
-    self.assertFalse(pipeline.components[1].HasField('weights_name'))
+    # TODO: Drop once the deprecated field is no longer written.
+    self.assertEqual(pipeline.components[0].weights_name, 'model1_weights')
+    self.assertEqual(pipeline.components[1].weights_name, 'model2_weights')
 
     manifest = persistence_lib.load(str(export_path))
     self.assertEqual(
-        manifest.objects[pipeline.components[0].function_name]
-        .function.weights_name,
+        manifest.objects[
+            pipeline.components[0].function_name
+        ].function.weights_name,
         'model1_weights',
     )
     self.assertEqual(
-        manifest.objects[pipeline.components[1].function_name]
-        .function.weights_name,
+        manifest.objects[
+            pipeline.components[1].function_name
+        ].function.weights_name,
         'model2_weights',
     )
 
@@ -326,7 +329,8 @@ class MainLibOrchestrationTest(test_utils.XsmTestCase):
       pipelines_proto = orchestration_pb2.Pipelines.FromString(f.read())
     pipeline = pipelines_proto.name_to_pipeline['serving_default']
     self.assertLen(pipeline.components, 1)
-    self.assertFalse(pipeline.components[0].HasField('weights_name'))
+    # TODO: Drop once the deprecated field is no longer written.
+    self.assertEqual(pipeline.components[0].weights_name, 'weights')
 
     manifest = persistence_lib.load(str(export_path))
     fn = manifest.objects[pipeline.components[0].function_name].function
