@@ -26,13 +26,15 @@ namespace core {
 class GraphValidator {
  public:
   // Validates that the graph is non-empty, topologically sorted, all internal
-  // edges connect compatible ports and types, and all graph output edges refer
-  // to valid nodes/ports.
+  // edges connect compatible ports and types, all graph output edges refer
+  // to valid nodes/ports, and, if the graph declares its number of inputs, all
+  // graph input edges refer to a declared input.
   static absl::Status Validate(const ExecutionGraph& graph);
 
  private:
   static absl::Status ValidateInternalEdges(const ExecutionGraph& graph);
   static absl::Status ValidateGraphOutputs(const ExecutionGraph& graph);
+  static absl::Status ValidateGraphInputs(const ExecutionGraph& graph);
 };
 
 }  // namespace core

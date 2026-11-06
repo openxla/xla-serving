@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <typeindex>
 #include <utility>
@@ -242,6 +243,7 @@ TEST(CompositeProcessorTest, SimpleTransformsSucceed) {
       graph.AddNode("mult_five", std::make_unique<MultiplyByFiveTransform>(),
                     {GraphEdge::NodeOutput(add_two, 0).value()});
   graph.SetOutputs({GraphEdge::NodeOutput(mult_five, 0).value()});
+  graph.SetNumInputs(1);
 
   ASSERT_OK_AND_ASSIGN(CompositeProcessor processor,
                        CompositeProcessor::Create(std::move(graph)));
@@ -796,6 +798,129 @@ TEST(CompositeProcessorTest, DagSerializeDeserialize) {
   ASSERT_EQ(context.outputs.size(), 1);
   EXPECT_TRUE(context.outputs[0].IsType<int>());
   EXPECT_EQ(context.outputs[0].Get<int>(), 24);
+}
+
+TEST(CompositeProcessorTest, DeclaredNumInputsSerializeDeserialize) {
+  // The graph reads only input 0 of its 2 declared inputs.
+  ExecutionGraph graph;
+  int add_two = graph.AddNode("add_two", std::make_unique<AddTwoTransform>(),
+                              {GraphEdge::GraphInput(0).value()});
+  graph.SetOutputs({GraphEdge::NodeOutput(add_two, 0).value()});
+  graph.SetNumInputs(2);
+
+  ASSERT_OK_AND_ASSIGN(CompositeProcessor processor,
+                       CompositeProcessor::Create(std::move(graph)));
+  EXPECT_EQ(processor.GetNumInputs(), 2);
+
+  ASSERT_OK_AND_ASSIGN(CompositeProcessorConfig config, processor.ToProto());
+  EXPECT_THAT(config, EqualsProto(R"pb(
+                transforms {
+                  name: "add_two"
+                  op_name: "AddTwoTransform"
+                  input_edges { type: GRAPH_INPUT }
+                }
+                output_edges { type: NODE_OUTPUT }
+                metadata { version: 1 }
+                num_inputs: 2
+              )pb"));
+
+  ASSERT_OK_AND_ASSIGN(CompositeProcessor deserialized,
+                       CompositeProcessor::FromProto(config));
+  EXPECT_EQ(deserialized.GetNumInputs(), 2);
+
+  api::ExecuteContext context;
+  std::vector<api::Value> inputs = {api::Value(10), api::Value(20)};
+  context.inputs = inputs;
+  EXPECT_OK(deserialized.Process(context));
+  ASSERT_EQ(context.outputs.size(), 1);
+  EXPECT_EQ(context.outputs[0].Get<int>(), 12);
+}
+
+TEST(CompositeProcessorTest, FromProtoHonorsExplicitZeroNumInputs) {
+  CompositeProcessorConfig config;
+  EXPECT_TRUE(TextFormat::ParseFromString(
+      R"pb(
+        metadata { version: 1 }
+        transforms {
+          name: "node1"
+          op_name: "AddTwoTransform"
+          input_edges { type: GRAPH_INPUT source_index: 0 }
+        }
+        output_edges { type: NODE_OUTPUT source_index: 0 port_index: 0 }
+        num_inputs: 0
+      )pb",
+      &config));
+  // An explicit 0 is not mistaken for an unset field (which would infer 1).
+  EXPECT_THAT(CompositeProcessor::FromProto(config),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("reads graph input 0, but the graph has 0 "
+                                 "inputs")));
+}
+
+TEST(CompositeProcessorTest, FromProtoWithoutNumInputsLeavesItUndeclared) {
+  CompositeProcessorConfig config;
+  EXPECT_TRUE(TextFormat::ParseFromString(
+      R"pb(
+        metadata { version: 1 }
+        transforms {
+          name: "node1"
+          op_name: "AddTwoTransform"
+          input_edges { type: GRAPH_INPUT source_index: 1 }
+        }
+        output_edges { type: NODE_OUTPUT source_index: 0 port_index: 0 }
+      )pb",
+      &config));
+
+  ASSERT_OK_AND_ASSIGN(CompositeProcessor processor,
+                       CompositeProcessor::FromProto(config));
+  EXPECT_EQ(processor.graph().declared_num_inputs(), std::nullopt);
+  EXPECT_EQ(processor.graph().GetNumReferencedInputs(), 2);
+  EXPECT_DEATH(processor.GetNumInputs(), "SetNumInputs");
+
+  // Re-serializing keeps the count implicit.
+  ASSERT_OK_AND_ASSIGN(CompositeProcessorConfig config2, processor.ToProto());
+  EXPECT_FALSE(config2.has_num_inputs());
+}
+
+TEST(CompositeProcessorTest, FromProtoWithEdgeBeyondNumInputsFails) {
+  CompositeProcessorConfig config;
+  EXPECT_TRUE(TextFormat::ParseFromString(
+      R"pb(
+        metadata { version: 1 }
+        transforms {
+          name: "node1"
+          op_name: "AddTwoTransform"
+          input_edges { type: GRAPH_INPUT source_index: 1 }
+        }
+        output_edges { type: NODE_OUTPUT source_index: 0 port_index: 0 }
+        num_inputs: 1
+      )pb",
+      &config));
+
+  EXPECT_THAT(CompositeProcessor::FromProto(config),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("reads graph input 1, but the graph has 1 "
+                                 "inputs")));
+}
+
+TEST(CompositeProcessorTest, FromProtoWithNegativeNumInputsFails) {
+  CompositeProcessorConfig config;
+  EXPECT_TRUE(TextFormat::ParseFromString(
+      R"pb(
+        metadata { version: 1 }
+        transforms {
+          name: "node1"
+          op_name: "AddTwoTransform"
+          input_edges { type: GRAPH_INPUT source_index: 0 }
+        }
+        output_edges { type: NODE_OUTPUT source_index: 0 port_index: 0 }
+        num_inputs: -1
+      )pb",
+      &config));
+
+  EXPECT_THAT(CompositeProcessor::FromProto(config),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("num_inputs must be non-negative, got -1")));
 }
 
 class CustomCountingGraphExecutor : public GraphExecutor {

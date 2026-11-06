@@ -1425,7 +1425,11 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
             self.SetOutputs(std::move(outputs));
           })
       .def_property("io_structure", &core::ExecutionGraph::io_structure,
-                    &core::ExecutionGraph::SetIOStructure);
+                    &core::ExecutionGraph::SetIOStructure)
+      // Reads the declared input count, or infers it from the graph input
+      // edges if it was never set.
+      .def_property("num_inputs", &core::ExecutionGraph::GetNumInputs,
+                    &core::ExecutionGraph::SetNumInputs);
 
   // Internal API only. Do not export.
   py::class_<core::CompositeProcessor>(m, "CompositeProcessor")
@@ -1466,6 +1470,8 @@ PYBIND11_MODULE(composite_processor_pybind, m) {
              return outputs;
            })
       .def("propagate_signature", &core::CompositeProcessor::PropagateSignature)
+      .def_property_readonly("num_inputs",
+                             &core::CompositeProcessor::GetNumInputs)
       .def_property_readonly("graph", &core::CompositeProcessor::graph);
 }
 

@@ -106,4 +106,10 @@ message CompositeProcessorConfig {
   repeated EdgeProto output_edges = 4;
   CompositeProcessorMetadata metadata = 5;
   GraphIOStructureProto io_structure = 6;
+  // The number of inputs of the graph, including trailing inputs that no
+  // transform or output edge reads.
+  // Currently the field_presence is EXPLICIT to allow unset values to be
+  // inferred. Later, it will be required to be set. (and the presence may turn
+  // IMPLICIT)
+  int32 num_inputs = 7 [features.field_presence = EXPLICIT];
 }

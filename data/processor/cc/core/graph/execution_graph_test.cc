@@ -15,6 +15,7 @@
 #include "data/processor/cc/core/graph/execution_graph.h"  // from @xla_serving
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -116,20 +117,103 @@ TEST(ExecutionGraphTest, GraphEdgeValidation) {
             absl::StatusCode::kInvalidArgument);
 }
 
-TEST(ExecutionGraphTest, GetNumInputsAndOutputs) {
+TEST(ExecutionGraphTest, GetNumReferencedInputsAndOutputs) {
   ExecutionGraph graph;
-  EXPECT_EQ(graph.GetNumInputs(), 0);
+  EXPECT_EQ(graph.GetNumReferencedInputs(), 0);
   EXPECT_EQ(graph.GetNumOutputs(), 0);
 
   graph.AddNode(
       "first", std::make_shared<TestTransform>(),
       {GraphEdge::GraphInput(0).value(), GraphEdge::GraphInput(2).value()});
-  EXPECT_EQ(graph.GetNumInputs(), 3);
+  EXPECT_EQ(graph.GetNumReferencedInputs(), 3);
   EXPECT_EQ(graph.GetNumOutputs(), 0);
 
   graph.SetOutputs({GraphEdge::GraphInput(4).value()});
-  EXPECT_EQ(graph.GetNumInputs(), 5);
+  EXPECT_EQ(graph.GetNumReferencedInputs(), 5);
   EXPECT_EQ(graph.GetNumOutputs(), 1);
+}
+
+TEST(ExecutionGraphTest, GetNumInputsWithoutSetNumInputsDies) {
+  ExecutionGraph graph;
+  graph.AddNode("first", std::make_shared<TestTransform>(),
+                {GraphEdge::GraphInput(0).value()});
+  EXPECT_EQ(graph.declared_num_inputs(), std::nullopt);
+  EXPECT_EQ(graph.GetNumReferencedInputs(), 1);
+  EXPECT_DEATH(graph.GetNumInputs(), "SetNumInputs");
+}
+
+TEST(ExecutionGraphTest, DeclaredNumInputsIncludesUnreadTrailingInputs) {
+  ExecutionGraph graph;
+  graph.AddNode("first", std::make_shared<TestTransform>(),
+                {GraphEdge::GraphInput(0).value()});
+  graph.SetNumInputs(3);
+  EXPECT_EQ(graph.declared_num_inputs(), 3);
+  EXPECT_EQ(graph.GetNumReferencedInputs(), 1);
+  EXPECT_EQ(graph.GetNumInputs(), 3);
+}
+
+TEST(ExecutionGraphTest, DeclaredZeroInputs) {
+  ExecutionGraph graph;
+  graph.SetNumInputs(0);
+  EXPECT_EQ(graph.declared_num_inputs(), 0);
+  EXPECT_EQ(graph.GetNumInputs(), 0);
+}
+
+TEST(ExecutionGraphTest, ClearResetsDeclaredNumInputs) {
+  ExecutionGraph graph;
+  graph.AddNode("first", std::make_shared<TestTransform>(),
+                {GraphEdge::GraphInput(0).value()});
+  graph.SetNumInputs(3);
+  GraphIOStructureProto io_structure;
+  io_structure.mutable_input_structure()->set_type(PyTreeProto::LEAF);
+  graph.SetIOStructure(io_structure);
+
+  graph.clear();
+  EXPECT_EQ(graph.declared_num_inputs(), std::nullopt);
+  EXPECT_EQ(graph.io_structure().input_structure().type(),
+            PyTreeProto::INVALID);
+  EXPECT_DEATH(graph.GetNumInputs(), "SetNumInputs");
+}
+
+TEST(ExecutionGraphTest, DeclaredNumInputsFallsBackToIOStructureAndUpdates) {
+  ExecutionGraph graph;
+
+  GraphIOStructureProto io1;
+  io1.mutable_input_structure()->set_type(PyTreeProto::LEAF);
+  io1.mutable_captured_structure()->set_type(PyTreeProto::LEAF);
+  graph.SetIOStructure(io1);
+  EXPECT_EQ(graph.declared_num_inputs(), 2);
+  EXPECT_EQ(graph.GetNumInputs(), 2);
+
+  GraphIOStructureProto io2;
+  io2.mutable_input_structure()->set_type(PyTreeProto::TUPLE);
+  io2.mutable_input_structure()->add_children()->set_type(PyTreeProto::LEAF);
+  io2.mutable_input_structure()->add_children()->set_type(PyTreeProto::LEAF);
+  io2.mutable_input_structure()->add_children()->set_type(PyTreeProto::LEAF);
+  graph.SetIOStructure(io2);
+  EXPECT_EQ(graph.declared_num_inputs(), 3);
+  EXPECT_EQ(graph.GetNumInputs(), 3);
+}
+
+TEST(ExecutionGraphTest, SetNumInputsTakesPrecedenceOverIOStructure) {
+  ExecutionGraph graph;
+  GraphIOStructureProto io;
+  io.mutable_input_structure()->set_type(PyTreeProto::TUPLE);
+  io.mutable_input_structure()->add_children()->set_type(PyTreeProto::LEAF);
+  io.mutable_input_structure()->add_children()->set_type(PyTreeProto::LEAF);
+
+  graph.SetNumInputs(5);
+  graph.SetIOStructure(io);
+  EXPECT_EQ(graph.declared_num_inputs(), 5);
+  EXPECT_EQ(graph.GetNumInputs(), 5);
+
+  ExecutionGraph graph2;
+  graph2.SetIOStructure(io);
+  EXPECT_EQ(graph2.GetNumInputs(), 2);
+  graph2.SetNumInputs(1);
+  graph2.SetIOStructure(io);
+  EXPECT_EQ(graph2.declared_num_inputs(), 1);
+  EXPECT_EQ(graph2.GetNumInputs(), 1);
 }
 
 }  // namespace

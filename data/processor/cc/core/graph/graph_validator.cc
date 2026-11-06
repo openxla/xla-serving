@@ -31,6 +31,38 @@ absl::Status GraphValidator::Validate(const ExecutionGraph& graph) {
   }
   RETURN_IF_ERROR(ValidateInternalEdges(graph));
   RETURN_IF_ERROR(ValidateGraphOutputs(graph));
+  RETURN_IF_ERROR(ValidateGraphInputs(graph));
+  return absl::OkStatus();
+}
+
+absl::Status GraphValidator::ValidateGraphInputs(const ExecutionGraph& graph) {
+  if (!graph.declared_num_inputs().has_value()) {
+    // The input count is inferred from the edges, so they are all in range.
+    return absl::OkStatus();
+  }
+  const size_t num_inputs = *graph.declared_num_inputs();
+  for (size_t i = 0; i < graph.size(); ++i) {
+    const auto& node = graph[i];
+    for (size_t j = 0; j < node.input_edges.size(); ++j) {
+      const auto& edge = node.input_edges[j];
+      if (edge.type == GraphEdge::SourceType::kGraphInput &&
+          static_cast<size_t>(edge.source_index) >= num_inputs) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("Node '", node.name, "' (index ", i, ") input port ",
+                         j, " reads graph input ", edge.source_index,
+                         ", but the graph has ", num_inputs, " inputs."));
+      }
+    }
+  }
+  for (size_t i = 0; i < graph.outputs().size(); ++i) {
+    const auto& edge = graph.outputs()[i];
+    if (edge.type == GraphEdge::SourceType::kGraphInput &&
+        static_cast<size_t>(edge.source_index) >= num_inputs) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Graph output ", i, " reads graph input ", edge.source_index,
+          ", but the graph has ", num_inputs, " inputs."));
+    }
+  }
   return absl::OkStatus();
 }
 
