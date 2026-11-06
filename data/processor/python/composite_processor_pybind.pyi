@@ -129,6 +129,25 @@ class ShapeInferenceContext:
   metadata: ExecuteMetadata
   inputs: List[ShapeInferenceValue]
   outputs: List[ShapeInferenceValue]
+  # What is known at trace time about the contents of each input or output:
+  # empty, or parallel to `inputs` or `outputs`. An entry is None when nothing
+  # is known, and an element is None when it is unknown.
+  @property
+  def input_partial_values(
+      self,
+  ) -> List[Optional[Tuple[Optional[int], ...]]]: ...
+  @input_partial_values.setter
+  def input_partial_values(
+      self, values: Sequence[Optional[Sequence[Optional[int]]]]
+  ) -> None: ...
+  @property
+  def output_partial_values(
+      self,
+  ) -> List[Optional[Tuple[Optional[int], ...]]]: ...
+  @output_partial_values.setter
+  def output_partial_values(
+      self, values: Sequence[Optional[Sequence[Optional[int]]]]
+  ) -> None: ...
   def __init__(self) -> None: ...
 
 class ExecuteContext:

@@ -11,6 +11,26 @@ py_library(
     srcs = ["transform.py"],
 )
 
+py_library(
+    name = "shape_dtype_struct",
+    srcs = ["shape_dtype_struct.py"],
+    deps = [
+        "@xla_serving_pypi//jax",
+        "@xla_serving_pypi//numpy",
+    ],
+)
+
+py_test(
+    name = "shape_dtype_struct_test",
+    srcs = ["shape_dtype_struct_test.py"],
+    deps = [
+        ":shape_dtype_struct",
+        "@absl_py//absl/testing:absltest",
+        "@xla_serving_pypi//jax",
+        "@xla_serving_pypi//numpy",
+    ],
+)
+
 pybind_extension(
     name = "composite_processor_pybind",
     srcs = ["composite_processor_pybind.cc"],

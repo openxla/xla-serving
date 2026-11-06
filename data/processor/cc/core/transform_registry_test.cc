@@ -711,6 +711,164 @@ TEST(TransformBaseTest, ExpectedShapeAcceptsUnknownDimsAtTraceTime) {
               "Input 'x' has invalid shape at dim 0: 4. Expected: 2")));
 }
 
+using Values = std::vector<std::optional<api::PartialValue>>;
+
+// Forwards its input specs. Sets `output_partial_values` to
+// `output_partial_values` if given, else forwards `input_partial_values`.
+class ValueForwardingTransform : public TransformBase {
+ public:
+  static absl::StatusOr<std::unique_ptr<ValueForwardingTransform>> Create() {
+    return std::make_unique<ValueForwardingTransform>();
+  }
+  ValueForwardingTransform() = default;
+  explicit ValueForwardingTransform(Values output_partial_values)
+      : output_partial_values_(std::move(output_partial_values)) {}
+
+  absl::StatusOr<xla_serving::HostBuffer> operator()(xla_serving::HostBuffer a) { return a; }
+  absl::StatusOr<TransformConfig> ToProto() const override {
+    TransformConfig config;
+    config.set_op_name("ValueForwardingTransform");
+    return config;
+  }
+  absl::string_view DebugString() const override {
+    return "ValueForwardingTransform";
+  }
+
+ protected:
+  absl::Status PropagateSignatureImpl(
+      api::ShapeInferenceContext& context) const override {
+    context.outputs.assign(context.inputs.begin(), context.inputs.end());
+    if (output_partial_values_.has_value()) {
+      context.output_partial_values.assign(output_partial_values_->begin(),
+                                           output_partial_values_->end());
+    } else {
+      context.output_partial_values.assign(context.input_partial_values.begin(),
+                                           context.input_partial_values.end());
+    }
+    return absl::OkStatus();
+  }
+
+ private:
+  std::optional<Values> output_partial_values_;
+};
+
+ND_REGISTER_TRANSFORM(ValueForwardingTransform, "ValueForwardingTransform");
+
+// Propagates `specs` and `values` through `transform`, and returns the output
+// values.
+absl::StatusOr<Values> PropagateValues(const TransformBase& transform,
+                                       std::vector<api::HostBufferSpec> specs,
+                                       Values values) {
+  std::vector<api::ShapeInferenceValue> inputs(specs.begin(), specs.end());
+  api::ShapeInferenceContext context;
+  context.inputs = inputs;
+  context.input_partial_values = values;
+  absl::Status status = transform.PropagateSignature(context);
+  if (!status.ok()) return status;
+  return Values(context.output_partial_values.begin(),
+                context.output_partial_values.end());
+}
+
+TEST(TransformBaseTest, PropagateSignatureForwardsValues) {
+  const xla::ifrt::DType s32(xla::ifrt::DType::Kind::kS32);
+  const xla::ifrt::DType s64(xla::ifrt::DType::Kind::kS64);
+  const xla::ifrt::DType f32(xla::ifrt::DType::Kind::kF32);
+  ValueForwardingTransform transform;
+
+  // No values: nothing is known.
+  EXPECT_THAT(PropagateValues(transform, {{s32, xla::ifrt::Shape({2})}}, {}),
+              absl_testing::IsOkAndHolds(testing::IsEmpty()));
+
+  // Known, partially known and absent values.
+  const api::PartialValue known = api::PartialValue::Known({3, 4});
+  const api::PartialValue partial =
+      api::PartialValue::FromElements({std::nullopt, -1});
+  EXPECT_THAT(PropagateValues(transform,
+                              {{s32, xla::ifrt::Shape({2})},
+                               {s64, xla::ifrt::Shape({1, 2})},
+                               {f32, xla::ifrt::Shape({2})}},
+                              {known, partial, std::nullopt}),
+              absl_testing::IsOkAndHolds(
+                  testing::ElementsAre(known, partial, std::nullopt)));
+}
+
+TEST(TransformBaseTest, PropagateSignatureRejectsBadInputValues) {
+  const xla::ifrt::DType s32(xla::ifrt::DType::Kind::kS32);
+  const xla::ifrt::DType s64(xla::ifrt::DType::Kind::kS64);
+  const xla::ifrt::DType f32(xla::ifrt::DType::Kind::kF32);
+  ValueForwardingTransform transform;
+  const api::PartialValue two = api::PartialValue::Known({3, 4});
+
+  EXPECT_THAT(
+      PropagateValues(transform, {{s32, xla::ifrt::Shape({2})}}, {two, two}),
+      absl_testing::StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          testing::HasSubstr(
+              "ValueForwardingTransform: input_partial_values has 2 "
+              "entries, but there are 1 inputs")));
+  EXPECT_THAT(PropagateValues(transform, {{f32, xla::ifrt::Shape({2})}}, {two}),
+              absl_testing::StatusIs(
+                  absl::StatusCode::kInvalidArgument,
+                  testing::HasSubstr(
+                      "ValueForwardingTransform: input 0 has value "
+                      "{3,4}, but its dtype is F32, not int32 or int64")));
+  EXPECT_THAT(
+      PropagateValues(
+          transform,
+          {{s32, test_utils::PartialShapeOrDie({api::Dim::Unknown()})}}, {two}),
+      absl_testing::StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          testing::HasSubstr("input 0 has value {3,4}, but its shape [?] is "
+                             "not fully known")));
+  EXPECT_THAT(
+      PropagateValues(transform, {{s32, xla::ifrt::Shape({3})}}, {two}),
+      absl_testing::StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          testing::HasSubstr("input 0 has value {3,4}, but its shape [3] has 3 "
+                             "elements")));
+  std::vector<int64_t> many(api::PartialValue::kMaxElements + 1, 0);
+  EXPECT_THAT(
+      PropagateValues(
+          transform,
+          {{s64, xla::ifrt::Shape({static_cast<int64_t>(many.size())})}},
+          {api::PartialValue::Known(many)}),
+      absl_testing::StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          testing::HasSubstr("it has more than 64 elements")));
+  EXPECT_THAT(
+      PropagateValues(transform, {{s32, xla::ifrt::Shape({2})}},
+                      {api::PartialValue::Known({1, int64_t{1} << 31})}),
+      absl_testing::StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          testing::HasSubstr("element 1 does not fit its dtype int32")));
+  // The same element fits int64.
+  EXPECT_OK(PropagateValues(transform, {{s64, xla::ifrt::Shape({2})}},
+                            {api::PartialValue::Known({1, int64_t{1} << 31})}));
+}
+
+TEST(TransformBaseTest, PropagateSignatureRejectsBadOutputValues) {
+  const xla::ifrt::DType s32(xla::ifrt::DType::Kind::kS32);
+  const xla::ifrt::DType f32(xla::ifrt::DType::Kind::kF32);
+  const api::PartialValue one = api::PartialValue::Known({7});
+
+  EXPECT_THAT(PropagateValues(ValueForwardingTransform(Values{one, one}),
+                              {{s32, xla::ifrt::Shape({1})}}, {}),
+              absl_testing::StatusIs(
+                  absl::StatusCode::kInvalidArgument,
+                  testing::HasSubstr(
+                      "ValueForwardingTransform: output_partial_values has 2 "
+                      "entries, but there are 1 outputs")));
+  EXPECT_THAT(
+      PropagateValues(ValueForwardingTransform(Values{one}),
+                      {{f32, xla::ifrt::Shape({1})}}, {}),
+      absl_testing::StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          testing::HasSubstr("ValueForwardingTransform: output 0 has value "
+                             "{7}, but its dtype is F32, not int32 or int64")));
+  EXPECT_OK(PropagateValues(ValueForwardingTransform(Values{one}),
+                            {{s32, xla::ifrt::Shape({1})}}, {}));
+}
+
 template <typename T>
 class MultiKernelTransform : public TransformBase {
  public:
