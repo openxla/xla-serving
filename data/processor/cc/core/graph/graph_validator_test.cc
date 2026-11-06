@@ -181,6 +181,40 @@ TEST(GraphValidatorTest, NegativeInternalEdgePortIndexFails) {
                        HasSubstr("Invalid port index: node 'node1'")));
 }
 
+TEST(GraphValidatorTest, DeclaredNumInputsWithUnreadTrailingInputSucceeds) {
+  ExecutionGraph graph;
+  int node0 = graph.AddNode("node0", std::make_shared<IntToIntTransform>(),
+                            {GraphEdge::GraphInput(0).value()});
+  graph.SetOutputs({GraphEdge::NodeOutput(node0, 0).value()});
+  graph.SetNumInputs(2);
+  EXPECT_OK(GraphValidator::Validate(graph));
+}
+
+TEST(GraphValidatorTest, NodeReadingUndeclaredGraphInputFails) {
+  ExecutionGraph graph;
+  int node0 = graph.AddNode("node0", std::make_shared<IntToIntTransform>(),
+                            {GraphEdge::GraphInput(1).value()});
+  graph.SetOutputs({GraphEdge::NodeOutput(node0, 0).value()});
+  graph.SetNumInputs(1);
+  EXPECT_THAT(GraphValidator::Validate(graph),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Node 'node0' (index 0) input port 0 reads "
+                                 "graph input 1, but the graph has 1 inputs")));
+}
+
+TEST(GraphValidatorTest, GraphOutputReadingUndeclaredGraphInputFails) {
+  ExecutionGraph graph;
+  int node0 = graph.AddNode("node0", std::make_shared<IntToIntTransform>(),
+                            {GraphEdge::GraphInput(0).value()});
+  graph.SetOutputs({GraphEdge::NodeOutput(node0, 0).value(),
+                    GraphEdge::GraphInput(2).value()});
+  graph.SetNumInputs(2);
+  EXPECT_THAT(GraphValidator::Validate(graph),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Graph output 1 reads graph input 2, but the "
+                                 "graph has 2 inputs")));
+}
+
 }  // namespace
 }  // namespace core
 }  // namespace composite

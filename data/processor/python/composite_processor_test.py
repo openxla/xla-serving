@@ -32,6 +32,7 @@ from data.processor.python.examples import make_dict_transform_pybind
 from data.processor.python.examples import multiply_by_five_transform_pybind
 from data.processor.python.examples import suffix_transform_pybind
 from data.resource_manager.python import resource_manager
+from pybind11_abseil import status as error
 
 
 def _create_raw_dlpack_object(code: int, bits: int, lanes: int = 1):
@@ -387,6 +388,51 @@ class CompositeProcessorTest(absltest.TestCase):
 
     self.assertLen(outputs, 1)
     self.assertEqual(outputs[0].as_encapsulated_type(), 15)
+
+  def test_execution_graph_num_inputs(self):
+    graph = composite_processor_pybind.ExecutionGraph()
+    idx = graph.add_node(
+        "my_add_two",
+        add_two_transform_pybind.AddTwoTransform(),
+        [composite_processor_pybind.GraphEdge.graph_input(0)],
+    )
+    graph.set_outputs(
+        [composite_processor_pybind.GraphEdge.node_output(idx, 0)]
+    )
+    graph.num_inputs = 2
+    self.assertEqual(graph.num_inputs, 2)
+
+    processor = composite_processor_pybind.CompositeProcessor.create(graph)
+    self.assertEqual(processor.num_inputs, 2)
+    config = processor.to_proto()
+    self.assertEqual(config.num_inputs, 2)
+    deserialized = composite_processor_pybind.CompositeProcessor.from_proto(
+        config
+    )
+    self.assertEqual(deserialized.num_inputs, 2)
+    outputs = deserialized.process([
+        composite_processor_pybind.Value(5),
+        composite_processor_pybind.Value(10),
+    ])
+    self.assertLen(outputs, 1)
+    self.assertEqual(outputs[0].as_encapsulated_type(), 7)
+
+  def test_execution_graph_num_inputs_below_referenced_inputs_fails(self):
+    graph = composite_processor_pybind.ExecutionGraph()
+    idx = graph.add_node(
+        "my_add_two",
+        add_two_transform_pybind.AddTwoTransform(),
+        [composite_processor_pybind.GraphEdge.graph_input(1)],
+    )
+    graph.set_outputs(
+        [composite_processor_pybind.GraphEdge.node_output(idx, 0)]
+    )
+    graph.num_inputs = 1
+    with self.assertRaisesRegex(
+        (error.StatusNotOk, RuntimeError),
+        "reads graph input 1, but the graph has 1 inputs",
+    ):
+      composite_processor_pybind.CompositeProcessor.create(graph)
 
   def test_execute_context(self):
     context = composite_processor_pybind.ExecuteContext()
