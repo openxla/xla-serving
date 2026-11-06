@@ -258,6 +258,15 @@ def _build_function(
 
     stable_hlo_body.num_input_aliased_output = fn.num_input_aliased_output
 
+    if fn.optimized_input_signature is not None:
+      stable_hlo_body.optimized_input_signature.CopyFrom(
+          type_proto_utils.to_type_proto(fn.optimized_input_signature)
+      )
+    if fn.optimized_output_signature is not None:
+      stable_hlo_body.optimized_output_signature.CopyFrom(
+          type_proto_utils.to_type_proto(fn.optimized_output_signature)
+      )
+
     # Serialize and add all supplementals to the function body proto.
     for supp_name, supp in (fn.supplemental_info or {}).items():
       supp = supp.serializable_to_proto()

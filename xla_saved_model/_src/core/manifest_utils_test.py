@@ -25,6 +25,8 @@ from xla_saved_model._src.core import file_utils
 from xla_saved_model._src.core import manifest_utils
 from xla_saved_model._src.core import serializable_function
 from xla_saved_model._src.core import shlo_function
+from xla_saved_model._src.core import shlo_type
+from xla_saved_model._src.core import type_proto_utils
 from xla_saved_model._src.core import unstructured_data
 
 
@@ -616,6 +618,58 @@ class ManifestUtilsTest(absltest.TestCase):
       manifest_utils.read_unstructured_data_bytes(
           manifest_pb2.UnstructuredData(), '/unused'
       )
+
+  def test_build_shlo_function_proto_with_optimized_signatures(self):
+    opt_in = {
+        'x': shlo_type.ShloTensorSpec(
+            shape=(384,),
+            dtype=shlo_type.ShloDType.f32,
+            host_transpose=(0, 3, 1, 2),
+        )
+    }
+    opt_out = {
+        'y': shlo_type.ShloTensorSpec(
+            shape=(20,),
+            dtype=shlo_type.ShloDType.f32,
+        )
+    }
+    fn = shlo_function.ShloFunction(
+        mlir_module_serialized=b'test_stablehlo',
+        calling_convention_version=1,
+        module_kept_var_idx=(0,),
+        lowering_platforms=('tpu',),
+        supplemental_info={},
+        physical_in_dtypes=(None,),
+        physical_out_dtypes=(None,),
+        input_signature={
+            'x': shlo_type.ShloTensorSpec(
+                shape=(2, 8, 8, 3),
+                dtype=shlo_type.ShloDType.f32,
+                host_transpose=(0, 3, 1, 2),
+            )
+        },
+        output_signature={
+            'y': shlo_type.ShloTensorSpec(
+                shape=(2, 10), dtype=shlo_type.ShloDType.f32
+            )
+        },
+        optimized_input_signature=opt_in,
+        optimized_output_signature=opt_out,
+    )
+    manifest_proto = manifest_utils.build_manifest_proto(
+        {'test_fn': fn}, self.create_tempdir().full_path
+    )
+    body = manifest_proto.objects['test_fn'].function.body.stable_hlo_body
+    self.assertTrue(body.HasField('optimized_input_signature'))
+    self.assertTrue(body.HasField('optimized_output_signature'))
+    self.assertEqual(
+        type_proto_utils.from_type_proto(body.optimized_input_signature),
+        opt_in,
+    )
+    self.assertEqual(
+        type_proto_utils.from_type_proto(body.optimized_output_signature),
+        opt_out,
+    )
 
 
 if __name__ == '__main__':

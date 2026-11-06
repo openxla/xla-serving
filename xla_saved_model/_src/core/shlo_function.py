@@ -18,6 +18,8 @@ import abc
 from collections.abc import Mapping
 from dataclasses import dataclass  # pylint: disable=g-importing-member
 
+import jaxtyping
+
 from xla_saved_model._src.core import function
 from xla_saved_model._src.core import shlo_type
 from xla_saved_model._src.core import unstructured_data
@@ -64,6 +66,10 @@ class ShloFunction(function.Function):
       output donation ends its argument list with one extra argument per output,
       aliased to that output; those arguments carry no input data and are
       supplied by the runtime. Zero means no output donation.
+    optimized_input_signature: optional post-optimization physical input
+      signature when export-time TPU I/O shape optimizations were applied.
+    optimized_output_signature: optional post-optimization physical output
+      signature when export-time TPU I/O shape optimizations were applied.
   """
 
   mlir_module_serialized: bytes
@@ -77,3 +83,9 @@ class ShloFunction(function.Function):
   physical_out_dtypes: tuple[shlo_type.ShloDType | None, ...]
 
   num_input_aliased_output: int = 0
+  optimized_input_signature: (
+      jaxtyping.PyTree[shlo_type.ShloTensorSpec] | None
+  ) = None
+  optimized_output_signature: (
+      jaxtyping.PyTree[shlo_type.ShloTensorSpec] | None
+  ) = None

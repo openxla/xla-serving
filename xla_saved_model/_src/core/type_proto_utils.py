@@ -85,6 +85,8 @@ def to_tensor_type_proto(
     tensor_type_proto.layout.CopyFrom(spec.layout)
   if spec.placement:
     tensor_type_proto.placement = spec.placement
+  if spec.host_transpose is not None:
+    tensor_type_proto.host_transpose.extend(spec.host_transpose)
   return tensor_type_proto
 
 
@@ -169,12 +171,18 @@ def _from_tensor_type_proto(
       if manifest_tensor_type.HasField("placement")
       else None
   )
+  host_transpose = (
+      tuple(manifest_tensor_type.host_transpose)
+      if manifest_tensor_type.host_transpose
+      else None
+  )
   return shlo_type.ShloTensorSpec(
       shape=_from_shape_proto(manifest_tensor_type.shape),
       dtype=to_shlo_dtype(manifest_tensor_type.dtype),
       sharding=sharding,
       layout=layout,
       placement=placement,
+      host_transpose=host_transpose,
   )
 
 
