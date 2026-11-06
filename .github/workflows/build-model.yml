@@ -17,7 +17,7 @@ permissions:
 jobs:
   build-and-test:
     name: "Build XLA SavedModel (Python ${{ matrix.python-version }}, jax ${{ matrix.jax-version }})"
-    runs-on: linux-x86-n4-16
+    runs-on: linux-x86-n4-32
     container:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:0ad60e35d5870853c4c463f1c23dff6ed2dbfe3b1f708406c25a7606a5cae078
     strategy:
