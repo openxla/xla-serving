@@ -15,29 +15,20 @@ on:
         default: ""
         type: string
 
-      draft:
-        description: "Create as Draft release (recommended: review before publishing)"
+      release_mode:
+        description: "Release mode: github_draft (build wheels and create a Draft GitHub Release) or publish_pypi (publish wheels from an existing GitHub Release to PyPI)"
         required: true
-        type: boolean
-        default: true
+        type: choice
+        default: "github_draft"
+        options:
+          - github_draft # (default) Builds and verifies a new set of wheels and creates a Draft GitHub Release
+          - publish_pypi # Downloads .whl files from an existing GitHub Release and publishes them to PyPI via OSS Exit Gate
 
       prerelease:
         description: "Mark as pre-release (e.g. alpha, beta, rc)"
         required: true
         type: boolean
         default: false
-
-      dry_run:
-        description: "Dry run: build and verify without creating a GitHub release or tag"
-        required: true
-        type: boolean
-        default: false
-
-      publish_pypi:
-        description: "Publish wheels to PyPI via OSS Exit Gate (skipped when dry_run=true or draft=true)"
-        required: true
-        type: boolean
-        default: true
 
 concurrency:
   group: release-xla-serving
@@ -84,35 +75,45 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INPUT_VERSION: ${{ inputs.version }}
-          DRY_RUN: ${{ inputs.dry_run }}
-          PUBLISH_PYPI: ${{ !inputs.dry_run && !inputs.draft && inputs.publish_pypi }}
+          RELEASE_MODE: ${{ inputs.release_mode }}
+          PUBLISH_PYPI: ${{ inputs.release_mode == 'publish_pypi' }}
         run: |
           TARGET_COMMIT=$(git rev-parse HEAD)
           echo "Target commit SHA: ${TARGET_COMMIT}"
 
-          if [ "${PUBLISH_PYPI}" = "true" ] && ! git merge-base --is-ancestor "${TARGET_COMMIT}" origin/main; then
-            echo "❌ Error: Commit ${TARGET_COMMIT} is not on main! PyPI releases must be built from main."
-            exit 1
+          if [ "${PUBLISH_PYPI}" = "true" ]; then
+            if [[ "${GITHUB_REF}" != "refs/heads/main" && "${GITHUB_REF}" != refs/tags/* ]]; then
+              echo "❌ Error: Workflow must be dispatched from main (or a tag) to publish to PyPI (current GITHUB_REF=${GITHUB_REF})."
+              exit 1
+            fi
+            if ! git merge-base --is-ancestor "${TARGET_COMMIT}" origin/main; then
+              echo "❌ Error: Commit ${TARGET_COMMIT} is not on main! PyPI releases must be built from main."
+              exit 1
+            fi
           fi
 
           CLEAN_VERSION=$(python3 -c '
           import os, re, sys
 
+          try:
+              content = open("version.bzl").read()
+              m = re.search(r"""VERSION\s*=\s*[\x27"]([^\x27"]+)[\x27"]""", content)
+              if not m:
+                  sys.exit("Error: Could not find VERSION in version.bzl")
+              bzl_v = m.group(1).lstrip("v")
+          except Exception as e:
+              sys.exit(f"Error reading version.bzl: {e}")
+
           raw_version = os.environ.get("INPUT_VERSION", "").strip()
-          if raw_version:
-              v = raw_version.lstrip("v")
-          else:
-              try:
-                  content = open("version.bzl").read()
-                  m = re.search(r"""VERSION\s*=\s*[\x27"]([^\x27"]+)[\x27"]""", content)
-                  if not m:
-                      sys.exit("Error: Could not find VERSION in version.bzl")
-                  v = m.group(1).lstrip("v")
-              except Exception as e:
-                  sys.exit(f"Error reading version.bzl: {e}")
+          v = raw_version.lstrip("v") if raw_version else bzl_v
 
           if not re.match(r"^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$", v):
               sys.exit(f"Error: Invalid version format {v!r}. Must follow SemVer (e.g. 0.0.10 or 0.1.0-rc1).")
+
+          bzl_tuple = tuple(int(x) for x in bzl_v.split("-")[0].split("."))
+          v_tuple = tuple(int(x) for x in v.split("-")[0].split("."))
+          if v_tuple < bzl_tuple:
+              sys.exit(f"Error: Version {v} is older than version.bzl ({bzl_v}).")
 
           print(v)
           ')
@@ -120,13 +121,28 @@ jobs:
           TAG_NAME="v${CLEAN_VERSION}"
           echo "Target release tag: ${TAG_NAME}"
 
-          # Verify that the tag does not already exist
-          if gh release view "${TAG_NAME}" > /dev/null 2>&1; then
-            if [ "${DRY_RUN}" = "true" ]; then
-              echo "⚠️ Warning: Release ${TAG_NAME} already exists, continuing because dry_run=true."
-            else
-              echo "❌ Error: Release ${TAG_NAME} already exists! Bump the version before releasing."
+          # Public releases (isDraft=false) are immutable; Draft releases (isDraft=true) can be overwritten.
+          EXISTING_DRAFT=$(gh release view "${TAG_NAME}" --json isDraft -q .isDraft 2>/dev/null || echo "none")
+          if [ "${RELEASE_MODE}" = "publish_pypi" ]; then
+            if [ "${EXISTING_DRAFT}" = "none" ]; then
+              echo "❌ Error: GitHub release ${TAG_NAME} does not exist! Run with release_mode=github_draft and publish the release on GitHub first."
               exit 1
+            elif [ "${EXISTING_DRAFT}" = "true" ]; then
+              echo "❌ Error: GitHub release ${TAG_NAME} is still a Draft! Please review the release notes and publish it in the GitHub UI before running publish_pypi."
+              exit 1
+            fi
+            RELEASE_COMMIT=$(git rev-list -n 1 "refs/tags/${TAG_NAME}" 2>/dev/null || echo "${TARGET_COMMIT}")
+            if ! git merge-base --is-ancestor "${RELEASE_COMMIT}" origin/main; then
+              echo "❌ Error: Release tag ${TAG_NAME} (${RELEASE_COMMIT}) is not on main! PyPI releases must be built from main."
+              exit 1
+            fi
+            echo "ℹ️ Verified published GitHub release ${TAG_NAME} (${RELEASE_COMMIT}) is ready for PyPI publication."
+          else
+            if [ "${EXISTING_DRAFT}" = "false" ]; then
+              echo "❌ Error: Public release ${TAG_NAME} already exists and cannot be overwritten! Bump the version before releasing."
+              exit 1
+            elif [ "${EXISTING_DRAFT}" = "true" ]; then
+              echo "ℹ️ Draft release ${TAG_NAME} exists (not yet public) — it will be overwritten by this run."
             fi
           fi
 
@@ -140,6 +156,7 @@ jobs:
   build-and-verify:
     name: "Build & Verify XLA Serving Wheels (Python ${{ matrix.python-version }})"
     needs: resolve-version
+    if: ${{ inputs.release_mode == 'github_draft' }}
     runs-on: linux-x86-n4-16
     container:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:0ad60e35d5870853c4c463f1c23dff6ed2dbfe3b1f708406c25a7606a5cae078
@@ -302,6 +319,10 @@ jobs:
   publish-release:
     name: Publish Release
     needs: [resolve-version, build-and-verify]
+    if: >-
+      !cancelled() &&
+      needs.resolve-version.result == 'success' &&
+      (inputs.release_mode == 'publish_pypi' || needs.build-and-verify.result == 'success')
     runs-on: linux-x86-n4-16
     permissions:
       contents: write # Required to create release & git tag
@@ -316,21 +337,38 @@ jobs:
           ref: ${{ needs.resolve-version.outputs.target_commit }}
 
       - name: Download Stashed Wheels
+        if: ${{ inputs.release_mode == 'github_draft' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: release-wheels-*
           merge-multiple: true
           path: wheels
 
+      - name: Download Wheels from GitHub Release
+        if: ${{ inputs.release_mode == 'publish_pypi' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.resolve-version.outputs.tag_name }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          git config --global --add safe.directory /__w/xla-serving/xla-serving || true
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}" || true
+          git config --global --add safe.directory "*" || true
+          mkdir -p wheels
+          echo "Downloading wheels from published GitHub release ${TAG_NAME} (repo: ${GH_REPO})..."
+          gh release download "${TAG_NAME}" --repo "${GH_REPO}" --pattern "*.whl" --dir wheels
+          ls -la wheels/
+
       - name: Create GitHub Release
+        if: ${{ inputs.release_mode == 'github_draft' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ needs.resolve-version.outputs.tag_name }}
           VERSION: ${{ needs.resolve-version.outputs.version }}
           TARGET_COMMIT: ${{ needs.resolve-version.outputs.target_commit }}
-          IS_DRAFT: ${{ inputs.draft }}
+          RELEASE_MODE: ${{ inputs.release_mode }}
+          IS_DRAFT: ${{ inputs.release_mode == 'github_draft' }}
           IS_PRERELEASE: ${{ inputs.prerelease }}
-          IS_DRY_RUN: ${{ inputs.dry_run }}
         run: |
           git config --global --add safe.directory /__w/xla-serving/xla-serving || true
           git config --global --add safe.directory "${GITHUB_WORKSPACE}" || true
@@ -347,15 +385,15 @@ jobs:
           echo "=== Release Summary ==="
           echo "Tag: ${TAG_NAME}"
           echo "Target Commit: ${TARGET_COMMIT}"
+          echo "Release Mode: ${RELEASE_MODE}"
           echo "Draft: ${IS_DRAFT}"
           echo "Prerelease: ${IS_PRERELEASE}"
-          echo "Dry Run: ${IS_DRY_RUN}"
           echo "Artifacts to release:"
           ls -la wheels/*.whl
 
-          if [ "${IS_DRY_RUN}" = "true" ]; then
-            echo "🔎 DRY RUN: Verification succeeded! Skipping git tagging and release creation."
-            exit 0
+          if [ "$(gh release view "${TAG_NAME}" --json isDraft -q .isDraft 2>/dev/null || echo 'none')" = "true" ]; then
+            echo "ℹ️ Removing previous draft release ${TAG_NAME} before creating updated release..."
+            gh release delete "${TAG_NAME}" --yes
           fi
 
           gh release create "${TAG_NAME}" \
@@ -368,7 +406,7 @@ jobs:
           echo "🚀 Release ${TAG_NAME} successfully created!"
 
       - name: Tag Nightly Docker Images with Release Version
-        if: ${{ !inputs.dry_run && !inputs.draft }}
+        if: ${{ inputs.release_mode == 'publish_pypi' }}
         env:
           TAG_NAME: ${{ needs.resolve-version.outputs.tag_name }}
           IS_PRERELEASE: ${{ inputs.prerelease }}
@@ -394,38 +432,42 @@ jobs:
           echo "✅ Tagged nightly Docker images with ${TAG_NAME}$([ "${IS_PRERELEASE}" != "true" ] && echo ' and latest')."
 
       - name: Check Wheel Sizes Against PyPI File Limit
-        if: ${{ !inputs.dry_run && !inputs.draft && inputs.publish_pypi }}
+        if: ${{ inputs.release_mode == 'publish_pypi' }}
         env:
           PYPI_FILE_LIMIT_MB: ${{ vars.PYPI_FILE_LIMIT_MB || '100' }}
+          PYPI_RUNNER_FILE_LIMIT_MB: ${{ vars.PYPI_RUNNER_FILE_LIMIT_MB || '300' }}
         run: |
           python3 - <<'PY'
           import glob, os, sys
-          limit = int(os.environ['PYPI_FILE_LIMIT_MB']) * 1024 * 1024
+          default_limit = int(os.environ['PYPI_FILE_LIMIT_MB']) * 1024 * 1024
+          runner_limit = int(os.environ['PYPI_RUNNER_FILE_LIMIT_MB']) * 1024 * 1024
           wheels = sorted(glob.glob('wheels/*.whl'))
           assert wheels, 'no wheels found in wheels/'
           too_big = []
           for w in wheels:
+              base = os.path.basename(w)
+              limit = runner_limit if base.startswith('xla_saved_model_runner-') else default_limit
               size = os.path.getsize(w)
-              print(f'{size / 1048576:8.1f} MB  {os.path.basename(w)}')
+              print(f'{size / 1048576:8.1f} MB / {limit // 1048576:3d} MB limit  {base}')
               if size > limit:
-                  too_big.append(w)
+                  too_big.append((w, limit))
           if too_big:
-              print(f'WARNING: skipping wheels above the PyPI per-file limit of {limit // 1048576} MB: '
-                    + ', '.join(os.path.basename(w) for w in too_big), file=sys.stderr)
-              print('       Request a higher limit from PyPI and record it in the '
-                    'PYPI_FILE_LIMIT_MB repository variable.', file=sys.stderr)
-              # Create GitHub Release has already uploaded wheels/*.whl above.
-              for w in too_big:
-                  os.remove(w)
+              print('ERROR: wheels exceed their PyPI per-file limit: '
+                    + ', '.join(f'{os.path.basename(w)} (>{lim // 1048576} MB)' for w, lim in too_big),
+                    file=sys.stderr)
+              print('       Request a higher limit from PyPI and update the '
+                    'PYPI_FILE_LIMIT_MB / PYPI_RUNNER_FILE_LIMIT_MB repository variables.', file=sys.stderr)
+              sys.exit(1)
           PY
+
       - name: Authenticate with OSS Exit Gate (WIF)
-        if: ${{ !inputs.dry_run && !inputs.draft && inputs.publish_pypi }}
+        if: ${{ inputs.release_mode == 'publish_pypi' }}
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
           workload_identity_provider: "projects/305452601764/locations/global/workloadIdentityPools/builders/providers/github"
 
       - name: Stage Wheels in OSS Exit Gate Artifact Registry
-        if: ${{ !inputs.dry_run && !inputs.draft && inputs.publish_pypi }}
+        if: ${{ inputs.release_mode == 'publish_pypi' }}
         env:
           EXIT_GATE_REPOSITORY_URL: https://us-python.pkg.dev/oss-exit-gate-prod/xla-serving--pypi/
         run: |
@@ -437,7 +479,7 @@ jobs:
             wheels/*.whl
 
       - name: Write and Upload OSS Exit Gate Publishing Manifest
-        if: ${{ !inputs.dry_run && !inputs.draft && inputs.publish_pypi }}
+        if: ${{ inputs.release_mode == 'publish_pypi' }}
         env:
           EXIT_GATE_MANIFEST_PREFIX: gs://oss-exit-gate-prod-projects-bucket/xla-serving/pypi/manifests
           MANIFEST_NAME: manifest-${{ github.run_id }}-${{ github.run_attempt }}.json
