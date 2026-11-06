@@ -14,6 +14,8 @@
 
 """Some utilities for type.proto ."""
 
+from collections.abc import Sequence
+
 import jax
 import jaxtyping
 
@@ -58,16 +60,35 @@ def to_shlo_dtype(
 
 def to_shape_proto(
     shape: shlo_type.ShloShape,
+    upper_bound_dims: Sequence[int] | None = None,
 ) -> type_pb2.Shape:
-  """Converts `ShloShape` to type_proto `Shape`."""
+  """Converts `ShloShape` to type_proto `Shape`.
+
+  Args:
+    shape: The shape to convert. `None` means unknown rank.
+    upper_bound_dims: Indices of the dimensions whose size is an upper bound
+      (see `ShloTensorSpec.upper_bound_dims`); they are marked with
+      `DimensionSize.is_upper_bound`.
+
+  Returns:
+    The `Shape` proto.
+  """
   shape_proto = type_pb2.Shape()
   if shape is not None:
     shape_proto.shape_with_known_rank.SetInParent()
-    for dim in shape:
+    upper_bound_dim_set = frozenset(upper_bound_dims or ())
+    for i, dim in enumerate(shape):
       dim: shlo_type.ShloDimSize
       ds_proto = type_pb2.DimensionSize()
       if dim is not None:
         ds_proto.size = dim
+      if i in upper_bound_dim_set:
+        if dim is None:
+          raise ValueError(
+              f"Dimension {i} of shape {shape} is an upper bound but has no"
+              " concrete size"
+          )
+        ds_proto.is_upper_bound = True
       shape_proto.shape_with_known_rank.dimension_sizes.append(ds_proto)
   return shape_proto
 
@@ -77,7 +98,9 @@ def to_tensor_type_proto(
 ) -> type_pb2.TensorType:
   """Converts ShloTensorSpec to type_proto TensorType."""
   tensor_type_proto = type_pb2.TensorType()
-  tensor_type_proto.shape.CopyFrom(to_shape_proto(spec.shape))
+  tensor_type_proto.shape.CopyFrom(
+      to_shape_proto(spec.shape, spec.upper_bound_dims)
+  )
   tensor_type_proto.dtype = to_dtype_proto(spec.dtype)
   if spec.sharding:
     tensor_type_proto.sharding.CopyFrom(spec.sharding)
@@ -150,6 +173,20 @@ def _from_shape_proto(
   return None
 
 
+def _upper_bound_dims_from_shape_proto(
+    shape: type_pb2.Shape,
+) -> tuple[int, ...] | None:
+  """Returns the upper-bound dimension indices of a manifest `Shape`."""
+  if not shape.HasField("shape_with_known_rank"):
+    return None
+  upper_bound_dims = tuple(
+      i
+      for i, dim in enumerate(shape.shape_with_known_rank.dimension_sizes)
+      if dim.is_upper_bound
+  )
+  return upper_bound_dims or None
+
+
 def _from_tensor_type_proto(
     manifest_tensor_type: type_pb2.TensorType,
 ) -> shlo_type.ShloTensorSpec:
@@ -175,6 +212,9 @@ def _from_tensor_type_proto(
       sharding=sharding,
       layout=layout,
       placement=placement,
+      upper_bound_dims=_upper_bound_dims_from_shape_proto(
+          manifest_tensor_type.shape
+      ),
   )
 
 
