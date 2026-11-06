@@ -1,4 +1,5 @@
 # Copyright 2026 Google LLC
+# Copyright 2026 Arm Ltd. and affiliates
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,6 +31,17 @@ _NUM_DENSE_FEATURES = flags.DEFINE_integer(
     'num_dense_features', 13, 'Number of dense features.'
 )
 _EMBEDDING_SIZE = flags.DEFINE_integer('embedding_size', 128, 'Embedding size.')
+_VOCAB_SIZE_CAP = flags.DEFINE_integer(
+    'vocab_size_cap', None, 'Optional per-table vocabulary cap.', lower_bound=1
+)
+_SEED = flags.DEFINE_integer('seed', 0, 'Seed for synthetic model weights and inputs.')
+_BENCHMARK_INPUTS = flags.DEFINE_string(
+    'benchmark_inputs', None, 'Optional new .npz file containing inputs and answers.'
+)
+_NUM_INPUT_BATCHES = flags.DEFINE_integer(
+    'num_input_batches', 8, 'Number of distinct batches saved with --benchmark_inputs.',
+    lower_bound=1,
+)
 
 
 def main(argv):
@@ -43,6 +55,10 @@ def main(argv):
       embedding_size=_EMBEDDING_SIZE.value or 128,
       global_batch_size=_GLOBAL_BATCH_SIZE.value or 2,
       num_dense_features=_NUM_DENSE_FEATURES.value or 13,
+      vocab_size_cap=_VOCAB_SIZE_CAP.value,
+      seed=_SEED.value,
+      benchmark_inputs=_BENCHMARK_INPUTS.value,
+      num_input_batches=_NUM_INPUT_BATCHES.value,
   )
 
 

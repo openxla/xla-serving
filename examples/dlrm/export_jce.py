@@ -1,4 +1,5 @@
 # Copyright 2026 Google LLC
+# Copyright 2026 Arm Ltd. and affiliates
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""XLA SavedModel export for DLRM recommender with TPUEmbeddingForServing."""
+"""XLA SavedModel export for DLRM with native CPU embedding."""
 
 import os
 import tempfile
@@ -47,50 +48,35 @@ def get_synthetic_batch(
     valency: Sequence[int] | None = None,
     vocab_sizes: Sequence[int] | None = None,
     num_dense_features: int = 13,
+    rng: np.random.Generator | None = None,
 ) -> dict[str, Any]:
-  """Returns a synthetic batch of data.
+  """Returns click labels, FP32 dense features and int32 sparse feature arrays.
 
-  Args:
-    batch_size: The size of the batch to generate.
-    valency: A list of sizes for the multi-valent features.
-    vocab_sizes: A list of sizes for the vocabularies of the sparse features.
-    num_dense_features: The number of dense features.
-
-  Our features dict is an inputs of dictionary - {
-      'label': (0,1)
-      'dense_features': {
-          '1': 0.123,
-          '2': 0.456,
-          ...
-          '13': 0.987,
-      },
-      'sparse_features': {
-          '1': sparse_tensor,
-          '2': sparse_tensor,
-          ...
-          '26': sparse_tensor,
-      },
-  }
+  All arrays have batch_size rows; sparse feature i has valency[i] columns.
+  Pass a seeded rng for reproducible draws.
   """
   if valency is None:
     valency = model_lib.VALENCY
   if vocab_sizes is None:
     vocab_sizes = model_lib.VOCAB_SIZES
+  if rng is None:
+    rng = np.random.default_rng()
 
   data = {}
 
-  data['clicked'] = np.random.randint(0, 2, size=(batch_size,), dtype=np.int64)
-  data['dense_features'] = np.random.uniform(
+  data['clicked'] = rng.integers(0, 2, size=(batch_size,), dtype=np.int64)
+  data['dense_features'] = rng.uniform(
       0.0, 0.9, size=(batch_size, num_dense_features)
   ).astype(np.float32)
 
   sparse_features = {}
 
   for i, val in enumerate(valency):
-    sparse_features[str(i)] = np.random.randint(
+    sparse_features[str(i)] = rng.integers(
         low=0,
         high=vocab_sizes[i],
         size=(batch_size, val),
+        dtype=np.int32,
     )
 
   data['sparse_features'] = sparse_features
@@ -103,12 +89,22 @@ def export_model(
     embedding_size: int = 128,
     global_batch_size: int = 2,
     num_dense_features: int = 13,
+    *,
+    seed: int = 0,
+    vocab_size_cap: int | None = None,
+    benchmark_inputs: str | None = None,
+    num_input_batches: int = 8,
 ):
   """Exports the DLRM recommender model using XLA SavedModel."""
+  if benchmark_inputs is not None and os.path.exists(benchmark_inputs):
+    raise FileExistsError(benchmark_inputs)
+  rng = np.random.default_rng(seed)
 
   # Initialize synthetic weights and JCE resource for serving lookups
   if use_capped_vocab:
     vocab_sizes = [min(v, 100) for v in model_lib.VOCAB_SIZES]
+  elif vocab_size_cap is not None:
+    vocab_sizes = [min(v, vocab_size_cap) for v in model_lib.VOCAB_SIZES]
   else:
     vocab_sizes = model_lib.VOCAB_SIZES
 
@@ -118,7 +114,7 @@ def export_model(
   for i, size in enumerate(vocab_sizes):
     table_name = str(i)
     feature_name = str(i)
-    table_data[table_name] = np.random.uniform(
+    table_data[table_name] = rng.uniform(
         -0.05, 0.05, size=(size, embedding_size)
     ).astype(np.float32)
     combine_modes[table_name] = 'SUM'
@@ -139,8 +135,9 @@ def export_model(
       model_lib.VALENCY,
       vocab_sizes,
       num_dense_features=num_dense_features,
+      rng=rng,
   )
-  logging.info('synthetic_batch: %s', synthetic_batch)
+  logging.info('Initializing synthetic DCN v2, batch size %d', global_batch_size)
 
   # Generate mock JAX sparse embeddings arrays directly instead of calling TF
   jax_sparse_embeddings = {
@@ -152,7 +149,7 @@ def export_model(
   }
 
   model_params = model.init(
-      jax.random.PRNGKey(0),
+      jax.random.PRNGKey(seed),
       jnp.array(synthetic_batch['dense_features']),
       jax_sparse_embeddings,
   )
@@ -210,7 +207,11 @@ def export_model(
           input_polymorphic_shapes=input_polyshape,
           jax_export_kwargs={'platforms': ['cpu']},
           input_polymorphic_shape_symbol_values={
-              'b': [1, 64, 512, 4096],
+              'b': (
+                  [global_batch_size]
+                  if benchmark_inputs is not None
+                  else [1, 64, 512, 4096]
+              ),
           },
       ),
       params=model_params,
@@ -241,3 +242,29 @@ def export_model(
           )
       ],
   )
+
+  if benchmark_inputs is not None:
+    batch = get_synthetic_batch(
+        global_batch_size * num_input_batches,
+        model_lib.VALENCY,
+        vocab_sizes,
+        num_dense_features,
+        rng=np.random.default_rng(np.random.SeedSequence([seed, 1])),
+    )
+    inputs = {**batch['sparse_features'], 'dense_features': batch['dense_features']}
+    inputs = {
+        name: array.reshape(num_input_batches, global_batch_size, -1)
+        for name, array in inputs.items()
+    }
+    predict = jax.jit(model.apply)
+    predictions = []
+    for index in range(num_input_batches):
+      pooled = {
+          name: table[inputs[name][index]].sum(axis=1, dtype=np.float32)
+          for name, table in table_data.items()
+      }
+      predictions.append(np.asarray(predict(
+          model_params, inputs['dense_features'][index], pooled
+      ), dtype=np.float32))
+    with open(benchmark_inputs, 'xb') as stream:
+      np.savez(stream, **inputs, predictions=np.stack(predictions))
