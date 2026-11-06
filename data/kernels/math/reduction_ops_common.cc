@@ -35,6 +35,7 @@ limitations under the License.
 #include "data/kernels/macros.h"  // from @xla_serving
 #include "data/kernels/math/reduction_ops.h"  // from @xla_serving
 #include "data/kernels/math/reduction_transform_config.pb.h"  // from @xla_serving
+#include "data/processor/cc/api/shape.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/api/type_info.h"  // from @xla_serving
 #include "data/processor/cc/api/value.h"  // from @xla_serving
@@ -46,8 +47,10 @@ limitations under the License.
 
 namespace xla_serving::data::kernel {
 using ::xla_serving::data::composite::api::CreateTypeInfo;
+using ::xla_serving::data::composite::api::Dim;
 using ::xla_serving::data::composite::api::ExecuteContext;
 using ::xla_serving::data::composite::api::HostBufferSpec;
+using ::xla_serving::data::composite::api::PartialShape;
 using ::xla_serving::data::composite::api::ShapeInferenceContext;
 using ::xla_serving::data::composite::api::TypeInfo;
 using ::xla_serving::data::composite::api::Value;
@@ -277,13 +280,34 @@ absl::Status ReductionTransformBase<Derived>::PropagateSignatureImpl(
         absl::StrCat(Derived::kOpName, " expects tensor input"));
   }
   const auto& input_spec = context.inputs[0].spec();
-  ASSIGN_OR_RETURN(const xla::ifrt::Shape input_shape,
-                   input_spec.shape.GetStatic());
-  xla_serving::HostBuffer axes_hb = AxesVectorToHostBuffer(axis_);
-  ReductionHelper helper;
-  RETURN_IF_ERROR(helper.Simplify(input_shape, axes_hb, keep_dims_));
+  const int64_t data_dims =
+      static_cast<int64_t>(input_spec.shape.dims().size());
+  absl::InlinedVector<bool, 4> bitmap(data_dims, false);
+  for (int64_t index : axis_) {
+    if (index < -data_dims || index >= data_dims) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Invalid reduction dimension (", index,
+                       " for input with ", data_dims, " dimension(s))"));
+    }
+    index = (index + data_dims) % data_dims;
+    if (bitmap[index]) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Invalid reduction arguments: Axes contains duplicate dimension: ",
+          index));
+    }
+    bitmap[index] = true;
+  }
+  PartialShape::Dimensions out_dims;
+  for (int64_t i = 0; i < data_dims; ++i) {
+    if (!bitmap[i]) {
+      out_dims.push_back(input_spec.shape.dims()[i]);
+    } else if (keep_dims_) {
+      out_dims.push_back(Dim::Static(1));
+    }
+  }
+  ASSIGN_OR_RETURN(PartialShape out_shape, PartialShape::Create(out_dims));
   context.outputs.push_back(
-      HostBufferSpec{input_spec.dtype, helper.out_shape()});
+      HostBufferSpec{input_spec.dtype, std::move(out_shape)});
   return absl::OkStatus();
 }
 
