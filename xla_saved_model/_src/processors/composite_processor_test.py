@@ -20,9 +20,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from xla_serving_data.kernels.cpu_embedding import pack_host_buffer_vector_transform_pybind
 from xla_serving_data.ops import cpu_embedding
 from xla_serving_data.processor.proto import transform_config_pb2
 from xla_serving_data.processor.python import composite_processor_pybind
+from xla_serving_data.processor.python import shape_dtype_struct
 from xla_serving_data_test.processor.python.examples import add_from_resource_transform_pybind
 from xla_serving_data_test.processor.python.examples import add_int_transform_pybind
 from xla_serving_data_test.processor.python.examples import int_resource_pybind
@@ -249,10 +251,10 @@ class CompositeProcessorTest(parameterized.TestCase):
 
   @parameterized.named_parameters(
       dict(testcase_name="static", shape=(64, 2), expected_shape=(64, 2)),
-      # -1 is an unknown dimension: None in the HostBufferSpec seen by C++,
-      # and None in the exported signature.
+      # None is an unknown dimension, in the HostBufferSpec seen by C++ and in
+      # the exported signature.
       dict(
-          testcase_name="unknown_dim", shape=(-1, 2), expected_shape=(None, 2)
+          testcase_name="unknown_dim", shape=(None, 2), expected_shape=(None, 2)
       ),
   )
   def test_from_graph_dynamic_shape_propagation(self, shape, expected_shape):
@@ -290,8 +292,8 @@ class CompositeProcessorTest(parameterized.TestCase):
 
     # Call prepare with a dynamic runtime shape, e.g. a batch size of (64, 2)
     dynamic_input_sig = {
-        "a": jax.ShapeDtypeStruct(shape=shape, dtype=jnp.int32),
-        "b": jax.ShapeDtypeStruct(shape=shape, dtype=jnp.int32),
+        "a": shape_dtype_struct.ShapeDtypeStruct(shape=shape, dtype=np.int32),
+        "b": shape_dtype_struct.ShapeDtypeStruct(shape=shape, dtype=np.int32),
     }
     prepared = proc_from_graph.prepare(dynamic_input_sig)
 
@@ -300,6 +302,102 @@ class CompositeProcessorTest(parameterized.TestCase):
     self.assertEqual(
         prepared.output_signature["out"].dtype, shlo_type.ShloDType.i32
     )
+
+    # -1 never means unknown.
+    with self.assertRaisesRegex(ValueError, "Dimension 0 is -1"):
+      proc_from_graph.prepare({
+          "a": jax.ShapeDtypeStruct(shape=(-1, 2), dtype=jnp.int32),
+          "b": jax.ShapeDtypeStruct(shape=(-1, 2), dtype=jnp.int32),
+      })
+
+  def test_from_graph_spec_list_signature_propagation(self):
+    graph = composite_processor_pybind.ExecutionGraph()
+    pack = (
+        pack_host_buffer_vector_transform_pybind.PackHostBufferVectorTransform(
+            2
+        )
+    )
+    idx = graph.add_node(
+        "pack",
+        pack,
+        [
+            composite_processor_pybind.GraphEdge.graph_input(0),
+            composite_processor_pybind.GraphEdge.graph_input(1),
+        ],
+    )
+    graph.set_outputs(
+        [composite_processor_pybind.GraphEdge.node_output(idx, 0)]
+    )
+
+    input_signature = {
+        "a": shape_dtype_struct.ShapeDtypeStruct((None, 4), np.int32),
+        "b": shape_dtype_struct.ShapeDtypeStruct((None, 2), np.float32),
+    }
+    output_structure = {
+        "packed": shape_dtype_struct.ShapeDtypeStruct((), np.int32)
+    }
+    struct = transform_config_pb2.GraphIOStructureProto()
+    struct.input_structure.CopyFrom(
+        composite_processor._tree_to_proto(input_signature)
+    )
+    struct.output_structure.CopyFrom(
+        composite_processor._tree_to_proto(output_structure)
+    )
+    graph.io_structure = struct
+
+    proc = composite_processor.CompositeProcessor.from_graph(
+        "pack_proc", graph, assets={}
+    )
+    prepared = proc.prepare(input_signature)
+    self.assertEqual(
+        prepared.output_signature,
+        {
+            "packed": [
+                shlo_type.ShloTensorSpec(
+                    shape=(None, 4), dtype=shlo_type.ShloDType.i32
+                ),
+                shlo_type.ShloTensorSpec(
+                    shape=(None, 2), dtype=shlo_type.ShloDType.f32
+                ),
+            ]
+        },
+    )
+
+  def test_io_structure_unknown_dims(self):
+    tree = {
+        "a": shape_dtype_struct.ShapeDtypeStruct((None, 4), np.int32),
+        "b": (jax.ShapeDtypeStruct((2,), jnp.float32),),
+    }
+    self.assertEqual(
+        composite_processor._proto_to_tree(
+            composite_processor._tree_to_proto(tree)
+        ),
+        {
+            "a": shape_dtype_struct.ShapeDtypeStruct((None, 4), np.int32),
+            "b": (shape_dtype_struct.ShapeDtypeStruct((2,), np.float32),),
+        },
+    )
+    with self.assertRaisesRegex(ValueError, "Dimension 0 is -1"):
+      composite_processor._tree_to_proto(
+          jax.ShapeDtypeStruct((-1, 4), jnp.int32)
+      )
+
+  def test_io_structure_writes_partial_shape(self):
+    proto = composite_processor._tree_to_proto(
+        shape_dtype_struct.ShapeDtypeStruct((None, 0, 4), np.int32)
+    )
+    dims = proto.leaf_value.shape.dims
+    self.assertLen(dims, 3)
+    self.assertFalse(dims[0].HasField("size"))
+    self.assertTrue(dims[1].HasField("size"))
+    self.assertEqual(dims[1].size, 0)
+    self.assertEqual(dims[2].size, 4)
+    # A scalar has a shape with no dims.
+    scalar = composite_processor._tree_to_proto(
+        jax.ShapeDtypeStruct((), jnp.int32)
+    )
+    self.assertTrue(scalar.leaf_value.HasField("shape"))
+    self.assertEmpty(scalar.leaf_value.shape.dims)
 
 
 if __name__ == "__main__":

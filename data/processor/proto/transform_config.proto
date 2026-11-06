@@ -67,8 +67,11 @@ message PartialShapeProto {
 }
 
 message ShapeDtypeStructProto {
-  repeated int64 shape = 1;
+  reserved 1;
+
   string dtype = 2;
+  // The shape of a signature leaf, with an unset size for an unknown dimension.
+  PartialShapeProto shape = 3;
 }
 
 message PyTreeProto {

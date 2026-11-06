@@ -879,10 +879,21 @@ TEST(CompositeProcessorTest, IOStructureSerializeDeserialize) {
   graph.SetOutputs({GraphEdge::NodeOutput(add, 0).value()});
 
   GraphIOStructureProto io_structure;
-  io_structure.mutable_input_structure()->mutable_leaf_value()->add_shape(42);
-  io_structure.mutable_output_structure()->mutable_leaf_value()->add_shape(43);
-  io_structure.mutable_captured_structure()->mutable_leaf_value()->add_shape(
-      44);
+  io_structure.mutable_input_structure()
+      ->mutable_leaf_value()
+      ->mutable_shape()
+      ->add_dims()
+      ->set_size(42);
+  io_structure.mutable_output_structure()
+      ->mutable_leaf_value()
+      ->mutable_shape()
+      ->add_dims()
+      ->set_size(43);
+  io_structure.mutable_captured_structure()
+      ->mutable_leaf_value()
+      ->mutable_shape()
+      ->add_dims()
+      ->set_size(44);
   graph.SetIOStructure(io_structure);
 
   ASSERT_OK_AND_ASSIGN(CompositeProcessor processor,
@@ -893,11 +904,16 @@ TEST(CompositeProcessorTest, IOStructureSerializeDeserialize) {
   ASSERT_OK_AND_ASSIGN(CompositeProcessor deserialized_processor,
                        CompositeProcessor::FromProto(config));
 
-  GraphIOStructureProto deserialized_io =
-      deserialized_processor.graph().io_structure();
-  EXPECT_EQ(deserialized_io.input_structure().leaf_value().shape(0), 42);
-  EXPECT_EQ(deserialized_io.output_structure().leaf_value().shape(0), 43);
-  EXPECT_EQ(deserialized_io.captured_structure().leaf_value().shape(0), 44);
+  const auto& deserialized_io = deserialized_processor.graph().io_structure();
+  EXPECT_EQ(
+      deserialized_io.input_structure().leaf_value().shape().dims(0).size(),
+      42);
+  EXPECT_EQ(
+      deserialized_io.output_structure().leaf_value().shape().dims(0).size(),
+      43);
+  EXPECT_EQ(
+      deserialized_io.captured_structure().leaf_value().shape().dims(0).size(),
+      44);
 }
 
 template <typename T>

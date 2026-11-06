@@ -14,7 +14,7 @@
 
 """Generic JAX Data preprocessor execution graph builder for CPU embedding lookups."""
 
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 import jax
 import jax.numpy as jnp
@@ -28,7 +28,7 @@ from xla_saved_model._src.processors import composite_processor
 
 def build_embedding_lookup(
     name: str,
-    input_signature: dict[str, jax.ShapeDtypeStruct],
+    input_signature: Mapping[str, Any],
     feature_specs: Sequence[dict[str, Any]],
     jce_resource: Any,
     embedding_dim: int | None = None,

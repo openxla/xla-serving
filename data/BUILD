@@ -133,6 +133,7 @@ genrule(
         "//data/kernels/cpu_embedding:unpack_host_buffer_vector_module.py",
         "//data/kernels/cpu_embedding:unpack_host_buffer_vector_transform_pybind.so",
         "//data/processor/python:composite_processor_pybind.so",
+        "//data/processor/python:shape_dtype_struct.py",
         "//data/processor/python:transform.py",
         "//data/processor/proto:transform_config_py_pb2",
         "//data/processor/cc/utils:default_value_py_pb2",
@@ -176,6 +177,7 @@ genrule(
         "xla_serving_data/processor/__init__.py",
         "xla_serving_data/processor/python/__init__.py",
         "xla_serving_data/processor/python/composite_processor_pybind.so",
+        "xla_serving_data/processor/python/shape_dtype_struct.py",
         "xla_serving_data/processor/python/transform.py",
         "xla_serving_data/processor/proto/__init__.py",
         "xla_serving_data/processor/proto/transform_config_pb2.py",
@@ -270,6 +272,8 @@ genrule(
   sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/kernels/cpu_embedding/unpack_host_buffer_vector_module.py
   cp $(location //data/kernels/cpu_embedding:unpack_host_buffer_vector_transform_pybind.so) $(@D)/xla_serving_data/kernels/cpu_embedding/unpack_host_buffer_vector_transform_pybind.so
   cp $(location //data/processor/python:composite_processor_pybind.so) $(@D)/xla_serving_data/processor/python/composite_processor_pybind.so
+  cp $(location //data/processor/python:shape_dtype_struct.py) $(@D)/xla_serving_data/processor/python/shape_dtype_struct.py
+  sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/processor/python/shape_dtype_struct.py
   cp $(location //data/processor/python:transform.py) $(@D)/xla_serving_data/processor/python/transform.py
   sed -i 's/from data\\./from xla_serving_data\\./g' $(@D)/xla_serving_data/processor/python/transform.py
   for f in $(locations //data/processor/proto:transform_config_py_pb2); do
@@ -335,6 +339,7 @@ py_library(
         "xla_serving_data/processor/proto/__init__.py",
         "xla_serving_data/processor/proto/transform_config_pb2.py",
         "xla_serving_data/processor/python/__init__.py",
+        "xla_serving_data/processor/python/shape_dtype_struct.py",
         "xla_serving_data/processor/python/transform.py",
         "xla_serving_data/pybind11_abseil/__init__.py",
         "xla_serving_data/resource_manager/__init__.py",

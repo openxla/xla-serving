@@ -24,6 +24,7 @@ import jaxtyping
 
 from xla_serving_data.processor.proto import transform_config_pb2
 from xla_serving_data.processor.python import composite_processor_pybind
+from xla_serving_data.processor.python import shape_dtype_struct
 from xla_saved_model.protos import manifest_pb2
 from xla_saved_model._src import assets2xsm
 from xla_saved_model._src.core import persistence_lib
@@ -34,71 +35,24 @@ from xla_saved_model._src.core import unstructured_data
 from xla_saved_model._src.processors import processor
 
 
-def _tree_to_proto(tree: Any) -> transform_config_pb2.PyTreeProto:
-  proto = transform_config_pb2.PyTreeProto()
-  if tree is None:
-    proto.type = transform_config_pb2.PyTreeProto.NONE
-  elif isinstance(tree, dict):
-    proto.type = transform_config_pb2.PyTreeProto.DICT
-    for k, v in sorted(tree.items()):
-      proto.dict_keys.append(k)
-      proto.children.append(_tree_to_proto(v))
-  elif isinstance(tree, list):
-    proto.type = transform_config_pb2.PyTreeProto.LIST
-    for v in tree:
-      proto.children.append(_tree_to_proto(v))
-  elif isinstance(tree, tuple):
-    proto.type = transform_config_pb2.PyTreeProto.TUPLE
-    for v in tree:
-      proto.children.append(_tree_to_proto(v))
-  else:
-    proto.type = transform_config_pb2.PyTreeProto.LEAF
-    proto.leaf_value.shape.extend(tree.shape)
-    proto.leaf_value.dtype = (
-        str(tree.dtype.name)
-        if getattr(tree, "dtype", None)
-        else str(tree.dtype)
-    )
-  return proto
+_tree_to_proto = shape_dtype_struct.tree_to_proto
+_proto_to_tree = shape_dtype_struct.proto_to_tree
 
 
-def _proto_to_tree(proto: transform_config_pb2.PyTreeProto) -> Any:
-  if proto.type == transform_config_pb2.PyTreeProto.NONE:
-    return None
-  elif proto.type == transform_config_pb2.PyTreeProto.DICT:
-    return {
-        k: _proto_to_tree(c) for k, c in zip(proto.dict_keys, proto.children)
-    }
-  elif proto.type == transform_config_pb2.PyTreeProto.LIST:
-    return [_proto_to_tree(c) for c in proto.children]
-  elif proto.type == transform_config_pb2.PyTreeProto.TUPLE:
-    return tuple([_proto_to_tree(c) for c in proto.children])
-  elif proto.type == transform_config_pb2.PyTreeProto.LEAF:
-    return jax.ShapeDtypeStruct(
-        shape=tuple(proto.leaf_value.shape), dtype=proto.leaf_value.dtype
-    )
-  else:
-    raise ValueError(f"Unknown node type: {proto.type}")
-
-
-def _to_spec_shape(shape: Sequence[int | None]) -> list[int | None]:
-  """Returns a JAX-level signature shape as a HostBufferSpec shape.
+def _to_spec_shape(shape: Sequence[Any]) -> list[int | None]:
+  """Returns the shape of an input signature leaf as a HostBufferSpec shape.
 
   Args:
-    shape: The sizes, in which None or a negative size is an unknown dimension.
+    shape: The dims, in which None, or a dim that isn't an int (e.g. a JAX
+      symbolic dim), is unknown.
 
   Returns:
-    The sizes, with None for each unknown dimension, so that the C++ shape
-    functions never see a -1.
+    The dims, with None for each unknown one.
+
+  Raises:
+    ValueError: If a dim is negative. -1 never means unknown.
   """
-  return [d if (d is not None and d >= 0) else None for d in shape]
-
-
-def _to_jax_shape(spec_shape: Sequence[int | None]) -> tuple[int, ...]:
-  """Returns a HostBufferSpec shape as a JAX-level signature shape."""
-  # jax.ShapeDtypeStruct rejects None, and neptune's JAX-level signatures use -1
-  # for an unknown dimension (type_conversions maps negative sizes to None).
-  return tuple(-1 if d is None else d for d in spec_shape)
+  return list(shape_dtype_struct.to_partial_shape(shape))
 
 
 def _propagate_pybind_signature(
@@ -132,21 +86,15 @@ def _propagate_pybind_signature(
   def _to_shape_dtype_struct(val):
     if val.is_spec_list():
       return [
-          jax.ShapeDtypeStruct(
-              shape=_to_jax_shape(spec.shape), dtype=spec.dtype
-          )
+          shape_dtype_struct.ShapeDtypeStruct(spec.shape, spec.dtype)
           for spec in val.spec_list()
       ]
     else:
       spec = val.spec()
-      return jax.ShapeDtypeStruct(
-          shape=_to_jax_shape(spec.shape), dtype=spec.dtype
-      )
+      return shape_dtype_struct.ShapeDtypeStruct(spec.shape, spec.dtype)
 
   flat_outputs = [_to_shape_dtype_struct(val) for val in context.outputs]
-  output_structure = _proto_to_tree(output_structure_proto)
-  _, output_treedef = jax.tree_util.tree_flatten(output_structure)
-  return jax.tree_util.tree_unflatten(output_treedef, flat_outputs)
+  return _proto_to_tree(output_structure_proto, iter(flat_outputs))
 
 
 # Keep in sync with runtime/xla_serving_data/composite_processor_function_handler.h

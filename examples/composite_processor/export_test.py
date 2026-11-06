@@ -37,23 +37,28 @@ class ExportTest(absltest.TestCase):
 
     runner = _model_runner(export_path)
 
-    inputs = {
-        'x': np.ones((3, 4), dtype=np.int32),
-        'y': np.ones((3, 4), dtype=np.int32),
-    }
-    outputs = runner.signature('serving_default').run_with_dict_return(**inputs)
+    for batch_size in (3, 5):
+      inputs = {
+          'x': np.ones((batch_size, 4), dtype=np.int32),
+          'y': np.ones((batch_size, 4), dtype=np.int32),
+      }
+      outputs = runner.signature('serving_default').run_with_dict_return(
+          **inputs
+      )
 
-    self.assertIn('pred', outputs)
-    self.assertEqual(outputs['pred'].shape, (3, 4))
+      self.assertIn('pred', outputs)
+      self.assertEqual(outputs['pred'].shape, (batch_size, 4))
 
-    # The output is calculated as follows:
-    # Inputs are np.ones of shape (3, 4).
-    # (1 + 1) (AddTwoInputBuffersTransform)
-    # + (5 + 10) (Two of the AddIntFromResourceTransforms)
-    # * 2 (JaxModel apply_fn)
-    # + 8 (Post-processing AddIntFromResourceTransform)
-    # = 42
-    np.testing.assert_array_equal(outputs['pred'], np.full((3, 4), 42))
+      # The output is calculated as follows:
+      # Inputs are np.ones of shape (batch_size, 4).
+      # (1 + 1) (AddTwoInputBuffersTransform)
+      # + (5 + 10) (Two of the AddIntFromResourceTransforms)
+      # * 2 (JaxModel apply_fn)
+      # + 8 (Post-processing AddIntFromResourceTransform)
+      # = 42
+      np.testing.assert_array_equal(
+          outputs['pred'], np.full((batch_size, 4), 42)
+      )
 
 
 if __name__ == '__main__':

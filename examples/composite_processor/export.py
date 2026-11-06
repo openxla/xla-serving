@@ -19,13 +19,14 @@ import tempfile
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
+from xla_serving_data.processor.python import shape_dtype_struct
 from xla_serving_data.resource_manager.python import resource_manager
 from xla_serving_data_test.examples.composite_processor import add_int_from_resource_transform_pybind
 from xla_serving_data_test.examples.composite_processor import add_two_input_buffers_transform_pybind
 from xla_serving_data_test.examples.composite_processor import int_resource_pybind
 from xla_saved_model.protos import orchestration_pb2
-from xla_saved_model._src.core import shlo_type
 from xla_saved_model._src.export import jax_model
 from xla_saved_model._src.export import main_lib
 from xla_saved_model._src.export import serving_config
@@ -91,11 +92,11 @@ def export_model(export_path: str):
     return {'pred': jax.tree.map(lambda x: x * 2, inputs)['x']}
 
   input_signature = {
-      'x': shlo_type.ShloTensorSpec(
-          shape=(None, 4), dtype=shlo_type.ShloDType.i32
+      'x': shape_dtype_struct.ShapeDtypeStruct(
+          shape=(None, 4), dtype=np.int32
       ),
-      'y': shlo_type.ShloTensorSpec(
-          shape=(None, 4), dtype=shlo_type.ShloDType.i32
+      'y': shape_dtype_struct.ShapeDtypeStruct(
+          shape=(None, 4), dtype=np.int32
       ),
   }
 

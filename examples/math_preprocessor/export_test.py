@@ -19,6 +19,7 @@ import os
 from absl.testing import absltest
 import numpy as np
 
+from xla_serving_data.processor.python import shape_dtype_struct
 from examples.math_preprocessor import export
 from xla_saved_model_runner import model_runner
 
@@ -57,6 +58,19 @@ class ExportTest(absltest.TestCase):
     expected_log_revenue, expected_cross = _expected_features(inputs)
     np.testing.assert_allclose(log_revenue, expected_log_revenue, rtol=1e-6)
     np.testing.assert_array_equal(user_item_cross, expected_cross)
+
+  def test_build_preprocessor_io_structure(self):
+    prepared = export.build_preprocessor().prepare(export.INPUT_SIGNATURE)
+    io_structure = prepared.config.io_structure
+
+    self.assertEqual(
+        shape_dtype_struct.proto_to_tree(io_structure.input_structure),
+        export.INPUT_SIGNATURE,
+    )
+    self.assertEqual(
+        shape_dtype_struct.proto_to_tree(io_structure.output_structure),
+        export.FEATURE_SIGNATURE,
+    )
 
   def test_export_model(self):
     export_path = self.create_tempdir().full_path

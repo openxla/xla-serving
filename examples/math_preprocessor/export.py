@@ -31,10 +31,6 @@ The JAX model then scores each example as
   pred = W * log_revenue + cross_weights[user_item_cross % NUM_BUCKETS] + B
 """
 
-from collections.abc import Mapping
-from typing import Any
-
-import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -43,6 +39,7 @@ from xla_serving_data.ops import bitwise
 from xla_serving_data.ops import math
 from xla_serving_data.processor.proto import transform_config_pb2
 from xla_serving_data.processor.python import composite_processor_pybind
+from xla_serving_data.processor.python import shape_dtype_struct
 from xla_saved_model.protos import orchestration_pb2
 from xla_saved_model._src.export import jax_model
 from xla_saved_model._src.export import main_lib
@@ -54,16 +51,28 @@ BIAS = 0.5
 
 # Raw request features. Each feature has shape [batch_size, 1].
 INPUT_SIGNATURE = {
-    'item_id': jax.ShapeDtypeStruct(shape=(1, 1), dtype=jnp.int32),
-    'price': jax.ShapeDtypeStruct(shape=(1, 1), dtype=jnp.float32),
-    'quantity': jax.ShapeDtypeStruct(shape=(1, 1), dtype=jnp.float32),
-    'user_id': jax.ShapeDtypeStruct(shape=(1, 1), dtype=jnp.int32),
+    'item_id': shape_dtype_struct.ShapeDtypeStruct(
+        shape=(1, 1), dtype=np.int32
+    ),
+    'price': shape_dtype_struct.ShapeDtypeStruct(
+        shape=(1, 1), dtype=np.float32
+    ),
+    'quantity': shape_dtype_struct.ShapeDtypeStruct(
+        shape=(1, 1), dtype=np.float32
+    ),
+    'user_id': shape_dtype_struct.ShapeDtypeStruct(
+        shape=(1, 1), dtype=np.int32
+    ),
 }
 
 # Model features produced by the preprocessor, in output order.
 FEATURE_SIGNATURE = [
-    jax.ShapeDtypeStruct(shape=(1, 1), dtype=jnp.float32),  # log_revenue
-    jax.ShapeDtypeStruct(shape=(1, 1), dtype=jnp.int32),  # user_item_cross
+    shape_dtype_struct.ShapeDtypeStruct(
+        shape=(1, 1), dtype=np.float32
+    ),  # log_revenue
+    shape_dtype_struct.ShapeDtypeStruct(
+        shape=(1, 1), dtype=np.int32
+    ),  # user_item_cross
 ]
 
 
@@ -106,25 +115,6 @@ def compute_features(
   return np.from_dlpack(log_revenue), np.from_dlpack(user_item_cross)
 
 
-def _to_pytree_proto(tree: Any) -> transform_config_pb2.PyTreeProto:
-  """Converts a dict/list tree of `jax.ShapeDtypeStruct`s to a PyTreeProto."""
-  proto = transform_config_pb2.PyTreeProto()
-  if isinstance(tree, Mapping):
-    proto.type = transform_config_pb2.PyTreeProto.DICT
-    for key in sorted(tree):
-      proto.dict_keys.append(key)
-      proto.children.append(_to_pytree_proto(tree[key]))
-  elif isinstance(tree, list):
-    proto.type = transform_config_pb2.PyTreeProto.LIST
-    for child in tree:
-      proto.children.append(_to_pytree_proto(child))
-  else:
-    proto.type = transform_config_pb2.PyTreeProto.LEAF
-    proto.leaf_value.shape.extend(tree.shape)
-    proto.leaf_value.dtype = np.dtype(tree.dtype).name
-  return proto
-
-
 def build_preprocessor() -> main_lib.CompositeModel:
   """Builds the preprocessing graph out of math and bitwise transforms."""
   graph = composite_processor_pybind.ExecutionGraph()
@@ -160,8 +150,12 @@ def build_preprocessor() -> main_lib.CompositeModel:
   ])
 
   io_structure = transform_config_pb2.GraphIOStructureProto()
-  io_structure.input_structure.CopyFrom(_to_pytree_proto(INPUT_SIGNATURE))
-  io_structure.output_structure.CopyFrom(_to_pytree_proto(FEATURE_SIGNATURE))
+  io_structure.input_structure.CopyFrom(
+      shape_dtype_struct.tree_to_proto(INPUT_SIGNATURE)
+  )
+  io_structure.output_structure.CopyFrom(
+      shape_dtype_struct.tree_to_proto(FEATURE_SIGNATURE)
+  )
   graph.io_structure = io_structure
 
   return main_lib.CompositeModel.from_graph(

@@ -47,6 +47,7 @@ import numpy as np
 
 from xla_serving_data.cpu_embedding.python import embedding_utils
 from xla_serving_data.kernels.cpu_embedding import cpu_embedding_module
+from xla_serving_data.processor.python import shape_dtype_struct
 from examples.dlrm import model_jce
 from examples.dlrm_benchmark import common
 from xla_saved_model.protos import orchestration_pb2
@@ -259,11 +260,15 @@ def _export_xse(
 
   # Dynamic batch dimension; the second dimension is the fixed valency.
   input_signature = {
-      n: jax.ShapeDtypeStruct(shape=(-1, config.valency[i]), dtype=jnp.int32)
+      n: shape_dtype_struct.ShapeDtypeStruct(
+          shape=(None, config.valency[i]), dtype=np.int32
+      )
       for i, n in enumerate(feature_names)
   }
-  input_signature[common.DENSE_FEATURE_NAME] = jax.ShapeDtypeStruct(
-      shape=(-1, config.num_dense_features), dtype=jnp.float32
+  input_signature[common.DENSE_FEATURE_NAME] = (
+      shape_dtype_struct.ShapeDtypeStruct(
+          shape=(None, config.num_dense_features), dtype=np.float32
+      )
   )
 
   preprocessor = embedding_utils.build_embedding_lookup(
