@@ -60,9 +60,11 @@ cc_test(
     srcs = ["value_test.cc"],
     defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
     deps = [
+        ":host_buffer",
         ":value",
         "@abseil-cpp//absl/strings:string_view",
         "@googletest//:gtest_main",
+        "@xla//xla/python/ifrt",
     ],
 )
 
