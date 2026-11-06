@@ -118,7 +118,11 @@ cc_library(
 
 cc_test(
     name = "transform_registry_test",
-    srcs = ["transform_registry_test.cc"],
+    srcs = [
+        "transform_registry_test.cc",
+        "transform_registry_test_type_a.cc",
+        "transform_registry_test_type_b.cc",
+    ],
     defines = [
         "ABSL_DEFINE_UNQUALIFIED_STATUS_MACROS",
         "ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS",
