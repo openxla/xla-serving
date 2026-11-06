@@ -411,5 +411,26 @@ TEST(CpuEmbeddingEngineBatchTest, SnapshotSurvivesClearDuringAllocation) {
   EXPECT_EQ(allocation_count, 1);
 }
 
+TEST(CpuEmbeddingEngineBatchTest, ExecuteSingleFeatureWithInt32Ids) {
+  CpuEmbeddingEngine engine(CpuEmbeddingEngine::Options{.max_cpu_slots = 2});
+  std::vector<float> table_data = {1.0f, 2.0f, 3.0f, 4.0f};
+  ASSERT_OK(AddFeature(&engine, "feature", table_data, 2));
+  const std::vector<int32_t> ids_i32 = {0, 1};
+  const std::vector<int32_t> rows = {0, 2};
+  std::vector<float> output(2, -1.0f);
+  ASSERT_OK(engine.Execute<float>({
+      .feature_name = "feature",
+      .embedding_ids = {},
+      .row_pointers = rows,
+      .weights = {},
+      .output_allocator =
+          [&](size_t size) {
+            return absl::MakeSpan(output).subspan(0, size);
+          },
+      .embedding_ids_i32 = ids_i32,
+  }));
+  EXPECT_THAT(output, ElementsAre(4.0f, 6.0f));
+}
+
 }  // namespace
 }  // namespace xla_serving::data::cpu_embedding

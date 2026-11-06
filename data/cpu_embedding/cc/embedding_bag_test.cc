@@ -213,7 +213,6 @@ TEST(EmbeddingBagBatchTest, PoolReentryExecutesInline) {
   std::vector<float> output(2, -1.0f);
   auto allocate = MakeAllocator(&output);
   auto request = MakeRequest(ids, rows, table.get(), {}, &allocate);
-  Eigen::ThreadPool pool(2);
   std::promise<void> blocker_started;
   std::future<void> blocker_ready = blocker_started.get_future();
   std::promise<void> release_blocker;
@@ -221,6 +220,7 @@ TEST(EmbeddingBagBatchTest, PoolReentryExecutesInline) {
       release_blocker.get_future().share();
   std::promise<absl::Status> completion;
   std::future<absl::Status> result = completion.get_future();
+  Eigen::ThreadPool pool(2);
 
   pool.Schedule([&] {
     blocker_started.set_value();
@@ -260,11 +260,11 @@ TEST(EmbeddingBagBatchTest, SmallGroupExecutesInlineOnCaller) {
   auto allocate = MakeAllocator(&output);
   auto request = MakeRequest(ids, rows, table.get(), {}, &allocate);
   constexpr int kThreads = 2;
-  Eigen::ThreadPool pool(kThreads);
   std::promise<void> release_workers;
   std::shared_future<void> workers_release =
       release_workers.get_future().share();
   std::vector<std::promise<void>> worker_started(kThreads);
+  Eigen::ThreadPool pool(kThreads);
   for (int worker = 0; worker < kThreads; ++worker) {
     pool.Schedule([&, worker] {
       worker_started[worker].set_value();
@@ -456,6 +456,164 @@ TEST(EmbeddingBagSveTest, ForcedBatchCoversThreadedNonzeroBagRanges) {
     EXPECT_THAT(status,
                 absl_testing::StatusIs(absl::StatusCode::kFailedPrecondition));
     EXPECT_THAT(forced, testing::Each(testing::FloatEq(-3.0f)));
+  }
+}
+
+TEST(EmbeddingBagBatchTest, Int32IdsMatchInt64AcrossAllUnrollSizesAndModes) {
+  for (int rows : {16, 1500}) {
+    for (int embedding_dim : {7, 32, 64, 128}) {
+      std::vector<float> table_data(rows * embedding_dim);
+      for (int row = 0; row < rows; ++row) {
+        for (int col = 0; col < embedding_dim; ++col) {
+          table_data[row * embedding_dim + col] =
+              static_cast<float>(((row % 31) + 1) * 0.25f + col * 0.03125f);
+        }
+      }
+      const std::vector<int> bag_sizes = {
+          0, 1, 2, 3, 4, 7, 8, 13, 16, 31, 100, 1, 1, 1, 1};
+      std::vector<int32_t> row_pointers = {0};
+      std::vector<int64_t> ids_i64;
+      std::vector<int32_t> ids_i32;
+      for (int bag_size : bag_sizes) {
+        for (int i = 0; i < bag_size; ++i) {
+          const int id = (i * 7 + bag_size * 13) % rows;
+          ids_i64.push_back(id);
+          ids_i32.push_back(id);
+        }
+        row_pointers.push_back(static_cast<int32_t>(ids_i64.size()));
+      }
+      const size_t num_bags = bag_sizes.size();
+
+      for (auto mode : {EmbeddingTable::CombineMode::kSum,
+                        EmbeddingTable::CombineMode::kMean,
+                        EmbeddingTable::CombineMode::kSqrtN}) {
+        ASSERT_OK_AND_ASSIGN(auto table,
+                             MakeTable(table_data, embedding_dim, mode));
+        std::vector<float> out_i64(num_bags * embedding_dim, -1.0f);
+        std::vector<float> out_i32(num_bags * embedding_dim, -2.0f);
+        auto alloc_i64 = MakeAllocator(&out_i64);
+        auto alloc_i32 = MakeAllocator(&out_i32);
+
+        internal::EmbeddingBagInput req_i64 =
+            MakeRequest(ids_i64, row_pointers, table.get(), {}, &alloc_i64);
+        internal::EmbeddingBagInput req_i32 = {
+            .embedding_ids = {},
+            .row_pointers = row_pointers,
+            .embedding_table = table.get(),
+            .weights = {},
+            .output_allocator = &alloc_i32,
+            .embedding_ids_i32 = ids_i32,
+        };
+        Eigen::ThreadPool pool(4);
+        ASSERT_OK(internal::ExecuteEmbeddingBagBatch(
+            absl::MakeSpan(&req_i64, 1),
+            internal::EmbeddingBagBackend::kPortable, &pool,
+            /*inline_work_threshold=*/0));
+        ASSERT_OK(internal::ExecuteEmbeddingBagBatch(
+            absl::MakeSpan(&req_i32, 1),
+            internal::EmbeddingBagBackend::kPortable, &pool,
+            /*inline_work_threshold=*/0));
+        EXPECT_EQ(out_i32, out_i64);
+      }
+    }
+  }
+}
+
+TEST(EmbeddingBagBatchTest, Int32IdsValidateBoundsAndIsolation) {
+  std::vector<float> table_data = {1.0f, 2.0f, 3.0f, 4.0f};
+  ASSERT_OK_AND_ASSIGN(auto table, MakeTable(table_data, 2));
+  const std::vector<int32_t> oob_ids = {0, -1};
+  const std::vector<int32_t> rows = {0, 2};
+  std::vector<float> output(2, 5.0f);
+  auto allocate = MakeAllocator(&output);
+  internal::EmbeddingBagInput bad_req = {
+      .embedding_ids = {},
+      .row_pointers = rows,
+      .embedding_table = table.get(),
+      .weights = {},
+      .output_allocator = &allocate,
+      .embedding_ids_i32 = oob_ids,
+  };
+  Eigen::ThreadPool pool(2);
+  EXPECT_THAT(internal::ExecuteEmbeddingBagBatch(
+                  absl::MakeSpan(&bad_req, 1),
+                  internal::EmbeddingBagBackend::kPortable, &pool),
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
+                                     testing::HasSubstr("out of bounds")));
+
+  const std::vector<int64_t> valid_i64 = {0, 1};
+  const std::vector<int32_t> valid_i32 = {0, 1};
+  internal::EmbeddingBagInput both_req = {
+      .embedding_ids = valid_i64,
+      .row_pointers = rows,
+      .embedding_table = table.get(),
+      .weights = {},
+      .output_allocator = &allocate,
+      .embedding_ids_i32 = valid_i32,
+  };
+  EXPECT_THAT(
+      internal::ExecuteEmbeddingBagBatch(
+          absl::MakeSpan(&both_req, 1),
+          internal::EmbeddingBagBackend::kPortable, &pool),
+      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
+                             testing::HasSubstr("both int64 and int32")));
+}
+
+TEST(EmbeddingBagBatchTest, ConcurrentCallersSharePoolWithoutRaceOrDeadlock) {
+  constexpr int kRows = 1024;
+  constexpr int kDim = 128;
+  constexpr int kBags = 64;
+  std::vector<float> table_data(kRows * kDim);
+  for (int i = 0; i < kRows * kDim; ++i) {
+    table_data[i] = static_cast<float>((i % 29) * 0.125f);
+  }
+  ASSERT_OK_AND_ASSIGN(auto table, MakeTable(table_data, kDim));
+
+  std::vector<int32_t> row_pointers(kBags + 1);
+  std::vector<int32_t> ids(kBags * 4);
+  for (int b = 0; b <= kBags; ++b) row_pointers[b] = b * 4;
+  for (int i = 0; i < kBags * 4; ++i) ids[i] = (i * 17) % kRows;
+
+  std::vector<float> expected(kBags * kDim, 0.0f);
+  auto expected_alloc = MakeAllocator(&expected);
+  internal::EmbeddingBagInput ref_req = {
+      .embedding_ids = {},
+      .row_pointers = row_pointers,
+      .embedding_table = table.get(),
+      .weights = {},
+      .output_allocator = &expected_alloc,
+      .embedding_ids_i32 = ids,
+  };
+  ASSERT_OK(internal::ComputeEmbeddingActivationsF32(
+      ref_req, internal::EmbeddingBagBackend::kPortable));
+
+  Eigen::ThreadPool pool(4);
+  constexpr int kCallers = 12;
+  constexpr int kIterations = 25;
+  std::vector<std::future<void>> futures;
+  futures.reserve(kCallers);
+  for (int c = 0; c < kCallers; ++c) {
+    futures.push_back(std::async(std::launch::async, [&]() {
+      for (int iter = 0; iter < kIterations; ++iter) {
+        std::vector<float> out(kBags * kDim, -1.0f);
+        auto alloc = MakeAllocator(&out);
+        internal::EmbeddingBagInput req = {
+            .embedding_ids = {},
+            .row_pointers = row_pointers,
+            .embedding_table = table.get(),
+            .weights = {},
+            .output_allocator = &alloc,
+            .embedding_ids_i32 = ids,
+        };
+        ASSERT_OK(internal::ExecuteEmbeddingBagBatch(
+            absl::MakeSpan(&req, 1), internal::EmbeddingBagBackend::kAuto,
+            &pool, /*inline_work_threshold=*/0));
+        EXPECT_EQ(out, expected);
+      }
+    }));
+  }
+  for (auto& f : futures) {
+    f.get();
   }
 }
 
