@@ -664,6 +664,13 @@ absl::Status SharedBatchScheduler<TaskType>::AddQueueAfterRewritingOptions(
   // TODO: Clean up once the migration to QueueBase is complete.
   if (!absl::GetFlag(FLAGS_jsv_use_queue_base)) {
     LOG(INFO) << "SharedBatchScheduler creating legacy internal::Queue.";
+    if (options.priority_batching_policy ==
+        PriorityBatchingPolicy::kPriorityAware) {
+      LOG(WARNING) << "Priority-aware batching was requested, but "
+                      "--jsv_use_queue_base is false. The legacy "
+                      "internal::Queue does not support it, so the priority "
+                      "batching policy is ignored.";
+    }
     auto internal_queue = std::unique_ptr<internal::Queue<TaskType>>(
         new internal::Queue<TaskType>(options, options_.env,
                                       process_batch_callback,
