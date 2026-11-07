@@ -109,11 +109,17 @@ def handle_tuple(args: list[str]) -> str:
   return f'tuple[{", ".join(args)}]'
 
 
+def handle_optional(args: list[str]) -> str:
+  inner = args[0] if args else 'Any'
+  return f'{inner} | None'
+
+
 TEMPLATE_MAPPERS = {
     'vector': handle_vector,
     'map': handle_map,
     'set': handle_set,
     'tuple': handle_tuple,
+    'optional': handle_optional,
 }
 
 

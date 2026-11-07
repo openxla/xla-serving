@@ -20,11 +20,13 @@ from absl.testing import absltest
 from google.protobuf import text_format
 import jax
 import numpy as np
+from data.kernels.cpu_embedding import cpu_embedding_lookup_transform_pybind
 from data.kernels.cpu_embedding import cpu_embedding_pb2
 from data.kernels.cpu_embedding import cpu_embedding_serializer_pybind
 from data.kernels.cpu_embedding import unpack_host_buffer_vector_module
 from data.ops import cpu_embedding
 from data.processor.python import composite_processor_pybind
+from data.processor.python import shape_dtype_struct
 
 
 class CpuEmbeddingModuleTest(absltest.TestCase):
@@ -569,6 +571,161 @@ class CpuEmbeddingModuleTest(absltest.TestCase):
     out_sig = wrapper.get_output_signature(None)
     self.assertIsNotNone(out_sig)
     resource.close()
+
+  def test_dynamic_output_signatures_and_negative_dim_rejection(self):
+    table_data = {
+        "feat1": np.array([[0.0, 0.0], [1.0, 2.0]], dtype=np.float32),
+        "feat2": np.array([[0.0, 0.0, 0.0], [3.0, 4.0, 5.0]], dtype=np.float32),
+    }
+    combine_modes = {"feat1": "SUM", "feat2": "SUM"}
+    feature_specs = [
+        {"name": "feat1", "table_name": "feat1"},
+        {"name": "feat2", "table_name": "feat2"},
+    ]
+    resource = cpu_embedding.CpuEmbeddingResource(
+        table_data, combine_modes, feature_specs
+    )
+    self.addCleanup(resource.close)
+
+    # CpuEmbeddingModule single-feature with dynamic batch dimension.
+    mod_single = cpu_embedding.CpuEmbeddingModule(
+        resource,
+        feature_name="feat1",
+        output_feature_name="feat1_out",
+        output_shape=[None, 2],
+    )
+    sig_single = mod_single.get_output_signature(None)
+    self.assertEqual(sig_single["feat1_out"].shape, (None, 2))
+    self.assertEqual(sig_single["feat1_out"].dtype, np.float32)
+
+    # Single-feature output_shapes accepts both 1D and 2D, and rejects empty [].
+    for single_shapes in ([None, 2], [[None, 2]]):
+      mod_single_shapes = cpu_embedding.CpuEmbeddingModule(
+          resource,
+          feature_names=["feat1"],
+          output_feature_names=["feat1_out"],
+          output_shapes=single_shapes,
+      )
+      self.assertEqual(
+          mod_single_shapes.get_output_signature(None)["feat1_out"].shape,
+          (None, 2),
+      )
+
+    with self.assertRaisesRegex(ValueError, "Sequence length mismatch"):
+      cpu_embedding.CpuEmbeddingModule(
+          resource,
+          feature_names=["feat1"],
+          output_feature_names=["feat1_out"],
+          output_shapes=[],
+      )
+    with self.assertRaisesRegex(
+        ValueError, "Must provide output_shapes or output_shape"
+    ):
+      cpu_embedding.CpuEmbeddingModule(
+          resource,
+          feature_names=["feat1"],
+          output_feature_names=["feat1_out"],
+      )
+
+    # CpuEmbeddingModule multi-feature with dynamic batch dimensions.
+    mod_multi = cpu_embedding.CpuEmbeddingModule(
+        resource,
+        feature_names=["feat1", "feat2"],
+        output_feature_names=["out1", "out2"],
+        output_shapes=[[None, 2], [None, 3]],
+    )
+    sig_multi = mod_multi.get_output_signature(None)
+    self.assertEqual(sig_multi["out1"].shape, (None, 2))
+    self.assertEqual(sig_multi["out2"].shape, (None, 3))
+
+    # Deprecated -1 in CpuEmbeddingModule warns and normalizes to None; < -1
+    # raises ValueError.
+    with self.assertWarnsRegex(DeprecationWarning, "deprecated"):
+      mod_legacy = cpu_embedding.CpuEmbeddingModule(
+          resource,
+          feature_name="feat1",
+          output_feature_name="feat1_out",
+          output_shape=[-1, 2],
+      )
+    self.assertEqual(
+        mod_legacy.get_output_signature(None)["feat1_out"].shape, (None, 2)
+    )
+    with self.assertRaises(ValueError):
+      cpu_embedding.CpuEmbeddingModule(
+          resource,
+          feature_name="feat1",
+          output_feature_name="feat1_out",
+          output_shape=[-2, 2],
+      )
+
+    # Direct pybind CpuEmbeddingLookupTransform rejects negative sizes (-1, -2).
+    with self.assertRaisesRegex(RuntimeError, "Expected a non-negative size"):
+      cpu_embedding_lookup_transform_pybind.CpuEmbeddingLookupTransform(
+          resource.resource,
+          ["feat1"],
+          False,
+          ["feat1_out"],
+          2,
+          [[-1, 2]],
+      )
+    with self.assertRaisesRegex(RuntimeError, "Expected a non-negative size"):
+      cpu_embedding_lookup_transform_pybind.CpuEmbeddingLookupTransform(
+          resource.resource,
+          ["feat1"],
+          False,
+          ["feat1_out"],
+          2,
+          [[-2, 2]],
+      )
+
+    # DenseCpuEmbeddingLookupTransform with dynamic and rank-0 input specs.
+    dense_transform = cpu_embedding.DenseCpuEmbeddingLookupTransform(
+        resource=resource,
+        feature_names="feat1",
+    )
+    dyn_out = dense_transform.get_output_signature(
+        (shape_dtype_struct.ShapeDtypeStruct(shape=(None, 3), dtype=np.int32),)
+    )
+    self.assertEqual(dyn_out[0].shape, (None, 2))
+    self.assertEqual(dyn_out[0].dtype, np.float32)
+
+    scalar_out = dense_transform.get_output_signature(
+        (shape_dtype_struct.ShapeDtypeStruct(shape=(), dtype=np.int32),)
+    )
+    self.assertEqual(scalar_out[0].shape, (None, 2))
+
+    class _LegacyLeaf:
+      shape = (-1, 3)
+
+    with self.assertWarnsRegex(DeprecationWarning, "deprecated"):
+      legacy_dense_out = dense_transform.get_output_signature((_LegacyLeaf(),))
+    self.assertEqual(legacy_dense_out[0].shape, (None, 2))
+
+    class _InvalidLeaf:
+      shape = (-2, 3)
+
+    with self.assertRaises(ValueError):
+      dense_transform.get_output_signature((_InvalidLeaf(),))
+
+    # UnpackHostBufferVectorModule with dynamic dimensions and deprecated -1.
+    unpack_dyn = unpack_host_buffer_vector_module.UnpackHostBufferVectorModule(
+        output_count=1,
+        output_shapes=[[None, 4]],
+    )
+    self.assertEqual(unpack_dyn.get_output_signature(None).shape, (None, 4))
+    with self.assertWarnsRegex(DeprecationWarning, "deprecated"):
+      unpack_legacy = (
+          unpack_host_buffer_vector_module.UnpackHostBufferVectorModule(
+              output_count=1,
+              output_shapes=[[-1, 4]],
+          )
+      )
+    self.assertEqual(unpack_legacy.get_output_signature(None).shape, (None, 4))
+    with self.assertRaises(ValueError):
+      unpack_host_buffer_vector_module.UnpackHostBufferVectorModule(
+          output_count=1,
+          output_shapes=[[-2, 4]],
+      )
 
 
 if __name__ == "__main__":

@@ -31,11 +31,11 @@ from xla_serving_data.kernels.cpu_embedding import cpu_embedding_module
 from xla_serving_data.ops import packing
 from xla_serving_data.processor.proto import transform_config_pb2
 from xla_serving_data.processor.python import composite_processor_pybind
+from xla_serving_data.processor.python import shape_dtype_struct
 from xla_serving_data.resource_manager.python import resource_manager_pybind
 from examples.dlrm import model_jce as model_lib
 from xla_saved_model.protos import orchestration_pb2
 from xla_saved_model._src import assets2xsm
-from xla_saved_model._src.core import shlo_type
 from xla_saved_model._src.export import jax_model
 from xla_saved_model._src.export import main_lib
 from xla_saved_model._src.export import serving_config
@@ -178,13 +178,13 @@ def export_model(
   # 3. UnpackTensorArrayModule: Scatters lookup outputs back to separate positional leaf tensors.
 
   input_signature = {
-      str(i): jax.ShapeDtypeStruct(
-          shape=(1, model_lib.VALENCY[i]), dtype=jnp.int32
+      str(i): shape_dtype_struct.ShapeDtypeStruct(
+          shape=(None, model_lib.VALENCY[i]), dtype=np.int32
       )
       for i in range(len(model_lib.VALENCY))
   }
-  input_signature['dense_features'] = jax.ShapeDtypeStruct(
-      shape=(1, num_dense_features), dtype=jnp.float32
+  input_signature['dense_features'] = shape_dtype_struct.ShapeDtypeStruct(
+      shape=(None, num_dense_features), dtype=np.float32
   )
 
   composite_preprocessor = embedding_utils.build_embedding_lookup(

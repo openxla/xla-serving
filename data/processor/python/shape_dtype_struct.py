@@ -21,6 +21,7 @@ negative size is never read as unknown: it is an error.
 from collections.abc import Iterable, Iterator
 import dataclasses
 from typing import Any
+import warnings
 
 import jax
 import numpy as np
@@ -34,6 +35,39 @@ def _is_size(d: Any) -> bool:
   return isinstance(d, (int, np.integer)) and not isinstance(
       d, (bool, np.bool_)
   )
+
+
+# TODO: Remove once deprecated -1 unknown dims in CPU embedding
+# callers are migrated to None.
+def _replace_deprecated_negative_one_shapes(
+    shapes: Iterable[Any],
+    caller: str,
+    *,
+    stacklevel: int = 3,
+) -> list[Any]:
+  """Replaces -1 dims with None across `shapes`, warning at most once."""
+  replaced_shapes: list[Any] = []
+  warned = False
+  for s in shapes:
+    if not isinstance(s, Iterable) or isinstance(s, (str, bytes)):
+      replaced_shapes.append(s)
+      continue
+    dims = []
+    for d in s:
+      if _is_size(d) and int(d) == -1:
+        if not warned:
+          warnings.warn(
+              f'Passing -1 for an unknown dimension in {caller} is deprecated'
+              ' and will be removed soon; use None instead.',
+              DeprecationWarning,
+              stacklevel=stacklevel,
+          )
+          warned = True
+        dims.append(None)
+      else:
+        dims.append(d)
+    replaced_shapes.append(tuple(dims))
+  return replaced_shapes
 
 
 def to_partial_shape(shape: Iterable[Any]) -> tuple[int | None, ...]:

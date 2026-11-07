@@ -43,24 +43,24 @@ class ExportTest(absltest.TestCase):
     self.assertIn('serving_default', runner.signature_names())
     signature = runner.signature('serving_default')
 
-    # Prepare inputs
-    batch_size = 1
+    # Prepare inputs across single-item and batched buckets
     vocab_sizes = [min(v, 100) for v in model_lib.VOCAB_SIZES]
-    inputs = {}
-    for i, rename_me in enumerate(model_lib.VALENCY):
-      inputs[str(i)] = np.random.randint(
-          0, vocab_sizes[i], size=(batch_size, rename_me), dtype=np.int32
-      )
-    inputs['dense_features'] = np.random.uniform(
-        0.0, 1.0, size=(batch_size, 13)
-    ).astype(np.float32)
+    for batch_size in (1, 64):
+      inputs = {}
+      for i, valency in enumerate(model_lib.VALENCY):
+        inputs[str(i)] = np.random.randint(
+            0, vocab_sizes[i], size=(batch_size, valency), dtype=np.int32
+        )
+      inputs['dense_features'] = np.random.uniform(
+          0.0, 1.0, size=(batch_size, 13)
+      ).astype(np.float32)
 
-    # Run full preprocessor pre-execution + model inference in C++ serving!
-    outputs = signature.run(**inputs)
-    self.assertLen(outputs, 1)
-    predictions = np.array(outputs[0])
-    self.assertEqual(predictions.shape, (batch_size,))
-    self.assertEqual(predictions.dtype, np.float32)
+      # Run full preprocessor pre-execution + model inference in C++ serving!
+      outputs = signature.run(**inputs)
+      self.assertLen(outputs, 1)
+      predictions = np.array(outputs[0])
+      self.assertEqual(predictions.shape, (batch_size,))
+      self.assertEqual(predictions.dtype, np.float32)
 
   def test_load_and_run_inference_shuffled_order(self):
     export_path = self.create_tempdir().full_path
