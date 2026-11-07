@@ -377,10 +377,30 @@ def _run_model_fn_benchmark(args: argparse.Namespace) -> None:
       )
 
 
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]", ""})
+
+
+def _create_grpc_channel(
+    server_address: str, use_alts_credentials: bool = False
+) -> grpc.Channel:
+  """Creates a gRPC channel with ALTS, local loopback, or insecure creds."""
+  if use_alts_credentials:
+    return grpc.secure_channel(server_address, grpc.alts_channel_credentials())
+  if (
+      server_address in _LOOPBACK_HOSTS
+      or server_address.rsplit(":", 1)[0] in _LOOPBACK_HOSTS
+  ):
+    return grpc.secure_channel(server_address, grpc.local_channel_credentials())
+  return grpc.insecure_channel(server_address)
+
+
 def _run_grpc_client_benchmark(args: argparse.Namespace) -> None:
   """Benchmarks an existing C++ XLA SavedModel Server via gRPC."""
   print(f"=== Running Mode: grpc_client (Server={args.server_address}) ===")
-  channel = grpc.insecure_channel(args.server_address)
+  channel = _create_grpc_channel(
+      args.server_address,
+      use_alts_credentials=args.use_alts_credentials,
+  )
   predict_method = channel.unary_unary(
       _PREDICT_METHOD,
       request_serializer=predict_pb2.PredictRequest.SerializeToString,
@@ -658,6 +678,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
       type=str,
       default="localhost:8500",
       help="Target server address for grpc_client mode.",
+  )
+  parser.add_argument(
+      "--use-alts-credentials",
+      action="store_true",
+      help=(
+          "Use ALTS credentials for Google Cloud endpoints in grpc_client mode."
+      ),
   )
   parser.add_argument(
       "--model-name",

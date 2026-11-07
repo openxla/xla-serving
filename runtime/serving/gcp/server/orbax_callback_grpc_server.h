@@ -16,7 +16,9 @@
 #define XLA_SERVING_RUNTIME_SERVING_GCP_SERVER_ORBAX_CALLBACK_GRPC_SERVER_H_
 
 #include <cstddef>
+#if ENABLE_TF == 1
 #include <cstdint>
+#endif
 #include <memory>
 #include <string>
 #include <utility>
@@ -41,6 +43,7 @@ namespace xla_serving {
 namespace serving {
 
 struct OrbaxCallbackGrpcServerOptions {
+#if ENABLE_TF == 1
   bool enable_lazy_loading = true;
   bool lazy_loading_use_graph_executor = true;
   bool enable_mlrt = true;
@@ -48,6 +51,7 @@ struct OrbaxCallbackGrpcServerOptions {
   bool hoist_invariant_ops = true;
   bool sink_in_invariant_ops = true;
   int64_t cost_threshold = 10000;
+#endif
   bool warmup_server = false;
   bool warmup_all_batch_sizes = false;
   int thread_pool_num_threads = 0;

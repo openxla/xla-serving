@@ -12,7 +12,9 @@ cc_library(
     deps = [
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings:string_view",
         "@grpc//:grpc++",
         "@grpc//:grpc_security_base",
         "@xla//xla/tsl/platform:env",

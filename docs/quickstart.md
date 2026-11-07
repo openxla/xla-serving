@@ -143,17 +143,18 @@ docker run \
   --model_name=classifier \
   --model_path=/models/classifier \
   --orbax_grpc_server_platform=cpu \
-  --port=8500 \
-  --use_insecure_grpc_credentials=true
+  --port=8500
 ```
 
 The server compiles the StableHLO for the host CPU, loads the checkpoint, and
-begins listening on `[::]:8500`.
+begins listening on `localhost:8500`.
 
-`--model_name` is the name clients put in `model_spec.name`. It does not have
-to match the directory. `--use_insecure_grpc_credentials=true` is for local
-use; the TLS flags are `--server_private_key_path`,
-`--server_cert_chain_path`, and `--client_cert_chain_path`.
+`--model_name` is the name clients put in `model_spec.name`; it does not have
+to match the directory. With no credential flags set, the server binds to
+loopback using gRPC local credentials (which requires `--net=host` when running
+in Docker). For multi-host traffic—such as zero-certificate ALTS on Google
+Cloud (`--use_alts_credentials=true`) or custom TLS/mTLS—see
+[Transport security](guides/serving.md#transport-security).
 
 ::::{tab-set}
 :::{tab-item} GPU
@@ -170,8 +171,7 @@ docker run \
   --model_name=classifier \
   --model_path=/models/classifier \
   --orbax_grpc_server_platform=cuda \
-  --port=8500 \
-  --use_insecure_grpc_credentials=true
+  --port=8500
 ```
 
 To run on one MIG partition instead of the whole card, replace `--gpus all`
@@ -191,8 +191,7 @@ docker run \
   --model_name=classifier \
   --model_path=/models/classifier \
   --orbax_grpc_server_platform=tpu \
-  --port=8500 \
-  --use_insecure_grpc_credentials=true
+  --port=8500
 ```
 :::
 :::{tab-item} Without Docker
@@ -206,8 +205,7 @@ bazel run \
   --model_name=classifier \
   --model_path=/tmp/classifier \
   --orbax_grpc_server_platform=cpu \
-  --port=8500 \
-  --use_insecure_grpc_credentials=true
+  --port=8500
 ```
 :::
 ::::
@@ -239,7 +237,9 @@ def from_host_buffer(buf: host_buffer_pb2.HostBufferProto) -> np.ndarray:
   return np.frombuffer(buf.raw_data, dtype=np.float32).reshape(buf.shape.dims)
 
 
-channel = grpc.insecure_channel('localhost:8500')
+channel = grpc.secure_channel(
+    'localhost:8500', grpc.local_channel_credentials()
+)
 predict = channel.unary_unary(
     f'/{predict_pb2.DESCRIPTOR.package}.PredictionService/Predict',
     request_serializer=predict_pb2.PredictRequest.SerializeToString,

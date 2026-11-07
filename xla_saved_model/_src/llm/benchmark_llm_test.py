@@ -262,10 +262,16 @@ class BenchmarkLlmTest(absltest.TestCase):
     )
     mock_wrapper.compile_generation_loop.assert_called_once()
 
-  @mock.patch.object(benchmark_llm.grpc, "insecure_channel", autospec=True)
-  def test_main_grpc_client_benchmark(self, mock_channel_fn):
+  @mock.patch.object(
+      benchmark_llm.grpc, "local_channel_credentials", autospec=True
+  )
+  @mock.patch.object(benchmark_llm.grpc, "secure_channel", autospec=True)
+  def test_main_grpc_client_benchmark(
+      self, mock_secure_channel_fn, mock_local_creds_fn
+  ):
     mock_channel = mock.MagicMock()
     mock_predict_method = mock.MagicMock()
+    sentinel_creds = mock.MagicMock()
 
     response = predict_pb2.PredictResponse()
     hb = host_buffer_pb2.HostBufferProto()
@@ -276,7 +282,8 @@ class BenchmarkLlmTest(absltest.TestCase):
 
     mock_predict_method.return_value = response
     mock_channel.unary_unary.return_value = mock_predict_method
-    mock_channel_fn.return_value = mock_channel
+    mock_local_creds_fn.return_value = sentinel_creds
+    mock_secure_channel_fn.return_value = mock_channel
 
     benchmark_llm.main([
         "--mode",
@@ -295,7 +302,10 @@ class BenchmarkLlmTest(absltest.TestCase):
         "2",
     ])
 
-    mock_channel_fn.assert_called_once_with("localhost:8500")
+    mock_local_creds_fn.assert_called_once_with()
+    mock_secure_channel_fn.assert_called_once_with(
+        "localhost:8500", sentinel_creds
+    )
     mock_channel.unary_unary.assert_called_once_with(
         f"/{predict_pb2.DESCRIPTOR.package}.PredictionService/Predict",
         request_serializer=predict_pb2.PredictRequest.SerializeToString,
@@ -303,6 +313,85 @@ class BenchmarkLlmTest(absltest.TestCase):
     )
     # 1 warmup + 2 timed iterations = 3 calls
     self.assertEqual(mock_predict_method.call_count, 3)
+
+  @mock.patch.object(
+      benchmark_llm.grpc, "alts_channel_credentials", autospec=True
+  )
+  @mock.patch.object(benchmark_llm.grpc, "secure_channel", autospec=True)
+  def test_main_grpc_client_benchmark_alts(
+      self, mock_secure_channel_fn, mock_alts_creds_fn
+  ):
+    mock_channel = mock.MagicMock()
+    mock_predict_method = mock.MagicMock()
+    sentinel_creds = mock.MagicMock()
+
+    response = predict_pb2.PredictResponse()
+    hb = host_buffer_pb2.HostBufferProto()
+    hb.dtype.kind = dtype_pb2.DTypeProto.Kind.Value("KIND_STRING")
+    hb.shape.dims.append(1)
+    hb.string_data.elements.append(b"Generated answer from server")
+    response.outputs["text_output"].CopyFrom(hb)
+
+    mock_predict_method.return_value = response
+    mock_channel.unary_unary.return_value = mock_predict_method
+    mock_alts_creds_fn.return_value = sentinel_creds
+    mock_secure_channel_fn.return_value = mock_channel
+
+    benchmark_llm.main([
+        "--mode",
+        "grpc_client",
+        "--server-address",
+        "10.0.0.1:8500",
+        "--use-alts-credentials",
+        "--model-name",
+        "qwen3",
+        "--prompt",
+        "Test prompt text",
+        "--batch-size",
+        "1",
+        "--num-batches",
+        "1",
+    ])
+
+    mock_alts_creds_fn.assert_called_once_with()
+    mock_secure_channel_fn.assert_called_once_with(
+        "10.0.0.1:8500", sentinel_creds
+    )
+    self.assertEqual(mock_predict_method.call_count, 2)
+
+  @mock.patch.object(benchmark_llm.grpc, "insecure_channel", autospec=True)
+  def test_main_grpc_client_benchmark_remote_insecure(self, mock_channel_fn):
+    mock_channel = mock.MagicMock()
+    mock_predict_method = mock.MagicMock()
+
+    response = predict_pb2.PredictResponse()
+    hb = host_buffer_pb2.HostBufferProto()
+    hb.dtype.kind = dtype_pb2.DTypeProto.Kind.Value("KIND_STRING")
+    hb.shape.dims.append(1)
+    hb.string_data.elements.append(b"Generated answer from server")
+    response.outputs["text_output"].CopyFrom(hb)
+
+    mock_predict_method.return_value = response
+    mock_channel.unary_unary.return_value = mock_predict_method
+    mock_channel_fn.return_value = mock_channel
+
+    benchmark_llm.main([
+        "--mode",
+        "grpc_client",
+        "--server-address",
+        "10.0.0.1:8500",
+        "--model-name",
+        "qwen3",
+        "--prompt",
+        "Test prompt text",
+        "--batch-size",
+        "1",
+        "--num-batches",
+        "1",
+    ])
+
+    mock_channel_fn.assert_called_once_with("10.0.0.1:8500")
+    self.assertEqual(mock_predict_method.call_count, 2)
 
   def test_main_invalid_batch_size(self):
     with self.assertRaisesRegex(

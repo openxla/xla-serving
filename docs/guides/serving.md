@@ -27,8 +27,7 @@ docker run \
   --model_name=classifier \
   --model_path=/models/classifier \
   --orbax_grpc_server_platform=cpu \
-  --port=8500 \
-  --use_insecure_grpc_credentials=true
+  --port=8500
 ```
 :::
 
@@ -46,8 +45,7 @@ docker run \
   --model_name=classifier \
   --model_path=/models/classifier \
   --orbax_grpc_server_platform=cuda \
-  --port=8500 \
-  --use_insecure_grpc_credentials=true
+  --port=8500
 ```
 
 To bind a specific GPU or MIG partition, use `--gpus '"device=0"'` or
@@ -68,8 +66,7 @@ docker run \
   --model_name=classifier \
   --model_path=/models/classifier \
   --orbax_grpc_server_platform=tpu \
-  --port=8500 \
-  --use_insecure_grpc_credentials=true
+  --port=8500
 ```
 
 If you run a bare `xla_serving_main_tpu` binary outside the container, set
@@ -82,7 +79,8 @@ If your bundle contains a `TensorflowModel` stage, use the corresponding
 `gpu-jax-cuda13-with-tf`).
 
 When all models finish loading (and optional [warmup](warmup.md) completes),
-the server begins listening on `[::]:8500`.
+the server begins listening on `localhost:8500` by default (or `[::]:8500` when
+remote credentials are configured).
 
 ### Serving multiple models in one server
 
@@ -110,39 +108,64 @@ docker run \
   us-docker.pkg.dev/xla-serving-engine/xla-serving/cpu-jax-only:latest \
   --model_config_file=/models/models.txtpb \
   --orbax_grpc_server_platform=cpu \
-  --port=8500 \
-  --use_insecure_grpc_credentials=true
+  --port=8500
 ```
 
 All models in the config share the server's IFRT device client and execution
 thread pools. Clients select which model to call via `model_spec.name` in
 `PredictRequest`.
 
-### TLS and mTLS
+### Transport security
 
-For production traffic, omit `--use_insecure_grpc_credentials` and supply a
-server key and certificate chain:
+XSE supports three credential modes depending on where your clients run:
 
-```bash
-  --server_private_key_path=/etc/tls/server.key \
-  --server_cert_chain_path=/etc/tls/server.crt \
-  --client_cert_chain_path=/etc/tls/ca.crt    # optional: enables mutual TLS
-```
+1. **Loopback default (no flags)** — When no credential flags are passed, the
+   server binds to `localhost:<port>` with gRPC `LocalServerCredentials` and
+   accepts connections only from local loopback addresses (`127.0.0.1` and
+   `::1`). Run Docker with `--net=host` so host clients share the loopback
+   interface; Docker bridge port forwarding (`-p 8500:8500`) rewrites peer
+   addresses to the bridge gateway and will be rejected. Connect with
+   `grpc.secure_channel('localhost:8500', grpc.local_channel_credentials())` in
+   Python or `grpc::experimental::LocalCredentials(LOCAL_TCP)` in C++.
+2. **Google Cloud ALTS (`--use_alts_credentials=true`)** — On Compute Engine,
+   GKE, and Cloud TPU VMs, ALTS provides automatic mutual TLS and service-account
+   authentication backed by the GCP metadata server, with no certificate files
+   to manage:
+
+   ```bash
+     --use_alts_credentials=true
+   ```
+
+   The server listens on `[::]:<port>`. Clients on GCP connect with
+   `grpc.secure_channel('<host>:8500', grpc.alts_channel_credentials())` in
+   Python or `grpc::experimental::AltsCredentials(...)` (`--use_alts_credentials=true`
+   on the bundled C++ clients).
+3. **Custom TLS and mTLS** — Outside Google Cloud or across trust boundaries,
+   supply PEM-encoded key and certificate files:
+
+   ```bash
+     --server_private_key_path=/etc/tls/server.key \
+     --server_cert_chain_path=/etc/tls/server.crt \
+     --client_cert_chain_path=/etc/tls/ca.crt    # optional: requires client certs (mTLS)
+   ```
+
+   Clients connect with `grpc.secure_channel('<host>:8500', grpc.ssl_channel_credentials(root_certificates=...))`.
 
 ### Server flags reference
 
 | Flag | Default | Description |
 |---|---|---|
-| `--port` | `8500` | Port for the gRPC `PredictionService`. |
+| `--port` | `8500` | Port for the gRPC `PredictionService`. Binds `localhost:<port>` with default local credentials, or `[::]:<port>` when remote credentials are enabled. |
 | `--model_name` | `""` | Name of the single model to serve (paired with `--model_path`). |
 | `--model_path` | `""` | Path to the exported bundle directory. |
 | `--model_config_file` | `""` | Path to a `ModelServerConfig` textproto for serving one or more models. Mutually exclusive with `--model_name`/`--model_path`. |
 | `--orbax_grpc_server_platform` | `""` | Target hardware platform: `cpu`, `cuda`, or `tpu`. |
 | `--warmup_server` | `false` | Replay `assets.extra/xla_serving_warmup_requests` before opening the gRPC port. Fails startup if the file is missing. |
-| `--use_insecure_grpc_credentials` | `false` | Use plaintext gRPC without TLS (development/local use only). |
-| `--server_private_key_path` | `""` | Path to PEM-encoded server private key for TLS. |
-| `--server_cert_chain_path` | `""` | Path to PEM-encoded server certificate chain for TLS. |
+| `--use_alts_credentials` | `false` | Use Google Cloud ALTS mutual TLS via the metadata server (Compute Engine, GKE, Cloud TPU) with no certificate files. |
+| `--server_private_key_path` | `""` | Path to PEM-encoded server private key for TLS (requires `--server_cert_chain_path`). |
+| `--server_cert_chain_path` | `""` | Path to PEM-encoded server certificate chain for TLS (requires `--server_private_key_path`). |
 | `--client_cert_chain_path` | `""` | Optional PEM-encoded client CA bundle to require mutual TLS (mTLS). |
+| `--use_insecure_grpc_credentials` | `false` | Accept unencrypted, unauthenticated gRPC connections on `[::]:<port>` (isolated testing only, such as Docker bridge networking). |
 | `--max_receive_message_size` | `16777216` (16 MiB) | Maximum incoming gRPC message size in bytes. Increase for large image or batch payloads. |
 | `--max_send_message_size` | `-1` (unlimited) | Maximum outgoing gRPC message size in bytes. |
 | `--thread_pool_num_threads` | `0` (CPU core count) | Size of the server's execution and computation thread pools. |
@@ -221,7 +244,9 @@ def from_host_buffer(buf: host_buffer_pb2.HostBufferProto) -> np.ndarray:
 Send a `PredictRequest`:
 
 ```python
-channel = grpc.insecure_channel('localhost:8500')
+channel = grpc.secure_channel(
+    'localhost:8500', grpc.local_channel_credentials()
+)
 predict = channel.unary_unary(
     f'/{predict_pb2.DESCRIPTOR.package}.PredictionService/Predict',
     request_serializer=predict_pb2.PredictRequest.SerializeToString,
