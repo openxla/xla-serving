@@ -16,6 +16,7 @@ cc_binary(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/strings:string_view",
         "@grpc//:grpc++",
+        "@tsl//tsl/platform:platform_port",
         "@xla//xla/python/ifrt:dtype_proto_cc",
         "@xla//xla/python/ifrt:shape_proto_cc",
         "@xla_serving//protos/grpc:host_buffer_cc_proto",

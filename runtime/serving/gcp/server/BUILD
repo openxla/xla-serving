@@ -204,7 +204,7 @@ cc_library(
     ],
 )
 
-XLA_SERVING_CALLBACK_GRPC_SERVER_COMMON_DEPS = [
+XLA_SERVING_CALLBACK_GRPC_SERVER_JAX_DEPS = [
     ":flags",
     ":grpc_status_utils",
     "@abseil-cpp//absl/cleanup",
@@ -234,24 +234,33 @@ XLA_SERVING_CALLBACK_GRPC_SERVER_COMMON_DEPS = [
     "@xla_serving//protos/grpc:prediction_log_cc_proto",
     "@xla_serving//protos/grpc:prediction_service_cc_grpc_proto",
     "@xla_serving//protos/grpc:prediction_service_cc_proto",
-    "@xla_serving//runtime/tensorflow/utils:tf_to_host_buffer",
     "@xla//xla/pjrt:pjrt_api",
     "@xla//xla/python/ifrt",
-    "@xla//xla/python/pjrt_ifrt",
     "@xla//xla/tsl/concurrency:future",
+    "@xla//xla/tsl/lib/monitoring:counter",
+    "@xla//xla/tsl/lib/monitoring:sampler",
     "@xla//xla/tsl/platform:env",
     "@xla//xla/tsl/platform:errors",
     "@xla//xla/tsl/platform:statusor",
-    "@org_tensorflow//tensorflow/core/framework:tensor",
-    "@org_tensorflow//tensorflow/core:lib",
+    "@tsl//tsl/platform:platform_port",
     "@tsl//tsl/profiler/lib:traceme",
     "@xla_serving//protos/grpc:model_server_config_cc_proto",
-] + select({
+]
+
+XLA_SERVING_CALLBACK_GRPC_SERVER_COMMON_DEPS = XLA_SERVING_CALLBACK_GRPC_SERVER_JAX_DEPS + select({
     ":enable_tf": [
+        "@xla_serving//runtime/tensorflow:interpreter_tensorflow_support",  # buildcleaner: keep
         "@xla_serving//runtime/tensorflow:tf_compatible_interpreter_create_options",
-        "@xla_serving//runtime/tensorflow:interpreter_tensorflow_support",
+        "@xla_serving//runtime/tensorflow/utils:tf_to_host_buffer",
+        "@org_tensorflow//tensorflow/core/framework:tensor",
+        "@org_tensorflow//tensorflow/core/tfrt/runtime",
+        "@org_tensorflow//tensorflow/core/tfrt/runtime:work_queue_interface",
+        "@org_tensorflow//tensorflow/core/tfrt/saved_model:saved_model_cpu",
+        "@tf_runtime//:hostcontext",
     ],
-    "//conditions:default": ["@xla_serving//runtime/interpreter:interpreter_create_options"],
+    "//conditions:default": [
+        "@xla_serving//runtime/interpreter:interpreter_create_options",
+    ],
 })
 
 cc_library(
@@ -407,6 +416,7 @@ XLA_SERVING_MAIN_TEST_COMMON_DEPS = [
     "@xla_serving//protos/grpc:prediction_service_cc_grpc_proto",
     "@xla_serving//runtime/core:host_buffer",
     "@xla_serving//runtime/core:host_buffer_matcher",
+    "@xla_serving//runtime/serving/gcp/auth:utils",
     "@com_google_protobuf//:protobuf",
     "@xla//xla/python/ifrt",
     "@xla//xla/tsl/platform:env",

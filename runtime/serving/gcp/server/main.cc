@@ -17,7 +17,9 @@
 // This file is responsible for setting up the server, loading models, and
 // handling requests.
 #include <cstddef>
+#if ENABLE_TF == 1
 #include <cstdint>
+#endif
 #include <memory>
 #include <string>
 
@@ -51,16 +53,20 @@ ABSL_FLAG(std::string, model_config_file, "",
 ABSL_FLAG(std::string, server_private_key_path, "",
           "Path to the server's private key file for SSL/TLS.");
 ABSL_FLAG(std::string, server_cert_chain_path, "",
-          "Path to the server's certificate chain file for SSL/TLS. For a "
-          "client, this is the server's certificate chain for verification. If "
-          "not provided, the client will fall back on default trust stores.");
+          "Path to the server's PEM-encoded certificate chain file for "
+          "SSL/TLS.");
 ABSL_FLAG(
     std::string, client_cert_chain_path, "",
     "Optional path to the certificate chain file for client authentication.");
+ABSL_FLAG(bool, use_alts_credentials, false,
+          "Whether to use Application Layer Transport Security (ALTS) "
+          "credentials. Supported on Google Cloud (Compute Engine, GKE, Cloud "
+          "TPU) with automatic mutual TLS and no certificate files.");
 ABSL_FLAG(bool, use_insecure_grpc_credentials, false,
           "Whether to use insecure credentials for the server. WARNING: THIS "
           "SHOULD NOT BE USED IN PRODUCTION.");
 
+#if ENABLE_TF == 1
 ABSL_FLAG(bool, enable_lazy_loading, true, "Enable lazy loading");
 ABSL_FLAG(bool, lazy_loading_use_graph_executor, true,
           "Lazy loading use graph executor");
@@ -69,6 +75,7 @@ ABSL_FLAG(bool, allow_xla_cpu, true, "Allow XLA CPU");
 ABSL_FLAG(bool, hoist_invariant_ops, true, "Hoist invariant ops");
 ABSL_FLAG(bool, sink_in_invariant_ops, true, "Sink in invariant ops");
 ABSL_FLAG(int64_t, cost_threshold, 10000, "Cost threshold");
+#endif
 ABSL_FLAG(int, xprof_port, 8888, "Port for the XProf server to listen on.");
 ABSL_FLAG(bool, warmup_server, false,
           "Warmup server on startup. This requires the warmup requests file "
@@ -108,7 +115,19 @@ ABSL_FLAG(int, tpu_num_premapped_partitions_per_device, 1,
           "TPU client when --tpu_use_premapped_buffer is true.");
 
 void RunServer() {
-  std::string server_address = absl::StrCat("[::]:", absl::GetFlag(FLAGS_port));
+  std::string private_key_path = absl::GetFlag(FLAGS_server_private_key_path);
+  std::string cert_chain_path = absl::GetFlag(FLAGS_server_cert_chain_path);
+  std::string root_certs_path = absl::GetFlag(FLAGS_client_cert_chain_path);
+  bool use_alts_credentials = absl::GetFlag(FLAGS_use_alts_credentials);
+  bool use_insecure_grpc_credentials =
+      absl::GetFlag(FLAGS_use_insecure_grpc_credentials);
+
+  const bool use_local_credentials = xla_serving::serving::UsesLocalServerCredentials(
+      private_key_path, cert_chain_path, root_certs_path,
+      use_insecure_grpc_credentials, use_alts_credentials);
+  std::string server_address =
+      absl::StrCat(use_local_credentials ? "localhost:" : "[::]:",
+                   absl::GetFlag(FLAGS_port));
 
   std::string model_config_file = absl::GetFlag(FLAGS_model_config_file);
   std::string model_name = absl::GetFlag(FLAGS_model_name);
@@ -126,7 +145,14 @@ void RunServer() {
                   "--model_path must be specified.";
   }
 
+  absl::StatusOr<std::shared_ptr<grpc::ServerCredentials>> creds =
+      xla_serving::serving::CreateServerCredentials(
+          private_key_path, cert_chain_path, root_certs_path,
+          use_insecure_grpc_credentials, use_alts_credentials);
+  TF_CHECK_OK(creds.status());
+
   xla_serving::serving::OrbaxCallbackGrpcServerOptions options;
+#if ENABLE_TF == 1
   options.enable_lazy_loading = absl::GetFlag(FLAGS_enable_lazy_loading);
   options.lazy_loading_use_graph_executor =
       absl::GetFlag(FLAGS_lazy_loading_use_graph_executor);
@@ -135,6 +161,7 @@ void RunServer() {
   options.hoist_invariant_ops = absl::GetFlag(FLAGS_hoist_invariant_ops);
   options.sink_in_invariant_ops = absl::GetFlag(FLAGS_sink_in_invariant_ops);
   options.cost_threshold = absl::GetFlag(FLAGS_cost_threshold);
+#endif
   options.warmup_server = absl::GetFlag(FLAGS_warmup_server);
   options.warmup_all_batch_sizes = absl::GetFlag(FLAGS_warmup_all_batch_sizes);
   options.thread_pool_num_threads =
@@ -171,27 +198,19 @@ void RunServer() {
   TF_CHECK_OK(service_or.status());
 
   grpc::ServerBuilder builder;
-  std::string private_key_path = absl::GetFlag(FLAGS_server_private_key_path);
-  std::string cert_chain_path = absl::GetFlag(FLAGS_server_cert_chain_path);
-  std::string root_certs_path = absl::GetFlag(FLAGS_client_cert_chain_path);
-  bool use_insecure_grpc_credentials =
-      absl::GetFlag(FLAGS_use_insecure_grpc_credentials);
-  absl::StatusOr<std::shared_ptr<grpc::ServerCredentials>> creds =
-      xla_serving::serving::CreateServerCredentials(private_key_path, cert_chain_path,
-                                            root_certs_path,
-                                            use_insecure_grpc_credentials);
-  TF_CHECK_OK(creds.status());
-
+  int selected_port = 0;
   builder.SetMaxReceiveMessageSize(
       absl::GetFlag(FLAGS_max_receive_message_size));
   builder.SetMaxSendMessageSize(absl::GetFlag(FLAGS_max_send_message_size));
-  builder.AddListeningPort(server_address, *creds);
+  builder.AddListeningPort(server_address, *creds, &selected_port);
   builder.RegisterService(service_or.value().get());
   std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
-  if (server == nullptr) {
-    LOG(FATAL) << "Failed to build server and start server";
+  if (server == nullptr || selected_port == 0) {
+    LOG(FATAL) << "Failed to build and start server on " << server_address;
   }
-  LOG(INFO) << "JAX Serving listening on " << server_address;
+  LOG(INFO) << "JAX Serving listening on "
+            << (use_local_credentials ? "localhost:" : "[::]:")
+            << selected_port;
 
   server->Wait();
 }
@@ -206,6 +225,7 @@ int main(int argc, char* argv[]) {
             << absl::GetFlag(FLAGS_server_private_key_path) << " "
             << absl::GetFlag(FLAGS_server_cert_chain_path) << " "
             << absl::GetFlag(FLAGS_client_cert_chain_path) << " "
+            << absl::GetFlag(FLAGS_use_alts_credentials) << " "
             << absl::GetFlag(FLAGS_use_insecure_grpc_credentials);
   tsl::profiler::ProfilerServer server;
   server.StartProfilerServer(absl::GetFlag(FLAGS_xprof_port));
