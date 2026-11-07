@@ -126,6 +126,23 @@ class ShapeDtypeStructTest(absltest.TestCase):
     with self.assertRaisesRegex(ValueError, 'Unknown node type'):
       shape_dtype_struct.proto_to_tree(transform_config_pb2.PyTreeProto())
 
+  def test_replace_deprecated_negative_one_shapes(self):
+    with self.assertWarnsRegex(
+        DeprecationWarning, 'TestCaller.*deprecated.*use None instead'
+    ) as cm:
+      replaced = shape_dtype_struct._replace_deprecated_negative_one_shapes(
+          [[-1, 4], (np.int64(-1), None, 2)], 'TestCaller'
+      )
+    self.assertLen(cm.warnings, 1)
+    self.assertEqual(replaced, [(None, 4), (None, None, 2)])
+    # Other negative ints and booleans are passed through untouched.
+    self.assertEqual(
+        shape_dtype_struct._replace_deprecated_negative_one_shapes(
+            [(-2, 4), (True, False)], 'TestCaller'
+        ),
+        [(-2, 4), (True, False)],
+    )
+
 
 if __name__ == '__main__':
   absltest.main()

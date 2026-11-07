@@ -1090,7 +1090,7 @@ TEST(CpuEmbeddingLookupTransformTest,
 }
 
 TEST(CpuEmbeddingLookupTransformTest,
-     PropagateSignatureReadsNegativeOutputShapeSizeAsUnknown) {
+     PropagateSignatureReadsNulloptOutputShapeSizeAsUnknown) {
   auto resource = std::make_shared<TestCpuEmbeddingEngineResource>(
       "engine_res", std::vector<Asset>{}, "CpuEmbeddingEngineResource");
   ASSERT_OK_AND_ASSIGN(
@@ -1098,7 +1098,8 @@ TEST(CpuEmbeddingLookupTransformTest,
       CpuEmbeddingLookupTransform::Create(
           resource, std::vector<std::string>{"feature1", "feature2"},
           /*dense_lookup=*/false, /*output_feature_names=*/{},
-          /*embedding_dim=*/128, /*output_shapes=*/{{-1, 4}, {2, 5}}));
+          /*embedding_dim=*/128,
+          /*output_shapes=*/{{std::nullopt, 4}, {2, 5}}));
 
   ASSERT_OK_AND_ASSIGN(
       auto specs, PropagateIdsShape(*transform, /*num_features=*/2,
@@ -1107,6 +1108,19 @@ TEST(CpuEmbeddingLookupTransformTest,
   EXPECT_EQ(specs[0].shape,
             PartialShapeOrDie({api::Dim::Unknown(), api::Dim::Static(4)}));
   EXPECT_EQ(specs[1].shape, xla::ifrt::Shape({2, 5}));
+}
+
+TEST(CpuEmbeddingLookupTransformTest, CreateRejectsNegativeOutputShapeSize) {
+  auto resource = std::make_shared<TestCpuEmbeddingEngineResource>(
+      "engine_res", std::vector<Asset>{}, "CpuEmbeddingEngineResource");
+  for (int64_t bad_dim : {-1, -2}) {
+    EXPECT_THAT(
+        CpuEmbeddingLookupTransform::Create(
+            resource, std::vector<std::string>{"feature1"},
+            /*dense_lookup=*/false, /*output_feature_names=*/{},
+            /*embedding_dim=*/128, /*output_shapes=*/{{bad_dim, 4}}),
+        absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
+  }
 }
 
 TEST(CpuEmbeddingLookupTransformTest, PropagateSignatureForwardsIdsDim1) {

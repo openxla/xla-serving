@@ -20,6 +20,7 @@ import jax.numpy as jnp
 import numpy as np
 from xla_serving_data.cpu_embedding.python import embedding_utils
 from xla_serving_data.kernels.cpu_embedding import cpu_embedding_module
+from xla_serving_data.processor.python import shape_dtype_struct
 
 
 class EmbeddingUtilsTest(absltest.TestCase):
@@ -122,6 +123,38 @@ class EmbeddingUtilsTest(absltest.TestCase):
     self.assertEqual(prepared.output_signature[1].shape, (None, 5, 64))
     # Output 2: Passthrough dense_passthrough -> (2, 8)
     self.assertEqual(prepared.output_signature[2].shape, (2, 8))
+
+  def test_build_with_dynamic_input_signature(self):
+    feature_specs = [
+        {"name": "feat_0", "table_name": "table_0", "max_sequence_length": 0},
+        {"name": "seq_feat", "table_name": "table_0", "max_sequence_length": 5},
+    ]
+    input_signature = {
+        "feat_0": shape_dtype_struct.ShapeDtypeStruct(
+            shape=(None, 3), dtype=np.int32
+        ),
+        "seq_feat": shape_dtype_struct.ShapeDtypeStruct(
+            shape=(None, 5), dtype=np.int32
+        ),
+        "dense_passthrough": shape_dtype_struct.ShapeDtypeStruct(
+            shape=(None, 8), dtype=np.float32
+        ),
+    }
+
+    processor = embedding_utils.build_embedding_lookup(
+        name="test_dynamic_processor",
+        input_signature=input_signature,
+        feature_specs=feature_specs,
+        jce_resource=self.resource,
+        embedding_dim=64,
+        dense_lookup=True,
+    )
+
+    prepared = processor.prepare(input_signature)
+    self.assertLen(prepared.output_signature, 3)
+    self.assertEqual(prepared.output_signature[0].shape, (None, 64))
+    self.assertEqual(prepared.output_signature[1].shape, (None, 5, 64))
+    self.assertEqual(prepared.output_signature[2].shape, (None, 8))
 
 
 if __name__ == "__main__":

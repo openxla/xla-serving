@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -74,7 +75,8 @@ CpuEmbeddingLookupTransform::CpuEmbeddingLookupTransform(
     std::shared_ptr<CpuEmbeddingEngineResource> resource,
     std::vector<std::string> feature_names,
     std::vector<std::string> output_feature_names, bool dense_lookup,
-    int64_t embedding_dim, std::vector<std::vector<int64_t>> output_shapes)
+    int64_t embedding_dim,
+    std::vector<std::vector<std::optional<int64_t>>> output_shapes)
     : resource_(std::move(resource)),
       feature_names_(std::move(feature_names)),
       output_feature_names_(std::move(output_feature_names)),
@@ -87,7 +89,7 @@ CpuEmbeddingLookupTransform::Create(
     std::shared_ptr<CpuEmbeddingEngineResource> resource,
     std::vector<std::string> feature_names, bool dense_lookup,
     std::vector<std::string> output_feature_names, int64_t embedding_dim,
-    std::vector<std::vector<int64_t>> output_shapes) {
+    std::vector<std::vector<std::optional<int64_t>>> output_shapes) {
   if (resource == nullptr) {
     return absl::InvalidArgumentError(
         "CpuEmbeddingLookupTransform requires a non-null resource.");
@@ -131,6 +133,13 @@ CpuEmbeddingLookupTransform::Create(
       if (!unique_outputs.insert(name).second) {
         return absl::InvalidArgumentError(
             absl::StrCat("Duplicate output feature name found: ", name));
+      }
+    }
+  }
+  for (const auto& shape : output_shapes) {
+    for (const std::optional<int64_t>& d : shape) {
+      if (d.has_value()) {
+        RETURN_IF_ERROR(api::Dim::FromSize(*d).status());
       }
     }
   }
@@ -362,13 +371,12 @@ absl::Status CpuEmbeddingLookupTransform::PropagateSignatureImpl(
 
     if (i < output_shapes_.size() && !output_shapes_[i].empty()) {
       output_dims.reserve(output_shapes_[i].size());
-      // The config encodes a dynamic dimension as a negative size.
-      for (int64_t d : output_shapes_[i]) {
-        if (d < 0) {
+      for (std::optional<int64_t> d : output_shapes_[i]) {
+        if (!d.has_value()) {
           output_dims.push_back(api::Dim::Unknown());
           continue;
         }
-        ASSIGN_OR_RETURN(const api::Dim dim, api::Dim::FromSize(d));
+        ASSIGN_OR_RETURN(const api::Dim dim, api::Dim::FromSize(*d));
         output_dims.push_back(dim);
       }
     } else {

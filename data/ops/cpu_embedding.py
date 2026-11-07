@@ -19,11 +19,13 @@ from collections.abc import Sequence
 from typing import Any, Optional, Union
 
 import jax
+import numpy as np
 
 from data.kernels.cpu_embedding import cpu_embedding_lookup_transform_pybind
 from data.kernels.cpu_embedding import cpu_embedding_module
 from data.kernels.cpu_embedding import dense_cpu_embedding_lookup_transform_pybind
 from data.processor.python import composite_processor_pybind
+from data.processor.python import shape_dtype_struct
 from data.processor.python import transform
 
 MANIFEST_ASSET_NAME = cpu_embedding_module.MANIFEST_ASSET_NAME
@@ -94,18 +96,24 @@ class DenseCpuEmbeddingLookupTransform(transform.ExportableTransform):
     if not leaves:
       return input_signature
 
+    normalized_shapes = (
+        shape_dtype_struct._replace_deprecated_negative_one_shapes(  # pylint: disable=protected-access
+            [leaf.shape for leaf in leaves],
+            "DenseCpuEmbeddingLookupTransform input_signature",
+        )
+    )
     out_specs = []
-    for i, leaf in enumerate(leaves):
-      shape = list(leaf.shape)
-      batch_size = shape[0] if shape else -1
+    for i, raw_shape in enumerate(normalized_shapes):
+      shape = shape_dtype_struct.to_partial_shape(raw_shape)
+      batch_size = shape[0] if shape else None
       emb_dim = (
           self._embedding_dims[i]
           if i < len(self._embedding_dims)
           else self._embedding_dims[0]
       )
       out_specs.append(
-          jax.ShapeDtypeStruct(
-              shape=(batch_size, emb_dim), dtype=jax.numpy.float32
+          shape_dtype_struct.ShapeDtypeStruct(
+              shape=(batch_size, emb_dim), dtype=np.float32
           )
       )
     return jax.tree_util.tree_unflatten(treedef, out_specs)
@@ -153,7 +161,7 @@ class CpuEmbeddingLookupTransformWrapper(transform.ExportableTransform):
             self._dense_lookup,
             [self._output_feature_name],
             self._embedding_dim,
-            [[-1, self._embedding_dim]],
+            [[None, self._embedding_dim]],
         )
     )
 
