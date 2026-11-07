@@ -16,9 +16,10 @@
 #ifndef XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_LOOKUP_TRANSFORM_H_
 #define XLA_SERVING_DATA_KERNELS_CPU_EMBEDDING_CPU_EMBEDDING_LOOKUP_TRANSFORM_H_
 
+#include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
-#include <string_view>
 #include <vector>
 
 #include "absl/status/status.h"  // from @abseil-cpp
@@ -44,7 +45,7 @@ class CpuEmbeddingLookupTransform : public TransformBase {
       std::vector<std::string> feature_names, bool dense_lookup = false,
       std::vector<std::string> output_feature_names = {},
       int64_t embedding_dim = 128,
-      std::vector<std::vector<int64_t>> output_shapes = {});
+      std::vector<std::vector<std::optional<int64_t>>> output_shapes = {});
 
   std::vector<std::shared_ptr<xla_serving::data::Resource>> GetAllResources()
       const override;
@@ -68,14 +69,15 @@ class CpuEmbeddingLookupTransform : public TransformBase {
       std::shared_ptr<CpuEmbeddingEngineResource> resource,
       std::vector<std::string> feature_names,
       std::vector<std::string> output_feature_names, bool dense_lookup,
-      int64_t embedding_dim, std::vector<std::vector<int64_t>> output_shapes);
+      int64_t embedding_dim,
+      std::vector<std::vector<std::optional<int64_t>>> output_shapes);
 
   std::shared_ptr<CpuEmbeddingEngineResource> resource_;
   std::vector<std::string> feature_names_;
   std::vector<std::string> output_feature_names_;
   bool dense_lookup_ = false;
   int64_t embedding_dim_ = 128;
-  std::vector<std::vector<int64_t>> output_shapes_;
+  std::vector<std::vector<std::optional<int64_t>>> output_shapes_;
 };
 
 }  // namespace composite

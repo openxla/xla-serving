@@ -23,7 +23,6 @@ import tempfile
 from typing import Any, Sequence
 
 from google.protobuf import text_format
-import jax
 import jaxtyping
 import numpy as np
 
@@ -32,6 +31,7 @@ from data.kernels.cpu_embedding import cpu_embedding_pb2
 from data.kernels.cpu_embedding import cpu_embedding_resource_pybind
 from data.kernels.cpu_embedding import cpu_embedding_serializer_pybind
 from data.processor.python import composite_processor_pybind
+from data.processor.python import shape_dtype_struct
 from data.resource_manager.python import resource_manager
 
 MANIFEST_ASSET_NAME = cpu_embedding_serializer_pybind.MANIFEST_ASSET_NAME
@@ -338,20 +338,24 @@ class CpuEmbeddingModule:
       resource: CpuEmbeddingResource,
       feature_names: str | Sequence[str] | None = None,
       output_feature_names: str | Sequence[str] | None = None,
-      output_shapes: Sequence[int] | Sequence[Sequence[int]] | None = None,
+      output_shapes: (
+          Sequence[int | None] | Sequence[Sequence[int | None]] | None
+      ) = None,
       dense_lookup: bool = False,
       embedding_dim: int | None = None,
       # For backwards compatibility with keyword arguments:
       feature_name: str | None = None,
       output_feature_name: str | None = None,
-      output_shape: Sequence[int] | None = None,
+      output_shape: Sequence[int | None] | None = None,
   ):
     super().__init__()
     self._resource_wrapper = resource
 
     resolved_features = feature_names or feature_name
     resolved_outputs = output_feature_names or output_feature_name
-    resolved_shapes = output_shapes or output_shape
+    resolved_shapes = (
+        output_shapes if output_shapes is not None else output_shape
+    )
     resolved_embedding_dim = (
         embedding_dim if embedding_dim is not None else resource.embedding_dim
     )
@@ -376,16 +380,28 @@ class CpuEmbeddingModule:
     else:
       self._output_feature_names = list(resolved_outputs)
 
-    # Normalize shapes to a list of lists of integers
+    # Normalize shapes to a 2D list of optional non-negative ints
     if len(self._feature_names) == 1:
       if not resolved_shapes:
-        self._output_shapes = [[]]
-      elif isinstance(resolved_shapes[0], int):
-        self._output_shapes = [list(resolved_shapes)]
+        raw_shapes: Sequence[Any] = [[]]
+      elif resolved_shapes[0] is None or isinstance(
+          resolved_shapes[0], (int, np.integer)
+      ):
+        raw_shapes = [resolved_shapes]
       else:
-        self._output_shapes = [list(s) for s in resolved_shapes]
+        raw_shapes = resolved_shapes
     else:
-      self._output_shapes = [list(s) for s in resolved_shapes]  # pyrefly: ignore[bad-argument-type]
+      raw_shapes = resolved_shapes
+
+    replaced_shapes = (
+        shape_dtype_struct._replace_deprecated_negative_one_shapes(  # pylint: disable=protected-access
+            raw_shapes, "CpuEmbeddingModule output_shapes"
+        )
+    )
+    self._output_shapes = [
+        list(shape_dtype_struct.ShapeDtypeStruct(s, np.float32).shape)
+        for s in replaced_shapes
+    ]
 
     # Assert sequence lengths are equal
     if len(self._feature_names) != len(self._output_feature_names) or len(
@@ -405,10 +421,7 @@ class CpuEmbeddingModule:
             dense_lookup,
             self._output_feature_names,
             resolved_embedding_dim,
-            [  # pyrefly: ignore[bad-argument-type]
-                [d if d is not None else -1 for d in shape]
-                for shape in self._output_shapes
-            ],
+            self._output_shapes,
         )
     )
 
@@ -426,8 +439,8 @@ class CpuEmbeddingModule:
     del input_signature
     output_sig = {}
     for name, shape in zip(self._output_feature_names, self._output_shapes):
-      output_sig[name] = jax.ShapeDtypeStruct(
-          shape=tuple(shape), dtype=jax.numpy.float32
+      output_sig[name] = shape_dtype_struct.ShapeDtypeStruct(
+          shape=shape, dtype=np.float32
       )
 
     # Unflatten slash-delimited keys into a nested dictionary PyTree structure

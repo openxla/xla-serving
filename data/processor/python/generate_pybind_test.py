@@ -79,6 +79,16 @@ class GeneratePybindTest(absltest.TestCase):
         ),
         "list[dict[int, str]]",
     )
+    self.assertEqual(
+        generate_pybind.map_cpp_type_to_py("std::optional<int64_t>"),
+        "int | None",
+    )
+    self.assertEqual(
+        generate_pybind.map_cpp_type_to_py(
+            "std::vector<std::vector<std::optional<int64_t>>>"
+        ),
+        "list[list[int | None]]",
+    )
 
   def test_map_cpp_type_to_py_fallback(self):
     self.assertEqual(

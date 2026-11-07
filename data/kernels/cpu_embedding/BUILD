@@ -26,8 +26,8 @@ py_library(
         ":cpu_embedding_serializer_pybind",
         "@com_google_protobuf//:protobuf",
         "@xla_serving//data/processor/python:composite_processor_pybind",
+        "@xla_serving//data/processor/python:shape_dtype_struct",
         "@xla_serving//data/resource_manager/python:resource_manager",
-        "@xla_serving_pypi//jax",
         "@xla_serving_pypi//jaxtyping",
         "@xla_serving_pypi//numpy",
     ],
@@ -386,7 +386,8 @@ py_library(
     visibility = ["//visibility:public"],
     deps = [
         ":unpack_host_buffer_vector_transform_pybind",
+        "@xla_serving//data/processor/python:shape_dtype_struct",
         "@xla_serving//data/processor/python:transform",
-        "@xla_serving_pypi//jax",
+        "@xla_serving_pypi//numpy",
     ],
 )

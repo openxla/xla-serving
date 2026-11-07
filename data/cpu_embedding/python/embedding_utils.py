@@ -16,13 +16,13 @@
 
 from typing import Any, Mapping, Sequence
 
-import jax
-import jax.numpy as jnp
+import numpy as np
 
 from data.kernels.cpu_embedding import cpu_embedding_module
 from data.ops import packing
 from data.processor.proto import transform_config_pb2
 from data.processor.python import composite_processor_pybind
+from data.processor.python import shape_dtype_struct
 from xla_saved_model._src.processors import composite_processor
 
 
@@ -179,13 +179,15 @@ def build_embedding_lookup(
     seq_len = f.get('max_sequence_length', 0)
     if seq_len > 0:
       output_signature.append(
-          jax.ShapeDtypeStruct(
-              shape=(1, seq_len, embedding_dim), dtype=jnp.float32
+          shape_dtype_struct.ShapeDtypeStruct(
+              shape=(None, seq_len, embedding_dim), dtype=np.float32
           )
       )
     else:
       output_signature.append(
-          jax.ShapeDtypeStruct(shape=(1, embedding_dim), dtype=jnp.float32)
+          shape_dtype_struct.ShapeDtypeStruct(
+              shape=(None, embedding_dim), dtype=np.float32
+          )
       )
 
   for idx in passthrough_indices:
