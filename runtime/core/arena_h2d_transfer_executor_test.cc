@@ -13,8 +13,10 @@
 // limitations under the License.
 #include "runtime/core/arena_h2d_transfer_executor.h"  // from @xla_serving
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <numeric>
 #include <vector>
 
 #include "gmock/gmock.h"
@@ -22,6 +24,7 @@
 #include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_matchers.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "runtime/core/host_buffer_matcher.h"  // from @xla_serving
@@ -47,6 +50,7 @@
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
+#include "tsl/platform/bfloat16.h"  // from @tsl
 #include "tsl/platform/ml_dtypes.h"  // from @tsl
 #include "tsl/platform/tstring.h"  // from @tsl
 
@@ -105,16 +109,20 @@ class ArenaH2DTransferExecutorTest : public ::testing::Test {
 TEST(ArenaH2DTransferExecutorCreateTest, NullClientReturnsInvalidArgument) {
   tsl::thread::ThreadPool thread_pool(tsl::Env::Default(), tsl::ThreadOptions(),
                                       "TestThreadPool", /*num_threads=*/2);
+  ArenaH2DTransferExecutor::Options options;
   EXPECT_THAT(
-      ArenaH2DTransferExecutor::Create(/*client=*/nullptr, &thread_pool),
+      ArenaH2DTransferExecutor::Create(/*client=*/nullptr, &thread_pool,
+                                       options),
       StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(ArenaH2DTransferExecutorCreateTest, NullThreadPoolReturnsInvalidArgument) {
   TF_ASSERT_OK_AND_ASSIGN(std::shared_ptr<xla::ifrt::Client> client,
                           xla::ifrt::test_util::GetClient());
+  ArenaH2DTransferExecutor::Options options;
   EXPECT_THAT(
-      ArenaH2DTransferExecutor::Create(client.get(), /*thread_pool=*/nullptr),
+      ArenaH2DTransferExecutor::Create(client.get(), /*thread_pool=*/nullptr,
+                                       options),
       StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
@@ -128,10 +136,12 @@ TEST(ArenaH2DTransferExecutorCreateTest, CpuClientReturnsUnimplemented) {
                           xla::ifrt::test_util::GetDevices(client.get(), {0}));
   tsl::thread::ThreadPool thread_pool(tsl::Env::Default(), tsl::ThreadOptions(),
                                       "TestThreadPool", /*num_threads=*/2);
-  ArenaH2DTransferExecutorFactory factory;
+  ArenaH2DTransferExecutor::Options options;
+  ArenaH2DTransferExecutorFactory factory(options);
 
-  EXPECT_THAT(ArenaH2DTransferExecutor::Create(client.get(), &thread_pool),
-              StatusIs(absl::StatusCode::kUnimplemented));
+  EXPECT_THAT(
+      ArenaH2DTransferExecutor::Create(client.get(), &thread_pool, options),
+      StatusIs(absl::StatusCode::kUnimplemented));
   EXPECT_THAT(factory.Create(client.get(), device_list, &thread_pool),
               StatusIs(absl::StatusCode::kUnimplemented));
 }
@@ -144,9 +154,11 @@ TEST(ArenaH2DTransferExecutorCreateTest,
 
   tsl::thread::ThreadPool thread_pool(tsl::Env::Default(), tsl::ThreadOptions(),
                                       "TestThreadPool", /*num_threads=*/2);
+  ArenaH2DTransferExecutor::Options options;
 
-  EXPECT_THAT(ArenaH2DTransferExecutor::Create(&mock_client, &thread_pool),
-              StatusIs(absl::StatusCode::kUnimplemented));
+  EXPECT_THAT(
+      ArenaH2DTransferExecutor::Create(&mock_client, &thread_pool, options),
+      StatusIs(absl::StatusCode::kUnimplemented));
 }
 
 TEST(ArenaH2DTransferExecutorCreateTest,
@@ -154,22 +166,26 @@ TEST(ArenaH2DTransferExecutorCreateTest,
   TF_ASSERT_OK_AND_ASSIGN(std::shared_ptr<xla::ifrt::Client> client,
                           xla::ifrt::test_util::GetClient());
   if (client->platform_id() == xla::CpuId() ||
-          !IsBackedByCommonPjRtClient(client.get()) ||
-          SupportsArenaTransfer(client.get())) {
+      !IsBackedByCommonPjRtClient(client.get()) ||
+      SupportsArenaTransfer(client.get())) {
     GTEST_SKIP() << "Requires a non-CPU CommonPjRtClient without "
                     "GetDeviceAddressAlignment support.";
   }
   tsl::thread::ThreadPool thread_pool(tsl::Env::Default(), tsl::ThreadOptions(),
                                       "TestThreadPool", /*num_threads=*/2);
+  ArenaH2DTransferExecutor::Options options;
 
-  EXPECT_THAT(ArenaH2DTransferExecutor::Create(client.get(), &thread_pool),
-              StatusIs(absl::StatusCode::kUnimplemented));
+  EXPECT_THAT(
+      ArenaH2DTransferExecutor::Create(client.get(), &thread_pool, options),
+      StatusIs(absl::StatusCode::kUnimplemented));
 }
 
 TEST_F(ArenaH2DTransferExecutorTest, SizeMismatchReturnsInvalidArgument) {
+  ArenaH2DTransferExecutor::Options options;
   TF_ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<H2DTransferExecutor> executor,
-      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get()));
+      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get(),
+                                       options));
   ASSERT_NE(executor, nullptr);
 
   HostBuffer input0 = AsHostBuffer<float>({1.0f, 2.0f}, xla::ifrt::Shape({2}));
@@ -178,16 +194,18 @@ TEST_F(ArenaH2DTransferExecutorTest, SizeMismatchReturnsInvalidArgument) {
 
   xla::ifrt::ShardingRef sharding = xla::ifrt::SingleDeviceSharding::Create(
       device_list_->devices()[0], xla::ifrt::MemoryKind());
-  std::vector<xla::ifrt::ShardingRef> shardings = {sharding};
+  std::vector<xla::ifrt::ShardingRef> shardings = {sharding};  // size 1 vs 2
 
   EXPECT_THAT(executor->ExecuteTransfer(inputs, shardings),
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST_F(ArenaH2DTransferExecutorTest, EmptyInputsSucceeds) {
+  ArenaH2DTransferExecutor::Options options;
   TF_ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<H2DTransferExecutor> executor,
-      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get()));
+      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get(),
+                                       options));
 
   std::vector<HostBuffer> inputs = {};
   std::vector<xla::ifrt::ShardingRef> shardings = {};
@@ -197,10 +215,34 @@ TEST_F(ArenaH2DTransferExecutorTest, EmptyInputsSucceeds) {
   EXPECT_TRUE(results.empty());
 }
 
-TEST_F(ArenaH2DTransferExecutorTest, FallbackTransferSingleDevice) {
+TEST_F(ArenaH2DTransferExecutorTest,
+       ByteStridesRankMismatchReturnsInvalidArgument) {
+  ArenaH2DTransferExecutor::Options options;
   TF_ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<H2DTransferExecutor> executor,
-      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get()));
+      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get(),
+                                       options));
+
+  xla::ifrt::ShardingRef sharding = xla::ifrt::SingleDeviceSharding::Create(
+      device_list_->devices()[0], xla::ifrt::MemoryKind());
+
+  auto owner =
+      std::make_shared<std::vector<int32_t>>(std::vector<int32_t>{10, 20});
+  absl::InlinedVector<int64_t, 4> mismatched_strides = {4, 4};
+  HostBuffer bad_in(owner->data(), xla::ifrt::DType(xla::ifrt::DType::kS32),
+                    xla::ifrt::Shape({2}), mismatched_strides, owner);
+
+  EXPECT_THAT(executor->ExecuteTransfer({bad_in}, {sharding}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST_F(ArenaH2DTransferExecutorTest, SmallTensorsCoalescedSingleDevice) {
+  ArenaH2DTransferExecutor::Options options;
+  options.small_tensor_threshold_in_bytes = 64 * 1024;
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<H2DTransferExecutor> executor,
+      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get(),
+                                       options));
 
   xla::ifrt::Device* device = device_list_->devices()[0];
   xla::ifrt::ShardingRef sharding =
@@ -210,6 +252,146 @@ TEST_F(ArenaH2DTransferExecutorTest, FallbackTransferSingleDevice) {
       AsHostBuffer<float>({1.0f, 2.0f, 3.0f}, xla::ifrt::Shape({3}));
   HostBuffer in1 =
       AsHostBuffer<int32_t>({10, 20, 30, 40}, xla::ifrt::Shape({2, 2}));
+  HostBuffer in2 =
+      AsHostBuffer<tsl::bfloat16, float>({5.0f, 6.0f}, xla::ifrt::Shape({2}));
+
+  std::vector<HostBuffer> inputs = {in0, in1, in2};
+  std::vector<xla::ifrt::ShardingRef> shardings = {sharding, sharding,
+                                                   sharding};
+
+  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
+                          executor->ExecuteTransfer(inputs, shardings));
+  ASSERT_EQ(results.size(), 3);
+
+  for (int i = 0; i < 3; ++i) {
+    TF_ASSERT_OK_AND_ASSIGN(
+        xla::ifrt::ArrayRef old_array,
+        sharding_internal::MakeArrayFromHostBuffer(
+            *client_, inputs[i], device_list_, shardings[i], *thread_pool_));
+    TF_ASSERT_OK_AND_ASSIGN(
+        HostBuffer old_out,
+        sharding_internal::MakeHostBufferFromArray(
+            *client_, *old_array, shardings[i], device_list_, *thread_pool_)
+            .Await());
+
+    TF_ASSERT_OK_AND_ASSIGN(
+        HostBuffer new_out,
+        sharding_internal::MakeHostBufferFromArray(
+            *client_, *results[i], shardings[i], device_list_, *thread_pool_)
+            .Await());
+
+    EXPECT_THAT(new_out, HostBufferEq(old_out));
+    EXPECT_THAT(new_out, HostBufferEq(inputs[i]));
+  }
+}
+
+TEST_F(ArenaH2DTransferExecutorTest, LargeTensorsIndividualSingleDevice) {
+  ArenaH2DTransferExecutor::Options options;
+  options.small_tensor_threshold_in_bytes = 64 * 1024;  // 64 KB
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<H2DTransferExecutor> executor,
+      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get(),
+                                       options));
+
+  xla::ifrt::Device* device = device_list_->devices()[0];
+  xla::ifrt::ShardingRef sharding =
+      xla::ifrt::SingleDeviceSharding::Create(device, xla::ifrt::MemoryKind());
+
+  // 20,000 floats = 80,000 bytes (> 64 KB)
+  std::vector<float> large_data0(20000);
+  std::iota(large_data0.begin(), large_data0.end(), 1.0f);
+  HostBuffer in0 = AsHostBuffer<float>(large_data0, xla::ifrt::Shape({20000}));
+
+  // 25,000 int32s = 100,000 bytes (> 64 KB)
+  std::vector<int32_t> large_data1(25000);
+  std::iota(large_data1.begin(), large_data1.end(), 100);
+  HostBuffer in1 =
+      AsHostBuffer<int32_t>(large_data1, xla::ifrt::Shape({250, 100}));
+
+  std::vector<HostBuffer> inputs = {in0, in1};
+  std::vector<xla::ifrt::ShardingRef> shardings = {sharding, sharding};
+
+  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
+                          executor->ExecuteTransfer(inputs, shardings));
+  ASSERT_EQ(results.size(), 2);
+
+  for (int i = 0; i < 2; ++i) {
+    TF_ASSERT_OK_AND_ASSIGN(
+        HostBuffer out,
+        sharding_internal::MakeHostBufferFromArray(
+            *client_, *results[i], shardings[i], device_list_, *thread_pool_)
+            .Await());
+    EXPECT_THAT(out, HostBufferEq(inputs[i]));
+  }
+}
+
+TEST_F(ArenaH2DTransferExecutorTest, MixedSmallAndLargeTensorsSingleDevice) {
+  ArenaH2DTransferExecutor::Options options;
+  // Set threshold to 1 KB so 1D small tensors (<= 512B even with TPU tiling)
+  // are coalesced while 2D large tensors (>= 4 KB) are transferred
+  // individually, verifying the "Small then Large" arena layout and output slot
+  // mapping on both GPU and TPU.
+  options.small_tensor_threshold_in_bytes = 1024;
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<H2DTransferExecutor> executor,
+      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get(),
+                                       options));
+
+  xla::ifrt::Device* device = device_list_->devices()[0];
+  xla::ifrt::ShardingRef sharding =
+      xla::ifrt::SingleDeviceSharding::Create(device, xla::ifrt::MemoryKind());
+
+  // Small (8B on host / <= 512B on device)
+  HostBuffer small0 = AsHostBuffer<float>({1.0f, 2.0f}, xla::ifrt::Shape({2}));
+  // Large (4 KB = 1024 * 4B > 1 KB)
+  std::vector<int32_t> large_vec0(1024);
+  std::iota(large_vec0.begin(), large_vec0.end(), 10);
+  HostBuffer large0 =
+      AsHostBuffer<int32_t>(large_vec0, xla::ifrt::Shape({4, 256}));
+  // Small (16B on host / <= 512B on device)
+  HostBuffer small1 =
+      AsHostBuffer<int32_t>({100, 200, 300, 400}, xla::ifrt::Shape({4}));
+  // Large (8 KB = 2048 * 4B > 1 KB)
+  std::vector<float> large_vec1(2048);
+  std::iota(large_vec1.begin(), large_vec1.end(), 0.5f);
+  HostBuffer large1 =
+      AsHostBuffer<float>(large_vec1, xla::ifrt::Shape({8, 256}));
+  // Small (4B on host / <= 512B on device)
+  HostBuffer small2 =
+      AsHostBuffer<tsl::bfloat16, float>({7.0f, 8.0f}, xla::ifrt::Shape({2}));
+
+  std::vector<HostBuffer> inputs = {small0, large0, small1, large1, small2};
+  std::vector<xla::ifrt::ShardingRef> shardings(inputs.size(), sharding);
+
+  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
+                          executor->ExecuteTransfer(inputs, shardings));
+  ASSERT_EQ(results.size(), inputs.size());
+
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    TF_ASSERT_OK_AND_ASSIGN(
+        HostBuffer out,
+        sharding_internal::MakeHostBufferFromArray(
+            *client_, *results[i], shardings[i], device_list_, *thread_pool_)
+            .Await());
+    EXPECT_THAT(out, HostBufferEq(inputs[i]));
+  }
+}
+
+TEST_F(ArenaH2DTransferExecutorTest,
+       ThresholdZeroDisablesSmallTensorCoalescing) {
+  ArenaH2DTransferExecutor::Options options;
+  options.small_tensor_threshold_in_bytes = 0;
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<H2DTransferExecutor> executor,
+      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get(),
+                                       options));
+
+  xla::ifrt::Device* device = device_list_->devices()[0];
+  xla::ifrt::ShardingRef sharding =
+      xla::ifrt::SingleDeviceSharding::Create(device, xla::ifrt::MemoryKind());
+
+  HostBuffer in0 = AsHostBuffer<float>({1.0f, 2.0f}, xla::ifrt::Shape({2}));
+  HostBuffer in1 = AsHostBuffer<int32_t>({10, 20, 30}, xla::ifrt::Shape({3}));
 
   std::vector<HostBuffer> inputs = {in0, in1};
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding, sharding};
@@ -229,28 +411,49 @@ TEST_F(ArenaH2DTransferExecutorTest, FallbackTransferSingleDevice) {
 }
 
 TEST_F(ArenaH2DTransferExecutorTest,
-       ByteStridesRankMismatchReturnsInvalidArgument) {
+       SingleSmallTensorPromotedToIndividualTransfer) {
+  ArenaH2DTransferExecutor::Options options;
+  options.small_tensor_threshold_in_bytes = 64 * 1024;
   TF_ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<H2DTransferExecutor> executor,
-      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get()));
+      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get(),
+                                       options));
 
-  xla::ifrt::ShardingRef sharding = xla::ifrt::SingleDeviceSharding::Create(
-      device_list_->devices()[0], xla::ifrt::MemoryKind());
+  xla::ifrt::Device* device = device_list_->devices()[0];
+  xla::ifrt::ShardingRef sharding =
+      xla::ifrt::SingleDeviceSharding::Create(device, xla::ifrt::MemoryKind());
 
-  auto owner =
-      std::make_shared<std::vector<int32_t>>(std::vector<int32_t>{10, 20});
-  absl::InlinedVector<int64_t, 4> mismatched_strides = {4, 4};
-  HostBuffer bad_in(owner->data(), xla::ifrt::DType(xla::ifrt::DType::kS32),
-                    xla::ifrt::Shape({2}), mismatched_strides, owner);
+  // Only one small tensor (8 bytes <= 64 KB) alongside a large tensor (80 KB >
+  // 64 KB), exercising the single-small-tensor promotion to individual
+  // transfer.
+  HostBuffer small0 = AsHostBuffer<float>({1.0f, 2.0f}, xla::ifrt::Shape({2}));
+  std::vector<float> large_vec(20000);
+  std::iota(large_vec.begin(), large_vec.end(), 10.0f);
+  HostBuffer large0 = AsHostBuffer<float>(large_vec, xla::ifrt::Shape({20000}));
 
-  EXPECT_THAT(executor->ExecuteTransfer({bad_in}, {sharding}),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+  std::vector<HostBuffer> inputs = {small0, large0};
+  std::vector<xla::ifrt::ShardingRef> shardings = {sharding, sharding};
+
+  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
+                          executor->ExecuteTransfer(inputs, shardings));
+  ASSERT_EQ(results.size(), 2);
+
+  for (int i = 0; i < 2; ++i) {
+    TF_ASSERT_OK_AND_ASSIGN(
+        HostBuffer out,
+        sharding_internal::MakeHostBufferFromArray(
+            *client_, *results[i], shardings[i], device_list_, *thread_pool_)
+            .Await());
+    EXPECT_THAT(out, HostBufferEq(inputs[i]));
+  }
 }
 
 TEST_F(ArenaH2DTransferExecutorTest, StringTensorsRouteToDefaultPath) {
+  ArenaH2DTransferExecutor::Options options;
   TF_ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<H2DTransferExecutor> executor,
-      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get()));
+      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get(),
+                                       options));
 
   xla::ifrt::Device* device = device_list_->devices()[0];
   xla::ifrt::ShardingRef sharding =
@@ -260,8 +463,11 @@ TEST_F(ArenaH2DTransferExecutorTest, StringTensorsRouteToDefaultPath) {
   HostBuffer str_in(str_data, xla::ifrt::DType(xla::ifrt::DType::Kind::kString),
                     xla::ifrt::Shape({2}));
 
+  std::vector<HostBuffer> inputs = {str_in};
+  std::vector<xla::ifrt::ShardingRef> shardings = {sharding};
+
   TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer({str_in}, {sharding}));
+                          executor->ExecuteTransfer(inputs, shardings));
   ASSERT_EQ(results.size(), 1);
   TF_ASSERT_OK_AND_ASSIGN(
       HostBuffer out,
@@ -272,9 +478,11 @@ TEST_F(ArenaH2DTransferExecutorTest, StringTensorsRouteToDefaultPath) {
 }
 
 TEST_F(ArenaH2DTransferExecutorTest, PackedSubByteDtypeRoutesToDefaultPath) {
+  ArenaH2DTransferExecutor::Options options;
   TF_ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<H2DTransferExecutor> executor,
-      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get()));
+      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get(),
+                                       options));
 
   xla::ifrt::Device* device = device_list_->devices()[0];
   xla::ifrt::ShardingRef sharding =
@@ -302,10 +510,80 @@ TEST_F(ArenaH2DTransferExecutorTest, PackedSubByteDtypeRoutesToDefaultPath) {
   }
 }
 
-TEST_F(ArenaH2DTransferExecutorTest, ZeroElementTensorSupport) {
+TEST_F(ArenaH2DTransferExecutorTest, ArenaTransferStridedSingleDevice) {
+  ArenaH2DTransferExecutor::Options options;
   TF_ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<H2DTransferExecutor> executor,
-      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get()));
+      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get(),
+                                       options));
+
+  xla::ifrt::Device* device = device_list_->devices()[0];
+  xla::ifrt::ShardingRef sharding =
+      xla::ifrt::SingleDeviceSharding::Create(device, xla::ifrt::MemoryKind());
+
+  auto owner = std::make_shared<std::vector<int32_t>>(
+      std::vector<int32_t>{10, 20, 30, 40});
+  absl::InlinedVector<int64_t, 4> byte_strides = {8};
+  HostBuffer strided_in(owner->data(), xla::ifrt::DType(xla::ifrt::DType::kS32),
+                        xla::ifrt::Shape({2}), byte_strides, owner);
+
+  std::vector<HostBuffer> inputs = {strided_in};
+  std::vector<xla::ifrt::ShardingRef> shardings = {sharding};
+
+  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
+                          executor->ExecuteTransfer(inputs, shardings));
+  ASSERT_EQ(results.size(), 1);
+
+  TF_ASSERT_OK_AND_ASSIGN(
+      HostBuffer out,
+      sharding_internal::MakeHostBufferFromArray(
+          *client_, *results[0], shardings[0], device_list_, *thread_pool_)
+          .Await());
+  HostBuffer expected = AsHostBuffer<int32_t>({10, 30}, xla::ifrt::Shape({2}));
+  EXPECT_THAT(out, HostBufferEq(expected));
+}
+
+TEST_F(ArenaH2DTransferExecutorTest, ArenaTransferTransposed2D) {
+  ArenaH2DTransferExecutor::Options options;
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<H2DTransferExecutor> executor,
+      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get(),
+                                       options));
+
+  xla::ifrt::Device* device = device_list_->devices()[0];
+  xla::ifrt::ShardingRef sharding =
+      xla::ifrt::SingleDeviceSharding::Create(device, xla::ifrt::MemoryKind());
+
+  auto owner = std::make_shared<std::vector<int32_t>>(
+      std::vector<int32_t>{1, 4, 2, 5, 3, 6});
+  absl::InlinedVector<int64_t, 4> byte_strides = {4, 8};
+  HostBuffer transposed_in(owner->data(),
+                           xla::ifrt::DType(xla::ifrt::DType::kS32),
+                           xla::ifrt::Shape({2, 3}), byte_strides, owner);
+
+  std::vector<HostBuffer> inputs = {transposed_in};
+  std::vector<xla::ifrt::ShardingRef> shardings = {sharding};
+
+  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
+                          executor->ExecuteTransfer(inputs, shardings));
+  ASSERT_EQ(results.size(), 1);
+
+  TF_ASSERT_OK_AND_ASSIGN(
+      HostBuffer out,
+      sharding_internal::MakeHostBufferFromArray(
+          *client_, *results[0], shardings[0], device_list_, *thread_pool_)
+          .Await());
+  HostBuffer expected =
+      AsHostBuffer<int32_t>({1, 2, 3, 4, 5, 6}, xla::ifrt::Shape({2, 3}));
+  EXPECT_THAT(out, HostBufferEq(expected));
+}
+
+TEST_F(ArenaH2DTransferExecutorTest, ZeroElementTensorSupport) {
+  ArenaH2DTransferExecutor::Options options;
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<H2DTransferExecutor> executor,
+      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get(),
+                                       options));
 
   xla::ifrt::Device* device = device_list_->devices()[0];
   xla::ifrt::ShardingRef sharding =
@@ -333,9 +611,11 @@ TEST_F(ArenaH2DTransferExecutorTest, ZeroElementTensorSupport) {
 
 TEST_F(ArenaH2DTransferExecutorTest, HloShardingSingleDeviceSupport) {
   ASSERT_GE(device_list_->devices().size(), 2);
+  ArenaH2DTransferExecutor::Options options;
   TF_ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<H2DTransferExecutor> executor,
-      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get()));
+      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get(),
+                                       options));
 
   xla::ifrt::Device* dev0 = device_list_->devices()[0];
   xla::ifrt::Device* dev1 = device_list_->devices()[1];
@@ -371,12 +651,52 @@ TEST_F(ArenaH2DTransferExecutorTest, HloShardingSingleDeviceSupport) {
   }
 }
 
+TEST_F(ArenaH2DTransferExecutorTest, MultiDeviceSingleDeviceSharding) {
+  ASSERT_GE(device_list_->devices().size(), 2);
+
+  ArenaH2DTransferExecutor::Options options;
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<H2DTransferExecutor> executor,
+      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get(),
+                                       options));
+
+  xla::ifrt::ShardingRef sharding0 = xla::ifrt::SingleDeviceSharding::Create(
+      device_list_->devices()[0], xla::ifrt::MemoryKind());
+  xla::ifrt::ShardingRef sharding1 = xla::ifrt::SingleDeviceSharding::Create(
+      device_list_->devices()[1], xla::ifrt::MemoryKind());
+
+  HostBuffer in0 = AsHostBuffer<float>({1.0f, 2.0f}, xla::ifrt::Shape({2}));
+  HostBuffer in1 = AsHostBuffer<int32_t>({10, 20}, xla::ifrt::Shape({2}));
+  HostBuffer in2 = AsHostBuffer<float>({3.0f, 4.0f}, xla::ifrt::Shape({2}));
+  HostBuffer in3 = AsHostBuffer<int32_t>({30, 40}, xla::ifrt::Shape({2}));
+
+  std::vector<HostBuffer> inputs = {in0, in1, in2, in3};
+  std::vector<xla::ifrt::ShardingRef> shardings = {sharding0, sharding1,
+                                                   sharding0, sharding1};
+
+  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
+                          executor->ExecuteTransfer(inputs, shardings));
+  ASSERT_EQ(results.size(), 4);
+
+  for (int i = 0; i < 4; ++i) {
+    TF_ASSERT_OK_AND_ASSIGN(
+        HostBuffer out,
+        sharding_internal::MakeHostBufferFromArray(
+            *client_, *results[i], shardings[i], device_list_, *thread_pool_)
+            .Await());
+    EXPECT_THAT(out, HostBufferEq(inputs[i]));
+  }
+}
+
 TEST_F(ArenaH2DTransferExecutorTest,
        NonSingleDeviceHloShardingRoutesToDefaultPath) {
   ASSERT_GE(device_list_->devices().size(), 2);
+
+  ArenaH2DTransferExecutor::Options options;
   TF_ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<H2DTransferExecutor> executor,
-      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get()));
+      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get(),
+                                       options));
 
   xla::ifrt::ShardingRef replicated_sharding = xla::ifrt::HloSharding::Create(
       device_list_, xla::ifrt::MemoryKind(), xla::HloSharding::Replicate());
@@ -407,9 +727,11 @@ TEST_F(ArenaH2DTransferExecutorTest,
 TEST_F(ArenaH2DTransferExecutorTest,
        UnsupportedShardingFailsFastWithUnimplemented) {
   ASSERT_GE(device_list_->devices().size(), 2);
+  ArenaH2DTransferExecutor::Options options;
   TF_ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<H2DTransferExecutor> executor,
-      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get()));
+      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get(),
+                                       options));
 
   xla::ifrt::ShardingRef single_device_sharding =
       xla::ifrt::SingleDeviceSharding::Create(device_list_->devices()[0],
@@ -433,7 +755,9 @@ TEST_F(ArenaH2DTransferExecutorTest,
 }
 
 TEST_F(ArenaH2DTransferExecutorTest, FactoryCreate) {
-  ArenaH2DTransferExecutorFactory factory;
+  ArenaH2DTransferExecutor::Options options;
+  options.small_tensor_threshold_in_bytes = 32 * 1024;
+  ArenaH2DTransferExecutorFactory factory(options);
 
   TF_ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<H2DTransferExecutor> executor,
@@ -444,8 +768,11 @@ TEST_F(ArenaH2DTransferExecutorTest, FactoryCreate) {
       device_list_->devices()[0], xla::ifrt::MemoryKind());
   HostBuffer in = AsHostBuffer<float>({42.0f}, xla::ifrt::Shape({1}));
 
+  std::vector<HostBuffer> inputs = {in};
+  std::vector<xla::ifrt::ShardingRef> shardings = {sharding};
+
   TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer({in}, {sharding}));
+                          executor->ExecuteTransfer(inputs, shardings));
   ASSERT_EQ(results.size(), 1);
 
   TF_ASSERT_OK_AND_ASSIGN(
