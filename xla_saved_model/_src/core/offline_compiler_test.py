@@ -531,6 +531,36 @@ class OfflineCompilerTest(parameterized.TestCase):
     with self.assertRaisesRegex(ValueError, "num_weights must be non-negative"):
       list(hook(stablehlo_mlir, [0], -1))
 
+  def test_optimizer_skipped_when_optimized_at_export(self):
+    """Verifies config.optimizer is bypassed when optimized_at_export=True."""
+    calls: list[Sequence[int]] = []
+
+    def recording_opt(
+        mlir_bytes: bytes, weight_indices: Sequence[int]
+    ) -> bytes:
+      calls.append(list(weight_indices))
+      return mlir_bytes
+
+    config = offline_compiler.TargetConfig(
+        target_topology_label="cpu_target",
+        platform="cpu",
+        optimizer=recording_opt,
+    )
+    hook = offline_compiler.create_offline_compiler_hook([config])
+    stablehlo_mlir = test_utils.get_stablehlo_mlir()
+
+    artifacts_skipped = list(
+        hook(stablehlo_mlir, [0], 0, optimized_at_export=True)
+    )
+    self.assertLen(artifacts_skipped, 1)
+    self.assertEmpty(calls)
+
+    artifacts_ran = list(
+        hook(stablehlo_mlir, [0], 0, optimized_at_export=False)
+    )
+    self.assertLen(artifacts_ran, 1)
+    self.assertLen(calls, 1)
+
 
 if __name__ == "__main__":
   absltest.main()

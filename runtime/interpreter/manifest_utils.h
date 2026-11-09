@@ -61,6 +61,20 @@ absl::StatusOr<std::vector<ArgSpec>> GetInputSpec(
 absl::StatusOr<std::vector<ArgSpec>> GetOutputSpec(
     const xla_saved_model_manifest::Function& func);
 
+// Gets the post-optimization physical input `ArgSpec`s for a StableHLO
+// function from `optimized_input_signature` when present in
+// `function.body().stable_hlo_body()`, or defaults to `input_specs`.
+absl::StatusOr<std::vector<ArgSpec>> GetOptimizedInputSpec(
+    const xla_saved_model_manifest::Function& function,
+    absl::Span<const ArgSpec> input_specs);
+
+// Gets the post-optimization physical output `ArgSpec`s for a StableHLO
+// function from `optimized_output_signature` when present in
+// `function.body().stable_hlo_body()`, or defaults to `output_specs`.
+absl::StatusOr<std::vector<ArgSpec>> GetOptimizedOutputSpec(
+    const xla_saved_model_manifest::Function& function,
+    absl::Span<const ArgSpec> output_specs);
+
 // Returns error if the mime type of `unstructured_data` is not
 // `allowed_mime_type`.  A `description` of the `unstructured_data` should be
 // provided to add more context for the error message, for example, "Checkpoint

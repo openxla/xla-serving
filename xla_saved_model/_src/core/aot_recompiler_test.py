@@ -26,6 +26,9 @@ from xla_saved_model._src.core import file_utils
 from xla_saved_model._src.core import offline_compiler
 from xla_saved_model._src.core import persistence_lib
 from xla_saved_model._src.core import test_utils
+from xla_saved_model._src.export import jax_model
+from xla_saved_model._src.export import main_lib as export_main_lib
+from xla_saved_model._src.export import serving_config
 
 
 class AotRecompilerTest(test_utils.XsmTestCase):
@@ -661,6 +664,56 @@ class AotRecompilerTest(test_utils.XsmTestCase):
           target_configs=config,
           version=1,
       )
+
+  def test_recompile_skips_optimizer_for_export_optimized_model(self):
+    input_dir = str(pathlib.Path(self.temp_dir) / "models" / "export_opt_in")
+    bundle = jax_model.ApplyFnBundle(
+        apply_fn=lambda p, x: {"out": x["img"] * p["w"]},
+        enable_input_r1_optimization=True,
+        enable_output_r1_optimization=True,
+        max_transpose_channels=3,
+    )
+    model = jax_model.JaxModel(
+        apply_fn_bundle=bundle,
+        params={"w": jax.numpy.ones((2,), dtype=jax.numpy.float32)},
+        name="model",
+    )
+    export_main_lib.save(
+        models=model,
+        export_path=input_dir,
+        serving_configs=[
+            serving_config.ServingConfig(
+                serving_signature="serving_default",
+                input_signature={
+                    "img": jax.ShapeDtypeStruct((2, 3, 5, 2), jax.numpy.float32)
+                },
+            )
+        ],
+    )
+
+    optimizer_calls = []
+
+    def recording_opt(mlir_bytes: bytes, weight_indices):
+      optimizer_calls.append(list(weight_indices))
+      return mlir_bytes
+
+    output_base = str(pathlib.Path(self.temp_dir) / "models" / "export_opt_out")
+    out_dir = aot_recompiler.recompile(
+        input_model_path=input_dir,
+        output_model_path=output_base,
+        target_configs=offline_compiler.TargetConfig(
+            target_topology_label="cpu_target",
+            platform="cpu",
+            optimizer=recording_opt,
+        ),
+        version=1,
+    )
+    self.assertEmpty(optimizer_calls)
+    recompiled_manifest = persistence_lib.load(out_dir)
+    body = recompiled_manifest.objects["serving_default"].function.body
+    self.assertTrue(body.stable_hlo_body.HasField("optimized_input_signature"))
+    self.assertTrue(body.stable_hlo_body.HasField("optimized_output_signature"))
+    self.assertLen(body.stable_hlo_body.compiled_executables, 1)
 
 
 if __name__ == "__main__":

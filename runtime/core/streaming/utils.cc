@@ -15,6 +15,7 @@
 #include "runtime/core/streaming/utils.h"  // from @xla_serving
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -381,7 +382,8 @@ bool ContainsStreamingOp(mlir::Operation* op) {
 
 }  // namespace
 
-absl::Status PropagateStreamingStepId(mlir::ModuleOp module, bool is_batched) {
+absl::Status PropagateStreamingStepId(mlir::ModuleOp module, bool is_batched,
+                                      std::optional<int64_t> batch_size) {
   if (VLOG_IS_ON(1)) {
     xla_serving::DumpMlirOpToFile("module_before_step_id_propagation", module);
   }
@@ -404,31 +406,39 @@ absl::Status PropagateStreamingStepId(mlir::ModuleOp module, bool is_batched) {
   mlir::OpBuilder builder(module.getContext());
   mlir::Type step_id_type;
   if (is_batched) {
-    mlir::RankedTensorType ranked_type;
-    for (int i = main_func.getNumArguments() - 1; i >= 0; --i) {
-      bool is_const_arg = false;
-      if (auto arg_attr = main_func.getArgAttrOfType<mlir::DictionaryAttr>(
-              i, "mhlo.frontend_attributes")) {
-        if (auto is_const = arg_attr.get("is_constant")) {
-          if (auto str = llvm::dyn_cast<mlir::StringAttr>(is_const)) {
-            if (str.getValue() == "true") is_const_arg = true;
-          } else if (auto b = llvm::dyn_cast<mlir::BoolAttr>(is_const)) {
-            if (b.getValue()) is_const_arg = true;
+    int64_t batch_dim = 1;
+    if (batch_size.has_value()) {
+      if (*batch_size <= 0) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Streaming batch_size must be positive, got ", *batch_size));
+      }
+      batch_dim = *batch_size;
+    } else {
+      mlir::RankedTensorType ranked_type;
+      for (int i = main_func.getNumArguments() - 1; i >= 0; --i) {
+        bool is_const_arg = false;
+        if (auto arg_attr = main_func.getArgAttrOfType<mlir::DictionaryAttr>(
+                i, "mhlo.frontend_attributes")) {
+          if (auto is_const = arg_attr.get("is_constant")) {
+            if (auto str = llvm::dyn_cast<mlir::StringAttr>(is_const)) {
+              if (str.getValue() == "true") is_const_arg = true;
+            } else if (auto b = llvm::dyn_cast<mlir::BoolAttr>(is_const)) {
+              if (b.getValue()) is_const_arg = true;
+            }
+          }
+        }
+        if (is_const_arg) continue;
+        if (auto type = llvm::dyn_cast<mlir::RankedTensorType>(
+                main_func.getArgument(i).getType())) {
+          if (type.getRank() >= 1) {
+            ranked_type = type;
+            break;
           }
         }
       }
-      if (is_const_arg) continue;
-      if (auto type = llvm::dyn_cast<mlir::RankedTensorType>(
-              main_func.getArgument(i).getType())) {
-        if (type.getRank() >= 1) {
-          ranked_type = type;
-          break;
-        }
+      if (ranked_type) {
+        batch_dim = ranked_type.getShape()[0];
       }
-    }
-    int64_t batch_dim = 1;
-    if (ranked_type) {
-      batch_dim = ranked_type.getShape()[0];
     }
     step_id_type =
         mlir::RankedTensorType::get({batch_dim}, builder.getI32Type());

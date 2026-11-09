@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -113,13 +114,12 @@ absl::Status ValidateDeviceBufferInput(const xla::ifrt::Array& original_input,
   }
   if (original_input.shape() != target_shape) {
     return absl::InvalidArgumentError(absl::StrCat(
-        "Zero-copy D2D execution requires the input "
-        "shape to exactly match the optimized model's target shape. "
-        "Expected ",
-        target_shape, ", but got ", original_input.shape(), ". ",
-        "To fix this, you must pre-reshape the device array to match the "
-        "optimized signature. Otherwise, provide a HostBuffer to allow "
-        "StableHloRunner to perform the reshape via host memory."));
+        "Zero-copy D2D execution requires the input shape to exactly match the "
+        "optimized model's target shape at index ",
+        idx_in_stablehlo_spec, ". Expected ", target_shape, ", but got ",
+        original_input.shape(),
+        ". Provide a HostBuffer to allow StableHloRunner to reshape via host "
+        "memory, or disable input R1 optimization for D2D inputs."));
   }
   return absl::OkStatus();
 }
@@ -147,6 +147,9 @@ absl::Status ValidateOutputArray(const xla::ifrt::Array& array_for_copy,
 // `TransposePlan` writes.
 absl::StatusOr<HostBuffer> TransposeHostBuffer(
     const HostBuffer& input, absl::Span<const int64_t> permutation) {
+  if (!input.has_data()) {
+    return absl::InvalidArgumentError("Cannot transpose an empty HostBuffer.");
+  }
   const absl::Span<const int64_t> dims = input.shape().dims();
   if (permutation.size() != dims.size()) {
     return absl::InvalidArgumentError(absl::StrCat(
@@ -166,18 +169,22 @@ absl::StatusOr<HostBuffer> TransposeHostBuffer(
         absl::StrCat("Unsupported dtype for host transpose: ", input.dtype()));
   }
 
+  absl::InlinedVector<bool, 8> seen_axes(dims.size(), false);
   std::vector<int64_t> transposed_dims(dims.size());
   for (size_t i = 0; i < permutation.size(); ++i) {
-    if (permutation[i] < 0 ||
-        permutation[i] >= static_cast<int64_t>(dims.size())) {
+    const int64_t axis = permutation[i];
+    if (axis < 0 || axis >= static_cast<int64_t>(dims.size()) ||
+        seen_axes[axis]) {
       return absl::InvalidArgumentError(
           absl::StrCat("Invalid host transpose permutation: ",
                        absl::StrJoin(permutation, ",")));
     }
-    transposed_dims[i] = dims[permutation[i]];
+    seen_axes[axis] = true;
+    transposed_dims[i] = dims[axis];
   }
-  HostBuffer transposed_buffer(input.dtype(),
-                               xla::ifrt::Shape(transposed_dims));
+  TF_ASSIGN_OR_RETURN(
+      HostBuffer transposed_buffer,
+      HostBuffer::Create(input.dtype(), xla::ifrt::Shape(transposed_dims)));
   if (input.shape().num_elements() == 0) {
     return transposed_buffer;
   }
@@ -196,6 +203,63 @@ absl::StatusOr<HostBuffer> TransposeHostBuffer(
                       xla::TransposePlan::Create(options));
   plan->Execute(input.base(), transposed_buffer.base());
   return transposed_buffer;
+}
+
+bool IsDenseRowMajorHostBuffer(const HostBuffer& buffer) {
+  if (!buffer.byte_strides().has_value() ||
+      buffer.shape().num_elements() <= 1) {
+    return true;
+  }
+  const std::optional<int> element_byte_size = buffer.dtype().byte_size();
+  if (!element_byte_size.has_value()) {
+    return false;
+  }
+  const absl::Span<const int64_t> dims = buffer.shape().dims();
+  const absl::InlinedVector<int64_t, 4>& strides = *buffer.byte_strides();
+  if (strides.size() != dims.size()) {
+    return false;
+  }
+  int64_t expected_stride = *element_byte_size;
+  for (int d = static_cast<int>(dims.size()) - 1; d >= 0; --d) {
+    if (dims[d] > 1) {
+      if (strides[d] != expected_stride) {
+        return false;
+      }
+      if (d > 0) {
+        if (expected_stride > std::numeric_limits<int64_t>::max() / dims[d]) {
+          return false;
+        }
+        expected_stride *= dims[d];
+      }
+    }
+  }
+  return true;
+}
+
+absl::StatusOr<HostBuffer> ReshapeHostBufferZeroCopy(
+    const HostBuffer& buffer, const xla::ifrt::Shape& target_shape) {
+  if (!buffer.has_data()) {
+    return absl::InvalidArgumentError("Cannot reshape an empty HostBuffer.");
+  }
+  if (buffer.shape().num_elements() != target_shape.num_elements()) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "HostBuffer reshape element count mismatch. Expected ",
+        target_shape.num_elements(), " elements for shape ", target_shape,
+        ", but got ", buffer.shape().num_elements(), " elements for shape ",
+        buffer.shape()));
+  }
+  if (buffer.dtype() != buffer.storage_dtype()) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Cannot zero-copy reshape HostBuffer with logical dtype ",
+        buffer.dtype(), " and storage dtype ", buffer.storage_dtype()));
+  }
+  if (!IsDenseRowMajorHostBuffer(buffer)) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Cannot zero-copy reshape non-contiguous strided HostBuffer of shape ",
+        buffer.shape(), " to ", target_shape));
+  }
+  return HostBuffer(buffer.base(), buffer.dtype(), target_shape,
+                    buffer.owner());
 }
 
 // Returns the PjRt memory space that `sharding` places `device` shards in.
@@ -305,55 +369,60 @@ absl::StatusOr<ModelIoMetadata> ModelIoMetadata::CreateFromStableHlo(
         "`num_weights` should be non-negative when creating ModelIoMetadata");
   }
 
-  if (stablehlo.specs()[0].inputs.size() < num_weights) {
-    return absl::InvalidArgumentError(absl::StrFormat(
-        "StableHLO module has fewer inputs (%d) than the number of "
-        "weights (%d)",
-        stablehlo.specs()[0].inputs.size(), num_weights));
-  }
   // A model exported for input aliasing ends its argument list with one
   // aliased buffer per output. The caller does not supply those, so they must
   // not be counted as user inputs.
-  const auto num_user_inputs_of = [&](int i) -> absl::StatusOr<int> {
-    const StableHlo::Spec& spec = stablehlo.specs()[i];
-    const int num_non_weight_args = spec.inputs.size() - num_weights;
+  const auto compute_num_user_inputs =
+      [&](size_t bucket_index) -> absl::StatusOr<int> {
+    const StableHlo::Spec& spec = stablehlo.specs()[bucket_index];
+    if (spec.inputs.size() < static_cast<size_t>(num_weights)) {
+      return absl::InvalidArgumentError(absl::StrFormat(
+          "StableHLO module has fewer inputs (%d) than the number of "
+          "weights (%d)",
+          spec.inputs.size(), num_weights));
+    }
+    for (int weight_index = 0; weight_index < num_weights; ++weight_index) {
+      if (spec.original_inputs[weight_index] != spec.inputs[weight_index] ||
+          !spec.original_inputs[weight_index].host_transpose.empty()) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Weight input #", weight_index, " in bucket #", bucket_index,
+            " cannot use export-time optimization or host_transpose."));
+      }
+    }
+    const int num_non_weight_args =
+        static_cast<int>(spec.inputs.size()) - num_weights;
     if (spec.num_input_aliased_output < 0 ||
         num_non_weight_args < spec.num_input_aliased_output) {
       return absl::InvalidArgumentError(absl::StrFormat(
           "StableHLO module #%d has %d arguments left after its %d weights, "
           "which does not fit the %d input-aliased output buffers it was "
           "declared to have",
-          i, num_non_weight_args, num_weights, spec.num_input_aliased_output));
+          bucket_index, num_non_weight_args, num_weights,
+          spec.num_input_aliased_output));
     }
     return num_non_weight_args - spec.num_input_aliased_output;
   };
-  TF_ASSIGN_OR_RETURN(int num_user_inputs, num_user_inputs_of(0));
+  TF_ASSIGN_OR_RETURN(int num_user_inputs, compute_num_user_inputs(0));
   int num_outputs = stablehlo.specs()[0].outputs.size();
 
   // Verifies that all StableHLO modules (shape buckets) have a consistent
   // number of user inputs and outputs. This ensures that dynamic shape
   // bucketing is structurally sound before execution.
-  for (int i = 1; i < stablehlo.specs().size(); ++i) {
-    if (stablehlo.specs()[i].inputs.size() < num_weights) {
-      return absl::InvalidArgumentError(absl::StrFormat(
-          "StableHLO module has fewer inputs (%d) than the number of "
-          "weights (%d)",
-          stablehlo.specs()[i].inputs.size(), num_weights));
-    }
-    TF_ASSIGN_OR_RETURN(int cur_user_inputs, num_user_inputs_of(i));
-    int cur_outputs = stablehlo.specs()[i].outputs.size();
+  for (size_t i = 1; i < stablehlo.specs().size(); ++i) {
+    TF_ASSIGN_OR_RETURN(int bucket_user_inputs, compute_num_user_inputs(i));
+    int bucket_outputs = stablehlo.specs()[i].outputs.size();
 
-    if (cur_user_inputs != num_user_inputs) {
+    if (bucket_user_inputs != num_user_inputs) {
       return absl::InvalidArgumentError(
           "Mismatched number of user inputs across buckets");
     }
-    if (cur_outputs != num_outputs) {
+    if (bucket_outputs != num_outputs) {
       return absl::InvalidArgumentError(
           "Mismatched number of outputs across buckets");
     }
     for (int j = 0; j < num_outputs; ++j) {
-      if (stablehlo.specs()[i].outputs[j].placement !=
-          stablehlo.specs()[0].outputs[j].placement) {
+      if (stablehlo.specs()[i].original_outputs[j].placement !=
+          stablehlo.specs()[0].original_outputs[j].placement) {
         return absl::InvalidArgumentError(absl::StrCat(
             "Mismatched output placement across buckets for output #", j,
             ": bucket 0 vs bucket ", i));
@@ -367,20 +436,21 @@ absl::StatusOr<ModelIoMetadata> ModelIoMetadata::CreateFromStableHlo(
   // When a weight spec is not used, it means the weight is unused by any of
   // the StableHLOs, thus setting spec to std::nullopt.
   std::vector<std::optional<ArgSpec>> weight_specs(num_weights, std::nullopt);
-  for (int spec_idx = 0; spec_idx < stablehlo.specs().size(); ++spec_idx) {
-    const StableHlo::Spec& cur_spec = stablehlo.specs()[spec_idx];
-    for (int i : cur_spec.mlir_module_kept_var_idx) {
+  for (size_t spec_index = 0; spec_index < stablehlo.specs().size();
+       ++spec_index) {
+    const StableHlo::Spec& current_spec = stablehlo.specs()[spec_index];
+    for (int i : current_spec.mlir_module_kept_var_idx) {
       if (i >= num_weights) {
         break;
       }
-      const auto& cur_weight_spec = cur_spec.inputs[i];
+      const ArgSpec& current_weight_spec = current_spec.inputs[i];
       if (!weight_specs[i].has_value()) {
-        weight_specs[i] = cur_weight_spec;
-      } else if (*weight_specs[i] != cur_weight_spec) {
+        weight_specs[i] = current_weight_spec;
+      } else if (*weight_specs[i] != current_weight_spec) {
         return absl::InvalidArgumentError(absl::StrCat(
             "Weights should have the same dtype, shape and sharding among"
             " StableHLOs, but found mismatch for weight #",
-            i, " : ", cur_weight_spec.DebugString(), " vs ",
+            i, " : ", current_weight_spec.DebugString(), " vs ",
             weight_specs[i].value().DebugString()));
       }
     }
@@ -404,7 +474,7 @@ absl::StatusOr<ModelIoMetadata> ModelIoMetadata::CreateFromStableHlo(
 
   return ModelIoMetadata{
       .weight_specs = std::move(weight_specs),
-      .output_specs = stablehlo.specs()[0].outputs,
+      .output_specs = stablehlo.specs()[0].original_outputs,
       .num_user_inputs = num_user_inputs,
       .num_outputs = num_outputs,
       // TODO: Set has_streaming based on AOT executable metadata
@@ -655,14 +725,9 @@ StableHloRunnerBase::DataConverter::ConvertOutput(
       const xla::ifrt::Shape expected_ifrt_shape =
           executable_bundle.original_io_spec.outputs[i].GetIfrtShape();
       if (host_buffer.shape() != expected_ifrt_shape) {
-        if (host_buffer.shape().num_elements() !=
-            expected_ifrt_shape.num_elements()) {
-          return absl::InvalidArgumentError(absl::StrCat(
-              "Output shape mismatch. Expected: ", expected_ifrt_shape,
-              ", but got: ", host_buffer.shape()));
-        }
-        HostBuffer reshaped_buffer(host_buffer.base(), host_buffer.dtype(),
-                                   expected_ifrt_shape, host_buffer.owner());
+        TF_ASSIGN_OR_RETURN(
+            HostBuffer reshaped_buffer,
+            ReshapeHostBufferZeroCopy(host_buffer, expected_ifrt_shape));
         converted_outputs.push_back(xla_serving::Value(std::move(reshaped_buffer)));
       } else {
         converted_outputs.push_back(xla_serving::Value(std::move(host_buffer)));
@@ -1106,6 +1171,14 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
     int original_input_idx = used_input_indices[i];
     auto& original_input_value = unpacked_inputs[original_input_idx];
     if (original_input_value.IsType<xla_serving::DeviceBuffer>()) {
+      if (executable_bundle->host_transpose_permutations.contains(
+              idx_in_stablehlo_spec)) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Zero-copy D2D execution is not supported for input at index ",
+            idx_in_stablehlo_spec,
+            " because it requires a host_transpose. Provide a HostBuffer or "
+            "disable NCHW input transpose for D2D inputs."));
+      }
       auto& device_buffer = original_input_value.Get<xla_serving::DeviceBuffer>();
       const xla::ifrt::Shape target_shape =
           executable_bundle->io_spec.inputs[idx_in_stablehlo_spec]
@@ -1132,11 +1205,11 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
         // Shapes match, use the buffer directly.
         host_buffers_to_convert.push_back(std::move(original_input));
       } else {
-        // Shapes differ (e.g., due to optimization). Perform a zero-copy
-        // reshape to match the model's expected signature.
-        HostBuffer reshaped_buffer(original_input.base(),
-                                   original_input.dtype(), target_shape,
-                                   original_input.owner());
+        // Shapes differ (e.g., due to optimization). Perform a validated
+        // zero-copy reshape to match the model's expected signature.
+        TF_ASSIGN_OR_RETURN(
+            HostBuffer reshaped_buffer,
+            ReshapeHostBufferZeroCopy(original_input, target_shape));
         host_buffers_to_convert.push_back(std::move(reshaped_buffer));
       }
       host_buffers_stablehlo_indices.push_back(idx_in_stablehlo_spec);

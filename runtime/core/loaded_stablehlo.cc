@@ -14,7 +14,10 @@
 
 #include "runtime/core/loaded_stablehlo.h"  // from @xla_serving
 
+#include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <string>
 #include <utility>
@@ -58,11 +61,16 @@ namespace {
 //    concretized StableHLOs from a polymorphic StableHLO).
 //  - num_weights: the total number of weights irrespective of whether they are
 //    used or not (i.e., passed to StableHLO during the execution)
+//  - resolved_kept_var_indices_per_spec: optional per-spec resolved kept
+//    variable indices (used when `spec.mlir_module_kept_var_idx` was omitted
+//    and defaulted from the MLIR module signature).
 // Returns:
 //  - A vector of `ArgSpec`s for model weights. The `ArgSpec` will be
 //    std::nullopt if the weight is unused by any of the StableHLOs.
 absl::StatusOr<std::vector<std::optional<ArgSpec>>> GetWeightSpecs(
-    absl_nonnull std::shared_ptr<StableHlo> stablehlo, int num_weights) {
+    absl_nonnull std::shared_ptr<StableHlo> stablehlo, int num_weights,
+    absl::Span<const std::vector<int>> resolved_kept_var_indices_per_spec =
+        {}) {
   // The following checks are defensive and should never fail, since some of
   // them are already checked in `StableHloRunner::Create`
   if (!stablehlo) {
@@ -84,20 +92,26 @@ absl::StatusOr<std::vector<std::optional<ArgSpec>>> GetWeightSpecs(
   // When a weight spec is not used, it means the weight is unused by any of
   // the StableHLOs, thus setting spec to std::nullopt.
   std::vector<std::optional<ArgSpec>> weight_specs(num_weights, std::nullopt);
-  for (int spec_idx = 0; spec_idx < stablehlo->specs().size(); ++spec_idx) {
-    const StableHlo::Spec& cur_spec = stablehlo->specs()[spec_idx];
-    for (int i : cur_spec.mlir_module_kept_var_idx) {
+  for (size_t spec_index = 0; spec_index < stablehlo->specs().size();
+       ++spec_index) {
+    const StableHlo::Spec& current_spec = stablehlo->specs()[spec_index];
+    const absl::Span<const int> kept_var_indices =
+        spec_index < resolved_kept_var_indices_per_spec.size()
+            ? absl::MakeConstSpan(
+                  resolved_kept_var_indices_per_spec[spec_index])
+            : absl::MakeConstSpan(current_spec.mlir_module_kept_var_idx);
+    for (int i : kept_var_indices) {
       if (i >= num_weights) {
         break;
       }
-      const auto& cur_weight_spec = cur_spec.inputs[i];
+      const ArgSpec& current_weight_spec = current_spec.inputs[i];
       if (!weight_specs[i].has_value()) {
-        weight_specs[i] = cur_weight_spec;
-      } else if (*weight_specs[i] != cur_weight_spec) {
+        weight_specs[i] = current_weight_spec;
+      } else if (*weight_specs[i] != current_weight_spec) {
         return absl::InvalidArgumentError(absl::StrCat(
             "Weights should have the same dtype, shape and sharding among"
             " StableHLOs, but found mismatch for weight #",
-            i, " : ", cur_weight_spec.DebugString(), " vs ",
+            i, " : ", current_weight_spec.DebugString(), " vs ",
             weight_specs[i].value().DebugString()));
       }
     }
@@ -127,8 +141,8 @@ absl::StatusOr<std::vector<std::optional<ArgSpec>>> GetWeightSpecs(
 int GetInputOffset(absl::Span<const int> mlir_module_kept_var_idx,
                    int num_weights) {
   int num_used_weights = 0;
-  for (int idx : mlir_module_kept_var_idx) {
-    if (idx < num_weights) {
+  for (int kept_index : mlir_module_kept_var_idx) {
+    if (kept_index < num_weights) {
       num_used_weights++;
     }
   }
@@ -171,37 +185,60 @@ absl::Status VerifyMultiBucketConsistency(
   if (stablehlo->specs().empty()) {
     return absl::InvalidArgumentError("StableHLO has no specs.");
   }
-
-  if (stablehlo->specs()[0].inputs.size() < num_weights) {
-    return absl::InvalidArgumentError(absl::StrFormat(
-        "StableHLO module has fewer inputs (%d) than the number of "
-        "weights (%d)",
-        stablehlo->specs()[0].inputs.size(), num_weights));
+  if (num_weights < 0) {
+    return absl::InvalidArgumentError(
+        "`num_weights` should be non-negative when verifying buckets.");
   }
-  int num_user_inputs = stablehlo->specs()[0].inputs.size() - num_weights;
-  int num_outputs = stablehlo->specs()[0].outputs.size();
 
-  for (int i = 1; i < stablehlo->specs().size(); ++i) {
-    if (stablehlo->specs()[i].inputs.size() < num_weights) {
+  const auto compute_num_user_inputs = [&](size_t bucket_index)
+      -> absl::StatusOr<int> {
+    const StableHlo::Spec& spec = stablehlo->specs()[bucket_index];
+    if (spec.inputs.size() < static_cast<size_t>(num_weights)) {
       return absl::InvalidArgumentError(absl::StrFormat(
           "StableHLO module has fewer inputs (%d) than the number of "
           "weights (%d)",
-          stablehlo->specs()[i].inputs.size(), num_weights));
+          spec.inputs.size(), num_weights));
     }
-    int cur_user_inputs = stablehlo->specs()[i].inputs.size() - num_weights;
-    int cur_outputs = stablehlo->specs()[i].outputs.size();
+    for (int weight_index = 0; weight_index < num_weights; ++weight_index) {
+      if (spec.original_inputs[weight_index] != spec.inputs[weight_index] ||
+          !spec.original_inputs[weight_index].host_transpose.empty()) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Weight input #", weight_index, " in bucket #", bucket_index,
+            " cannot use export-time optimization or host_transpose."));
+      }
+    }
+    const int num_non_weight_args =
+        static_cast<int>(spec.inputs.size()) - num_weights;
+    if (spec.num_input_aliased_output < 0 ||
+        num_non_weight_args < spec.num_input_aliased_output) {
+      return absl::InvalidArgumentError(absl::StrFormat(
+          "StableHLO module #%d has %d arguments left after its %d weights, "
+          "which does not fit the %d input-aliased output buffers it was "
+          "declared to have",
+          bucket_index, num_non_weight_args, num_weights,
+          spec.num_input_aliased_output));
+    }
+    return num_non_weight_args - spec.num_input_aliased_output;
+  };
 
-    if (cur_user_inputs != num_user_inputs) {
+  TF_ASSIGN_OR_RETURN(int num_user_inputs, compute_num_user_inputs(0));
+  int num_outputs = stablehlo->specs()[0].outputs.size();
+
+  for (size_t i = 1; i < stablehlo->specs().size(); ++i) {
+    TF_ASSIGN_OR_RETURN(int bucket_user_inputs, compute_num_user_inputs(i));
+    int bucket_outputs = stablehlo->specs()[i].outputs.size();
+
+    if (bucket_user_inputs != num_user_inputs) {
       return absl::InvalidArgumentError(
           "Mismatched number of user inputs across buckets");
     }
-    if (cur_outputs != num_outputs) {
+    if (bucket_outputs != num_outputs) {
       return absl::InvalidArgumentError(
           "Mismatched number of outputs across buckets");
     }
     for (int j = 0; j < num_outputs; ++j) {
-      if (stablehlo->specs()[i].outputs[j].placement !=
-          stablehlo->specs()[0].outputs[j].placement) {
+      if (stablehlo->specs()[i].original_outputs[j].placement !=
+          stablehlo->specs()[0].original_outputs[j].placement) {
         return absl::InvalidArgumentError(absl::StrCat(
             "Mismatched output placement across buckets for output #", j,
             ": bucket 0 vs bucket ", i));
@@ -229,7 +266,7 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::CreateForAot(
   return absl::WrapUnique(new LoadedStableHlo(
       /*concrete_module_bundles=*/std::nullopt,
       /*symbolic_module_bundle=*/std::nullopt, std::move(weight_specs),
-      /*output_specs=*/stablehlo->specs()[0].outputs, num_user_inputs,
+      /*output_specs=*/stablehlo->specs()[0].original_outputs, num_user_inputs,
       num_outputs,
       // TODO: Set has_streaming based on AOT executable metadata
       // when AOT + streaming execution is formally supported.
@@ -270,15 +307,14 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
     }
   }
 
-  TF_ASSIGN_OR_RETURN(std::vector<std::optional<ArgSpec>> weight_specs,
-                      GetWeightSpecs(stablehlo, num_weights));
-
   std::optional<absl::flat_hash_map<
       std::vector<xla::ifrt::Shape>,
       std::unique_ptr<LoadedStableHlo::ModuleBundleWithLoader>>>
       concrete_module_bundles = std::nullopt;
   std::optional<std::unique_ptr<LoadedStableHlo::ModuleBundleWithLoader>>
       symbolic_module_bundle = std::nullopt;
+  std::vector<std::vector<int>> resolved_kept_var_indices_per_spec;
+  resolved_kept_var_indices_per_spec.reserve(stablehlo->specs().size());
 
   for (const auto& spec : stablehlo->specs()) {
     if (spec.mlir_module_string().empty()) {
@@ -319,6 +355,32 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
     TF_RETURN_IF_ERROR(ValidateIOSpecs(stablehlo_io_spec.outputs, spec.outputs,
                                        /*module_kept_var_indices=*/{}));
 
+    std::vector<int> effective_kept_var_indices = spec.mlir_module_kept_var_idx;
+    if (effective_kept_var_indices.empty() &&
+        !stablehlo_io_spec.inputs.empty()) {
+      effective_kept_var_indices.resize(spec.inputs.size());
+      std::iota(effective_kept_var_indices.begin(),
+                effective_kept_var_indices.end(), 0);
+    }
+
+    std::optional<StableHloIOSpec> exported_original_io_spec = std::nullopt;
+    if (spec.optimized_at_export) {
+      StableHloIOSpec& original_spec = exported_original_io_spec.emplace();
+      original_spec.inputs.reserve(effective_kept_var_indices.size());
+      for (int kept_var_index : effective_kept_var_indices) {
+        original_spec.inputs.push_back(spec.original_inputs[kept_var_index]);
+      }
+      original_spec.outputs = spec.original_outputs;
+    }
+    absl::flat_hash_map<int, std::vector<int64_t>> host_transpose_permutations;
+    for (size_t k = 0; k < effective_kept_var_indices.size(); ++k) {
+      int kept_var_index = effective_kept_var_indices[k];
+      if (!spec.original_inputs[kept_var_index].host_transpose.empty()) {
+        host_transpose_permutations[k] =
+            spec.original_inputs[kept_var_index].host_transpose;
+      }
+    }
+
     // Create bundle for polymorphic or concrete StableHLO(s).
     //
     // Use MLIR module input argument shapes to determine whether the module
@@ -327,6 +389,11 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
     // can be True when the JAX model is exported for multiple native
     // serialization platforms while all input shapes are concrete.
     if (HasPolymorphicShape(stablehlo_io_spec.inputs)) {
+      if (spec.optimized_at_export) {
+        return absl::InvalidArgumentError(
+            "Export-time I/O shape optimizations are not supported with "
+            "unconcretized polymorphic StableHLO modules.");
+      }
       TF_ASSIGN_OR_RETURN(bool use_shape_polymorphism,
                           UsesPolymorphicShape(module.get()));
       // jax.uses_shape_polymorphism is expected to be true if the model has
@@ -341,6 +408,9 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
         return absl::InvalidArgumentError(
             "Unexpected multiple polymorphic StableHLO modules");
       }
+      const int input_offset =
+          GetInputOffset(effective_kept_var_indices, num_weights);
+      resolved_kept_var_indices_per_spec.push_back(effective_kept_var_indices);
       symbolic_module_bundle =
           std::make_unique<LoadedStableHlo::ModuleBundleWithLoader>(
               LoadedStableHlo::ModuleBundleWithLoader{
@@ -349,28 +419,35 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
                       LoadedStableHlo::ModuleBundle{
                           .module = std::move(module),
                           .module_kept_var_indices =
-                              spec.mlir_module_kept_var_idx,
-                          .input_offset = GetInputOffset(
-                              spec.mlir_module_kept_var_idx, num_weights),
+                              std::move(effective_kept_var_indices),
+                          .input_offset = input_offset,
+                          .original_io_spec =
+                              std::move(exported_original_io_spec),
+                          .host_transpose_permutations =
+                              std::move(host_transpose_permutations),
+                          .optimized_at_export = spec.optimized_at_export,
                       },
               });
     } else {
       std::vector<xla::ifrt::Shape> user_input_shapes;
-      if (spec.inputs.size() < num_weights) {
+      if (spec.original_inputs.size() < static_cast<size_t>(num_weights)) {
         return absl::InvalidArgumentError(absl::StrFormat(
             "StableHLO module has fewer inputs (%d) than the number of "
             "weights (%d)",
-            spec.inputs.size(), num_weights));
+            spec.original_inputs.size(), num_weights));
       }
-      user_input_shapes.reserve(spec.inputs.size() - num_weights);
-      for (int i = num_weights; i < spec.inputs.size(); ++i) {
-        user_input_shapes.push_back(ToIfrtShape(spec.inputs[i].shape));
+      user_input_shapes.reserve(spec.original_inputs.size() - num_weights);
+      for (size_t i = num_weights; i < spec.original_inputs.size(); ++i) {
+        user_input_shapes.push_back(ToIfrtShape(spec.original_inputs[i].shape));
       }
       if (!concrete_module_bundles.has_value()) {
         concrete_module_bundles = absl::flat_hash_map<
             std::vector<xla::ifrt::Shape>,
             std::unique_ptr<LoadedStableHlo::ModuleBundleWithLoader>>();
       }
+      const int input_offset =
+          GetInputOffset(effective_kept_var_indices, num_weights);
+      resolved_kept_var_indices_per_spec.push_back(effective_kept_var_indices);
       auto [_, inserted] = concrete_module_bundles->emplace(
           user_input_shapes,
           std::make_unique<LoadedStableHlo::ModuleBundleWithLoader>(
@@ -380,9 +457,13 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
                       LoadedStableHlo::ModuleBundle{
                           .module = std::move(module),
                           .module_kept_var_indices =
-                              spec.mlir_module_kept_var_idx,
-                          .input_offset = GetInputOffset(
-                              spec.mlir_module_kept_var_idx, num_weights),
+                              std::move(effective_kept_var_indices),
+                          .input_offset = input_offset,
+                          .original_io_spec =
+                              std::move(exported_original_io_spec),
+                          .host_transpose_permutations =
+                              std::move(host_transpose_permutations),
+                          .optimized_at_export = spec.optimized_at_export,
                       },
               }));
       if (!inserted) {
@@ -392,6 +473,11 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
       }
     }
   }
+
+  TF_ASSIGN_OR_RETURN(
+      std::vector<std::optional<ArgSpec>> weight_specs,
+      GetWeightSpecs(stablehlo, num_weights,
+                     resolved_kept_var_indices_per_spec));
 
   // Verify that all StableHLO modules have the same number of user inputs and
   // outputs.
@@ -415,8 +501,9 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
 
   return absl::WrapUnique(new LoadedStableHlo(
       std::move(concrete_module_bundles), std::move(symbolic_module_bundle),
-      std::move(weight_specs), /*output_specs=*/stablehlo->specs()[0].outputs,
-      num_user_inputs, num_outputs, has_streaming));
+      std::move(weight_specs),
+      /*output_specs=*/stablehlo->specs()[0].original_outputs, num_user_inputs,
+      num_outputs, has_streaming));
 };
 
 absl::StatusOr<std::unique_ptr<LoadedStableHlo::ModuleBundle>>

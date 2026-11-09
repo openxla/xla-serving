@@ -89,6 +89,10 @@ def _calculate_jax_model_input_sig(
   Returns:
     The input signature excluding the model parameters and, if present, the
     donated output buffers, structured as `((args,), kwargs)`.
+
+  Raises:
+    ValueError: If the positional part of `apply_fn_input_signature` is not a
+      sequence of the expected length.
   """
   if (
       # Already arg-kwarg split if the input signature is a sequence of two
@@ -124,7 +128,15 @@ def _calculate_jax_model_input_sig(
 
 @dataclasses.dataclass(frozen=True)
 class PreparedJaxProcessor(processor.ProcessorDefaults):
-  """JAX processor that is prepared for export."""
+  """JAX processor that is prepared for export.
+
+  Attributes:
+    name: Processor name in the exported manifest.
+    input_signature: Caller-facing logical input signature PyTree.
+    output_signature: Caller-facing logical output signature PyTree.
+    shlo_fns: Exported `ShloFunction` instances backing this processor.
+    weights_name: Optional manifest weights object name bound to this processor.
+  """
 
   name: str
   input_signature: jaxtyping.PyTree
@@ -145,6 +157,7 @@ class PreparedJaxProcessor(processor.ProcessorDefaults):
     return any(fn.num_input_aliased_output for fn in self.shlo_fns)
 
   def to_xsm_saveable(self) -> saveable.Saveable:
+    """Returns the single `ShloFunction` or tuple of `ShloFunction`s to save."""
     return self.shlo_fns[0] if len(self.shlo_fns) == 1 else tuple(self.shlo_fns)
 
 
@@ -221,12 +234,13 @@ class JaxProcessor:
     # exported for output donation) as a trailing argument. We exclude them
     # here to create the external-facing input signature that only contains the
     # actual user inputs.
-    jax_input_signature = _calculate_jax_model_input_sig(
-        _infer_polymorphic_signature(
-            [func.input_signature for func in shlo_functions]
-        ),
-        has_donated_output_args=self.apply_fn_bundle.use_input_aliasing,
-    )
+    jax_input_signature = _infer_polymorphic_signature([
+        _calculate_jax_model_input_sig(
+            func.input_signature,
+            has_donated_output_args=self.apply_fn_bundle.use_input_aliasing,
+        )
+        for func in shlo_functions
+    ])
     jax_output_signature = _infer_polymorphic_signature(
         [func.output_signature for func in shlo_functions]
     )

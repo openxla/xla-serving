@@ -81,6 +81,9 @@ cc_test(
     defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
     deps = [
         ":utils",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@abseil-cpp//absl/strings:string_view",
         "@googletest//:gtest",
         "@googletest//:gtest_main",
         "@llvm-project//llvm:Support",

@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -24,6 +25,7 @@
 #include <vector>
 
 #include "absl/base/optimization.h"  // from @abseil-cpp
+#include "absl/container/flat_hash_map.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_set.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/memory/memory.h"  // from @abseil-cpp
@@ -37,6 +39,7 @@
 #include "runtime/core/sharding_utils.h"  // from @xla_serving
 #include "runtime/core/stablehlo.h"  // from @xla_serving
 #include "runtime/core/stablehlo_runner_base.h"  // from @xla_serving
+#include "runtime/core/stablehlo_utils.h"  // from @xla_serving
 #include "runtime/libs/ifrt/executable_build_utils.h"  // from @xla_serving
 #include "xla/pjrt/pjrt_layout.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
@@ -63,6 +66,12 @@ namespace {
 absl::Status ValidateInputAliasedOutputArgs(
     const xla::ifrt::LoadedExecutable& executable, int num_args,
     int num_input_aliased_output, size_t bucket) {
+  if (num_input_aliased_output < 0 || num_args < num_input_aliased_output) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Executable #", bucket, " has ", num_args,
+        " kept arguments, fewer than its declared ", num_input_aliased_output,
+        " input-aliased output arguments."));
+  }
   TF_ASSIGN_OR_RETURN(const absl::Span<const int> donatable_indices,
                       executable.GetDonatableInputIndices());
   const absl::flat_hash_set<int> donatable(donatable_indices.begin(),
@@ -89,10 +98,15 @@ absl::Status ValidateInputAliasedOutputArgs(
 absl::StatusOr<std::vector<std::shared_ptr<const xla::PjRtLayout>>>
 GetInputAliasedOutputArgLayouts(const xla::ifrt::LoadedExecutable& executable,
                                 int num_args, int num_input_aliased_output) {
+  if (num_input_aliased_output < 0 || num_args < num_input_aliased_output) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Executable has ", num_args, " arguments, fewer than its declared ",
+        num_input_aliased_output, " input-aliased output arguments."));
+  }
   TF_ASSIGN_OR_RETURN(
       std::vector<std::shared_ptr<const xla::PjRtLayout>> layouts,
       executable.GetParameterLayouts());
-  if (layouts.size() != num_args) {
+  if (layouts.size() != static_cast<size_t>(num_args)) {
     return absl::InternalError(
         absl::StrCat("Executable reports ", layouts.size(),
                      " parameter layouts but has ", num_args, " arguments."));
@@ -202,17 +216,27 @@ absl::Status AotStableHloRunner::PopulateAotExecutableCache(
     executable_bundle->input_offset =
         std::count_if(executable_bundle->module_kept_var_indices.begin(),
                       executable_bundle->module_kept_var_indices.end(),
-                      [num_weights](int idx) { return idx < num_weights; });
+                      [num_weights](int kept_var_index) {
+                        return kept_var_index < num_weights;
+                      });
 
     executable_bundle->io_spec.inputs.reserve(
         executable_bundle->module_kept_var_indices.size());
-    for (int idx : executable_bundle->module_kept_var_indices) {
-      executable_bundle->io_spec.inputs.push_back(spec.inputs[idx]);
+    executable_bundle->original_io_spec.inputs.reserve(
+        executable_bundle->module_kept_var_indices.size());
+    for (size_t k = 0; k < executable_bundle->module_kept_var_indices.size();
+         ++k) {
+      int kept_var_index = executable_bundle->module_kept_var_indices[k];
+      executable_bundle->io_spec.inputs.push_back(spec.inputs[kept_var_index]);
+      executable_bundle->original_io_spec.inputs.push_back(
+          spec.original_inputs[kept_var_index]);
+      if (!spec.original_inputs[kept_var_index].host_transpose.empty()) {
+        executable_bundle->host_transpose_permutations[k] =
+            spec.original_inputs[kept_var_index].host_transpose;
+      }
     }
     executable_bundle->io_spec.outputs = spec.outputs;
-    executable_bundle->original_io_spec.inputs =
-        executable_bundle->io_spec.inputs;
-    executable_bundle->original_io_spec.outputs = spec.outputs;
+    executable_bundle->original_io_spec.outputs = spec.original_outputs;
     executable_bundle->ifrt_executable = std::move(options.executables[i]);
     if (num_input_aliased_output > 0) {
       const int num_args = executable_bundle->module_kept_var_indices.size();
@@ -232,13 +256,14 @@ absl::Status AotStableHloRunner::PopulateAotExecutableCache(
     std::vector<xla::ifrt::Shape> user_input_shapes;
     // The cache key must span every user input the caller supplies at runtime,
     // including inputs DCE pruned from the module. Slice the unpruned
-    // `spec.inputs`; `io_spec.inputs` holds only kept inputs and is indexed by
-    // `input_offset`, which counts kept weights rather than all weights.
+    // `spec.original_inputs`; `io_spec.inputs` holds only kept inputs and is
+    // indexed by `input_offset`, which counts kept weights rather than all
+    // weights.
     const size_t num_user_inputs =
-        spec.inputs.size() - num_input_aliased_output;
+        spec.original_inputs.size() - num_input_aliased_output;
     user_input_shapes.reserve(num_user_inputs - num_weights);
     for (size_t j = num_weights; j < num_user_inputs; ++j) {
-      user_input_shapes.push_back(spec.inputs[j].GetIfrtShape());
+      user_input_shapes.push_back(spec.original_inputs[j].GetIfrtShape());
     }
 
     // IFRT requires an explicit device mapping when executing unbound

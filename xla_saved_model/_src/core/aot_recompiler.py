@@ -140,9 +140,15 @@ def _recompile_to_temp(
     mlir_payload = manifest_utils.extract_stablehlo_payload(
         body.stable_hlo, manifest, tmp_dir, shlo_rel_paths_to_delete
     )
+    optimized_at_export = body.HasField(
+        "optimized_input_signature"
+    ) or body.HasField("optimized_output_signature")
     artifacts = list(
         compiler_hook(
-            mlir_payload, body.module_kept_var_idx, len(fn.data_names)
+            mlir_payload,
+            body.module_kept_var_idx,
+            len(fn.data_names),
+            optimized_at_export=optimized_at_export,
         )
     )
     _update_manifest_with_compiled_artifacts(

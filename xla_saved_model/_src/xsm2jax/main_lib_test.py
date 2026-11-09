@@ -6,6 +6,7 @@ os.environ['XLA_FLAGS'] = '--xla_force_host_platform_device_count=8'
 
 import dataclasses
 from typing import Any, Sequence
+from unittest import mock
 
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -580,6 +581,113 @@ class XsmToJaxTest(parameterized.TestCase):
         TypeError, 'expects a jax.export.Exported object, got str'
     ):
       xsm_to_jax.ExportedApplyFn('not an Exported object')
+
+  def test_xsm_fn_to_apply_fn_with_tpu_io_optimizations_e2e(self):
+    def jax_model_fn(params, inputs):
+      spatial = jnp.einsum('nhwc,hwo->nhwo', inputs['img'], params.weight)
+      return {
+          'feat': spatial + params.bias,
+          'norm': jnp.sum(spatial, axis=(1, 2, 3)),
+      }
+
+    jax_params = _Params(
+        weight=(
+            jnp.arange(3 * 5 * 4, dtype=jnp.float32).reshape((3, 5, 4)) * 0.1
+        ),
+        bias=jnp.array([0.5, -1.0, 1.5, 2.0], dtype=jnp.float32),
+        name='conv_head',
+    )
+    test_inputs = {
+        'img': (
+            jnp.arange(2 * 3 * 5 * 2, dtype=jnp.float32).reshape((2, 3, 5, 2))
+            - 5.0
+        ),
+    }
+
+    xsm_shlo_fn = main_lib.convert(
+        jax.jit(jax_model_fn),
+        (
+            _get_shape_dtype_struct(jax_params),
+            _get_shape_dtype_struct(test_inputs),
+        ),
+        {},
+        platforms=[xsm.manifest_pb2.Platform.CPU],
+        model_param_names=['weight', 'bias'],
+        enable_input_r1_optimization=True,
+        enable_output_r1_optimization=True,
+        max_transpose_channels=3,
+    )
+
+    save_dir_path = self.create_tempdir().full_path
+    xsm.save(
+        {'my_opt_fn': xsm_shlo_fn},
+        save_dir_path,
+        xsm.SaveOptions(version=2),
+    )
+
+    manifest_proto = xsm.load(save_dir_path)
+    loaded_fn = manifest_proto.objects['my_opt_fn'].function
+    supp_filename = (
+        loaded_fn.body.stable_hlo_body.supplemental_info[xsm.JAX_SPECIFIC_INFO]
+        .file_system_location.string_path
+    )
+    jax_supp_proto = jax_supplemental_pb2.Function()
+    with open(os.path.join(save_dir_path, supp_filename), 'rb') as f:
+      jax_supp_proto.ParseFromString(f.read())
+
+    restored_fn = xsm_to_jax.xsm_fn_to_apply_fn(loaded_fn, jax_supp_proto)
+    actual = restored_fn(jax_params, test_inputs)
+    expected = jax_model_fn(jax_params, test_inputs)
+    np.testing.assert_allclose(actual['feat'], expected['feat'], rtol=1e-5)
+    np.testing.assert_allclose(actual['norm'], expected['norm'], rtol=1e-5)
+
+    # Logical shape validation rejects mismatched caller shapes with identical
+    # element counts (e.g. (6, 10) vs (2, 3, 5, 2)).
+    wrong_shape_inputs = {
+        'img': jnp.ones((6, 10), dtype=jnp.float32),
+    }
+    with self.assertRaisesRegex(ValueError, 'Input leaf shape mismatch'):
+      restored_fn(jax_params, wrong_shape_inputs)
+
+    # Mismatched PyTree structure raises ValueError rather than bypassing
+    # `_in_adapters`.
+    with self.assertRaisesRegex(ValueError, 'Input PyTree structure mismatch'):
+      restored_fn(
+          jax_params,
+          {'wrong_key': jnp.ones((2, 3, 5, 2), dtype=jnp.float32)},
+      )
+
+    # Host `np.ndarray` inputs are transposed and flattened on host without
+    # premature device placement prior to `Exported.call`.
+    np_params = _Params(
+        weight=np.asarray(jax_params.weight),
+        bias=np.asarray(jax_params.bias),
+        name='conv_head',
+    )
+    np_inputs = {'img': np.asarray(test_inputs['img'])}
+    with mock.patch.object(
+        jax.export.Exported,
+        'call',
+        autospec=True,
+        side_effect=jax.export.Exported.call,
+    ) as mock_call:
+      np_actual = restored_fn(np_params, np_inputs)
+    self.assertIsInstance(mock_call.call_args.args[2]['img'], np.ndarray)
+    self.assertEqual(mock_call.call_args.args[2]['img'].shape, (60,))
+    np.testing.assert_allclose(np_actual['feat'], expected['feat'], rtol=1e-5)
+    np.testing.assert_allclose(np_actual['norm'], expected['norm'], rtol=1e-5)
+
+  def test_exported_apply_fn_rejects_mismatched_adapter_lengths(self):
+    exported = jax.export.export(jax.jit(lambda p, x: x + p))(
+        jax.core.ShapedArray((2,), jnp.float32),
+        jax.core.ShapedArray((2,), jnp.float32),
+    )
+    with self.assertRaisesRegex(ValueError, '`in_adapters` has 1 entries'):
+      xsm_to_jax.ExportedApplyFn(exported, in_adapters=[((2,), None, (2,))])
+    with self.assertRaisesRegex(
+        ValueError, '`out_logical_shapes` has 2 entries'
+    ):
+      xsm_to_jax.ExportedApplyFn(exported, out_logical_shapes=[(2,), (2,)])
 
 
 if __name__ == '__main__':

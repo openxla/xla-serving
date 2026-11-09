@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Type definitions and export configuration bundles for jax2xsm."""
+
 from collections.abc import Callable, Mapping, Sequence
 import dataclasses
 from typing import Any
@@ -49,6 +51,18 @@ class ApplyFnBundle:
       signature. Only meaningful for AOT serving, so input shapes must be
       concrete: with `input_polymorphic_shapes`,
       `input_polymorphic_shape_symbol_values` is required.
+    enable_input_r1_optimization: If True, flattens eligible static rank >= 2
+      user inputs to 1-D at the StableHLO entry point and reshapes them back
+      inside the function. Enabling any export-time TPU I/O optimization makes
+      export-time optimization authoritative, so the serving runtime skips its
+      legacy `StablehloTpuOptimizer` MLIR passes for the exported function.
+    enable_output_r1_optimization: If True, flattens eligible static rank >= 2
+      outputs to 1-D before returning from the StableHLO function. Incompatible
+      with `use_input_aliasing=True` (raises `ValueError`).
+    max_transpose_channels: If > 0, transposes eligible 4-D NHWC user inputs
+      with `C <= max_transpose_channels` and `C < W` to NCHW at the StableHLO
+      entry point (recording `host_transpose = (0, 3, 1, 2)`) and transposes
+      them back to NHWC on device.
   """
 
   apply_fn: ApplyFn
@@ -59,3 +73,6 @@ class ApplyFnBundle:
   )
   jax_export_kwargs: Mapping[str, Any] = dataclasses.field(default_factory=dict)
   use_input_aliasing: bool = False
+  enable_input_r1_optimization: bool = False
+  enable_output_r1_optimization: bool = False
+  max_transpose_channels: int = 0

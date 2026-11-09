@@ -457,7 +457,7 @@ def _to_shlo_tensor_spec_and_refinement(
 def _to_flat_shlo_specs_and_refinements(
     avals: Sequence[jax.core.AbstractValue],
     shardings: Sequence[Any],
-    layouts: Sequence[jax_layout.Layout] | None = None,
+    layouts: Sequence[jax_layout.Layout | None] | None = None,
     placements: Sequence[type_pb2.Placement] | None = None,
 ) -> tuple[
     tuple[shlo_type.ShloTensorSpec, ...],
@@ -469,12 +469,18 @@ def _to_flat_shlo_specs_and_refinements(
       if placements
       else (type_pb2.PLACEMENT_UNSPECIFIED,) * len(avals)
   )
+  if layouts is None:
+    effective_layouts: Sequence[jax_layout.Layout | None] = (None,) * len(avals)
+  elif len(layouts) < len(avals):
+    effective_layouts = (*layouts, *((None,) * (len(avals) - len(layouts))))
+  else:
+    effective_layouts = layouts[: len(avals)]
   specs_and_refinements = tuple(
       map(
           _to_shlo_tensor_spec_and_refinement,
           avals,
           shardings,
-          layouts if layouts is not None else [None] * len(avals),
+          effective_layouts,
           effective_placements,
       )
   )
@@ -487,7 +493,7 @@ def _to_flat_shlo_specs_and_refinements(
 def _to_shlo_spec_tree_and_refinement_tuple(
     avals: Sequence[jax.core.AbstractValue],
     shardings: Sequence[Any],
-    layouts: Sequence[jax_layout.Layout] | None = None,
+    layouts: Sequence[jax_layout.Layout | None] | None = None,
     tree_def: jax.tree_util.PyTreeDef | None = None,
     placements: Sequence[type_pb2.Placement] | None = None,
     name_leaves: bool = False,

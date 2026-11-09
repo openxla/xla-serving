@@ -17,7 +17,7 @@
 from collections.abc import Callable, Iterator, Sequence
 import copy
 import dataclasses
-from typing import Any
+from typing import Any, Protocol
 
 from absl import logging
 import jax
@@ -34,6 +34,33 @@ optimizer_ext = None
 OptimizerType = Callable[[bytes, Sequence[int]], bytes]
 
 _SUPPORTED_PLATFORMS = frozenset({"cpu", "cuda", "tpu"})
+
+
+class OfflineCompilerHook(manifest_utils.CompilerHook, Protocol):
+  """Protocol for an offline AOT compiler callback supporting export flags."""
+
+  def __call__(
+      self,
+      mlir_module_serialized: bytes,
+      module_kept_var_idx: Sequence[int],
+      num_weights: int,
+      /,
+      *,
+      optimized_at_export: bool = False,
+  ) -> Iterator[manifest_utils.CompiledArtifact]:
+    """Compiles a serialized MLIR module into compiled artifacts.
+
+    Args:
+      mlir_module_serialized: Serialized StableHLO MLIR bytecode or text module.
+      module_kept_var_idx: Indices of kept variables/arguments in the module.
+      num_weights: Number of leading weight leaves passed to the function.
+      optimized_at_export: Whether TPU I/O shape optimizations were already
+        applied during Python export (skipping `TargetConfig.optimizer`).
+
+    Returns:
+      An iterator yielding `CompiledArtifact` objects for each target config.
+    """
+    ...
 
 
 @dataclasses.dataclass(frozen=True)
@@ -227,8 +254,20 @@ def _optimize_mlir_payload(
 
 def create_offline_compiler_hook(
     target_configs: Sequence[TargetConfig],
-) -> manifest_utils.CompilerHook:
-  """Creates a compiler hook for offline AOT compilation."""
+) -> OfflineCompilerHook:
+  """Creates a compiler hook for offline AOT compilation.
+
+  Args:
+    target_configs: Non-empty sequence of `TargetConfig` entries specifying the
+      target hardware topologies, platforms, and optional StableHLO optimizers.
+
+  Returns:
+    An `OfflineCompilerHook` callable compatible with `SaveOptions`.
+
+  Raises:
+    ValueError: If `target_configs` is empty or any config fails validation.
+    FileNotFoundError: If a specified `autotune_database_path` does not exist.
+  """
   if not target_configs:
     raise ValueError("target_configs must not be empty.")
 
@@ -239,6 +278,9 @@ def create_offline_compiler_hook(
       mlir_module_serialized: bytes,
       module_kept_var_idx: Sequence[int],
       num_weights: int,
+      /,
+      *,
+      optimized_at_export: bool = False,
   ) -> Iterator[manifest_utils.CompiledArtifact]:
     if not mlir_module_serialized:
       raise ValueError("mlir_module_serialized must not be empty.")
@@ -266,7 +308,7 @@ def create_offline_compiler_hook(
 
       # 2. MLIR Optimization Phase
       optimized_mlir = mlir_module_serialized
-      if config.optimizer is not None:
+      if config.optimizer is not None and not optimized_at_export:
         optimized_mlir = _optimize_mlir_payload(
             mlir_module_serialized,
             module_kept_var_idx,

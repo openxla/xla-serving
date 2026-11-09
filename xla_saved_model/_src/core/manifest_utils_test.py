@@ -645,7 +645,6 @@ class ManifestUtilsTest(absltest.TestCase):
             'x': shlo_type.ShloTensorSpec(
                 shape=(2, 8, 8, 3),
                 dtype=shlo_type.ShloDType.f32,
-                host_transpose=(0, 3, 1, 2),
             )
         },
         output_signature={
@@ -659,7 +658,10 @@ class ManifestUtilsTest(absltest.TestCase):
     manifest_proto = manifest_utils.build_manifest_proto(
         {'test_fn': fn}, self.create_tempdir().full_path
     )
-    body = manifest_proto.objects['test_fn'].function.body.stable_hlo_body
+    fn_proto = manifest_proto.objects['test_fn'].function
+    logical_in = type_proto_utils.from_type_proto(fn_proto.signature.input)
+    self.assertIsNone(logical_in['x'].host_transpose)
+    body = fn_proto.body.stable_hlo_body
     self.assertTrue(body.HasField('optimized_input_signature'))
     self.assertTrue(body.HasField('optimized_output_signature'))
     self.assertEqual(
@@ -670,6 +672,141 @@ class ManifestUtilsTest(absltest.TestCase):
         type_proto_utils.from_type_proto(body.optimized_output_signature),
         opt_out,
     )
+
+  def test_compiler_hook_var_keyword_wrapper_around_three_arg_hook(self):
+    fn = shlo_function.ShloFunction(
+        mlir_module_serialized=b'test_stablehlo',
+        calling_convention_version=1,
+        module_kept_var_idx=(0,),
+        lowering_platforms=('cpu',),
+        supplemental_info={},
+        physical_in_dtypes=(None,),
+        physical_out_dtypes=(None,),
+        input_signature={
+            'x': shlo_type.ShloTensorSpec(
+                shape=(2, 4), dtype=shlo_type.ShloDType.f32
+            )
+        },
+        output_signature={
+            'y': shlo_type.ShloTensorSpec(
+                shape=(2, 4), dtype=shlo_type.ShloDType.f32
+            )
+        },
+    )
+
+    fn_optimized = shlo_function.ShloFunction(
+        mlir_module_serialized=b'test_stablehlo_opt',
+        calling_convention_version=1,
+        module_kept_var_idx=(0,),
+        lowering_platforms=('cpu',),
+        supplemental_info={},
+        physical_in_dtypes=(None,),
+        physical_out_dtypes=(None,),
+        input_signature={
+            'x': shlo_type.ShloTensorSpec(
+                shape=(2, 4), dtype=shlo_type.ShloDType.f32
+            )
+        },
+        output_signature={
+            'y': shlo_type.ShloTensorSpec(
+                shape=(2, 4), dtype=shlo_type.ShloDType.f32
+            )
+        },
+        optimized_input_signature={
+            'x': shlo_type.ShloTensorSpec(
+                shape=(8,), dtype=shlo_type.ShloDType.f32
+            )
+        },
+    )
+
+    def legacy_three_arg_hook(
+        mlir_bytes: bytes,
+        kept_var_idx: Sequence[int],
+        num_weights: int,
+    ) -> list[manifest_utils.CompiledArtifact]:
+      del mlir_bytes, kept_var_idx, num_weights
+      return [
+          manifest_utils.CompiledArtifact(
+              pjrt_executable_bytes=b'exec',
+              kept_var_idx=[0],
+              target_topology_label='cpu_target',
+              executable_version=b'v1',
+          )
+      ]
+
+    def var_kwargs_wrapper(*args: Any, **kwargs: Any):
+      return legacy_three_arg_hook(*args, **kwargs)
+
+    manifest_proto = manifest_utils.build_manifest_proto(
+        {'test_fn': fn, 'test_fn_opt': fn_optimized},
+        self.create_tempdir().full_path,
+        compiler_hook=var_kwargs_wrapper,
+    )
+    self.assertLen(
+        manifest_proto.objects[
+            'test_fn'
+        ].function.body.stable_hlo_body.compiled_executables,
+        1,
+    )
+    self.assertLen(
+        manifest_proto.objects[
+            'test_fn_opt'
+        ].function.body.stable_hlo_body.compiled_executables,
+        1,
+    )
+
+  def test_compiler_hook_positional_only_optimized_at_export(self):
+    received_flags: list[bool] = []
+
+    def positional_only_hook(
+        mlir_bytes: bytes,
+        kept_var_idx: Sequence[int],
+        num_weights: int,
+        optimized_at_export: bool = False,
+        /,
+    ) -> list[manifest_utils.CompiledArtifact]:
+      del mlir_bytes, kept_var_idx, num_weights
+      received_flags.append(optimized_at_export)
+      return [
+          manifest_utils.CompiledArtifact(
+              pjrt_executable_bytes=b'exec',
+              kept_var_idx=[0],
+              target_topology_label='tpu_target',
+              executable_version=b'v1',
+          )
+      ]
+
+    fn = shlo_function.ShloFunction(
+        mlir_module_serialized=b'test_stablehlo',
+        calling_convention_version=1,
+        module_kept_var_idx=(0,),
+        lowering_platforms=('tpu',),
+        supplemental_info={},
+        physical_in_dtypes=(None,),
+        physical_out_dtypes=(None,),
+        input_signature={
+            'x': shlo_type.ShloTensorSpec(
+                shape=(2, 4), dtype=shlo_type.ShloDType.f32
+            )
+        },
+        output_signature={
+            'y': shlo_type.ShloTensorSpec(
+                shape=(2, 4), dtype=shlo_type.ShloDType.f32
+            )
+        },
+        optimized_input_signature={
+            'x': shlo_type.ShloTensorSpec(
+                shape=(8,), dtype=shlo_type.ShloDType.f32
+            )
+        },
+    )
+
+    manifest_utils.build_manifest_proto(
+        {'test_fn': fn},
+        self.create_tempdir().full_path,
+        compiler_hook=positional_only_hook,
+    )
+    self.assertEqual(received_flags, [True])
 
 
 if __name__ == '__main__':
