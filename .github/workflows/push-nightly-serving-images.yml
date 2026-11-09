@@ -132,3 +132,53 @@ jobs:
             "${TARGET}" -- \
             --repository="${REPOSITORY}" \
             "${TAG_ARGS[@]}"
+
+      - name: Prune Superseded Untagged Digests
+        if: github.event_name != 'workflow_dispatch' || inputs.variant == 'all' || inputs.variant == matrix.variant.id
+        env:
+          REPOSITORY: ${{ matrix.variant.repository }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          repo = os.environ["REPOSITORY"]
+          out = subprocess.check_output(
+              [
+                  "gcloud",
+                  "artifacts",
+                  "docker",
+                  "images",
+                  "list",
+                  repo,
+                  "--include-tags",
+                  "--format=json",
+              ],
+              text=True,
+          )
+          untagged = [
+              item["version"]
+              for item in json.loads(out)
+              if item.get("package") == repo
+              and not item.get("tags")
+              and item.get("version", "").startswith("sha256:")
+          ]
+          if not untagged:
+              print(f"No untagged digests to prune in {repo}.")
+          for digest in untagged:
+              uri = f"{repo}@{digest}"
+              print(f"Pruning untagged digest {uri}...")
+              res = subprocess.run(
+                  ["gcloud", "artifacts", "docker", "images", "delete", uri, "--quiet"],
+                  check=False,
+              )
+              if res.returncode != 0:
+                  sha_hex = digest.removeprefix("sha256:").lower()
+                  dep_tag = f"{repo}:deprecated-public-image-{sha_hex}"
+                  print(f"Delete unavailable; tagging {uri} as {dep_tag}...")
+                  subprocess.run(
+                      ["gcloud", "artifacts", "docker", "tags", "add", uri, dep_tag, "--quiet"],
+                      check=True,
+                  )
+          PY
