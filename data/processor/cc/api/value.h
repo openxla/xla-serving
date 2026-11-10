@@ -36,11 +36,10 @@ class Value;
 namespace value_internal {
 
 struct InPlaceStorageT {
-  // Many tensor implementations like tensorflow::Tensor requires multiple
-  // words, and we'd like to keep these values inplace.
-  //
-  // TODO: Consider a better size for inplace storage.
-  alignas(8) char data[56];
+  // Many tensor implementations like tensorflow::Tensor and xla_serving::HostBuffer
+  // (112 bytes) require multiple words, and we'd like to keep these values
+  // inplace without per-value heap allocations.
+  alignas(8) char data[120];
 };
 
 template <typename T>
@@ -191,7 +190,7 @@ class alignas(64) Value {
 };
 
 // We only optimize the code for 64-bit architectures for now.
-static_assert(sizeof(Value) == 64 || sizeof(void*) != 8);
+static_assert(sizeof(Value) == 128 || sizeof(void*) != 8);
 
 // -----------------------------------------------------------
 // Implementation details.

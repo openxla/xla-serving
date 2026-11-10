@@ -18,6 +18,9 @@
 
 #include "gtest/gtest.h"
 #include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
 
 namespace xla_serving {
 namespace {
@@ -46,22 +49,51 @@ TEST(ValueTest, SmallCopyable) {
   EXPECT_EQ(value_move.Get<SmallCopyable>().v, 100);
 }
 
+TEST(ValueTest, HostBufferSizedInPlace) {
+  struct HostBufferSized {
+    alignas(8) char data[112];
+  };
+  static_assert(Value::IsInPlace<HostBufferSized>());
+}
+
+TEST(ValueTest, HostBufferInPlace) {
+  static_assert(Value::IsInPlace<HostBuffer>());
+
+  HostBuffer buffer(xla::ifrt::DType(xla::ifrt::DType::kS32),
+                    xla::ifrt::Shape({2}));
+  void* const base = buffer.base();
+  Value value(std::move(buffer));
+  Value moved = std::move(value);
+  ASSERT_TRUE(moved.IsType<HostBuffer>());
+  EXPECT_EQ(moved.Get<HostBuffer>().base(), base);
+  EXPECT_EQ(moved.Get<HostBuffer>().shape(), xla::ifrt::Shape({2}));
+}
+
 TEST(ValueTest, LargeCopyable) {
   constexpr char kData[] =
       "<<This line contains 32 bytes>>\n"
       "<<This line contains 32 bytes>>\n"
       "<<This line contains 32 bytes>>\n"
+      "<<This line contains 32 bytes>>\n"
+      "<<This line contains 32 bytes>>\n"
+      "<<This line contains 32 bytes>>\n"
+      "<<This line contains 32 bytes>>\n"
       "<<This line contains 32 bytes>>";
 
-  static_assert(sizeof(kData) == 128);
+  static_assert(sizeof(kData) == 256);
 
   struct LargeCopyable {
-    char data[128] =
+    char data[256] =
+        "<<This line contains 32 bytes>>\n"
+        "<<This line contains 32 bytes>>\n"
+        "<<This line contains 32 bytes>>\n"
+        "<<This line contains 32 bytes>>\n"
         "<<This line contains 32 bytes>>\n"
         "<<This line contains 32 bytes>>\n"
         "<<This line contains 32 bytes>>\n"
         "<<This line contains 32 bytes>>";
   };
+  static_assert(!Value::IsInPlace<LargeCopyable>());
 
   Value value(LargeCopyable{});
   EXPECT_EQ(absl::string_view(value.Get<LargeCopyable>().data), kData);
@@ -106,12 +138,20 @@ TEST(ValueTest, LargeMoveOnly) {
       "<<This line contains 32 bytes>>\n"
       "<<This line contains 32 bytes>>\n"
       "<<This line contains 32 bytes>>\n"
+      "<<This line contains 32 bytes>>\n"
+      "<<This line contains 32 bytes>>\n"
+      "<<This line contains 32 bytes>>\n"
+      "<<This line contains 32 bytes>>\n"
       "<<This line contains 32 bytes>>";
 
-  static_assert(sizeof(kData) == 128);
+  static_assert(sizeof(kData) == 256);
 
   struct LargeMoveOnly {
-    char data[128] =
+    char data[256] =
+        "<<This line contains 32 bytes>>\n"
+        "<<This line contains 32 bytes>>\n"
+        "<<This line contains 32 bytes>>\n"
+        "<<This line contains 32 bytes>>\n"
         "<<This line contains 32 bytes>>\n"
         "<<This line contains 32 bytes>>\n"
         "<<This line contains 32 bytes>>\n"
@@ -123,6 +163,7 @@ TEST(ValueTest, LargeMoveOnly) {
     LargeMoveOnly(LargeMoveOnly&&) = default;
     LargeMoveOnly& operator=(LargeMoveOnly&&) = default;
   };
+  static_assert(!Value::IsInPlace<LargeMoveOnly>());
 
   Value value(LargeMoveOnly{});
   EXPECT_EQ(absl::string_view(value.Get<LargeMoveOnly>().data), kData);
