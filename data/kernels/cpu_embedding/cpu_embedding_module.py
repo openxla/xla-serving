@@ -353,9 +353,6 @@ class CpuEmbeddingModule:
 
     resolved_features = feature_names or feature_name
     resolved_outputs = output_feature_names or output_feature_name
-    resolved_shapes = (
-        output_shapes if output_shapes is not None else output_shape
-    )
     resolved_embedding_dim = (
         embedding_dim if embedding_dim is not None else resource.embedding_dim
     )
@@ -366,8 +363,6 @@ class CpuEmbeddingModule:
       raise ValueError(
           "Must provide output_feature_names or output_feature_name."
       )
-    if resolved_shapes is None:
-      raise ValueError("Must provide output_shapes or output_shape.")
 
     # Normalize features and outputs to lists of strings
     if isinstance(resolved_features, str):
@@ -381,17 +376,22 @@ class CpuEmbeddingModule:
       self._output_feature_names = list(resolved_outputs)
 
     # Normalize shapes to a 2D list of optional non-negative ints
-    if len(self._feature_names) == 1:
-      if not resolved_shapes:
-        raw_shapes: Sequence[Any] = [[]]
-      elif resolved_shapes[0] is None or isinstance(
-          resolved_shapes[0], (int, np.integer)
+    if output_shapes is not None:
+      if (
+          len(self._feature_names) == 1
+          and output_shapes
+          and (
+              output_shapes[0] is None
+              or isinstance(output_shapes[0], (int, np.integer))
+          )
       ):
-        raw_shapes = [resolved_shapes]
+        raw_shapes: Sequence[Any] = [output_shapes]
       else:
-        raw_shapes = resolved_shapes
+        raw_shapes = output_shapes
+    elif output_shape is not None:
+      raw_shapes = [output_shape]
     else:
-      raw_shapes = resolved_shapes
+      raise ValueError("Must provide output_shapes or output_shape.")
 
     replaced_shapes = (
         shape_dtype_struct._replace_deprecated_negative_one_shapes(  # pylint: disable=protected-access

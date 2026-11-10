@@ -598,6 +598,35 @@ class CpuEmbeddingModuleTest(absltest.TestCase):
     self.assertEqual(sig_single["feat1_out"].shape, (None, 2))
     self.assertEqual(sig_single["feat1_out"].dtype, np.float32)
 
+    # Single-feature output_shapes accepts both 1D and 2D, and rejects empty [].
+    for single_shapes in ([None, 2], [[None, 2]]):
+      mod_single_shapes = cpu_embedding.CpuEmbeddingModule(
+          resource,
+          feature_names=["feat1"],
+          output_feature_names=["feat1_out"],
+          output_shapes=single_shapes,
+      )
+      self.assertEqual(
+          mod_single_shapes.get_output_signature(None)["feat1_out"].shape,
+          (None, 2),
+      )
+
+    with self.assertRaisesRegex(ValueError, "Sequence length mismatch"):
+      cpu_embedding.CpuEmbeddingModule(
+          resource,
+          feature_names=["feat1"],
+          output_feature_names=["feat1_out"],
+          output_shapes=[],
+      )
+    with self.assertRaisesRegex(
+        ValueError, "Must provide output_shapes or output_shape"
+    ):
+      cpu_embedding.CpuEmbeddingModule(
+          resource,
+          feature_names=["feat1"],
+          output_feature_names=["feat1_out"],
+      )
+
     # CpuEmbeddingModule multi-feature with dynamic batch dimensions.
     mod_multi = cpu_embedding.CpuEmbeddingModule(
         resource,
