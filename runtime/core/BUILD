@@ -1114,3 +1114,67 @@ cc_test(
         "@xla//xla/tsl/platform:statusor",
     ],
 )
+
+cc_library(
+    name = "arena_h2d_transfer_executor",
+    srcs = ["arena_h2d_transfer_executor.cc"],
+    hdrs = ["arena_h2d_transfer_executor.h"],
+    visibility = ["@xla_serving//runtime:__subpackages__"],
+    deps = [
+        ":h2d_transfer_executor",
+        ":host_buffer",
+        ":sharding_utils",
+        "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/types:span",
+        "@xla//xla/pjrt:common_pjrt_client",
+        "@xla//xla/pjrt:host_memory_allocator",
+        "@xla//xla/pjrt:pjrt_compiler",
+        "@xla//xla/pjrt:raw_pjrt_client",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/python/pjrt_ifrt",
+        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:statusor",
+    ],
+)
+
+cc_library(
+    name = "arena_h2d_transfer_executor_test_lib",
+    testonly = True,
+    srcs = ["arena_h2d_transfer_executor_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    visibility = ["@xla_serving//runtime/core/google:__subpackages__"],
+    deps = [
+        ":arena_h2d_transfer_executor",
+        ":h2d_transfer_executor",
+        ":host_buffer",
+        ":host_buffer_matcher",
+        ":host_buffer_test_utils",
+        ":sharding_utils",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@googletest//:gtest_main",
+        "@xla//xla/pjrt:common_pjrt_client",
+        "@xla//xla/pjrt:pjrt_compiler",
+        "@xla//xla/pjrt:raw_pjrt_client",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/python/ifrt:mock",
+        "@xla//xla/python/ifrt:test_util",
+        "@xla//xla/python/pjrt_ifrt",
+        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:statusor",
+    ],
+    alwayslink = 1,
+)
+
+cc_test(
+    name = "arena_h2d_transfer_executor_test",
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":arena_h2d_transfer_executor_test_lib",
+        "@xla//xla/python/pjrt_ifrt:tfrt_cpu_client_test_lib",  # buildcleaner: keep
+    ],
+)
