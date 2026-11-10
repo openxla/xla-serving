@@ -1,3 +1,5 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+
 # E5 export
 
 Export `intfloat/e5-base-v2` at revision
@@ -27,8 +29,6 @@ checkout's root with Python 3.12 and Bazel available:
 python3.12 -m venv .venv-e5
 . .venv-e5/bin/activate
 python -m pip install --upgrade build
-python -m pip install 'torch==2.12.1+cpu' \
-  --index-url https://download.pytorch.org/whl/cpu
 python -m build --wheel
 python -m pip install dist/xla_saved_model-*.whl \
   -r examples/e5/requirements.txt
@@ -40,7 +40,7 @@ Use a new output directory because saving may overwrite existing files.
 
 ## Parity test
 
-Build and install [ModelRunner](../../README.md#modelrunner) from this checkout,
+Build and install [`xla_saved_model_runner`](../../docs/installation.md#python-wheels) from this checkout,
 then run:
 
 ```bash
