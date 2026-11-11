@@ -85,7 +85,9 @@ PYBIND11_MODULE(resource_manager_pybind, m) {
       .def("get_all_assets", &ResourceManager::GetAllAssets)
       .def("get_all_resources", &ResourceManager::GetAllResources)
       .def("to_proto", &ResourceManager::ToProto)
-      .def_static("from_proto", &ResourceManager::FromProto)
+      .def_static("from_proto",
+                  py::overload_cast<const ResourceManagerProto&>(
+                      &ResourceManager::FromProto))
       .def_static("create", &ResourceManager::Create);
 }
 

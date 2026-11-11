@@ -14,6 +14,7 @@
 
 #include "data/processor/cc/core/composite_processor.h"  // from @xla_serving
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -21,6 +22,7 @@
 #include <vector>
 
 #include "absl/base/nullability.h"  // from @abseil-cpp
+#include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_macros.h"
@@ -345,12 +347,17 @@ absl::StatusOr<ExecutionGraph> DeserializeV1(
 absl::StatusOr<CompositeProcessor> CompositeProcessor::FromProto(
     const CompositeProcessorConfig& config,
     std::unique_ptr<GraphExecutor> executor) {
-  ResourceManagerProto rm_proto;
-  for (const auto& r : config.resources()) {
-    *rm_proto.add_resources() = r;
+  if (config.has_num_inputs() && config.num_inputs() < 0) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("CompositeProcessorConfig.num_inputs must be "
+                     "non-negative, got ",
+                     config.num_inputs()));
   }
-  ASSIGN_OR_RETURN(auto resource_manager,
-                   xla_serving::data::ResourceManager::FromProto(rm_proto));
+
+  ASSIGN_OR_RETURN(
+      std::unique_ptr<xla_serving::data::ResourceManager> resource_manager,
+      xla_serving::data::ResourceManager::FromProto(
+          absl::MakeSpan(config.resources().data(), config.resources_size())));
   for (const auto& resource : resource_manager->GetAllResources()) {
     RETURN_IF_ERROR(resource->Load());
   }
@@ -362,12 +369,6 @@ absl::StatusOr<CompositeProcessor> CompositeProcessor::FromProto(
                        : DeserializeV1(config, *resource_manager));
 
   if (config.has_num_inputs()) {
-    if (config.num_inputs() < 0) {
-      return absl::InvalidArgumentError(
-          absl::StrCat("CompositeProcessorConfig.num_inputs must be "
-                       "non-negative, got ",
-                       config.num_inputs()));
-    }
     graph.SetNumInputs(config.num_inputs());
   }
 

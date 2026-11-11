@@ -914,6 +914,11 @@ TEST(CompositeProcessorTest, FromProtoWithNegativeNumInputsFails) {
           input_edges { type: GRAPH_INPUT source_index: 0 }
         }
         output_edges { type: NODE_OUTPUT source_index: 0 port_index: 0 }
+        resources {
+          id: 99
+          name: "should_not_be_created"
+          class_name: "UnregisteredResourceClass"
+        }
         num_inputs: -1
       )pb",
       &config));
@@ -921,6 +926,28 @@ TEST(CompositeProcessorTest, FromProtoWithNegativeNumInputsFails) {
   EXPECT_THAT(CompositeProcessor::FromProto(config),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("num_inputs must be non-negative, got -1")));
+}
+
+TEST(CompositeProcessorTest, FromProtoPreservesInlineResourceAssetContent) {
+  CompositeProcessorConfig config;
+  EXPECT_TRUE(TextFormat::ParseFromString(
+      R"pb(
+        resources {
+          id: 1
+          name: "dummy_resource"
+          class_name: "DummyResource"
+          assets { name: "inline_asset" content: "inline_asset_bytes" }
+        }
+      )pb",
+      &config));
+
+  ASSERT_OK_AND_ASSIGN(CompositeProcessor processor,
+                       CompositeProcessor::FromProto(config));
+  ASSERT_OK_AND_ASSIGN(std::shared_ptr<xla_serving::data::Resource> resource,
+                       processor.resource_manager().GetResource(1));
+  ASSERT_EQ(resource->assets().size(), 1);
+  EXPECT_EQ(resource->assets()[0].name, "inline_asset");
+  EXPECT_EQ(resource->assets()[0].content, "inline_asset_bytes");
 }
 
 class CustomCountingGraphExecutor : public GraphExecutor {

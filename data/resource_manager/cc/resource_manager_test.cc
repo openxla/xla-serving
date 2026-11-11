@@ -25,6 +25,7 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_matchers.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "data/resource_manager/cc/asset.h"  // from @xla_serving
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
 #include "data/resource_manager/proto/resource_manager.pb.h"  // from @xla_serving
@@ -276,6 +277,42 @@ TEST(ResourceManagerTest, FromProtoFailsIfPathHasTraversal) {
       )pb",
       &proto));
   EXPECT_THAT(ResourceManager::FromProto(proto),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(ResourceManagerTest, FromProtoSpanLoadsResourcesAndRejectsInvalidInputs) {
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<ResourceManager> empty_manager,
+      ResourceManager::FromProto(absl::Span<const ResourceProto* const>{}));
+  EXPECT_TRUE(empty_manager->GetAllResources().empty());
+
+  ResourceProto r1;
+  r1.set_id(1);
+  r1.set_name("resource_1");
+  r1.set_class_name("FakeResource");
+  AssetProto* asset = r1.add_assets();
+  asset->set_name("inline_asset");
+  asset->set_content("inline_payload");
+
+  std::vector<const ResourceProto*> resource_ptrs = {&r1};
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<ResourceManager> manager,
+      ResourceManager::FromProto(
+          absl::Span<const ResourceProto* const>(resource_ptrs)));
+  ASSERT_OK_AND_ASSIGN(std::shared_ptr<Resource> resource,
+                       manager->GetResource(1));
+  ASSERT_EQ(resource->assets().size(), 1);
+  EXPECT_EQ(resource->assets()[0].name, "inline_asset");
+  EXPECT_EQ(resource->assets()[0].content, "inline_payload");
+
+  std::vector<const ResourceProto*> duplicate_ptrs = {&r1, &r1};
+  EXPECT_THAT(ResourceManager::FromProto(
+                  absl::Span<const ResourceProto* const>(duplicate_ptrs)),
+              StatusIs(absl::StatusCode::kAlreadyExists));
+
+  std::vector<const ResourceProto*> null_ptrs = {nullptr};
+  EXPECT_THAT(ResourceManager::FromProto(
+                  absl::Span<const ResourceProto* const>(null_ptrs)),
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 

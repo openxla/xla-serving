@@ -26,6 +26,7 @@
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "data/resource_manager/cc/asset.h"  // from @xla_serving
 #include "data/resource_manager/cc/resource.h"  // from @xla_serving
 #include "data/resource_manager/cc/resource_internal.h"  // from @xla_serving
@@ -125,10 +126,20 @@ std::vector<std::shared_ptr<Resource>> ResourceManager::GetAllResources()
 
 absl::StatusOr<std::unique_ptr<ResourceManager>> ResourceManager::FromProto(
     const ResourceManagerProto& proto) {
+  return FromProto(
+      absl::MakeSpan(proto.resources().data(), proto.resources_size()));
+}
+
+absl::StatusOr<std::unique_ptr<ResourceManager>> ResourceManager::FromProto(
+    absl::Span<const ResourceProto* const> resources) {
   auto manager = std::make_unique<ResourceManager>();
   internal::ResourceFactory& resource_factory =
       internal::ResourceFactory::GetInstance();
-  for (const auto& resource_proto : proto.resources()) {
+  for (const ResourceProto* resource_proto_ptr : resources) {
+    if (resource_proto_ptr == nullptr) {
+      return absl::InvalidArgumentError("ResourceProto cannot be nullptr.");
+    }
+    const ResourceProto& resource_proto = *resource_proto_ptr;
     std::vector<Asset> assets;
     assets.reserve(resource_proto.assets_size());
     for (const auto& asset_proto : resource_proto.assets()) {
