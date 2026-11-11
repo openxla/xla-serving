@@ -366,7 +366,9 @@ absl::Status BatchResourceBase::RegisterInput(
       const Value& value = inputs_for_batch[i];
       if (!value.IsType<HostBuffer>()) continue;
       const HostBuffer& host_buffer = value.Get<HostBuffer>();
-      if (host_buffer.shape().dims().empty()) continue;
+      if (!host_buffer.has_data() || host_buffer.shape().dims().empty()) {
+        continue;
+      }
 
       if (batch_size == -1) {
         if (classification.type == kRaggedRowSplits) {
@@ -387,6 +389,11 @@ absl::Status BatchResourceBase::RegisterInput(
           "inputs_for_batch is not a HostBuffer.");
     }
     const HostBuffer& host_buffer = value.Get<HostBuffer>();
+    if (!host_buffer.has_data()) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Batching input buffer at index ", i,
+                       " is uninitialized."));
+    }
     if (host_buffer.shape().dims().empty()) {
       return absl::InvalidArgumentError(
           absl::StrCat("Batching input buffers must have at least one "
@@ -603,14 +610,40 @@ BatchResourceBase::GetBatcherQueueOptions(
   return batcher_queue_options;
 }
 
-/*static*/ absl::Status BatchResourceBase::ValidateBatch(const BatchT& batch) {
-  for (int task_idx = 0; task_idx < batch.num_tasks(); ++task_idx) {
-    const BatchResourceBase::BatchTask& task = batch.task(task_idx);
-
-    if (task.inputs.size() != batch.task(0).inputs.size()) {
+/*static*/ absl::Status BatchResourceBase::ValidateBatch(
+    const BatchT& batch,
+    absl::Span<const std::unique_ptr<BatchTask>> unbatched_tasks) {
+  if (batch.empty()) {
+    return absl::OkStatus();
+  }
+  const BatchTask& ref_task = batch.task(0);
+  auto validate_task = [&](const BatchTask& task) -> absl::Status {
+    if (task.inputs.size() != ref_task.inputs.size()) {
       return absl::InvalidArgumentError(
           "Batching inputs must have equal number of edges");
     }
+    for (size_t i = 0; i < task.inputs.size(); ++i) {
+      if (!task.inputs[i].has_data()) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("Batching input ", i, " is uninitialized"));
+      }
+      if (task.inputs[i].dtype() != ref_task.inputs[i].dtype()) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Batching input ", i, " dtype mismatch across tasks: ",
+            ref_task.inputs[i].dtype(), " vs ", task.inputs[i].dtype()));
+      }
+    }
+    return absl::OkStatus();
+  };
+
+  for (int task_idx = 0; task_idx < batch.num_tasks(); ++task_idx) {
+    TF_RETURN_IF_ERROR(validate_task(batch.task(task_idx)));
+  }
+  for (const std::unique_ptr<BatchTask>& task : unbatched_tasks) {
+    if (task == nullptr) {
+      return absl::InvalidArgumentError("Unbatched task is null");
+    }
+    TF_RETURN_IF_ERROR(validate_task(*task));
   }
 
   return absl::OkStatus();
@@ -971,7 +1004,7 @@ void BatchResourceBase::ProcessFuncBatch(
 
   absl::Cleanup finally = ([&cleanup_fn, &status] { cleanup_fn(status); });
 
-  status = ValidateBatch(*batch);
+  status = ValidateBatch(*batch, unbatched_tasks);
   if (!status.ok()) {
     return;
   }

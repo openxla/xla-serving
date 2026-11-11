@@ -26,6 +26,7 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/allocator.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "runtime/core/host_buffer_type_utils.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
@@ -40,13 +41,24 @@ absl::StatusOr<HostBuffer> ConcatRowSplitsTyped(
     return absl::InvalidArgumentError("empty splits");
   }
 
+  const xla::ifrt::DType expected_dtype(NativeAsDTypeKind<T>::value);
   int64_t total_elements = 0;
   // Concat the row splits of the tasks into a single row splits, adding the
   // cumulative offset of each task to the next task.
   // For example, if the unbatched tasks have row splits [0, 2, 3] and [0, 3]
   // the offset of the first task is 3 and the offset of the second task is 6.
   // then the output splits will be [0, 2, 3, 3(0 + 3), 6(3 + 3)].
-  for (const auto& splits : unbatched_tasks_row_splits) {
+  for (size_t i = 0; i < unbatched_tasks_row_splits.size(); ++i) {
+    const HostBuffer& splits = unbatched_tasks_row_splits[i];
+    if (!splits.has_data()) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Row splits buffer at index ", i, " is uninitialized"));
+    }
+    if (splits.dtype() != expected_dtype) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Dtypes of all row splits buffers must match expected dtype ",
+          expected_dtype, ": dtype[", i, "] = ", splits.dtype()));
+    }
     if (splits.shape().dims().size() != 1) {
       return absl::InvalidArgumentError("splits buffer is not 1D");
     }
@@ -101,6 +113,10 @@ absl::StatusOr<HostBuffer> ConcatRowSplits(
     Allocator* allocator) {
   if (unbatched_tasks_row_splits.empty()) {
     return absl::InvalidArgumentError("empty splits passed to ConcatRowSplits");
+  }
+  if (!unbatched_tasks_row_splits[0].has_data()) {
+    return absl::InvalidArgumentError(
+        "Row splits buffer at index 0 is uninitialized");
   }
 
   xla::ifrt::DType dtype = unbatched_tasks_row_splits[0].dtype();

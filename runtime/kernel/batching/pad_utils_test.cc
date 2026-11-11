@@ -284,5 +284,18 @@ TEST(PadUtilsTest, MissingByteStridesError) {
                          "S32[1,2]")));
 }
 
+TEST(PadUtilsTest, UninitializedInputError) {
+  Allocator* allocator = DefaultAllocator::GetInstance();
+  HostBuffer valid_task =
+      AsHostBuffer<int32_t>({1, 2, 3}, xla::ifrt::Shape({1, 3}), allocator);
+
+  EXPECT_THAT(PadToCommonNonBatchDims({HostBuffer(), valid_task}, allocator),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("is uninitialized")));
+  EXPECT_THAT(PadToCommonNonBatchDims({valid_task, HostBuffer()}, allocator),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("is uninitialized")));
+}
+
 }  // namespace
 }  // namespace xla_serving
