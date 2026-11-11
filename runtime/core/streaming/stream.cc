@@ -14,6 +14,7 @@
 
 #include "runtime/core/streaming/stream.h"  // from @xla_serving
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <functional>
@@ -72,15 +73,21 @@ constexpr absl::string_view kControllerAddressAttr = "controller_address";
 constexpr absl::string_view kCallbackIdAttr = "callback_id";
 constexpr absl::string_view kOutputNamesAttr = "output_names";
 
-// Slices a set of combined (batched) buffers into individual responses grouped
-// by request ID.
+struct UserArgInfo {
+  ffi::AnyBuffer buffer;
+  xla::ifrt::DType dtype;
+};
+
+// Slices a set of combined (batched) FFI buffers into individual responses
+// grouped by request ID, allocating and copying only active (non-padding)
+// request slices.
 //
 // Assumes that elements belonging to the same request ID are contiguous in the
 // batch.
 //
 // Arguments:
 //   step_ids: A span of request/step IDs for each element in the batch.
-//   combined_buffers: The batched input buffers that need to be disassembled.
+//   user_args: The validated batched input FFI buffers and their IFRT dtypes.
 //
 // Returns:
 //   A vector of pairs, where each pair contains:
@@ -88,32 +95,48 @@ constexpr absl::string_view kOutputNamesAttr = "output_names";
 //     - A vector of sliced HostBuffers corresponding to that request.
 absl::StatusOr<std::vector<std::pair<int64_t, std::vector<xla_serving::HostBuffer>>>>
 SliceBuffersByRequestId(absl::Span<const int32_t> step_ids,
-                        absl::Span<const xla_serving::HostBuffer> combined_buffers) {
+                        absl::Span<const UserArgInfo> user_args) {
   std::vector<std::pair<int64_t, std::vector<xla_serving::HostBuffer>>> responses;
 
   int64_t batch_size = step_ids.size();
   int64_t start_idx = 0;
   while (start_idx < batch_size) {
     int64_t current_request_id = step_ids[start_idx];
-    // TODO: Make kInvalidStepId a global constant so that we can
-    // reuse the same constant at step ID creation and batching padding.
-    if (current_request_id == kInvalidStepId) {
-      break;
-    }
-
     // Find the end of the contiguous block of identical request IDs.
     int64_t end_idx = start_idx + 1;
     while (end_idx < batch_size && step_ids[end_idx] == current_request_id) {
       end_idx++;
     }
 
-    // Slice all combined buffers for the current request's range.
+    // TODO: Make kInvalidStepId a global constant so that we can
+    // reuse the same constant at step ID creation and batching padding.
+    if (current_request_id == kInvalidStepId) {
+      start_idx = end_idx;
+      continue;
+    }
+
+    // Allocate and copy only the current request's range [start_idx, end_idx).
     std::vector<xla_serving::HostBuffer> sliced_user_buffers;
-    sliced_user_buffers.reserve(combined_buffers.size());
-    for (const xla_serving::HostBuffer& combined_buffer : combined_buffers) {
-      TF_ASSIGN_OR_RETURN(
-          xla_serving::HostBuffer sliced_buffer,
-          combined_buffer.SliceAlongFirstDimension(start_idx, end_idx));
+    sliced_user_buffers.reserve(user_args.size());
+    for (const UserArgInfo& user_arg : user_args) {
+      const absl::Span<const int64_t> full_dims = user_arg.buffer.dimensions();
+      llvm::SmallVector<int64_t, 6> slice_dims(full_dims.begin(),
+                                               full_dims.end());
+      slice_dims[0] = end_idx - start_idx;
+      TF_ASSIGN_OR_RETURN(xla_serving::HostBuffer sliced_buffer,
+                          xla_serving::HostBuffer::Create(
+                              user_arg.dtype, xla::ifrt::Shape(slice_dims)));
+      const size_t row_bytes =
+          static_cast<size_t>(sliced_buffer.byte_strides()->at(0));
+      const size_t slice_bytes =
+          static_cast<size_t>(sliced_buffer.total_storage_bytes());
+      if (slice_bytes > 0) {
+        const size_t byte_offset = static_cast<size_t>(start_idx) * row_bytes;
+        std::memcpy(sliced_buffer.base(),
+                    static_cast<const char*>(user_arg.buffer.untyped_data()) +
+                        byte_offset,
+                    slice_bytes);
+      }
       sliced_user_buffers.push_back(std::move(sliced_buffer));
     }
 
@@ -181,8 +204,7 @@ absl::Status StreamCallbackRegistry::CallbackState::Invoke(
     tsl::thread::ThreadPoolInterface* thread_pool, StreamedResult result) {
   absl::MutexLock lock(mu_);
   if (closed_) {
-    return absl::InternalError(
-        "Failed to invoke the callback that is closed.");
+    return absl::InternalError("Failed to invoke the callback that is closed.");
   }
 
   pending_results_.push(std::move(result));
@@ -194,9 +216,7 @@ absl::Status StreamCallbackRegistry::CallbackState::Invoke(
 
   is_processing_ = true;
 
-  thread_pool->Schedule([this]() {
-    ProcessQueue();
-  });
+  thread_pool->Schedule([this]() { ProcessQueue(); });
 
   return absl::OkStatus();
 }
@@ -413,30 +433,9 @@ absl::Status Stream(xla::RunId run_id, ffi::Dictionary attrs,
         "with the PropagateStreamingStepId pass."));
   }
   size_t num_user_args = args.size() - 1;
+  names.pop_back();
 
-  std::vector<xla_serving::HostBuffer> host_buffers;
-  host_buffers.reserve(num_user_args);
-  for (size_t i = 0; i < num_user_args; ++i) {
-    auto arg = args.get<ffi::AnyBuffer>(i);
-    if (!arg.ok()) return arg.status();
-
-    auto buffer = std::make_shared<std::vector<char>>(arg->size_bytes());
-    std::memcpy(buffer->data(), arg->untyped_data(), arg->size_bytes());
-
-    std::vector<int64_t> dims(arg->dimensions().begin(),
-                              arg->dimensions().end());
-    xla::ifrt::Shape shape(dims);
-    TF_ASSIGN_OR_RETURN(xla::ifrt::DType dtype,
-                        xla::ifrt::ToDType(arg->element_type()));
-
-    xla_serving::HostBuffer host_buffer(buffer->data(), dtype, shape, buffer);
-    host_buffers.push_back(std::move(host_buffer));
-  }
-
-  std::vector<std::string> user_names(names.begin(),
-                                      names.begin() + num_user_args);
-
-  auto step_id_arg = args.get<ffi::AnyBuffer>(args.size() - 1);
+  auto step_id_arg = args.get<ffi::AnyBuffer>(num_user_args);
   if (!step_id_arg.ok()) return step_id_arg.status();
 
   if (step_id_arg->element_type() != xla::PrimitiveType::S32) {
@@ -444,37 +443,96 @@ absl::Status Stream(xla::RunId run_id, ffi::Dictionary attrs,
         absl::StrFormat("Expected step ID argument to be S32, but got %d",
                         static_cast<int>(step_id_arg->element_type())));
   }
-
-  using ResponseType =
-      std::vector<std::pair<int64_t, std::vector<xla_serving::HostBuffer>>>;
-
-  if (step_id_arg->dimensions().empty()) {
-    // Unbatched single-request inference: step_id is a rank-0 scalar tensor.
-    int32_t step_id =
-        *reinterpret_cast<const int32_t*>(step_id_arg->untyped_data());
-    ResponseType responses;
-    responses.push_back({step_id, std::move(host_buffers)});
-    return state->stream->InvokeStreamCallback(cb_id, user_names, responses);
-  }
-
-  if (step_id_arg->dimensions().size() != 1) {
+  if (step_id_arg->dimensions().size() > 1) {
     return absl::InternalError(absl::StrFormat(
         "Expected step ID argument to be a 0D or 1D tensor, but got rank %d",
         step_id_arg->dimensions().size()));
   }
 
-  int64_t batch_size = step_id_arg->dimensions()[0];
-  const int32_t* step_id_data =
-      reinterpret_cast<const int32_t*>(step_id_arg->untyped_data());
+  const bool is_batched = !step_id_arg->dimensions().empty();
+  const int64_t batch_size = is_batched ? step_id_arg->dimensions()[0] : 1;
+  if (batch_size < 0) {
+    return absl::InvalidArgumentError(absl::StrFormat(
+        "Invalid negative batch size in step ID argument: %d", batch_size));
+  }
+
+  llvm::SmallVector<UserArgInfo, 4> user_args;
+  user_args.reserve(num_user_args);
+  for (size_t i = 0; i < num_user_args; ++i) {
+    auto arg = args.get<ffi::AnyBuffer>(i);
+    if (!arg.ok()) return arg.status();
+
+    TF_ASSIGN_OR_RETURN(xla::ifrt::DType dtype,
+                        xla::ifrt::ToDType(arg->element_type()));
+    if (dtype.kind() == xla::ifrt::DType::Kind::kInvalid ||
+        dtype.kind() == xla::ifrt::DType::Kind::kToken ||
+        dtype.kind() == xla::ifrt::DType::Kind::kOpaque) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Unsupported HostBuffer dtype: ", dtype));
+    }
+    for (int64_t dim : arg->dimensions()) {
+      if (dim < 0) {
+        return absl::InvalidArgumentError(
+            absl::StrFormat("Invalid negative dimension in shape: %d", dim));
+      }
+    }
+    if (is_batched) {
+      if (arg->dimensions().empty()) {
+        return absl::InvalidArgumentError(
+            "Host buffer must have at least one dimension for slicing.");
+      }
+      if (arg->dimensions()[0] != batch_size) {
+        return absl::InvalidArgumentError(absl::StrFormat(
+            "Expected user argument %d batch dimension %d to match step ID "
+            "batch size %d",
+            i, arg->dimensions()[0], batch_size));
+      }
+    }
+    user_args.push_back({*arg, dtype});
+  }
 
   using ResponseType =
       std::vector<std::pair<int64_t, std::vector<xla_serving::HostBuffer>>>;
+
+  if (!is_batched) {
+    // Unbatched single-request inference: step_id is a rank-0 scalar tensor.
+    int32_t step_id =
+        *reinterpret_cast<const int32_t*>(step_id_arg->untyped_data());
+    if (step_id == kInvalidStepId) {
+      return absl::OkStatus();
+    }
+    std::vector<xla_serving::HostBuffer> host_buffers;
+    host_buffers.reserve(num_user_args);
+    for (const UserArgInfo& user_arg : user_args) {
+      TF_ASSIGN_OR_RETURN(
+          xla_serving::HostBuffer host_buffer,
+          xla_serving::HostBuffer::Create(
+              user_arg.dtype, xla::ifrt::Shape(user_arg.buffer.dimensions())));
+      const size_t size_bytes =
+          static_cast<size_t>(host_buffer.total_storage_bytes());
+      if (size_bytes > 0) {
+        std::memcpy(host_buffer.base(), user_arg.buffer.untyped_data(),
+                    size_bytes);
+      }
+      host_buffers.push_back(std::move(host_buffer));
+    }
+    ResponseType responses;
+    responses.push_back({step_id, std::move(host_buffers)});
+    return state->stream->InvokeStreamCallback(cb_id, names, responses);
+  }
+
+  const int32_t* step_id_data =
+      reinterpret_cast<const int32_t*>(step_id_arg->untyped_data());
+
   TF_ASSIGN_OR_RETURN(
       ResponseType responses,
       SliceBuffersByRequestId(absl::MakeConstSpan(step_id_data, batch_size),
-                              host_buffers));
+                              user_args));
+  if (responses.empty()) {
+    return absl::OkStatus();
+  }
 
-  return state->stream->InvokeStreamCallback(cb_id, user_names, responses);
+  return state->stream->InvokeStreamCallback(cb_id, names, responses);
 }
 
 XLA_FFI_DEFINE_HANDLER(kStream, Stream,
