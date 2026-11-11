@@ -204,10 +204,14 @@ class JaxProcessor:
     else:
       model_param_names = None
 
+    # The original specs are passed through (rather than only their
+    # `jax.ShapeDtypeStruct` form, which `convert_apply_fn_bundle_to_shlo`
+    # derives itself) so that annotations such as
+    # `ShloTensorSpec.upper_bound_dims` reach the exported function.
     shlo_functions = jax2xsm.convert_apply_fn_bundle_to_shlo(
         apply_fn_bundle=self.apply_fn_bundle,
         params=self.params,
-        input_signature=jax2xsm.utils.to_jax_spec(input_signature),
+        input_signature=input_signature,
         model_param_names=model_param_names,
         jax_mesh=self.jax_mesh,
         weights_name=self.weights_name or None,

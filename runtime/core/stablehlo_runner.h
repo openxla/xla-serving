@@ -75,6 +75,7 @@ class StableHloRunner : public StableHloRunnerBase {
   // beginning of the argument list.
   StableHloRunner(
       absl_nonnull std::unique_ptr<LoadedStableHlo> loaded_stablehlo,
+      std::vector<std::optional<xla::ifrt::Shape>> user_input_static_shapes,
       std::optional<xla::CompileOptionsProto> compile_options,
       absl_nonnull std::shared_ptr<xla::ifrt::Client> client,
       IfrtLoadedVariableRegistry* absl_nonnull ifrt_loaded_variable_registry,

@@ -69,9 +69,24 @@ struct ModelIoMetadata {
   int64_t num_user_inputs = 0;
   int64_t num_outputs = 0;
   bool has_streaming = false;
+  // One entry per user input. Set for inputs whose manifest signature marks
+  // the leading dimension as an upper bound (`ArgSpec::
+  // leading_dim_is_upper_bound`): the executable is compiled for this shape
+  // and `StableHloRunnerBase::Execute()` binds `HostBuffer`s passed for the
+  // input to it (dynamic DMA). Empty means no input is bound.
+  std::vector<std::optional<xla::ifrt::Shape>> user_input_static_shapes;
 
   static absl::StatusOr<ModelIoMetadata> CreateFromStableHlo(
       const StableHlo& stablehlo, int num_weights);
+
+  // Derives `user_input_static_shapes` from the user inputs of `stablehlo`'s
+  // specs (the inputs after the first `num_weights`): user input `i` gets the
+  // shape of `inputs[num_weights + i]` if that spec's leading dimension is an
+  // upper bound. The shape must then be concrete and identical across all
+  // specs (shape buckets). Returns an empty vector if no input is bound.
+  static absl::StatusOr<std::vector<std::optional<xla::ifrt::Shape>>>
+  GetUserInputStaticShapes(const StableHlo& stablehlo, int num_weights,
+                           int num_user_inputs);
 };
 
 struct StableHloRunnerOptions {
@@ -162,6 +177,26 @@ class StableHloRunnerBase {
     // `output_arrays` if it has one, and is allocated by the runner
     // otherwise. Either way, that memory is released after the copy.
     std::vector<std::optional<HostBuffer>> output_host_buffers;
+
+    // Static shapes for dynamic DMA. Either empty, or one entry per user
+    // input in input order, where `std::nullopt` leaves that input alone.
+    //
+    // A set entry binds the input to that static shape for this call: the
+    // executable compiled for the static shape is used, the device buffer is
+    // allocated for the static shape, and only the elements of the (smaller)
+    // host buffer are transferred as a dimension-0 prefix of it. Device
+    // elements beyond the host buffer are left uninitialized, so the model
+    // must not depend on them. The host buffer must have the same rank as the
+    // static shape, may only be smaller along dimension 0, and must be equal
+    // on every other dimension; binding a buffer to its own shape is allowed
+    // and transfers it as usual.
+    //
+    // Requires an `H2DTransferExecutor` to be configured and a single-device
+    // sharding for the input; `HostBuffer` inputs only (a `DeviceBuffer` input
+    // already has its device shape). An entry may also be set for an input
+    // whose model signature binds it (`DimensionSize.is_upper_bound`), in
+    // which case the two shapes must agree.
+    std::vector<std::optional<xla::ifrt::Shape>> input_static_shapes;
   };
 
   // Executes the computation.
@@ -319,10 +354,14 @@ class StableHloRunnerBase {
     // - `inputs` are the inputs from the user excluding weights.
     // - `executable_bundle` is the executable bundle for this execution.
     // - `input_offset` is the offset of the inputs in the StableHloIOSpec.
+    // - `static_shapes` is either empty or one entry per input; see
+    //   `ExecuteOptions::input_static_shapes`.
     absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ConvertInput(
         absl::Span<const HostBuffer> inputs,
         const CachedExecutableBundle& executable_bundle,
-        absl::Span<const int> stablehlo_indices) const;
+        absl::Span<const int> stablehlo_indices,
+        absl::Span<const std::optional<xla::ifrt::Shape>> static_shapes = {})
+        const;
 
     // Converts the outputs from `xla::ifrt::Array` to `xla_serving::Value` according
     // to `placements`. `output_host_buffers` is either empty or one entry per
@@ -343,11 +382,13 @@ class StableHloRunnerBase {
     // references without heap allocation, returning an O(1) pointer subspan
     // when possible.
     absl::StatusOr<absl::Span<const xla::ifrt::ShardingRef>>
-    ValidateAndResolveShardings(absl::Span<const HostBuffer> inputs,
-                                const CachedExecutableBundle& executable_bundle,
-                                absl::Span<const int> stablehlo_indices,
-                                absl::InlinedVector<xla::ifrt::ShardingRef, 16>&
-                                    mixed_shardings_storage) const;
+    ValidateAndResolveShardings(
+        absl::Span<const HostBuffer> inputs,
+        const CachedExecutableBundle& executable_bundle,
+        absl::Span<const int> stablehlo_indices,
+        absl::Span<const std::optional<xla::ifrt::Shape>> static_shapes,
+        absl::InlinedVector<xla::ifrt::ShardingRef, 16>&
+            mixed_shardings_storage) const;
 
     // Performs standard host-to-device transfers for inputs using the default
     // IFRT MakeArrayFromHostBuffer path.

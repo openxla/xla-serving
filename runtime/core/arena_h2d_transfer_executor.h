@@ -16,6 +16,7 @@
 #define XLA_SERVING_RUNTIME_CORE_ARENA_H2D_TRANSFER_EXECUTOR_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "absl/base/nullability.h"  // from @abseil-cpp
@@ -26,6 +27,7 @@
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
@@ -45,9 +47,13 @@ class ArenaH2DTransferExecutor : public H2DTransferExecutor {
 
   ~ArenaH2DTransferExecutor() override = default;
 
+  // Inputs bound to a static shape (`static_shapes`) are not supported yet
+  // and are rejected with `kUnimplemented`.
   absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ExecuteTransfer(
       absl::Span<const HostBuffer> inputs,
-      absl::Span<const xla::ifrt::ShardingRef> input_shardings) const override;
+      absl::Span<const xla::ifrt::ShardingRef> input_shardings,
+      absl::Span<const std::optional<xla::ifrt::Shape>> static_shapes)
+      const override;
 
  private:
   ArenaH2DTransferExecutor(
