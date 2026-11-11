@@ -33,6 +33,10 @@ cc_library(
     name = "composite_processor_function_handler",
     srcs = ["composite_processor_function_handler.cc"],
     hdrs = ["composite_processor_function_handler.h"],
+    visibility = [
+        ":composite_processor_function_internal_users",
+        "@xla_serving//:__subpackages__",
+    ],
     deps = [
         ":composite_processor_op",
         "@abseil-cpp//absl/log",
