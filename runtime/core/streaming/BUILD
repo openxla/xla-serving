@@ -48,6 +48,38 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "stream_test",
+    srcs = ["stream_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":streaming",
+        ":utils",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/types:span",
+        "@eigen_archive//:eigen3",
+        "@googletest//:gtest_main",
+        "@xla//xla:executable_run_options",
+        "@xla//xla:xla_data_proto_cc",
+        "@xla//xla/ffi",
+        "@xla//xla/ffi:call_frame",
+        "@xla//xla/ffi:execution_state",
+        "@xla//xla/ffi:ffi_registry",
+        "@xla//xla/ffi:invoke",
+        "@xla//xla/ffi/api:c_api",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/stream_executor:device_address",
+        "@xla//xla/tsl/lib/core:status_test_util",
+        "@xla//xla/tsl/platform:statusor",
+        "@xla//xla/tsl/platform:test_benchmark",  # buildcleaner: keep
+        "@xla_serving//runtime/core:host_buffer",
+    ],
+)
+
 cc_library(
     name = "utils",
     srcs = ["utils.cc"],
