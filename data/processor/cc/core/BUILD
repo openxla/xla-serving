@@ -12,6 +12,7 @@ cc_library(
     deps = [
         ":transform",
         "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/container:inlined_vector",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:status_macros",

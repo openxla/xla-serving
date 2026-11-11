@@ -65,6 +65,12 @@ class ResourceManager {
 
   static absl::StatusOr<std::unique_ptr<ResourceManager>> FromProto(
       const ResourceManagerProto& proto);
+  // Creates a new ResourceManager from a non-owning span of ResourceProto
+  // pointers without copying the enclosing container. Returns an error if any
+  // pointer is nullptr, if a resource ID is missing or duplicated, or if any
+  // asset path is invalid.
+  static absl::StatusOr<std::unique_ptr<ResourceManager>> FromProto(
+      absl::Span<const ResourceProto* const> resources);
 
   ResourceManagerProto ToProto() const;
 
