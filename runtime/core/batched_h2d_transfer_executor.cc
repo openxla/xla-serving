@@ -448,9 +448,25 @@ BatchedH2DTransferExecutor::BatchedH2DTransferExecutor(
 absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
 BatchedH2DTransferExecutor::ExecuteTransfer(
     absl::Span<const HostBuffer> inputs,
-    absl::Span<const xla::ifrt::ShardingRef> input_shardings) const {
+    absl::Span<const xla::ifrt::ShardingRef> input_shardings,
+    absl::Span<const std::optional<xla::ifrt::Shape>> static_shapes) const {
   if (inputs.size() != input_shardings.size()) {
     return absl::InvalidArgumentError("inputs and shardings size mismatch");
+  }
+  if (!static_shapes.empty()) {
+    if (static_shapes.size() != inputs.size()) {
+      return absl::InvalidArgumentError(
+          "inputs and static_shapes size mismatch");
+    }
+    for (int i = 0; i < static_shapes.size(); ++i) {
+      if (static_shapes[i].has_value()) {
+        return absl::UnimplementedError(absl::StrCat(
+            "BatchedH2DTransferExecutor does not support dynamic DMA yet: "
+            "input #",
+            i, " of shape ", inputs[i].shape(), " requested static shape ",
+            *static_shapes[i]));
+      }
+    }
   }
 
   absl::flat_hash_map<xla::ifrt::Device*, DeviceBatchData> batches_by_device;

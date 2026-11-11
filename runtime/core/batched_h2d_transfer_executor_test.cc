@@ -82,8 +82,9 @@ TEST_F(BatchedH2DTransferExecutorTest, SizeMismatchReturnsInvalidArgument) {
       device_list_->devices()[0], xla::ifrt::MemoryKind());
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding};  // size 1 vs 2
 
-  EXPECT_THAT(executor->ExecuteTransfer(inputs, shardings),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}),
+      StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST_F(BatchedH2DTransferExecutorTest, NullThreadPoolReturnsInvalidArgument)
@@ -111,8 +112,9 @@ TEST_F(BatchedH2DTransferExecutorTest, EmptyInputsSucceeds) {
   std::vector<HostBuffer> inputs = {};
   std::vector<xla::ifrt::ShardingRef> shardings = {};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   EXPECT_TRUE(results.empty());
 }
 
@@ -140,8 +142,9 @@ TEST_F(BatchedH2DTransferExecutorTest,
                                                    sharding};
 
   // 1. Run new batched transfer.
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 3);
 
   // 2. Validate side-by-side against old/default method and ground truth.
@@ -188,8 +191,9 @@ TEST_F(BatchedH2DTransferExecutorTest, StringTensorsRouteToDefaultPath) {
 
   // String tensors bypass batched PJRT literal transfer and route to
   // sharding_internal::MakeArrayFromHostBuffer.
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
   TF_ASSERT_OK_AND_ASSIGN(
       HostBuffer out,
@@ -218,8 +222,9 @@ TEST_F(BatchedH2DTransferExecutorTest, PackedSubByteDtypeRoutesToDefaultPath) {
   std::vector<HostBuffer> inputs = {float_in, int4_in};
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding, sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 2);
 
   for (int i = 0; i < 2; ++i) {
@@ -254,8 +259,9 @@ TEST_F(BatchedH2DTransferExecutorTest, BatchedTransferStridedSingleDevice) {
   std::vector<HostBuffer> inputs = {strided_in};
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
 
   TF_ASSERT_OK_AND_ASSIGN(
@@ -291,8 +297,9 @@ TEST_F(BatchedH2DTransferExecutorTest, BatchedTransferStridedReplicated) {
   std::vector<HostBuffer> inputs = {strided_in};
   std::vector<xla::ifrt::ShardingRef> shardings = {ifrt_sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
 
   TF_ASSERT_OK_AND_ASSIGN(
@@ -330,8 +337,9 @@ TEST_F(BatchedH2DTransferExecutorTest, BatchedTransferStridedTiled) {
   std::vector<HostBuffer> inputs = {strided_in};
   std::vector<xla::ifrt::ShardingRef> shardings = {ifrt_sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
 
   TF_ASSERT_OK_AND_ASSIGN(
@@ -367,8 +375,9 @@ TEST_F(BatchedH2DTransferExecutorTest, BatchedTransferTransposed2D) {
   std::vector<HostBuffer> inputs = {transposed_in};
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
 
   TF_ASSERT_OK_AND_ASSIGN(
@@ -399,8 +408,9 @@ TEST_F(BatchedH2DTransferExecutorTest, ZeroElementTensorSupport) {
   std::vector<HostBuffer> inputs = {empty_in, non_empty_in};
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding, sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 2);
   EXPECT_EQ(results[0]->shape(), xla::ifrt::Shape({0}));
 
@@ -439,8 +449,9 @@ TEST_F(BatchedH2DTransferExecutorTest, HloShardingSingleDeviceSupport) {
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding_dev0,
                                                    sharding_dev1};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 2);
 
   EXPECT_THAT(results[0]->sharding().devices()->devices(),
@@ -481,8 +492,9 @@ TEST_F(BatchedH2DTransferExecutorTest, MultiDeviceSingleDeviceSharding) {
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding0, sharding1,
                                                    sharding0, sharding1};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 4);
 
   for (int i = 0; i < 4; ++i) {
@@ -519,8 +531,9 @@ TEST_F(BatchedH2DTransferExecutorTest, BatchedTransferReplicated) {
   std::vector<xla::ifrt::ShardingRef> shardings = {ifrt_sharding, ifrt_sharding,
                                                    ifrt_sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 3);
 
   for (int i = 0; i < 3; ++i) {
@@ -576,8 +589,9 @@ TEST_F(BatchedH2DTransferExecutorTest,
   std::vector<xla::ifrt::ShardingRef> shardings = {
       sharding_dev0, sharding_replicated, sharding_dev1, sharding_replicated};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 4);
 
   for (int i = 0; i < 4; ++i) {
@@ -611,8 +625,9 @@ TEST_F(BatchedH2DTransferExecutorTest, BatchedTransferTiled1D) {
   std::vector<xla::ifrt::ShardingRef> shardings = {ifrt_sharding,
                                                    ifrt_sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 2);
 
   for (int i = 0; i < 2; ++i) {
@@ -667,8 +682,9 @@ TEST_F(BatchedH2DTransferExecutorTest, BatchedTransferTiled2D) {
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding_axis0,
                                                    sharding_axis1};
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 2);
 
   for (int i = 0; i < 2; ++i) {
@@ -716,8 +732,9 @@ TEST_F(BatchedH2DTransferExecutorTest, BatchedTransferTiled3D) {
   std::vector<HostBuffer> inputs = {in};
   std::vector<xla::ifrt::ShardingRef> shardings = {ifrt_sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
 
   TF_ASSERT_OK_AND_ASSIGN(
@@ -763,8 +780,9 @@ TEST_F(BatchedH2DTransferExecutorTest, BatchedTransferTiled4D) {
   std::vector<HostBuffer> inputs = {in};
   std::vector<xla::ifrt::ShardingRef> shardings = {ifrt_sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
 
   TF_ASSERT_OK_AND_ASSIGN(
@@ -827,8 +845,9 @@ TEST_F(BatchedH2DTransferExecutorTest,
       sharding_dev0, sharding_replicated, sharding_tiled_2d,
       sharding_tiled_1d, sharding_dev1};
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 5);
 
   for (int i = 0; i < 5; ++i) {
@@ -874,8 +893,9 @@ TEST_F(BatchedH2DTransferExecutorTest, UnevenTiledInputReturnsError) {
 
   // A size-3 tensor tiled over 2 devices yields unequal shard shapes ([2] vs
   // [1]), which the batching planner rejects with UnimplementedError.
-  EXPECT_THAT(executor->ExecuteTransfer(inputs, shardings),
-              StatusIs(absl::StatusCode::kUnimplemented));
+  EXPECT_THAT(
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}),
+      StatusIs(absl::StatusCode::kUnimplemented));
 }
 
 TEST_F(BatchedH2DTransferExecutorTest, FactoryCreate) {
@@ -894,8 +914,9 @@ TEST_F(BatchedH2DTransferExecutorTest, FactoryCreate) {
   std::vector<HostBuffer> inputs = {in};
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
 
   TF_ASSERT_OK_AND_ASSIGN(
