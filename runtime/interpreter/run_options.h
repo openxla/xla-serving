@@ -100,6 +100,9 @@ struct RunOptions {
   // the runtime otherwise; either way it is released after the copy.
   absl::flat_hash_map<std::string, HostBuffer> preallocated_output_host_buffers;
 
+  // GPU execution priority of this request.
+  int32_t execution_priority = 0;
+
   // The unique identifier for this execution request. Internal-only field,
   // populated automatically by the Interpreter. User should not set this field.
   int32_t request_id = -1;

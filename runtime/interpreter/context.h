@@ -67,6 +67,8 @@ struct RunContext {
   absl::flat_hash_map<std::string, xla::ifrt::ArrayRef>
       preallocated_output_arrays;
   absl::flat_hash_map<std::string, HostBuffer> preallocated_output_host_buffers;
+  // GPU execution priority of the request.
+  int32_t execution_priority = 0;
 
   static RunContext Create(const RunOptions& run_options,
                            std::vector<Placement> resolved_placements = {},
@@ -79,7 +81,8 @@ struct RunContext {
         .placements = std::move(resolved_placements),
         .preallocated_output_arrays = run_options.preallocated_output_arrays,
         .preallocated_output_host_buffers =
-            run_options.preallocated_output_host_buffers};
+            run_options.preallocated_output_host_buffers,
+        .execution_priority = run_options.execution_priority};
   }
 };
 
