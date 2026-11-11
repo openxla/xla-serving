@@ -14,6 +14,7 @@
 
 """Utils for converting from XSE back to JAX."""
 
+import dataclasses
 from typing import Any, List, Sequence, Tuple
 
 import jax
@@ -24,6 +25,7 @@ import numpy as np
 from xla_saved_model.protos import jax_supplemental_pb2
 from xla_saved_model._src import core as xsm
 from xla_saved_model._src.jax2xsm import pytree_proto
+from xla_saved_model._src.jax2xsm import sharding_proto
 from xla_saved_model._src.jax2xsm import typing as xsm_typing
 
 ApplyFn = xsm_typing.ApplyFn
@@ -351,9 +353,36 @@ def _to_jax_shape(
 def _to_jax_shaped_array(
     shape_dtype: _JaxShapeDtype,
     scope: jax.export.SymbolicScope,
+    sharding: jax.sharding.NamedSharding | None = None,
 ) -> jax.core.ShapedArray:
+  """Builds a `jax.core.ShapedArray` with its sharding and memory space."""
   shape, dtype = shape_dtype
-  return jax.core.ShapedArray(_to_jax_shape(shape, scope), dtype)
+  jax_shape = _to_jax_shape(shape, scope)
+  if sharding is None:
+    return jax.core.ShapedArray(jax_shape, dtype)
+  spec = sharding.spec
+  raw_partitions = spec._partitions  # pylint: disable=protected-access
+  partitions = tuple(
+      None if p is jax.sharding.PartitionSpec.UNCONSTRAINED else p
+      for p in raw_partitions
+  )
+  if len(partitions) < len(jax_shape):
+    partitions = partitions + (None,) * (len(jax_shape) - len(partitions))
+  aval_sharding = jax.sharding.NamedSharding(
+      sharding.mesh.abstract_mesh,
+      spec.update(partitions=partitions),
+  )
+  memory_space = (
+      jax.memory.Space.Host
+      if sharding.memory_kind == "pinned_host"
+      else jax.memory.Space.Device
+  )
+  return jax.core.ShapedArray(
+      jax_shape,
+      dtype,
+      sharding=aval_sharding,
+      memory_space=memory_space,
+  )
 
 
 def _validate_arg_count(
@@ -420,6 +449,33 @@ class ExportedApplyFn:
     return str(self._exported)
 
 
+def _exported_version_kwargs(
+    supplemental: jax_supplemental_pb2.Function,
+    exported_cls: type[Any] = jax.export.Exported,
+) -> dict[str, Any]:
+  """Returns JAX-version-specific keyword arguments for `jax.export.Exported`.
+
+  JAX 0.10.x through 0.11.0 required a `_has_named_shardings: bool` field on
+  `Exported` that was removed in JAX 0.11.1. Only that field is handled
+  conditionally so any future constructor change surfaces immediately.
+
+  Args:
+    supplemental: The function's JAX supplemental proto.
+    exported_cls: The `Exported` dataclass to inspect.
+
+  Returns:
+    `{"_has_named_shardings": <bool>}` when the field exists, otherwise `{}`.
+  """
+  if any(
+      f.name == "_has_named_shardings" for f in dataclasses.fields(exported_cls)
+  ):
+    has_named_shardings = supplemental.HasField(
+        "input_named_shardings"
+    ) or supplemental.HasField("output_named_shardings")
+    return {"_has_named_shardings": has_named_shardings}
+  return {}
+
+
 def xsm_fn_to_apply_fn(
     manifest_function: xsm.manifest_pb2.Function,
     jax_supplemental_function: jax_supplemental_pb2.Function,
@@ -453,23 +509,46 @@ def xsm_fn_to_apply_fn(
       "output_tree",
   )
 
+  abstract_meshes = tuple(
+      sharding_proto.abstract_mesh_from_proto(mesh_proto)
+      for mesh_proto in jax_supplemental_function.abstract_meshes
+  )
+  in_named_shardings = sharding_proto.from_proto(
+      _get_field(jax_supplemental_function, "input_named_shardings"),
+      abstract_meshes,
+      len(in_avals),
+  )
+  out_named_shardings = sharding_proto.from_proto(
+      _get_field(jax_supplemental_function, "output_named_shardings"),
+      abstract_meshes,
+      len(out_avals),
+  )
+
   # Uses the same symbolic-shape scope setup as in `jax.export.deserialize`.
   scope = jax.export.SymbolicScope(())
 
   exported = jax.export.Exported(
       fun_name=jax_supplemental_function.name,
       in_tree=in_treedef,
-      in_avals=tuple(_to_jax_shaped_array(a, scope) for a in in_avals),
+      in_avals=tuple(
+          _to_jax_shaped_array(aval, scope, sharding)
+          for aval, sharding in zip(in_avals, in_named_shardings)
+      ),
       out_tree=out_treedef,
-      out_avals=tuple(_to_jax_shaped_array(a, scope) for a in out_avals),
+      out_avals=tuple(
+          _to_jax_shaped_array(aval, scope, sharding)
+          for aval, sharding in zip(out_avals, out_named_shardings)
+      ),
+      _in_named_shardings=in_named_shardings,
+      _out_named_shardings=out_named_shardings,
       in_shardings_hlo=in_shardings_hlo,
       out_shardings_hlo=out_shardings_hlo,
       nr_devices=jax_supplemental_function.nr_devices,
       # According to the Jax team, most effects are only for things like debug
       # printing and debug assertions and should be turned off when model
       # exporting.
-      ordered_effects=tuple(),
-      unordered_effects=tuple(),
+      ordered_effects=(),
+      unordered_effects=(),
       disabled_safety_checks=tuple(
           map(
               _deserialize_disabled_safety_check,
@@ -488,10 +567,9 @@ def xsm_fn_to_apply_fn(
       platforms=tuple(
           manifest_function.body.stable_hlo_body.lowering_platforms
       ),
-      uses_global_constants=jax_supplemental_function.uses_shape_polymorphism,
+      uses_global_constants=(jax_supplemental_function.uses_shape_polymorphism),
       _get_vjp=None,
-      _in_named_shardings=(None,) * len(in_avals),
-      _out_named_shardings=(None,) * len(out_avals),
+      **_exported_version_kwargs(jax_supplemental_function),
   )
 
   return ExportedApplyFn(exported)

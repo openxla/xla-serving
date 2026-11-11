@@ -125,6 +125,7 @@ def jax_exported_to_shlo_fn(
   )
   num_user_outputs = exported.out_tree.num_leaves
   out_avals = exported.out_avals[:num_user_outputs]
+  out_named_shardings = out_named_shardings[:num_user_outputs]
   out_shardings_hlo = out_shardings_hlo[:num_user_outputs]
   out_placements = out_placements[:num_user_outputs]
 
@@ -170,6 +171,8 @@ def jax_exported_to_shlo_fn(
       uses_shape_polymorphism=exported.uses_global_constants,
       in_tree=exported.in_tree,
       out_tree=exported.out_tree,
+      in_named_shardings=in_named_shardings,
+      out_named_shardings=out_named_shardings,
   )
   supplemental_info_[constants.JAX_SPECIFIC_INFO] = jax_specific_info_
 

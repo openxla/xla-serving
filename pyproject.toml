@@ -11,7 +11,7 @@ name = "xla-saved-model"
 description = "XLA SavedModel"
 readme = 'README.md'
 license = {file = 'LICENSE'}
-requires-python = '>=3.10'
+requires-python = '>=3.11'
 authors = [{name = 'XLA Serving Authors', email='xla-serving-team@google.com'}]
 classifiers=[
     'Development Status :: 4 - Beta',
@@ -28,7 +28,7 @@ dependencies = [
     'absl-py',
     'dataclasses-json',
     'etils',
-    'jax >= 0.4.35',
+    'jax >= 0.10.0',
     'jaxlib',
     'jaxtyping',
     'numpy',
