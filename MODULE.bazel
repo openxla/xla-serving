@@ -24,7 +24,7 @@ bazel_dep(name = "re2", version = "2025-11-05.bcr.1")
 bazel_dep(name = "riegeli", version = "0.0.0-20250822-9f2744d")
 bazel_dep(name = "rules_cc", version = "0.2.25")
 bazel_dep(name = "rules_license", version = "1.0.0")
-bazel_dep(name = "rules_oci", version = "1.7.2")
+bazel_dep(name = "rules_oci", version = "1.8.0")
 bazel_dep(name = "rules_proto", version = "7.1.0")
 bazel_dep(name = "rules_python", version = "1.8.5")
 bazel_dep(name = "snappy", version = "1.2.2.bcr.3")
@@ -140,6 +140,7 @@ archive_override(
     integrity = "sha256-2TwlSSpVAnZEkQRRMC9SOjQJt9Ul3KbYTgBhBjx+gFc=",
     patch_strip = 1,
     patches = [
+        "//third_party/tensorflow:dynamic_partition_op_gpu.patch",
         # Restores the `//tensorflow/core:framework` dep of
         # `//tensorflow/core/kernels/batching_util:warmup`, which upstream
         # switched to `framework_headers_lib`. The header-only library doesn't
