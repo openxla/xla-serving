@@ -82,11 +82,10 @@ export TPU_LIBRARY_PATH=$(python3 -c "import libtpu; print(libtpu.get_library_pa
   --model_name=qwen3 \
   --model_path=/tmp/qwen3_serving_b30_p2000 \
   --port=8500 \
-  --use_insecure_grpc_credentials=true \
   --orbax_grpc_server_platform=tpu
 ```
 
-When ready, the server logs `JAX Serving listening on [::]:8500`.
+When ready, the server logs `JAX Serving listening on localhost:8500`.
 
 ---
 

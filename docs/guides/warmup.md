@@ -61,7 +61,6 @@ docker run \
   --model_name=classifier \
   --model_path=/models/classifier \
   --orbax_grpc_server_platform=cpu \
-  --use_insecure_grpc_credentials=true \
   --warmup_server=true
 ```
 

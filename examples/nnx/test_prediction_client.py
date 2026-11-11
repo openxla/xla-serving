@@ -14,13 +14,35 @@
 
 """End-to-end prediction client test for XLA Serving."""
 
-import argparse
+from collections.abc import Sequence
+
+from absl import app
+from absl import flags
 import grpc
 import numpy as np
 
 from xla_saved_model.protos.grpc import host_buffer_pb2
 from xla_saved_model.protos.grpc import predict_pb2
 from xla_saved_model.protos.xla.python.ifrt import dtype_pb2
+
+
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]", ""})
+
+
+def _is_loopback_target(target: str) -> bool:
+  return (
+      target in _LOOPBACK_HOSTS or target.rsplit(":", 1)[0] in _LOOPBACK_HOSTS
+  )
+
+
+def _make_channel(
+    server_address: str, use_alts_credentials: bool = False
+) -> grpc.Channel:
+  if use_alts_credentials:
+    return grpc.secure_channel(server_address, grpc.alts_channel_credentials())
+  if _is_loopback_target(server_address):
+    return grpc.secure_channel(server_address, grpc.local_channel_credentials())
+  return grpc.insecure_channel(server_address)
 
 
 def make_host_buffer(arr: np.ndarray) -> host_buffer_pb2.HostBufferProto:
@@ -37,10 +59,13 @@ def run_prediction_test(
     signature_name: str = "serving_default",
     batch_size: int = 4,
     timeout: int = 60,
+    use_alts_credentials: bool = False,
 ) -> None:
   """Sends a Predict request to the server and verifies the response."""
   print(f"Connecting to XLA Serving server at {server_address}...")
-  channel = grpc.insecure_channel(server_address)
+  channel = _make_channel(
+      server_address, use_alts_credentials=use_alts_credentials
+  )
   predict_fn = channel.unary_unary(
       f"/{predict_pb2.DESCRIPTOR.package}.PredictionService/Predict",
       request_serializer=predict_pb2.PredictRequest.SerializeToString,
@@ -85,47 +110,51 @@ def run_prediction_test(
   print("✅ End-to-end inference verification successful!")
 
 
-def main() -> None:
-  parser = argparse.ArgumentParser(
-      description="Test XLA Serving prediction client."
-  )
-  parser.add_argument(
-      "--server_address",
-      default="localhost:8500",
-      help="Server address (default: localhost:8500)",
-  )
-  parser.add_argument(
-      "--model_name",
-      default="nnx",
-      help="Model name (default: nnx)",
-  )
-  parser.add_argument(
-      "--signature_name",
-      default="serving_default",
-      help="Signature name (default: serving_default)",
-  )
-  parser.add_argument(
-      "--batch_size",
-      type=int,
-      default=4,
-      help="Batch size for prediction test (default: 4)",
-  )
-  parser.add_argument(
-      "--timeout",
-      type=int,
-      default=60,
-      help="Timeout in seconds (default: 60)",
-  )
-  args = parser.parse_args()
+_SERVER_ADDRESS = flags.DEFINE_string(
+    "server_address",
+    "localhost:8500",
+    "Server address (default: localhost:8500)",
+)
+_MODEL_NAME = flags.DEFINE_string(
+    "model_name",
+    "nnx",
+    "Model name (default: nnx)",
+)
+_SIGNATURE_NAME = flags.DEFINE_string(
+    "signature_name",
+    "serving_default",
+    "Signature name (default: serving_default)",
+)
+_BATCH_SIZE = flags.DEFINE_integer(
+    "batch_size",
+    4,
+    "Batch size for prediction test (default: 4)",
+)
+_TIMEOUT = flags.DEFINE_integer(
+    "timeout",
+    60,
+    "Timeout in seconds (default: 60)",
+)
+_USE_ALTS_CREDENTIALS = flags.DEFINE_bool(
+    "use_alts_credentials",
+    False,
+    "Use ALTS credentials for Google Cloud endpoints.",
+)
+
+
+def main(argv: Sequence[str]) -> None:
+  if len(argv) > 1:
+    raise app.UsageError("Too many command-line arguments.")
 
   run_prediction_test(
-      server_address=args.server_address,
-      model_name=args.model_name,
-      signature_name=args.signature_name,
-      batch_size=args.batch_size,
-      timeout=args.timeout,
+      server_address=_SERVER_ADDRESS.value,
+      model_name=_MODEL_NAME.value,
+      signature_name=_SIGNATURE_NAME.value,
+      batch_size=_BATCH_SIZE.value,
+      timeout=_TIMEOUT.value,
+      use_alts_credentials=_USE_ALTS_CREDENTIALS.value,
   )
 
 
 if __name__ == "__main__":
-  main()
+  app.run(main)

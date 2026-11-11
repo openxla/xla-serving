@@ -91,12 +91,11 @@ docker run \
   us-docker.pkg.dev/xla-serving-engine/xla-serving/cpu-jax-only:latest \
   --model_name=classifier \
   --model_path=/models/classifier \
-  --orbax_grpc_server_platform=cpu \
-  --use_insecure_grpc_credentials=true
+  --orbax_grpc_server_platform=cpu
 ```
 
 The server answers `PredictionService/Predict` and
-`PredictionService/GetModelMetadata` on port 8500. The
+`PredictionService/GetModelMetadata` on `localhost:8500`. The
 [quickstart](quickstart.md) runs this end to end with a working model, an
 in-process check, and a Python gRPC client.
 
