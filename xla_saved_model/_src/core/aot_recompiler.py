@@ -107,6 +107,7 @@ def _update_manifest_with_compiled_artifacts(
     entry.executable_version = artifact.executable_version
     entry.target_topology_label = artifact.target_topology_label
     entry.aot_kept_var_idx.extend(artifact.kept_var_idx)
+  manifest_utils.record_compile_options(body, artifacts)
 
 
 def _recompile_to_temp(

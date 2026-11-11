@@ -20,6 +20,7 @@ from typing import Any
 from absl.testing import absltest
 
 from xla_saved_model.protos import manifest_pb2
+from xla_saved_model._src.core import constants
 from xla_saved_model._src.core import device_assignment
 from xla_saved_model._src.core import file_utils
 from xla_saved_model._src.core import manifest_utils
@@ -28,6 +29,7 @@ from xla_saved_model._src.core import shlo_function
 from xla_saved_model._src.core import shlo_type
 from xla_saved_model._src.core import type_proto_utils
 from xla_saved_model._src.core import unstructured_data
+from xla_saved_model.protos.xla.pjrt.proto import compile_options_pb2  # pylint: disable=g-direct-tensorflow-import
 
 
 class ManifestUtilsTest(absltest.TestCase):
@@ -669,6 +671,134 @@ class ManifestUtilsTest(absltest.TestCase):
     self.assertEqual(
         type_proto_utils.from_type_proto(body.optimized_output_signature),
         opt_out,
+    )
+
+
+def _artifact(
+    platform: str,
+    compile_options: compile_options_pb2.CompileOptionsProto | None,
+    label: str = 'target',
+) -> manifest_utils.CompiledArtifact:
+  return manifest_utils.CompiledArtifact(
+      pjrt_executable_bytes=b'executable',
+      kept_var_idx=[0],
+      target_topology_label=label,
+      executable_version=b'',
+      platform=platform,
+      compile_options=compile_options,
+  )
+
+
+def _compile_options(
+    portable: bool,
+) -> compile_options_pb2.CompileOptionsProto:
+  return compile_options_pb2.CompileOptionsProto(
+      compile_portable_executable=portable
+  )
+
+
+def _recorded_compile_options(
+    body: manifest_pb2.StableHloFunctionBody,
+) -> manifest_pb2.CompileOptionsProtoMap:
+  supplemental = body.supplemental_info[constants.XLA_COMPILE_OPTIONS]
+  return manifest_pb2.CompileOptionsProtoMap.FromString(
+      supplemental.inlined_bytes
+  )
+
+
+class RecordCompileOptionsTest(absltest.TestCase):
+
+  def test_records_first_compile_options_per_platform(self):
+    body = manifest_pb2.StableHloFunctionBody()
+
+    manifest_utils.record_compile_options(
+        body,
+        [
+            _artifact('cuda', _compile_options(portable=True), 'pg199'),
+            _artifact('cuda', _compile_options(portable=False), 'p2021'),
+            _artifact('tpu', _compile_options(portable=False), 'df'),
+        ],
+    )
+
+    options_map = _recorded_compile_options(body)
+    self.assertEqual(
+        body.supplemental_info[constants.XLA_COMPILE_OPTIONS].mime_type,
+        constants.XLA_COMPILE_OPTIONS_MIME_TYPE,
+    )
+    self.assertEqual(set(options_map.map), {'cuda', 'tpu'})
+    self.assertTrue(options_map.map['cuda'].compile_portable_executable)
+    self.assertFalse(options_map.map['tpu'].compile_portable_executable)
+
+  def test_keeps_existing_compile_options(self):
+    body = manifest_pb2.StableHloFunctionBody()
+    existing = manifest_pb2.CompileOptionsProtoMap()
+    existing.map['tpu'].CopyFrom(_compile_options(portable=False))
+    body.supplemental_info[constants.XLA_COMPILE_OPTIONS].CopyFrom(
+        manifest_pb2.UnstructuredData(
+            inlined_bytes=existing.SerializeToString(),
+            mime_type=constants.XLA_COMPILE_OPTIONS_MIME_TYPE,
+        )
+    )
+
+    manifest_utils.record_compile_options(
+        body,
+        [
+            _artifact('tpu', _compile_options(portable=True), 'df'),
+            _artifact('cuda', _compile_options(portable=True), 'pg199'),
+        ],
+    )
+
+    options_map = _recorded_compile_options(body)
+    self.assertEqual(set(options_map.map), {'cuda', 'tpu'})
+    self.assertFalse(options_map.map['tpu'].compile_portable_executable)
+    self.assertTrue(options_map.map['cuda'].compile_portable_executable)
+
+  def test_skips_artifacts_without_compile_options(self):
+    body = manifest_pb2.StableHloFunctionBody()
+
+    manifest_utils.record_compile_options(
+        body, [_artifact('', None), _artifact('cuda', None)]
+    )
+
+    self.assertNotIn(constants.XLA_COMPILE_OPTIONS, body.supplemental_info)
+
+  def test_records_lowercase_platform(self):
+    body = manifest_pb2.StableHloFunctionBody()
+
+    manifest_utils.record_compile_options(
+        body, [_artifact('CUDA', _compile_options(portable=True))]
+    )
+
+    self.assertEqual(set(_recorded_compile_options(body).map), {'cuda'})
+
+  def test_build_manifest_proto_with_compiler_hook_records_compile_options(
+      self,
+  ):
+    fn = shlo_function.ShloFunction(
+        mlir_module_serialized=b'module',
+        calling_convention_version=1,
+        module_kept_var_idx=(0,),
+        lowering_platforms=('cuda',),
+        supplemental_info={},
+        physical_in_dtypes=(),
+        physical_out_dtypes=(),
+        input_signature={},
+        output_signature={},
+    )
+
+    def compiler_hook(*_):
+      return [_artifact('cuda', _compile_options(portable=True))]
+
+    manifest_proto = manifest_utils.build_manifest_proto(
+        {'test_fn': fn},
+        self.create_tempdir().full_path,
+        compiler_hook=compiler_hook,
+    )
+
+    body = manifest_proto.objects['test_fn'].function.body.stable_hlo_body
+    self.assertLen(body.compiled_executables, 1)
+    self.assertTrue(
+        _recorded_compile_options(body).map['cuda'].compile_portable_executable
     )
 
 

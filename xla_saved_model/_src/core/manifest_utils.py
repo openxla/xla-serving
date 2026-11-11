@@ -34,6 +34,7 @@ from xla_saved_model._src.core import shlo_function
 from xla_saved_model._src.core import type_proto_utils
 from xla_saved_model._src.core import unstructured_data
 from xla_saved_model._src.core import value
+from xla_saved_model.protos.xla.pjrt.proto import compile_options_pb2  # pylint: disable=g-direct-tensorflow-import
 
 
 def resolve_relative_path(
@@ -153,12 +154,63 @@ def extract_stablehlo_payload(
 # Multi-device execution in IFRT/XLA requires topology-bound executables.
 @dataclasses.dataclass(frozen=True)
 class CompiledArtifact:
-  """The resulting artifact from an Ahead-Of-Time (AOT) compilation hook."""
+  """The resulting artifact from an Ahead-Of-Time (AOT) compilation hook.
+
+  Attributes:
+    pjrt_executable_bytes: The serialized PJRT executable.
+    kept_var_idx: The indices of the arguments kept in the executable.
+    target_topology_label: The label of the target topology.
+    executable_version: The version of the executable.
+    platform: The platform the executable was compiled for (e.g. "cuda").
+      Required with `compile_options`.
+    compile_options: The XLA compile options to record for `platform`, if any.
+      The runtime requires the compile options of its platform to load compiled
+      executables.
+  """
 
   pjrt_executable_bytes: bytes
   kept_var_idx: Sequence[int]
   target_topology_label: str
   executable_version: bytes
+  platform: str = ""
+  compile_options: compile_options_pb2.CompileOptionsProto | None = None
+
+
+def record_compile_options(
+    stable_hlo_body: manifest_pb2.StableHloFunctionBody,
+    artifacts: Iterable[CompiledArtifact],
+) -> None:
+  """Records the compile options of `artifacts` in `stable_hlo_body`.
+
+  Adds the compile options of the first artifact of each platform that
+  `stable_hlo_body` has no compile options for yet. Existing compile options
+  (e.g. written at export, which JIT compilation uses too) are kept.
+
+  Args:
+    stable_hlo_body: The function body that `artifacts` were compiled from.
+    artifacts: The compiled artifacts.
+  """
+  supplemental_info = stable_hlo_body.supplemental_info
+  options_map = manifest_pb2.CompileOptionsProtoMap()
+  if constants.XLA_COMPILE_OPTIONS in supplemental_info:
+    options_map.ParseFromString(
+        supplemental_info[constants.XLA_COMPILE_OPTIONS].inlined_bytes
+    )
+  added = False
+  for artifact in artifacts:
+    # The runtime looks up the compile options of its lowercase platform name.
+    platform = artifact.platform.lower()
+    if artifact.compile_options is None or platform in options_map.map:
+      continue
+    options_map.map[platform].CopyFrom(artifact.compile_options)
+    added = True
+  if added:
+    supplemental_info[constants.XLA_COMPILE_OPTIONS].CopyFrom(
+        manifest_pb2.UnstructuredData(
+            inlined_bytes=options_map.SerializeToString(),
+            mime_type=constants.XLA_COMPILE_OPTIONS_MIME_TYPE,
+        )
+    )
 
 
 class CompilerHook(Protocol):
@@ -284,8 +336,10 @@ def _build_function(
     if compiler_hook:
       num_weights = len(fn.data_names or [])
       safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
-      artifacts = compiler_hook(
-          fn.mlir_module_serialized, fn.module_kept_var_idx, num_weights
+      artifacts = list(
+          compiler_hook(
+              fn.mlir_module_serialized, fn.module_kept_var_idx, num_weights
+          )
       )
       for artifact in artifacts:
         safe_label = re.sub(
@@ -306,6 +360,7 @@ def _build_function(
         )
         compiled_exec_proto.aot_kept_var_idx.extend(artifact.kept_var_idx)
         compiled_exec_proto.executable_version = artifact.executable_version
+      record_compile_options(stable_hlo_body, artifacts)
 
     # Fail-fast payload validation assertion
     has_stable_hlo = (

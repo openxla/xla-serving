@@ -20,6 +20,7 @@ from absl.testing import absltest
 from absl.testing import parameterized
 import jax
 
+from xla_saved_model.protos import manifest_pb2
 from xla_saved_model._src.core import aot_recompiler
 from xla_saved_model._src.core import constants
 from xla_saved_model._src.core import file_utils
@@ -196,6 +197,95 @@ class AotRecompilerTest(test_utils.XsmTestCase):
 
     for exec_body in fn.body.stable_hlo_body.compiled_executables:
       self.assert_compiled_executable_valid(out_dir, exec_body)
+
+  def test_recompile_records_compile_options(self):
+    """Verifies that the compile options of the compiled platform are recorded."""
+    input_model = test_utils.create_test_xla_saved_model(
+        str(pathlib.Path(self.temp_dir) / "models" / "options_input")
+    )
+    input_options = self._get_compile_options(input_model)
+    self.assertNotIn("cuda", input_options.map)
+
+    out_dir = aot_recompiler.recompile(
+        input_model_path=input_model,
+        output_model_path=str(
+            pathlib.Path(self.temp_dir) / "models" / "options_out"
+        ),
+        target_configs=offline_compiler.TargetConfig(
+            target_topology_label="cuda_target",
+            platform="cuda",
+            serialized_topology=test_utils.get_serialized_topology(
+                "h100=1", platform="cuda"
+            ),
+            autotune_database_path=test_utils.create_sample_autotune_dir(
+                self.create_tempdir().full_path
+            ),
+        ),
+        version=1,
+    )
+
+    options = self._get_compile_options(out_dir)
+    self.assertIn("cuda", options.map)
+    # The autotune database is a path on the compiling host.
+    self.assertEmpty(
+        options.map[
+            "cuda"
+        ].executable_build_options.debug_options.xla_gpu_per_fusion_autotune_cache_dir
+    )
+    # The compile options of the other platforms are kept.
+    for platform, platform_options in input_options.map.items():
+      self.assertEqual(options.map[platform], platform_options)
+
+  def test_recompile_keeps_existing_compile_options(self):
+    """Verifies that existing compile options of the platform are kept."""
+    input_model = test_utils.create_test_xla_saved_model(
+        str(pathlib.Path(self.temp_dir) / "models" / "existing_options_input")
+    )
+    manifest = persistence_lib.load(input_model)
+    body = manifest.objects["serving_default"].function.body.stable_hlo_body
+    existing_options = self._get_compile_options(input_model)
+    existing_options.map["cuda"].compile_portable_executable = False
+    body.supplemental_info[constants.XLA_COMPILE_OPTIONS].CopyFrom(
+        manifest_pb2.UnstructuredData(
+            inlined_bytes=existing_options.SerializeToString(),
+            mime_type=constants.XLA_COMPILE_OPTIONS_MIME_TYPE,
+        )
+    )
+    with file_utils.open_file(
+        str(pathlib.Path(input_model) / constants.MANIFEST_FILE_PATH), "wb"
+    ) as f:
+      f.write(manifest.SerializeToString())
+
+    out_dir = aot_recompiler.recompile(
+        input_model_path=input_model,
+        output_model_path=str(
+            pathlib.Path(self.temp_dir) / "models" / "existing_options_out"
+        ),
+        target_configs=offline_compiler.TargetConfig(
+            target_topology_label="cuda_target",
+            platform="cuda",
+            serialized_topology=test_utils.get_serialized_topology(
+                "h100=1", platform="cuda"
+            ),
+        ),
+        version=1,
+    )
+
+    self.assertEqual(self._get_compile_options(out_dir), existing_options)
+
+  def _get_compile_options(
+      self, model_dir: str
+  ) -> manifest_pb2.CompileOptionsProtoMap:
+    manifest = persistence_lib.load(model_dir)
+    body = manifest.objects["serving_default"].function.body.stable_hlo_body
+    options = manifest_pb2.CompileOptionsProtoMap()
+    if constants.XLA_COMPILE_OPTIONS in body.supplemental_info:
+      supplemental = body.supplemental_info[constants.XLA_COMPILE_OPTIONS]
+      self.assertEqual(
+          supplemental.mime_type, constants.XLA_COMPILE_OPTIONS_MIME_TYPE
+      )
+      options.ParseFromString(supplemental.inlined_bytes)
+    return options
 
   def test_attached_cpu_hardware_recompile(self):
     """Verifies attached recompilation on physical CPU hardware."""

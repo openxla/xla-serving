@@ -21,6 +21,7 @@ from typing import Any, cast
 from absl.testing import absltest
 from absl.testing import parameterized
 import jax
+import jaxlib
 from xla_saved_model._src.core import offline_compiler
 from xla_saved_model._src.core import test_utils
 
@@ -530,6 +531,76 @@ class OfflineCompilerTest(parameterized.TestCase):
     stablehlo_mlir = test_utils.get_stablehlo_mlir()
     with self.assertRaisesRegex(ValueError, "num_weights must be non-negative"):
       list(hook(stablehlo_mlir, [0], -1))
+
+  # ---------------------------------------------------------------------------
+  # Recorded Compile Options Tests
+  # ---------------------------------------------------------------------------
+
+  def test_deviceless_compilation_returns_recorded_compile_options(self):
+    """Verifies that artifacts carry the compile options to record."""
+    config = offline_compiler.TargetConfig(
+        target_topology_label="cuda_target",
+        platform="CUDA",
+        serialized_topology=test_utils.get_serialized_topology(
+            "h100=1", platform="cuda"
+        ),
+        autotune_database_path=self.create_tempdir().full_path,
+    )
+    hook = offline_compiler.create_offline_compiler_hook([config])
+    artifacts = list(hook(test_utils.get_vhlo_portable_artifact(), [0], 0))
+
+    self.assertLen(artifacts, 1)
+    self.assertEqual(artifacts[0].platform, "cuda")
+    compile_options = artifacts[0].compile_options
+    self.assertIsNotNone(compile_options)
+    # The autotune database is a path on the compiling host.
+    self.assertEmpty(
+        compile_options.executable_build_options.debug_options.xla_gpu_per_fusion_autotune_cache_dir
+    )
+
+  def test_deviceless_multi_device_compilation_records_no_compile_options(
+      self,
+  ):
+    """Verifies that executables for multiple devices record no options."""
+    config = offline_compiler.TargetConfig(
+        target_topology_label="cuda_target",
+        platform="cuda",
+        serialized_topology=test_utils.get_serialized_topology(
+            "h100=8", platform="cuda"
+        ),
+    )
+    hook = offline_compiler.create_offline_compiler_hook([config])
+    artifacts = list(hook(test_utils.get_vhlo_portable_artifact(), [0], 0))
+
+    self.assertLen(artifacts, 1)
+    self.assertIsNone(artifacts[0].compile_options)
+
+  def test_to_recorded_compile_options_strips_offline_only_options(self):
+    """Verifies that offline-only options aren't recorded."""
+    compile_options = jaxlib.xla_client.CompileOptions()
+    compile_options.compile_portable_executable = True
+    debug_options = compile_options.executable_build_options.debug_options
+    debug_options.xla_gpu_load_autotune_results_from = "/tmp/autotune.textproto"
+    debug_options.xla_gpu_per_fusion_autotune_cache_dir = "/tmp/autotune"
+    compile_options.env_option_overrides = [
+        ("xla_gpu_require_complete_aot_autotune_results", True),
+        ("xla_gpu_autotune_level", 4),
+    ]
+
+    recorded = offline_compiler._to_recorded_compile_options(compile_options)
+
+    self.assertTrue(recorded.compile_portable_executable)
+    recorded_debug_options = recorded.executable_build_options.debug_options
+    self.assertEmpty(recorded_debug_options.xla_gpu_load_autotune_results_from)
+    self.assertEmpty(
+        recorded_debug_options.xla_gpu_per_fusion_autotune_cache_dir
+    )
+    self.assertEqual(
+        set(recorded.env_option_overrides), {"xla_gpu_autotune_level"}
+    )
+    self.assertEqual(
+        recorded.env_option_overrides["xla_gpu_autotune_level"].int_field, 4
+    )
 
 
 if __name__ == "__main__":

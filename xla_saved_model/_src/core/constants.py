@@ -45,6 +45,19 @@ UNCONVERTED_TF_SAVED_MODEL_SUB_DIR = 'unconverted_tf_saved_model/'
 # The mime type of the compiled IFRT / PJRT executable payload in the manifest.
 IFRT_EXECUTABLE_MIME_TYPE = 'application/x-ifrt-executable'
 
+# The `StableHloFunctionBody.supplemental_info` with the XLA compile options of
+# each platform (`CompileOptionsProtoMap`), as jax2xsm writes it
+# (`jax2xsm.constants.XLA_COMPILE_OPTIONS`). The runtime requires the options of
+# its platform to load compiled executables.
+XLA_COMPILE_OPTIONS = 'xla_compile_options'
+
+# TODO: Consolidate constants related to mime types in a common
+# library, so that both OBM and XLA Serving can use them.
+# The mime type of `XLA_COMPILE_OPTIONS`.
+XLA_COMPILE_OPTIONS_MIME_TYPE = (
+    'application/protobuf; type=xla_saved_model_manifest.CompileOptionsProtoMap'
+)
+
 ################################################################################
 # Manifest model format constants
 ################################################################################

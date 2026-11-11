@@ -29,6 +29,7 @@ import jaxlib
 
 from xla_saved_model._src.core import file_utils
 from xla_saved_model._src.core import manifest_utils
+from xla_saved_model.protos.xla.pjrt.proto import compile_options_pb2  # pylint: disable=g-direct-tensorflow-import
 
 optimizer_ext = None
 OptimizerType = Callable[[bytes, Sequence[int]], bytes]
@@ -162,6 +163,42 @@ def _build_compile_options(
       )
 
   return compile_options
+
+
+# The debug options and environment option overrides that only apply to the
+# offline compilation, and aren't recorded with the compiled executables: the
+# autotune database is a path on the compiling host.
+_OFFLINE_ONLY_DEBUG_OPTIONS = (
+    "xla_gpu_load_autotune_results_from",
+    "xla_gpu_per_fusion_autotune_cache_dir",
+)
+_OFFLINE_ONLY_ENV_OPTION_OVERRIDES = (
+    "xla_gpu_require_complete_aot_autotune_results",
+)
+
+
+def _to_recorded_compile_options(
+    compile_options: jaxlib.xla_client.CompileOptions,
+) -> compile_options_pb2.CompileOptionsProto:
+  """Returns the compile options to record with the compiled executables.
+
+  Args:
+    compile_options: The compile options that the executables were compiled
+      with.
+
+  Returns:
+    `compile_options`, without the options that only apply to the offline
+    compilation.
+  """
+  proto = compile_options_pb2.CompileOptionsProto.FromString(
+      compile_options.SerializeAsString()
+  )
+  debug_options = proto.executable_build_options.debug_options
+  for field in _OFFLINE_ONLY_DEBUG_OPTIONS:
+    debug_options.ClearField(field)
+  for key in _OFFLINE_ONLY_ENV_OPTION_OVERRIDES:
+    proto.env_option_overrides.pop(key, None)
+  return proto
 
 
 def _get_compile_fn(
@@ -313,6 +350,14 @@ def create_offline_compiler_hook(
           kept_var_idx=list(module_kept_var_idx),
           target_topology_label=target_topology_label,
           executable_version=executable_version,
+          platform=platform,
+          # The compile options don't describe the devices of executables
+          # compiled for multiple devices, which the runtime takes from them.
+          compile_options=(
+              _to_recorded_compile_options(compile_options)
+              if compile_options.compile_portable_executable
+              else None
+          ),
       )
 
   return compiler_hook
