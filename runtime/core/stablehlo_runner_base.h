@@ -415,7 +415,7 @@ class StableHloRunnerBase {
 
     template <typename H>
     friend H AbslHashValue(H h, const Key& key) {
-      return AbslHashValue(std::move(h), KeyView(key.input_shapes));
+      return H::combine(std::move(h), KeyView(key.input_shapes));
     }
 
     friend bool operator==(const Key& x, const Key& y) {
