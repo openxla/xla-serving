@@ -14,6 +14,7 @@
 
 #include "runtime/core/batching/shared_batch_scheduler.h"  // from @xla_serving
 
+#include <algorithm>
 #include <climits>
 #include <cstddef>
 #include <functional>
@@ -3065,7 +3066,12 @@ void BM_QueueSchedule(::testing::benchmark::State& state) {
 }
 
 BENCHMARK(BM_QueueSchedule)->Apply([](benchmark::internal::Benchmark* b) {
-  b->ThreadRange(1, tsl::port::NumSchedulableCPUs() * tsl::port::CPUIDNumSMT());
+  const int smt = tsl::port::CPUIDNumSMT();
+  // CPUIDNumSMT() returns 0 on non-x86 architectures (such as Arm) or when SMT
+  // detection is unsupported. Default to 1 in that case.
+  const int max_threads =
+      std::max(1, tsl::port::NumSchedulableCPUs() * (smt > 0 ? smt : 1));
+  b->ThreadRange(1, max_threads);
 
   for (int queue_index : {0, 1, 2}) {
     b->ArgPair(10000, queue_index);
