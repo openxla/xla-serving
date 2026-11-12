@@ -285,6 +285,64 @@ class JaxSpecificInfoTest(test_utils.XsmTestCase):
           [0],
       )
 
+  def test_serializable_to_proto_named_shardings(self):
+    unsharded = jax_specific_info.JaxSpecificInfo(
+        name="fn",
+        input_spec_refinements=None,
+        output_spec_refinements=None,
+        nr_devices=1,
+        ordered_effects=(),
+        unordered_effects=(),
+        disabled_safety_checks=(),
+        uses_shape_polymorphism=False,
+        in_named_shardings=(None, None),
+        out_named_shardings=(None,),
+    )
+    unsharded_proto = jax_supplemental_pb2.Function.FromString(
+        unsharded.serializable_to_proto().proto.inlined_bytes
+    )
+    self.assertEmpty(unsharded_proto.abstract_meshes)
+    self.assertFalse(unsharded_proto.HasField("input_named_shardings"))
+    self.assertFalse(unsharded_proto.HasField("output_named_shardings"))
+
+    mesh = jax.sharding.AbstractMesh(
+        (4, 2),
+        ("x", "y"),
+        axis_types=(jax.sharding.AxisType.Auto, jax.sharding.AxisType.Explicit),
+    )
+    sharded = jax_specific_info.JaxSpecificInfo(
+        name="sharded_fn",
+        input_spec_refinements=None,
+        output_spec_refinements=None,
+        nr_devices=8,
+        ordered_effects=(),
+        unordered_effects=(),
+        disabled_safety_checks=(),
+        uses_shape_polymorphism=False,
+        in_named_shardings=(
+            None,
+            jax.sharding.NamedSharding(mesh, jax.sharding.PartitionSpec("x")),
+        ),
+        out_named_shardings=(
+            jax.sharding.NamedSharding(
+                mesh,
+                jax.sharding.PartitionSpec("x", "y"),
+                memory_kind="pinned_host",
+            ),
+        ),
+    )
+    sharded_proto = jax_supplemental_pb2.Function.FromString(
+        sharded.serializable_to_proto().proto.inlined_bytes
+    )
+    self.assertLen(sharded_proto.abstract_meshes, 1)
+    self.assertEqual(
+        list(sharded_proto.input_named_shardings.idx_to_sharding.keys()), [1]
+    )
+    self.assertEqual(
+        sharded_proto.output_named_shardings.idx_to_sharding[0].memory_kind,
+        "pinned_host",
+    )
+
 
 if __name__ == "__main__":
   absltest.main()

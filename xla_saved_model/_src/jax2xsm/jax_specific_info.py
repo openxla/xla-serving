@@ -43,6 +43,7 @@ from xla_saved_model._src.core import shlo_type
 from xla_saved_model._src.core import unstructured_data
 from xla_saved_model._src.jax2xsm import constants
 from xla_saved_model._src.jax2xsm import pytree_proto
+from xla_saved_model._src.jax2xsm import sharding_proto
 from xla_saved_model.protos.xla import xla_data_pb2
 
 T1 = TypeVar("T1")
@@ -301,6 +302,10 @@ class JaxSpecificInfo(shlo_function.ShloFunctionSupplementalInfo):
       Only recorded when the manifest is not already exact; see
       `_to_pytree_def_proto`.
     out_tree: the PyTree structure of the function's outputs. See `in_tree`.
+    in_named_shardings: the `NamedSharding` (or `None`) for each flattened input
+      leaf. Only recorded when at least one leaf has a `NamedSharding`.
+    out_named_shardings: the `NamedSharding` (or `None`) for each flattened
+      output leaf. See `in_named_shardings`.
   """
 
   name: str
@@ -316,11 +321,18 @@ class JaxSpecificInfo(shlo_function.ShloFunctionSupplementalInfo):
 
   in_tree: jax.tree_util.PyTreeDef | None = None
   out_tree: jax.tree_util.PyTreeDef | None = None
+  in_named_shardings: Sequence[jax.sharding.NamedSharding | None] | None = None
+  out_named_shardings: Sequence[jax.sharding.NamedSharding | None] | None = None
 
   def serializable_to_proto(
       self,
   ) -> unstructured_data.UnstructuredDataWithExtName:
     """Serializes to an `UnstructuredDataWithExtName`."""
+    abstract_meshes, input_named_shardings, output_named_shardings = (
+        sharding_proto.to_protos(
+            self.in_named_shardings, self.out_named_shardings
+        )
+    )
     jax_proto = jax_supplemental_pb2.Function(
         name=self.name,
         input_spec_refinements=_to_shape_dtype_refinements_proto(
@@ -342,6 +354,9 @@ class JaxSpecificInfo(shlo_function.ShloFunctionSupplementalInfo):
         output_tree=_to_pytree_def_proto(
             self.out_tree, f"the outputs of `{self.name}`"
         ),
+        abstract_meshes=abstract_meshes,
+        input_named_shardings=input_named_shardings,
+        output_named_shardings=output_named_shardings,
     )
     return unstructured_data.UnstructuredDataWithExtName(
         proto=manifest_pb2.UnstructuredData(

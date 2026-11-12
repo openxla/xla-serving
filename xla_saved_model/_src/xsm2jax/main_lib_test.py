@@ -344,6 +344,9 @@ class XsmToJaxTest(parameterized.TestCase):
     self.assertIsInstance(
         deserialized_apply_function.exported, jax.export.Exported
     )
+    self.assertEmpty(jax_supplemental_proto.abstract_meshes)
+    self.assertFalse(jax_supplemental_proto.HasField('input_named_shardings'))
+    self.assertFalse(jax_supplemental_proto.HasField('output_named_shardings'))
 
   def test_xsm_fn_to_apply_fn_preserves_custom_pytree_node(self):
     # The manifest has no way to express a custom PyTree node, so it records
@@ -580,6 +583,204 @@ class XsmToJaxTest(parameterized.TestCase):
         TypeError, 'expects a jax.export.Exported object, got str'
     ):
       xsm_to_jax.ExportedApplyFn('not an Exported object')
+
+  def test_to_jax_shaped_array_with_named_sharding(self):
+    explicit_mesh = jax.sharding.AbstractMesh(
+        (2, 4),
+        ('x', 'y'),
+        axis_types=(
+            jax.sharding.AxisType.Explicit,
+            jax.sharding.AxisType.Auto,
+        ),
+    )
+    scope = jax.export.SymbolicScope()
+
+    # Short PartitionSpec is padded to rank; Explicit axis stays on aval while
+    # Auto axis is canonicalized away; default memory space is Device.
+    short_spec_aval = xsm_to_jax._to_jax_shaped_array(
+        ((4, 8), np.float32),
+        scope,
+        NamedSharding(explicit_mesh, PartitionSpec('x')),
+    )
+    self.assertEqual(
+        short_spec_aval.sharding,
+        NamedSharding(explicit_mesh, PartitionSpec('x', None)),
+    )
+    self.assertEqual(short_spec_aval.memory_space, jax.memory.Space.Device)
+
+    # UNCONSTRAINED is normalized to None and pinned_host maps to Space.Host.
+    host_aval = xsm_to_jax._to_jax_shaped_array(
+        ((4, 8), np.float32),
+        scope,
+        NamedSharding(
+            explicit_mesh,
+            PartitionSpec('x', PartitionSpec.UNCONSTRAINED),
+            memory_kind='pinned_host',
+        ),
+    )
+    self.assertEqual(
+        host_aval.sharding,
+        NamedSharding(explicit_mesh, PartitionSpec('x', None)),
+    )
+    self.assertEqual(host_aval.memory_space, jax.memory.Space.Host)
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='neither_set',
+          has_in=False,
+          has_out=False,
+          expected=False,
+      ),
+      dict(
+          testcase_name='only_input_set',
+          has_in=True,
+          has_out=False,
+          expected=True,
+      ),
+      dict(
+          testcase_name='only_output_set',
+          has_in=False,
+          has_out=True,
+          expected=True,
+      ),
+      dict(
+          testcase_name='both_set',
+          has_in=True,
+          has_out=True,
+          expected=True,
+      ),
+  )
+  def test_exported_version_kwargs(self, has_in, has_out, expected):
+    supplemental = jax_supplemental_pb2.Function(
+        input_named_shardings=(
+            jax_supplemental_pb2.NamedShardings() if has_in else None
+        ),
+        output_named_shardings=(
+            jax_supplemental_pb2.NamedShardings() if has_out else None
+        ),
+    )
+    legacy_exported_cls = dataclasses.make_dataclass(
+        'LegacyExported',
+        [('fun_name', str), ('_has_named_shardings', bool)],
+        frozen=True,
+    )
+    modern_exported_cls = dataclasses.make_dataclass(
+        'ModernExported',
+        [('fun_name', str), ('_in_named_shardings', Any)],
+        frozen=True,
+    )
+    self.assertEqual(
+        xsm_to_jax._exported_version_kwargs(
+            supplemental, exported_cls=legacy_exported_cls
+        ),
+        {'_has_named_shardings': expected},
+    )
+    self.assertEqual(
+        xsm_to_jax._exported_version_kwargs(
+            supplemental, exported_cls=modern_exported_cls
+        ),
+        {},
+    )
+
+  def test_xsm_fn_to_apply_fn_preserves_named_shardings_and_placement(self):
+    mesh = jax.sharding.Mesh(mesh_utils.create_device_mesh((2, 4)), ('b', 'y'))
+    weight_sharding = NamedSharding(mesh, PartitionSpec('y'))
+    host_bias_sharding = NamedSharding(
+        mesh, PartitionSpec(), memory_kind='pinned_host'
+    )
+    input_sharding = NamedSharding(mesh, PartitionSpec('b', None))
+    out_sharding = NamedSharding(mesh, PartitionSpec('b', 'y'))
+
+    sharded_fn = jax.jit(
+        lambda p, x: x * p['w'] + p['bias'],
+        in_shardings=(
+            {'w': weight_sharding, 'bias': host_bias_sharding},
+            input_sharding,
+        ),
+        out_shardings=out_sharding,
+    )
+    params_spec = {
+        'w': jax.ShapeDtypeStruct((4,), jnp.float32),
+        'bias': jax.ShapeDtypeStruct((), jnp.float32),
+    }
+    input_spec = jax.ShapeDtypeStruct((2, 4), jnp.float32)
+
+    original_exported = jax.export.export(sharded_fn, platforms=['cpu'])(
+        params_spec, input_spec
+    )
+    shlo_fn = main_lib.jax_exported_to_shlo_fn(original_exported)
+    save_dir = self.create_tempdir().full_path
+    xsm.save({'fn': shlo_fn}, save_dir, xsm.SaveOptions(version=2))
+
+    manifest_proto = xsm.load(save_dir)
+    loaded_fn = manifest_proto.objects['fn'].function
+    supp_rel_path = loaded_fn.body.stable_hlo_body.supplemental_info[
+        constants.JAX_SPECIFIC_INFO
+    ].file_system_location.string_path
+    supp_proto = jax_supplemental_pb2.Function()
+    with open(os.path.join(save_dir, supp_rel_path), 'rb') as f:
+      supp_proto.ParseFromString(f.read())
+
+    # The single mesh is stored once and shared across inputs and outputs.
+    self.assertLen(supp_proto.abstract_meshes, 1)
+    self.assertTrue(supp_proto.HasField('input_named_shardings'))
+    self.assertTrue(supp_proto.HasField('output_named_shardings'))
+
+    restored_apply_fn = xsm_to_jax.xsm_fn_to_apply_fn(loaded_fn, supp_proto)
+    restored_exported = restored_apply_fn.exported
+
+    self.assertEqual(
+        restored_exported.in_shardings_jax(mesh),
+        original_exported.in_shardings_jax(mesh),
+    )
+    self.assertEqual(
+        restored_exported.out_shardings_jax(mesh),
+        original_exported.out_shardings_jax(mesh),
+    )
+
+    # Execute the restored function with inputs placed using its restored
+    # shardings.
+    in_shardings = restored_exported.in_shardings_jax(mesh)
+    params = {
+        'bias': jax.device_put(jnp.float32(1.0), in_shardings[0]),
+        'w': jax.device_put(jnp.arange(4, dtype=jnp.float32), in_shardings[1]),
+    }
+    x = jax.device_put(
+        jnp.ones((2, 4), dtype=jnp.float32) * 3.0, in_shardings[2]
+    )
+    result = restored_apply_fn(params, x)
+    self.assertTrue(jnp.array_equal(result, sharded_fn(params, x)))
+    self.assertEqual(result.sharding, out_sharding)
+
+    # Re-exporting back to ShloFunction preserves both OpShardings and HOST
+    # placement from the restored NamedShardings.
+    roundtripped_shlo_fn = main_lib.jax_exported_to_shlo_fn(restored_exported)
+    orig_in_leaves = jax.tree.leaves(shlo_fn.input_signature)
+    rt_in_leaves = jax.tree.leaves(roundtripped_shlo_fn.input_signature)
+    self.assertEqual(
+        [(s.sharding, s.placement) for s in rt_in_leaves],
+        [(s.sharding, s.placement) for s in orig_in_leaves],
+    )
+    self.assertEqual(rt_in_leaves[0].placement, xsm.type_pb2.HOST)
+    orig_out_leaves = jax.tree.leaves(shlo_fn.output_signature)
+    rt_out_leaves = jax.tree.leaves(roundtripped_shlo_fn.output_signature)
+    self.assertEqual(
+        [(s.sharding, s.placement) for s in rt_out_leaves],
+        [(s.sharding, s.placement) for s in orig_out_leaves],
+    )
+
+    # Artifacts saved before named shardings were added still load cleanly.
+    legacy_supp = jax_supplemental_pb2.Function()
+    legacy_supp.CopyFrom(supp_proto)
+    legacy_supp.ClearField('abstract_meshes')
+    legacy_supp.ClearField('input_named_shardings')
+    legacy_supp.ClearField('output_named_shardings')
+    legacy_apply_fn = xsm_to_jax.xsm_fn_to_apply_fn(loaded_fn, legacy_supp)
+    self.assertEqual(
+        legacy_apply_fn.exported._in_named_shardings, (None, None, None)
+    )
+    self.assertEqual(legacy_apply_fn.exported._out_named_shardings, (None,))
+    self.assertTrue(jnp.array_equal(legacy_apply_fn(params, x), result))
 
 
 if __name__ == '__main__':

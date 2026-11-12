@@ -63,6 +63,80 @@ message Function {
   // registered for serialization at export time.
   optional PyTreeDef input_tree = 9;
   optional PyTreeDef output_tree = 10;
+
+  // Unique abstract meshes referenced by `input_named_shardings` and
+  // `output_named_shardings`. Empty when neither field records a sharding.
+  repeated AbstractMesh abstract_meshes = 11;
+
+  // The `jax.sharding.NamedSharding` of each sharded input or output leaf,
+  // indexed by flattened leaf position.
+  //
+  // `manifest.pb` stores XLA `OpSharding` protos for serving runtimes, which do
+  // not preserve mesh axis names, axis types, or memory kinds. Recording the
+  // original `NamedSharding` (over an `AbstractMesh`) lets readers rebuild
+  // `jax.export.Exported` faithfully without relying on deprecated HLO sharding
+  // fields.
+  //
+  // Absence means no leaf carried a `NamedSharding`, or the artifact was
+  // written before these fields existed.
+  optional NamedShardings input_named_shardings = 12;
+  optional NamedShardings output_named_shardings = 13;
+}
+
+// Per-leaf `NamedSharding` entries for a function signature.
+message NamedShardings {
+  // Maps a flattened leaf index to its `NamedSharding`. Leaves absent from the
+  // map have unspecified (`None`) sharding.
+  map<uint64, NamedSharding> idx_to_sharding = 1;
+}
+
+// A serialized `jax.sharding.AbstractDevice`, mirroring `AbstractDevice` in
+// `jax/_src/export/serialization.py`.
+message AbstractDevice {
+  string device_kind = 1;
+  optional uint32 num_cores = 2;
+  string platform = 3;
+}
+
+// A serialized `jax.sharding.AbstractMesh`, mirroring `AbstractMesh` in
+// `jax/_src/export/serialization.py`.
+message AbstractMesh {
+  enum AxisType {
+    AXIS_TYPE_UNSPECIFIED = 0;
+    AUTO = 1;
+    EXPLICIT = 2;
+    MANUAL = 3;
+  }
+
+  repeated uint32 axis_sizes = 1;
+  repeated string axis_names = 2;
+  repeated AxisType axis_types = 3;
+  optional AbstractDevice abstract_device = 4;
+}
+
+// One dimension entry of a `PartitionSpec`: unpartitioned (`None`) when `axes`
+// is empty and `unconstrained` is false, a single axis name when `axes` has
+// length 1, a tuple of axis names when `axes` has length greater than 1, or
+// `PartitionSpec.UNCONSTRAINED` when `unconstrained` is true.
+message PartitionSpecAxis {
+  repeated string axes = 1;
+  bool unconstrained = 2;
+}
+
+// A serialized `jax.sharding.PartitionSpec`, mirroring `PartitionSpec` in
+// `jax/_src/export/serialization.py`.
+message PartitionSpec {
+  repeated PartitionSpecAxis partitions = 1;
+  repeated string reduced = 2;
+  repeated string unreduced = 3;
+}
+
+// A serialized `jax.sharding.NamedSharding` over an `AbstractMesh` stored in
+// `Function.abstract_meshes`.
+message NamedSharding {
+  uint32 abstract_mesh_index = 1;
+  PartitionSpec spec = 2;
+  optional string memory_kind = 3;
 }
 
 // A serialized `jax.tree_util.PyTreeDef`.
