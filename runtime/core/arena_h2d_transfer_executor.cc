@@ -16,6 +16,8 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
+#include <utility>
 #include <vector>
 
 #include "absl/base/nullability.h"  // from @abseil-cpp
@@ -27,20 +29,92 @@
 #include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "runtime/core/sharding_utils.h"  // from @xla_serving
+#include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/pjrt/common_pjrt_client.h"  // from @xla
 #include "xla/pjrt/host_memory_allocator.h"  // from @xla
 #include "xla/pjrt/pjrt_compiler.h"  // from @xla
 #include "xla/pjrt/raw_pjrt_client.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
+#include "xla/python/ifrt/device.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
+#include "xla/python/ifrt/dtype.h"  // from @xla
+#include "xla/python/ifrt/memory.h"  // from @xla
 #include "xla/python/ifrt/rtti.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
+#include "xla/python/pjrt_ifrt/xla_sharding.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
 namespace xla_serving {
+
+namespace {
+
+// Checks sharding-agnostic `HostBuffer` and `MemoryKind` properties to
+// determine whether `input` can use arena-backed H2D transfer instead of
+// falling back to `MakeArrayFromHostBuffer`.
+bool IsArenaEligibleInput(const HostBuffer& input,
+                          xla::ifrt::MemoryKind memory_kind) {
+  // CommonPjRtClient::Linearize and raw buffer H2D DMA only support fixed-size
+  // POD element types, not tsl::tstring objects.
+  if (input.dtype().kind() == xla::ifrt::DType::kString) {
+    return false;
+  }
+
+  // Sub-byte types (e.g. int4) are stored unpacked as kU8 in HostBuffer
+  // (dtype != storage_dtype), whereas CommonPjRtClient::Linearize expects the
+  // input buffer element width to match the on-device primitive type.
+  if (input.dtype() != input.storage_dtype()) {
+    return false;
+  }
+
+  // Zero-element tensors have 0 on-device bytes and require no H2D DMA;
+  // host staging arena allocation also requires size > 0.
+  if (input.shape().num_elements() == 0) {
+    return false;
+  }
+
+  // TODO: ArenaH2DTransferExecutor currently allocates from
+  // pjrt_device->default_memory_space(), so non-default memory kinds (e.g.,
+  // pinned_host) must fall back.
+  if (!memory_kind.is_default()) {
+    return false;
+  }
+
+  return true;
+}
+
+absl::Status ValidateInputByteStrides(const HostBuffer& input) {
+  if (input.byte_strides().has_value() &&
+      input.byte_strides()->size() != input.shape().dims().size()) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Byte strides rank (", input.byte_strides()->size(),
+                     ") does not match input shape rank (",
+                     input.shape().dims().size(), ")"));
+  }
+  return absl::OkStatus();
+}
+
+// Normalizes a single-device maximal `HloSharding` into a
+// `SingleDeviceSharding` targeting its unique device.
+absl::StatusOr<xla::ifrt::ShardingRef> ResolveSingleDeviceHloSharding(
+    const xla::HloSharding& hlo_sharding, xla::ifrt::MemoryKind memory_kind,
+    xla::ifrt::Client* client) {
+  int unique_device_id = hlo_sharding.GetUniqueDevice();
+  TF_ASSIGN_OR_RETURN(
+      xla::ifrt::Device * target_device,
+      client->LookupDevice(xla::ifrt::DeviceId(unique_device_id)));
+  if (!target_device) {
+    return absl::InternalError(absl::StrCat(
+        "LookupDevice returned null for device id ", unique_device_id));
+  }
+  return xla::ifrt::SingleDeviceSharding::Create(target_device, memory_kind);
+}
+
+}  // namespace
 
 absl::StatusOr<std::unique_ptr<H2DTransferExecutor>>
 ArenaH2DTransferExecutor::Create(xla::ifrt::Client* client,
@@ -59,7 +133,7 @@ ArenaH2DTransferExecutor::Create(xla::ifrt::Client* client,
   }
   xla::ifrt::PjRtCompatibleClient* pjrt_compatible_client =
       xla::ifrt::dyn_cast_or_null<xla::ifrt::PjRtCompatibleClient>(client);
-  auto* common_pjrt_client =
+  xla::CommonPjRtClient* common_pjrt_client =
       pjrt_compatible_client != nullptr
           ? dynamic_cast<xla::CommonPjRtClient*>(
                 pjrt_compatible_client->pjrt_client())
@@ -110,14 +184,74 @@ ArenaH2DTransferExecutor::ExecuteTransfer(
     return std::vector<xla::ifrt::ArrayRef>();
   }
 
-  // TODO: Add single-device eligibility checks and arena-backed
-  // H2D transfers in follow-up CLs.
+  // Phase 1: Dispatch by sharding type and check arena eligibility for all
+  // inputs up front so unsupported shardings fail fast before any transfers
+  // run.
+  std::vector<std::optional<xla::ifrt::ShardingRef>> effective_shardings(
+      inputs.size());
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    const xla::ifrt::ShardingRef& sharding = input_shardings[i];
+    if (sharding == nullptr) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Input sharding at index ", i, " is null."));
+    }
+
+    std::optional<xla::ifrt::ShardingRef> single_device_sharding;
+    if (const xla::ifrt::SingleDeviceSharding* ifrt_single_device_sharding =
+            xla::ifrt::dyn_cast<const xla::ifrt::SingleDeviceSharding>(
+                sharding.get())) {
+      if (ifrt_single_device_sharding->devices()->devices().empty()) {
+        return absl::InvalidArgumentError(
+            "SingleDeviceSharding has no target devices.");
+      }
+      single_device_sharding = sharding;
+    } else {
+      const xla::ifrt::HloSharding* ifrt_hlo_sharding =
+          xla::ifrt::dyn_cast<const xla::ifrt::HloSharding>(sharding.get());
+      if (ifrt_hlo_sharding == nullptr) {
+        return absl::UnimplementedError(
+            absl::StrCat("Unsupported sharding for H2D transfer: ", *sharding));
+      }
+      const xla::HloSharding& hlo_sharding =
+          ifrt_hlo_sharding->xla_hlo_sharding();
+
+      if (hlo_sharding.IsSingleDevice()) {
+        TF_ASSIGN_OR_RETURN(
+            single_device_sharding,
+            ResolveSingleDeviceHloSharding(hlo_sharding,
+                                           sharding->memory_kind(), client_));
+      } else if (hlo_sharding.IsReplicated()) {
+        // TODO: Support replicated sharding in
+        // ArenaH2DTransferExecutor.
+      } else if (hlo_sharding.IsTiled()) {
+        // TODO: Support tiled sharding in
+        // ArenaH2DTransferExecutor.
+      } else {
+        return absl::UnimplementedError(absl::StrCat(
+            "Only support MAXIMAL, OTHER or REPLICATED, but got sharding : ",
+            hlo_sharding.ToString()));
+      }
+    }
+
+    if (single_device_sharding.has_value() &&
+        IsArenaEligibleInput(inputs[i], sharding->memory_kind())) {
+      TF_RETURN_IF_ERROR(ValidateInputByteStrides(inputs[i]));
+      effective_shardings[i] = *std::move(single_device_sharding);
+    }
+  }
+
+  // TODO: Transfer eligible single-device inputs
+  // (`effective_shardings[i]` populated) via per-device host and device arenas
+  // instead of MakeArrayFromHostBuffer.
   std::vector<xla::ifrt::ArrayRef> results(inputs.size());
   for (size_t i = 0; i < inputs.size(); ++i) {
-    TF_ASSIGN_OR_RETURN(
-        results[i], sharding_internal::MakeArrayFromHostBuffer(
-                        *client_, inputs[i], input_shardings[i]->devices(),
-                        input_shardings[i], *thread_pool_));
+    const xla::ifrt::ShardingRef& target_sharding =
+        effective_shardings[i].has_value() ? *effective_shardings[i]
+                                           : input_shardings[i];
+    TF_ASSIGN_OR_RETURN(results[i],
+                        sharding_internal::MakeArrayFromHostBuffer(
+                            *client_, inputs[i], target_sharding->devices(),
+                            target_sharding, *thread_pool_));
   }
   return results;
 }
