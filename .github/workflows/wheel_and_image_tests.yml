@@ -1,0 +1,845 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Verification gate for staged Nightly and Release Candidate wheels and OCI
+# serving images produced by the internal Kokoro/Louhi pipeline. Runs without
+# any GCP credentials (`CLOUDSDK_AUTH_DISABLE_CREDENTIALS=1`) against public
+# staging buckets and container registries before artifacts are promoted.
+name: Wheel and Image Tests
+# Matched by trigger_action_workflows.sh to locate the dispatched run.
+run-name: E2E tests ${{ inputs.request_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      gcs_wheel_dir:
+        description: "GCS folder with staged wheels (e.g. gs://xla-serving-release-artifacts/0.1.0/rc0/release/)"
+        required: true
+        type: string
+      gcs_docker_dir:
+        description: "GCS folder with consolidated IMAGE_DIGESTS.json and IMAGE_DIGESTS.sha256"
+        required: true
+        type: string
+      source_sha:
+        description: "Commit SHA the staged artifacts were built from (defaults to dispatched ref)"
+        required: false
+        type: string
+        default: ""
+      request_id:
+        description: "Unique correlation ID used by the caller to locate this run"
+        required: false
+        type: string
+        default: "manual"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.request_id }}-${{ inputs.gcs_wheel_dir }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CLOUDSDK_AUTH_DISABLE_CREDENTIALS: "1"
+  STAGING_DOCKER_REGISTRY: "us-docker.pkg.dev/ml-oss-artifacts-published/xla-serving-staging-container"
+  CRANE_VERSION: "v0.18.0"
+  CRANE_SHA256: "cdf4d426d965d9a8ba613d7ebf3addf93101aa2e853a3f08fbfdaed2823918f3"
+
+jobs:
+  bazel-tests:
+    name: "Bazel runtime & data test suite"
+    runs-on: linux-x86-n4-32
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:0ad60e35d5870853c4c463f1c23dff6ed2dbfe3b1f708406c25a7606a5cae078
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Configure Git Safe Directory
+        run: |
+          git config --global --add safe.directory /__w/xla-serving/xla-serving
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          git config --global --add safe.directory "*"
+
+      - name: Setup Bazel
+        uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
+        with:
+          repository-cache: true
+
+      - name: Run Bazel Runtime and Data Tests
+        run: |
+          set -euo pipefail
+          bazel --nosystem_rc test -c opt --test_output=errors //runtime/... //data/... \
+            --config=remote_cache_readonly \
+            --output_filter=DONT_MATCH_ANYTHING \
+            --ui_event_filters=-warning \
+            --show_progress_rate_limit=30 \
+            --curses=no
+
+      - name: Upload Bazel Test Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bazel-testlogs-runtime-data
+          path: bazel-testlogs/
+          retention-days: 7
+
+  wheel-tests:
+    name: "Wheel install & pytest suite (Python ${{ matrix.python_version }})"
+    runs-on: linux-x86-n4-16
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        python_version: ["3.12", "3.13", "3.14"]
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:0ad60e35d5870853c4c463f1c23dff6ed2dbfe3b1f708406c25a7606a5cae078
+    env:
+      GCS_WHEEL_DIR: ${{ inputs.gcs_wheel_dir }}
+      PYTHON_VERSION: ${{ matrix.python_version }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Configure Git Safe Directory
+        run: |
+          git config --global --add safe.directory /__w/xla-serving/xla-serving
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          git config --global --add safe.directory "*"
+
+      - name: Download and Verify Staged Wheels
+        run: |
+          set -euo pipefail
+          uri="${GCS_WHEEL_DIR%/}"
+          if [[ ! "${uri}" =~ ^gs://xla-serving-(nightly|release)-artifacts/[A-Za-z0-9._/-]+$ ]]; then
+            echo "::error::Unexpected gcs_wheel_dir: ${GCS_WHEEL_DIR}" >&2
+            exit 1
+          fi
+          mkdir -p wheels
+          gcloud storage cp "${uri}/*.whl" "${uri}/SHA256SUMS" wheels/
+          (cd wheels && sha256sum --check --strict SHA256SUMS)
+          diff -u <(ls -1A -I SHA256SUMS wheels | LC_ALL=C sort) \
+            <(awk '{print $2}' wheels/SHA256SUMS | LC_ALL=C sort)
+          ls -la wheels/
+
+      - name: Install uv and Set up Python
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          python-version: ${{ matrix.python_version }}
+          enable-cache: false
+
+      - name: Setup Bazel
+        uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
+        with:
+          repository-cache: true
+
+      - name: Create Virtual Environment and Check Wheel Metadata
+        run: |
+          set -euo pipefail
+          uv venv --clear --python "${PYTHON_VERSION}"
+          echo "${GITHUB_WORKSPACE}/.venv/bin" >> "${GITHUB_PATH}"
+          echo "VIRTUAL_ENV=${GITHUB_WORKSPACE}/.venv" >> "${GITHUB_ENV}"
+          uv run --isolated --no-project --with twine twine check --strict wheels/*.whl
+
+      - name: Install Staged Wheels and Run Pytest Suites
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          py_tag="cp${PYTHON_VERSION//./}"
+          pure_wheels=(wheels/xla_saved_model-*-py3-none-any.whl)
+          data_wheels=(wheels/xla_serving_data-*-"${py_tag}"-*.whl)
+          runner_wheels=(wheels/xla_saved_model_runner-*-"${py_tag}"-*.whl)
+          if [[ ${#pure_wheels[@]} -ne 1 || ${#data_wheels[@]} -ne 1 || ${#runner_wheels[@]} -ne 1 ]]; then
+            echo "::error::Expected exactly 1 pure, 1 data, and 1 runner wheel for ${py_tag}." >&2
+            ls -la wheels/
+            exit 1
+          fi
+          pure_whl="${pure_wheels[0]}"
+          data_whl="${data_wheels[0]}"
+          runner_whl="${runner_wheels[0]}"
+
+          extras="test,torch"
+          # TensorFlow does not support Python 3.14 yet; TF tests are skipped via conftest.py.
+          if [[ "${PYTHON_VERSION}" != "3.14" ]]; then
+            extras="${extras},tf"
+          fi
+          # Install extras directly from the staged wheel file so uv never
+          # rebuilds local "." over the staged wheel under test.
+          uv pip install "./${pure_whl}[${extras}]" "./${data_whl}" "./${runner_whl}"
+          uv pip uninstall triton 2>/dev/null || true
+
+          # Verify standalone clean-directory imports of the published wheels
+          # before installing test-only C++ fixture pybinds.
+          (
+            cd /tmp
+            python - <<'PYEOF'
+          import pathlib
+          import xla_saved_model
+          import xla_serving_data
+          from xla_saved_model_runner import model_runner
+
+          assert 'site-packages' in pathlib.Path(xla_saved_model.__file__).parts, xla_saved_model.__file__
+          print('Imported xla_saved_model version:', xla_saved_model.__version__)
+          PYEOF
+          )
+
+          # Build and install the unpublished test-only C++ fixture wheel from
+          # the warm remote cache so composite_processor_test.py and
+          # examples/composite_processor also execute against the staged wheels.
+          bazel --nosystem_rc build -c opt //data:xla_serving_data_test \
+            --@rules_python//python/config_settings:python_version="${PYTHON_VERSION}" \
+            --config=remote_cache_readonly \
+            --output_filter=DONT_MATCH_ANYTHING \
+            --ui_event_filters=-warning \
+            --show_progress_rate_limit=30 \
+            --curses=no
+          uv pip install bazel-bin/data/xla_serving_data_test-*.whl
+          (
+            cd /tmp
+            python -c "import xla_serving_data_test; print('Imported xla_serving_data_test')"
+          )
+
+          pytest -v -s --full-trace -n auto \
+            xla_saved_model/ \
+            data/cpu_embedding/python/embedding_utils_test.py
+
+          pytest -v -s -n auto --dist loadfile \
+            examples/
+
+      - name: Run LLM Module Pytest Suite (Python 3.12)
+        if: matrix.python_version == '3.12'
+        env:
+          VLLM_TARGET_DEVICE: tpu
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          pure_wheels=(wheels/xla_saved_model-*-py3-none-any.whl)
+          data_wheels=(wheels/xla_serving_data-*-cp312-*.whl)
+          runner_wheels=(wheels/xla_saved_model_runner-*-cp312-*.whl)
+          uv pip install --pre "./${pure_wheels[0]}[test]" "./${data_wheels[0]}" "./${runner_wheels[0]}"
+          uv pip uninstall triton 2>/dev/null || true
+          pytest -v -s -n auto xla_saved_model/_src/llm/
+
+  verify-docker-images:
+    name: "Verify all 7 staged OCI images"
+    runs-on: linux-x86-n4-16
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:0ad60e35d5870853c4c463f1c23dff6ed2dbfe3b1f708406c25a7606a5cae078
+    env:
+      GCS_DOCKER_DIR: ${{ inputs.gcs_docker_dir }}
+
+    steps:
+      - name: Install SHA256-Verified Crane
+        run: |
+          set -euo pipefail
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "${tmp_dir}"' EXIT
+          curl -fsSL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" \
+            -o "${tmp_dir}/crane.tar.gz"
+          echo "${CRANE_SHA256}  ${tmp_dir}/crane.tar.gz" | sha256sum --check --strict
+          mkdir -p "${HOME}/.local/bin"
+          tar -xzf "${tmp_dir}/crane.tar.gz" -C "${HOME}/.local/bin" crane
+          chmod +x "${HOME}/.local/bin/crane"
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+
+      - name: Download IMAGE_DIGESTS and Verify All 7 Staged OCI Images
+        run: |
+          set -euo pipefail
+          uri="${GCS_DOCKER_DIR%/}"
+          if [[ ! "${uri}" =~ ^gs://xla-serving-(nightly|release)-artifacts/[A-Za-z0-9._/-]+$ ]]; then
+            echo "::error::Unexpected gcs_docker_dir: ${GCS_DOCKER_DIR}" >&2
+            exit 1
+          fi
+          mkdir -p docker_digests
+          gcloud storage cp "${uri}/IMAGE_DIGESTS.json" "${uri}/IMAGE_DIGESTS.sha256" docker_digests/
+          (cd docker_digests && sha256sum --check --strict IMAGE_DIGESTS.sha256)
+
+          declare -A expected_entrypoints=(
+            ["cpu-jax-only"]="/runtime/serving/gcp/server/xla_serving_main_cpu"
+            ["cpu-jax-with-tf"]="/runtime/serving/gcp/server/xla_serving_main_cpu"
+            ["gpu-jax-cuda12"]="/runtime/serving/gcp/server/xla_serving_main_gpu"
+            ["gpu-jax-cuda12-with-tf"]="/runtime/serving/gcp/server/xla_serving_main_gpu"
+            ["gpu-jax-cuda13"]="/runtime/serving/gcp/server/xla_serving_main_gpu"
+            ["gpu-jax-cuda13-with-tf"]="/runtime/serving/gcp/server/xla_serving_main_gpu"
+            ["tpu-jax-only"]="/runtime/serving/gcp/server/xla_serving_main_tpu"
+          )
+          variants=(
+            "cpu-jax-only"
+            "cpu-jax-with-tf"
+            "gpu-jax-cuda12"
+            "gpu-jax-cuda12-with-tf"
+            "gpu-jax-cuda13"
+            "gpu-jax-cuda13-with-tf"
+            "tpu-jax-only"
+          )
+
+          for variant in "${variants[@]}"; do
+            digest="$(jq -er --arg v "${variant}" '.[$v]' docker_digests/IMAGE_DIGESTS.json)"
+            if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::Invalid digest '${digest}' for ${variant}" >&2
+              exit 1
+            fi
+            image="${STAGING_DOCKER_REGISTRY}/${variant}@${digest}"
+            expected_bin="${expected_entrypoints[${variant}]}"
+            echo "Verifying ${image} (expected entrypoint: ${expected_bin})..."
+
+            cfg_json="$(crane config "${image}")"
+            actual_ep="$(jq -er '.config.Entrypoint[0]' <<< "${cfg_json}")"
+            if [[ "${actual_ep}" != "${expected_bin}" ]]; then
+              echo "::error::Entrypoint mismatch for ${variant}: expected ${expected_bin}, got ${actual_ep}" >&2
+              exit 1
+            fi
+            if [[ "${variant}" == "tpu-jax-only" ]]; then
+              jq -er '.config.Env | index("TPU_LIBRARY_PATH=/usr/lib/libtpu.so") != null' <<< "${cfg_json}" >/dev/null
+            elif [[ "${variant}" == gpu-* ]]; then
+              jq -er '.config.Env | index("NVIDIA_VISIBLE_DEVICES=all") != null' <<< "${cfg_json}" >/dev/null
+            fi
+
+            extract_dir="$(mktemp -d)"
+            crane export "${image}" - | tar -xf - -C "${extract_dir}"
+            test -x "${extract_dir}${expected_bin}"
+            if [[ "${variant}" == "tpu-jax-only" ]]; then
+              test -f "${extract_dir}/usr/lib/libtpu.so"
+            fi
+            rm -rf "${extract_dir}"
+          done
+          echo "Verified all 7 staged OCI serving images."
+
+  serving-test-cpu:
+    name: "End-to-end Serving Test (CPU)"
+    runs-on: linux-x86-n4-16
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:0ad60e35d5870853c4c463f1c23dff6ed2dbfe3b1f708406c25a7606a5cae078
+    env:
+      GCS_WHEEL_DIR: ${{ inputs.gcs_wheel_dir }}
+      GCS_DOCKER_DIR: ${{ inputs.gcs_docker_dir }}
+      PYTHON_VERSION: "3.12"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Configure Git Safe Directory
+        run: |
+          git config --global --add safe.directory /__w/xla-serving/xla-serving
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          git config --global --add safe.directory "*"
+
+      - name: Install SHA256-Verified Crane and Download Digests
+        run: |
+          set -euo pipefail
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "${tmp_dir}"' EXIT
+          curl -fsSL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" \
+            -o "${tmp_dir}/crane.tar.gz"
+          echo "${CRANE_SHA256}  ${tmp_dir}/crane.tar.gz" | sha256sum --check --strict
+          mkdir -p "${HOME}/.local/bin"
+          tar -xzf "${tmp_dir}/crane.tar.gz" -C "${HOME}/.local/bin" crane
+          chmod +x "${HOME}/.local/bin/crane"
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+
+          docker_uri="${GCS_DOCKER_DIR%/}"
+          if [[ ! "${docker_uri}" =~ ^gs://xla-serving-(nightly|release)-artifacts/[A-Za-z0-9._/-]+$ ]]; then
+            echo "::error::Unexpected gcs_docker_dir: ${GCS_DOCKER_DIR}" >&2
+            exit 1
+          fi
+          mkdir -p docker_digests
+          gcloud storage cp "${docker_uri}/IMAGE_DIGESTS.json" "${docker_uri}/IMAGE_DIGESTS.sha256" docker_digests/
+          (cd docker_digests && sha256sum --check --strict IMAGE_DIGESTS.sha256)
+
+      - name: Install uv and Set up Python
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          python-version: "3.12"
+          enable-cache: false
+
+      - name: Install Staged Wheels and Export NNX Model
+        run: |
+          set -euo pipefail
+          wheel_uri="${GCS_WHEEL_DIR%/}"
+          if [[ ! "${wheel_uri}" =~ ^gs://xla-serving-(nightly|release)-artifacts/[A-Za-z0-9._/-]+$ ]]; then
+            echo "::error::Unexpected gcs_wheel_dir: ${GCS_WHEEL_DIR}" >&2
+            exit 1
+          fi
+          uv venv --python "${PYTHON_VERSION}"
+          echo "${GITHUB_WORKSPACE}/.venv/bin" >> "${GITHUB_PATH}"
+          echo "VIRTUAL_ENV=${GITHUB_WORKSPACE}/.venv" >> "${GITHUB_ENV}"
+          export VIRTUAL_ENV="${GITHUB_WORKSPACE}/.venv"
+          export PATH="${VIRTUAL_ENV}/bin:${PATH}"
+
+          mkdir -p wheels
+          gcloud storage cp "${wheel_uri}/*.whl" "${wheel_uri}/SHA256SUMS" wheels/
+          (cd wheels && sha256sum --check --strict SHA256SUMS)
+          diff -u <(ls -1A -I SHA256SUMS wheels | LC_ALL=C sort) \
+            <(awk '{print $2}' wheels/SHA256SUMS | LC_ALL=C sort)
+          shopt -s nullglob
+          py_tag="cp${PYTHON_VERSION//./}"
+          wheels_to_install=(wheels/*-py3-none-any.whl wheels/*-"${py_tag}"-*.whl)
+          if [[ ${#wheels_to_install[@]} -ne 3 ]]; then
+            echo "::error::Expected 3 wheels for ${py_tag}, found ${#wheels_to_install[@]}" >&2
+            ls -la wheels/
+            exit 1
+          fi
+          uv pip install "${wheels_to_install[@]}"
+          uv pip install "jax[cpu]" flax grpcio
+
+          mkdir -p /tmp/exported_model
+          rm -rf /tmp/test_workspace && mkdir -p /tmp/test_workspace
+          cp -r examples /tmp/test_workspace/
+          (
+            cd /tmp/test_workspace
+            python3 -m examples.nnx.run_export --export_path=/tmp/exported_model
+          )
+          ls -la /tmp/exported_model
+
+      - name: Run End-to-End CPU Prediction Tests (cpu-jax-only & cpu-jax-with-tf)
+        run: |
+          set -euo pipefail
+          for variant in cpu-jax-only cpu-jax-with-tf; do
+            digest="$(jq -er --arg v "${variant}" '.[$v]' docker_digests/IMAGE_DIGESTS.json)"
+            if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::Invalid digest '${digest}' for ${variant}" >&2
+              exit 1
+            fi
+            image="${STAGING_DOCKER_REGISTRY}/${variant}@${digest}"
+            rm -rf /tmp/xla-serving /tmp/xla-serving.log
+            mkdir -p /tmp/xla-serving
+            crane export "${image}" - | tar -xf - -C /tmp/xla-serving
+            server_bin="/tmp/xla-serving/runtime/serving/gcp/server/xla_serving_main_cpu"
+            test -x "${server_bin}"
+
+            echo "Starting ${variant} server (${image})..."
+            "${server_bin}" \
+              --model_name=nnx \
+              --model_path=/tmp/exported_model \
+              --use_insecure_grpc_credentials=true \
+              --port=8500 > /tmp/xla-serving.log 2>&1 &
+            server_pid=$!
+            echo "SERVER_PID=${server_pid}" >> "${GITHUB_ENV}"
+
+            ready=false
+            for i in $(seq 1 30); do
+              if grep -q "JAX Serving listening on" /tmp/xla-serving.log 2>/dev/null; then
+                echo "${variant} server ready after ${i}s."
+                ready=true
+                break
+              fi
+              if ! kill -0 "${server_pid}" 2>/dev/null; then
+                echo "::error::${variant} server exited prematurely:" >&2
+                cat /tmp/xla-serving.log || true
+                exit 1
+              fi
+              sleep 1
+            done
+            if [[ "${ready}" != "true" ]]; then
+              echo "::error::${variant} server failed to start within 30s:" >&2
+              cat /tmp/xla-serving.log || true
+              kill -9 "${server_pid}" 2>/dev/null || true
+              exit 1
+            fi
+
+            python3 /tmp/test_workspace/examples/nnx/test_prediction_client.py \
+              --server_address=localhost:8500 \
+              --model_name=nnx \
+              --signature_name=serving_default \
+              --batch_size=4 \
+              --timeout=30
+
+            kill -9 "${server_pid}" 2>/dev/null || true
+            wait "${server_pid}" 2>/dev/null || true
+          done
+
+      - name: Clean up CPU Server
+        if: always()
+        run: |
+          if [[ -f /tmp/xla-serving.log ]]; then
+            echo "=== XLA Serving CPU Logs ==="
+            cat /tmp/xla-serving.log
+          fi
+          if [[ -n "${SERVER_PID:-}" ]]; then
+            kill -9 "${SERVER_PID}" 2>/dev/null || true
+          fi
+
+  serving-test-gpu:
+    name: "End-to-end Serving Test (GPU A100)"
+    runs-on: linux-x86-a2-48-a100-4gpu
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:0ad60e35d5870853c4c463f1c23dff6ed2dbfe3b1f708406c25a7606a5cae078
+      options: --gpus all --shm-size 2g
+    env:
+      GCS_WHEEL_DIR: ${{ inputs.gcs_wheel_dir }}
+      GCS_DOCKER_DIR: ${{ inputs.gcs_docker_dir }}
+      PYTHON_VERSION: "3.12"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Configure Git Safe Directory
+        run: |
+          git config --global --add safe.directory /__w/xla-serving/xla-serving
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          git config --global --add safe.directory "*"
+
+      - name: Verify GPU Availability
+        run: |
+          if command -v nvidia-smi >/dev/null 2>&1; then
+            nvidia-smi
+          else
+            ls -la /dev/nvidia* 2>/dev/null || echo "No /dev/nvidia* device nodes found"
+          fi
+
+      - name: Install SHA256-Verified Crane and Extract Staged GPU Image
+        run: |
+          set -euo pipefail
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "${tmp_dir}"' EXIT
+          curl -fsSL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" \
+            -o "${tmp_dir}/crane.tar.gz"
+          echo "${CRANE_SHA256}  ${tmp_dir}/crane.tar.gz" | sha256sum --check --strict
+          mkdir -p "${HOME}/.local/bin"
+          tar -xzf "${tmp_dir}/crane.tar.gz" -C "${HOME}/.local/bin" crane
+          chmod +x "${HOME}/.local/bin/crane"
+          export PATH="${HOME}/.local/bin:${PATH}"
+
+          docker_uri="${GCS_DOCKER_DIR%/}"
+          if [[ ! "${docker_uri}" =~ ^gs://xla-serving-(nightly|release)-artifacts/[A-Za-z0-9._/-]+$ ]]; then
+            echo "::error::Unexpected gcs_docker_dir: ${GCS_DOCKER_DIR}" >&2
+            exit 1
+          fi
+          mkdir -p docker_digests
+          gcloud storage cp "${docker_uri}/IMAGE_DIGESTS.json" "${docker_uri}/IMAGE_DIGESTS.sha256" docker_digests/
+          (cd docker_digests && sha256sum --check --strict IMAGE_DIGESTS.sha256)
+
+          digest="$(jq -er '."gpu-jax-cuda12"' docker_digests/IMAGE_DIGESTS.json)"
+          if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::Invalid digest '${digest}' for gpu-jax-cuda12" >&2
+            exit 1
+          fi
+          image="${STAGING_DOCKER_REGISTRY}/gpu-jax-cuda12@${digest}"
+          echo "Extracting ${image}..."
+          mkdir -p /tmp/xla-serving
+          crane export "${image}" - | tar -xf - -C /tmp/xla-serving
+          test -x /tmp/xla-serving/runtime/serving/gcp/server/xla_serving_main_gpu
+
+      - name: Install uv and Set up Python
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          python-version: "3.12"
+          enable-cache: false
+
+      - name: Install Staged Wheels and Export NNX Model
+        run: |
+          set -euo pipefail
+          wheel_uri="${GCS_WHEEL_DIR%/}"
+          if [[ ! "${wheel_uri}" =~ ^gs://xla-serving-(nightly|release)-artifacts/[A-Za-z0-9._/-]+$ ]]; then
+            echo "::error::Unexpected gcs_wheel_dir: ${GCS_WHEEL_DIR}" >&2
+            exit 1
+          fi
+          uv venv --python "${PYTHON_VERSION}"
+          echo "${GITHUB_WORKSPACE}/.venv/bin" >> "${GITHUB_PATH}"
+          echo "VIRTUAL_ENV=${GITHUB_WORKSPACE}/.venv" >> "${GITHUB_ENV}"
+          export VIRTUAL_ENV="${GITHUB_WORKSPACE}/.venv"
+          export PATH="${VIRTUAL_ENV}/bin:${PATH}"
+
+          mkdir -p wheels
+          gcloud storage cp "${wheel_uri}/*.whl" "${wheel_uri}/SHA256SUMS" wheels/
+          (cd wheels && sha256sum --check --strict SHA256SUMS)
+          diff -u <(ls -1A -I SHA256SUMS wheels | LC_ALL=C sort) \
+            <(awk '{print $2}' wheels/SHA256SUMS | LC_ALL=C sort)
+          shopt -s nullglob
+          py_tag="cp${PYTHON_VERSION//./}"
+          wheels_to_install=(wheels/*-py3-none-any.whl wheels/*-"${py_tag}"-*.whl)
+          if [[ ${#wheels_to_install[@]} -ne 3 ]]; then
+            echo "::error::Expected 3 wheels for ${py_tag}, found ${#wheels_to_install[@]}" >&2
+            ls -la wheels/
+            exit 1
+          fi
+          uv pip install "${wheels_to_install[@]}"
+          uv pip install "jax[cuda12]" flax grpcio
+          python3 -c "import jax; print('JAX devices:', jax.devices()); assert any(d.platform == 'gpu' for d in jax.devices()), 'No GPU device found in JAX!'"
+
+          mkdir -p /tmp/exported_model
+          rm -rf /tmp/test_workspace && mkdir -p /tmp/test_workspace
+          cp -r examples /tmp/test_workspace/
+          (
+            cd /tmp/test_workspace
+            python3 -m examples.nnx.run_export --export_path=/tmp/exported_model
+          )
+          ls -la /tmp/exported_model
+
+      - name: Start XLA Serving GPU Server and Run End-to-End Prediction Test
+        run: |
+          set -euo pipefail
+          server_bin="/tmp/xla-serving/runtime/serving/gcp/server/xla_serving_main_gpu"
+          cuda_lib_dirs="$(find /tmp/xla-serving -type d \( -name "lib64" -o -name "lib" \) 2>/dev/null | tr '\n' ':')"
+          nvidia_pip_lib_dirs="$(find "${VIRTUAL_ENV}" -type d -path "*/nvidia/*/lib" 2>/dev/null | tr '\n' ':')"
+          export LD_LIBRARY_PATH="${nvidia_pip_lib_dirs}${cuda_lib_dirs}/usr/local/nvidia/lib64:/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}"
+
+          "${server_bin}" \
+            --orbax_grpc_server_platform=cuda \
+            --model_name=nnx \
+            --model_path=/tmp/exported_model \
+            --use_insecure_grpc_credentials=true \
+            --port=8500 > /tmp/xla-serving.log 2>&1 &
+          server_pid=$!
+          echo "SERVER_PID=${server_pid}" >> "${GITHUB_ENV}"
+
+          ready=false
+          for i in $(seq 1 45); do
+            if grep -q "JAX Serving listening on" /tmp/xla-serving.log 2>/dev/null; then
+              echo "XLA Serving GPU server ready after ${i}s."
+              ready=true
+              break
+            fi
+            if ! kill -0 "${server_pid}" 2>/dev/null; then
+              echo "::error::XLA Serving GPU server exited prematurely:" >&2
+              cat /tmp/xla-serving.log || true
+              exit 1
+            fi
+            sleep 1
+          done
+          if [[ "${ready}" != "true" ]]; then
+            echo "::error::XLA Serving GPU server failed to start within 45s:" >&2
+            cat /tmp/xla-serving.log || true
+            exit 1
+          fi
+
+          python3 /tmp/test_workspace/examples/nnx/test_prediction_client.py \
+            --server_address=localhost:8500 \
+            --model_name=nnx \
+            --signature_name=serving_default \
+            --batch_size=4 \
+            --timeout=60
+
+      - name: Clean up GPU Server
+        if: always()
+        run: |
+          if [[ -f /tmp/xla-serving.log ]]; then
+            echo "=== XLA Serving GPU Logs ==="
+            cat /tmp/xla-serving.log
+          fi
+          if [[ -n "${SERVER_PID:-}" ]]; then
+            kill -9 "${SERVER_PID}" 2>/dev/null || true
+          fi
+
+  serving-test-tpu:
+    name: "End-to-end Serving Test (TPU v7x)"
+    runs-on: linux-x86-tpu7x-224-4tpu
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:0ad60e35d5870853c4c463f1c23dff6ed2dbfe3b1f708406c25a7606a5cae078
+      # --privileged exposes the TPU device nodes to the container.
+      options: --init --privileged
+    env:
+      GCS_WHEEL_DIR: ${{ inputs.gcs_wheel_dir }}
+      GCS_DOCKER_DIR: ${{ inputs.gcs_docker_dir }}
+      PYTHON_VERSION: "3.12"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Configure Git Safe Directory
+        run: |
+          git config --global --add safe.directory /__w/xla-serving/xla-serving
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          git config --global --add safe.directory "*"
+
+      - name: Verify TPU Availability
+        run: |
+          shopt -s nullglob
+          nodes=(/dev/accel* /dev/vfio/*)
+          echo "TPU device nodes:"
+          [[ ${#nodes[@]} -gt 0 ]] && ls -la "${nodes[@]}" || echo "No /dev/accel* or /dev/vfio/* device nodes found"
+
+          echo "Google (vendor 0x1ae0) PCI functions by device id (tpu7x = 0x0076):"
+          for dev in /sys/bus/pci/devices/*; do
+            if [[ "$(cat "${dev}/vendor" 2>/dev/null)" == "0x1ae0" ]]; then
+              cat "${dev}/device"
+            fi
+          done | sort | uniq -c
+
+      - name: Install SHA256-Verified Crane and Extract Staged TPU Image
+        run: |
+          set -euo pipefail
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "${tmp_dir}"' EXIT
+          curl -fsSL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" \
+            -o "${tmp_dir}/crane.tar.gz"
+          echo "${CRANE_SHA256}  ${tmp_dir}/crane.tar.gz" | sha256sum --check --strict
+          mkdir -p "${HOME}/.local/bin"
+          tar -xzf "${tmp_dir}/crane.tar.gz" -C "${HOME}/.local/bin" crane
+          chmod +x "${HOME}/.local/bin/crane"
+          export PATH="${HOME}/.local/bin:${PATH}"
+
+          docker_uri="${GCS_DOCKER_DIR%/}"
+          if [[ ! "${docker_uri}" =~ ^gs://xla-serving-(nightly|release)-artifacts/[A-Za-z0-9._/-]+$ ]]; then
+            echo "::error::Unexpected gcs_docker_dir: ${GCS_DOCKER_DIR}" >&2
+            exit 1
+          fi
+          mkdir -p docker_digests
+          gcloud storage cp "${docker_uri}/IMAGE_DIGESTS.json" "${docker_uri}/IMAGE_DIGESTS.sha256" docker_digests/
+          (cd docker_digests && sha256sum --check --strict IMAGE_DIGESTS.sha256)
+
+          digest="$(jq -er '."tpu-jax-only"' docker_digests/IMAGE_DIGESTS.json)"
+          if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::Invalid digest '${digest}' for tpu-jax-only" >&2
+            exit 1
+          fi
+          image="${STAGING_DOCKER_REGISTRY}/tpu-jax-only@${digest}"
+          echo "Extracting ${image}..."
+          mkdir -p /tmp/xla-serving
+          crane export "${image}" - | tar -xf - -C /tmp/xla-serving
+          test -x /tmp/xla-serving/runtime/serving/gcp/server/xla_serving_main_tpu
+          test -f /tmp/xla-serving/usr/lib/libtpu.so
+
+          crane config "${image}" > /tmp/image-config.json
+          jq -er '.config.Env | index("TPU_LIBRARY_PATH=/usr/lib/libtpu.so") != null' /tmp/image-config.json >/dev/null
+
+      - name: Install uv and Set up Python
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          python-version: "3.12"
+          enable-cache: false
+
+      - name: Install Staged Wheels and Export NNX Model
+        run: |
+          set -euo pipefail
+          wheel_uri="${GCS_WHEEL_DIR%/}"
+          if [[ ! "${wheel_uri}" =~ ^gs://xla-serving-(nightly|release)-artifacts/[A-Za-z0-9._/-]+$ ]]; then
+            echo "::error::Unexpected gcs_wheel_dir: ${GCS_WHEEL_DIR}" >&2
+            exit 1
+          fi
+          uv venv --python "${PYTHON_VERSION}"
+          echo "${GITHUB_WORKSPACE}/.venv/bin" >> "${GITHUB_PATH}"
+          echo "VIRTUAL_ENV=${GITHUB_WORKSPACE}/.venv" >> "${GITHUB_ENV}"
+          export VIRTUAL_ENV="${GITHUB_WORKSPACE}/.venv"
+          export PATH="${VIRTUAL_ENV}/bin:${PATH}"
+
+          mkdir -p wheels
+          gcloud storage cp "${wheel_uri}/*.whl" "${wheel_uri}/SHA256SUMS" wheels/
+          (cd wheels && sha256sum --check --strict SHA256SUMS)
+          diff -u <(ls -1A -I SHA256SUMS wheels | LC_ALL=C sort) \
+            <(awk '{print $2}' wheels/SHA256SUMS | LC_ALL=C sort)
+          shopt -s nullglob
+          py_tag="cp${PYTHON_VERSION//./}"
+          wheels_to_install=(wheels/*-py3-none-any.whl wheels/*-"${py_tag}"-*.whl)
+          if [[ ${#wheels_to_install[@]} -ne 3 ]]; then
+            echo "::error::Expected 3 wheels for ${py_tag}, found ${#wheels_to_install[@]}" >&2
+            ls -la wheels/
+            exit 1
+          fi
+          uv pip install "${wheels_to_install[@]}"
+          uv pip install "jax[tpu]" flax grpcio
+          python3 -c "import jax; print('JAX devices:', jax.devices()); assert any(d.platform == 'tpu' for d in jax.devices()), 'No TPU device found in JAX!'"
+
+          mkdir -p /tmp/exported_model
+          rm -rf /tmp/test_workspace && mkdir -p /tmp/test_workspace
+          cp -r examples /tmp/test_workspace/
+          (
+            cd /tmp/test_workspace
+            python3 -m examples.nnx.run_export --export_path=/tmp/exported_model
+          )
+          ls -la /tmp/exported_model
+
+      - name: Start XLA Serving TPU Server and Run End-to-End Prediction Test
+        env:
+          # `crane export` extracts filesystem layers without applying OCI ENV.
+          TPU_LIBRARY_PATH: /tmp/xla-serving/usr/lib/libtpu.so
+        run: |
+          set -euo pipefail
+          server_bin="/tmp/xla-serving/runtime/serving/gcp/server/xla_serving_main_tpu"
+          "${server_bin}" \
+            --orbax_grpc_server_platform=tpu \
+            --model_name=nnx \
+            --model_path=/tmp/exported_model \
+            --use_insecure_grpc_credentials=true \
+            --port=8500 > /tmp/xla-serving.log 2>&1 &
+          server_pid=$!
+          echo "SERVER_PID=${server_pid}" >> "${GITHUB_ENV}"
+
+          ready=false
+          for i in $(seq 1 180); do
+            if grep -q "JAX Serving listening on" /tmp/xla-serving.log 2>/dev/null; then
+              echo "XLA Serving TPU server ready after ${i}s."
+              ready=true
+              break
+            fi
+            if ! kill -0 "${server_pid}" 2>/dev/null; then
+              echo "::error::XLA Serving TPU server exited prematurely:" >&2
+              cat /tmp/xla-serving.log || true
+              exit 1
+            fi
+            sleep 1
+          done
+          if [[ "${ready}" != "true" ]]; then
+            echo "::error::XLA Serving TPU server failed to start within 180s:" >&2
+            cat /tmp/xla-serving.log || true
+            exit 1
+          fi
+
+          python3 /tmp/test_workspace/examples/nnx/test_prediction_client.py \
+            --server_address=localhost:8500 \
+            --model_name=nnx \
+            --signature_name=serving_default \
+            --batch_size=4 \
+            --timeout=60
+
+      - name: Clean up TPU Server
+        if: always()
+        run: |
+          if [[ -f /tmp/xla-serving.log ]]; then
+            echo "=== XLA Serving TPU Logs ==="
+            cat /tmp/xla-serving.log
+          fi
+          if [[ -n "${SERVER_PID:-}" ]]; then
+            kill -9 "${SERVER_PID}" 2>/dev/null || true
+          fi
