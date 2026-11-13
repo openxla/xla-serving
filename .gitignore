@@ -31,5 +31,3 @@ venv/
 *.swo
 
 .DS_Store
-
-/neptune_model/protos
