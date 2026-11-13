@@ -354,6 +354,7 @@ cc_library(
         "@xla//xla/tsl/platform:env",
         "@xla_serving//runtime/core:allocator",
         "@xla_serving//runtime/core:host_buffer",
+        "@xla_serving//runtime/core:host_buffer_type_utils",
     ],
 )
 

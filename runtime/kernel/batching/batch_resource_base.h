@@ -125,7 +125,8 @@ class BatchResourceBase : public ResourceBase {
     // inputs is enabled.
     size_t task_size = 0;
     size_t size() const override {
-      if (task_size == 0 && !inputs.empty()) {
+      if (task_size == 0 && !inputs.empty() && inputs[0].has_data() &&
+          !inputs[0].shape().dims().empty()) {
         return inputs[0].shape().dims()[0];
       }
       return task_size;
@@ -324,9 +325,11 @@ class BatchResourceBase : public ResourceBase {
   virtual absl::StatusOr<absl::Span<const Value>> GetInputsToBatch(
       Kernel::ExecuteContext* context) const;
 
-  // Validates that it's legal to combine the tasks in 'batch' into a batch.
-  // Assumes the batch is non-empty.
-  static absl::Status ValidateBatch(const BatchT& batch);
+  // Validates that it's legal to combine the tasks in 'batch' and
+  // 'unbatched_tasks' into a batch. Assumes the batch is non-empty.
+  static absl::Status ValidateBatch(
+      const BatchT& batch,
+      absl::Span<const std::unique_ptr<BatchTask>> unbatched_tasks = {});
 
   // Returns a boolean indicating whether a batch is formed from low priority
   // tasks only or not.

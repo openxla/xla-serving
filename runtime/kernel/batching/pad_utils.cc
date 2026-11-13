@@ -180,6 +180,12 @@ absl::StatusOr<std::vector<HostBuffer>> PadToCommonNonBatchDims(
   if (allocator == nullptr) {
     allocator = DefaultAllocator::GetInstance();
   }
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    if (!inputs[i].has_data()) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Input buffer at index ", i, " is uninitialized"));
+    }
+  }
 
   const xla::ifrt::DType ref_dtype = inputs.front().dtype();
   const absl::Span<const int64_t> input0_dims = inputs.front().shape().dims();

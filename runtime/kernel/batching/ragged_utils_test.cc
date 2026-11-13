@@ -214,6 +214,37 @@ TEST(RaggedUtilsTest, ConcatRowSplitsUnsupportedDType) {
                        HasSubstr("Unsupported splits dtype")));
 }
 
+TEST(RaggedUtilsTest, ConcatRowSplitsMismatchedDTypes) {
+  Allocator* allocator = DefaultAllocator::GetInstance();
+  HostBuffer s64_splits =
+      AsHostBuffer<int64_t>({0, 2, 3}, xla::ifrt::Shape({3}));
+  HostBuffer s32_splits =
+      AsHostBuffer<int32_t>({0, 1, 3}, xla::ifrt::Shape({3}));
+
+  EXPECT_THAT(ConcatRowSplits({s64_splits, s32_splits}, /*padding_amount=*/0,
+                              allocator),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Dtypes of all row splits buffers")));
+  EXPECT_THAT(
+      ConcatRowSplitsTyped<int64_t>({s32_splits}, /*padding_amount=*/0,
+                                    allocator),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("Dtypes of all row splits buffers")));
+  EXPECT_THAT(ConcatRowSplits({HostBuffer(), s64_splits}, /*padding_amount=*/0,
+                              allocator),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("is uninitialized")));
+  EXPECT_THAT(ConcatRowSplits({s64_splits, HostBuffer()}, /*padding_amount=*/0,
+                              allocator),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("is uninitialized")));
+  EXPECT_THAT(
+      ConcatRowSplitsTyped<int64_t>({HostBuffer()}, /*padding_amount=*/0,
+                                    allocator),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("is uninitialized")));
+}
+
 TEST(RaggedUtilsTest, ConcatRowSplitsEmptyError) {
   Allocator* allocator = DefaultAllocator::GetInstance();
   std::vector<HostBuffer> empty_splits;

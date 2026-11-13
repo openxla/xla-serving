@@ -844,6 +844,49 @@ TEST_F(HostBufferManipulationTest, ConcatFailedOnDifferentDimensionsInputs) {
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
+TEST_F(HostBufferManipulationTest, ConcatFailedOnDifferentDTypes) {
+  const xla::ifrt::Shape shape({1, 64});
+  HostBuffer f64_buffer(xla::ifrt::DType(xla::ifrt::DType::Kind::kF64), shape,
+                        allocator_);
+  HostBuffer f32_buffer(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32), shape,
+                        allocator_);
+  HostBuffer bf16_buffer(xla::ifrt::DType(xla::ifrt::DType::Kind::kBF16), shape,
+                         allocator_);
+  HostBuffer str_buffer(xla::ifrt::DType(xla::ifrt::DType::Kind::kString),
+                        xla::ifrt::Shape({1, 4}), allocator_);
+  HostBuffer f32_small(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+                       xla::ifrt::Shape({1, 4}), allocator_);
+
+  EXPECT_THAT(Concat(nullptr, {f64_buffer, f32_buffer}, allocator_),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(Concat(nullptr, {f32_buffer, bf16_buffer}, allocator_),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(Concat(nullptr, {str_buffer, f32_small}, allocator_),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(Concat<double>(nullptr, {f64_buffer, f32_buffer}, allocator_),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(Concat<double>(nullptr, {f32_buffer, f32_buffer}, allocator_),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(Concat<double>(nullptr, {f32_buffer}, allocator_),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(Concat<double>(nullptr, {HostBuffer(), f64_buffer}, allocator_),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(Concat(nullptr, {HostBuffer(), f64_buffer}, allocator_),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("is uninitialized")));
+  EXPECT_THAT(Concat(nullptr, {f64_buffer, HostBuffer()}, allocator_),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("is uninitialized")));
+
+  HostBuffer scalar_buffer = AsHostBuffer<float>(1.0f);
+  EXPECT_THAT(Concat(nullptr, {scalar_buffer}, allocator_),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("at least one dimension")));
+  EXPECT_THAT(Concat(nullptr, {scalar_buffer, scalar_buffer}, allocator_),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("at least one dimension")));
+}
+
 TEST_F(HostBufferSplitEasyCasesTest, SplitEasyCasesSizeOne) {
   HostBuffer host_buffer =
       AsHostBuffer<int32_t>({1, 2, 3, 4, 5, 6, 7, 8}, xla::ifrt::Shape({4, 2}));
