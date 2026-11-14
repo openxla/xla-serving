@@ -45,9 +45,12 @@ enum class Placement { kHost = 0, kDevice = 1 };
 // std::vector<std::optional<int64_t>>, where std::nullopt means dynamic.
 using ArgShape = sharding_internal::MlirShape;
 
-// Converts an `ArgShape` to `xla::ifrt::Shape` for the purposes of checkpoint
-// loading. The result will be fake if the shape is dynamic, so don't use this
-// function for anything else.
+// Converts a static `ArgShape` to `xla::ifrt::Shape`. Returns `std::nullopt` if
+// any dimension in `shape` is dynamic (`std::nullopt`).
+std::optional<xla::ifrt::Shape> MaybeToIfrtShape(const ArgShape& shape);
+
+// Converts a static `ArgShape` to `xla::ifrt::Shape`. `CHECK`-fails if any
+// dimension in `shape` is dynamic (`std::nullopt`).
 xla::ifrt::Shape ToIfrtShape(const ArgShape& shape);
 
 struct ArgSpec {
@@ -167,11 +170,6 @@ absl::Status ValidateIOSpecs(absl::Span<const ArgSpec> stablehlo_arg_specs,
 // function assumes input shapes are fully defined.
 absl::Status InputShapeEqual(ArgShape stablehlo_input_shape,
                              xla::ifrt::Shape input_shape);
-
-// Converts an `ArgShape` to `xla::ifrt::Shape` for the purposes of checkpoint
-// loading. The result will be fake if the shape is dynamic, so don't use this
-// function for anything else.
-xla::ifrt::Shape ToIfrtShape(const ArgShape& shape);
 
 };  // namespace xla_serving
 

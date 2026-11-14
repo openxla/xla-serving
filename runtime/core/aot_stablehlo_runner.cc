@@ -238,7 +238,14 @@ absl::Status AotStableHloRunner::PopulateAotExecutableCache(
         spec.inputs.size() - num_input_aliased_output;
     user_input_shapes.reserve(num_user_inputs - num_weights);
     for (size_t j = num_weights; j < num_user_inputs; ++j) {
-      user_input_shapes.push_back(spec.inputs[j].GetIfrtShape());
+      std::optional<xla::ifrt::Shape> user_input_shape =
+          MaybeToIfrtShape(spec.inputs[j].shape);
+      if (!user_input_shape.has_value()) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "AOT executable #", i, " user input #", j - num_weights,
+            " has a dynamic shape: {", spec.inputs[j].DebugString(), "}."));
+      }
+      user_input_shapes.push_back(*std::move(user_input_shape));
     }
 
     // IFRT requires an explicit device mapping when executing unbound

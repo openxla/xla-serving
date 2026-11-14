@@ -1066,5 +1066,13 @@ INSTANTIATE_TEST_SUITE_P(
       return info.param.test_name;
     });
 
+TEST(MaybeToIfrtShapeTest, StaticAndDynamicShapes) {
+  EXPECT_EQ(MaybeToIfrtShape(ArgShape({})), xla::ifrt::Shape({}));
+  EXPECT_EQ(MaybeToIfrtShape(ArgShape({2, 4})), xla::ifrt::Shape({2, 4}));
+  EXPECT_EQ(MaybeToIfrtShape(ArgShape({2, std::nullopt})), std::nullopt);
+  EXPECT_EQ(ToIfrtShape(ArgShape({2, 4})), xla::ifrt::Shape({2, 4}));
+  EXPECT_DEATH(ToIfrtShape(ArgShape({2, std::nullopt})), "dynamic");
+}
+
 }  // namespace
 }  // namespace xla_serving

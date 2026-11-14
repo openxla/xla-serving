@@ -18,10 +18,9 @@ limitations under the License.
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 
-#include "data/kernels/bounds_check.h"  // from @xla_serving
-#include "data/kernels/util/overflow.h"  // from @xla_serving
 #include "absl/base/optimization.h"  // from @abseil-cpp
 #include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
@@ -29,6 +28,8 @@ limitations under the License.
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "data/kernels/bounds_check.h"  // from @xla_serving
+#include "data/kernels/util/overflow.h"  // from @xla_serving
 #include "xla/python/ifrt/shape.h"  // from @xla
 
 namespace xla_serving::data::kernel {
@@ -65,6 +66,8 @@ absl::StatusOr<Shape> MakeShapeHelper(const T* dims, int64_t n) {
     return absl::InvalidArgumentError(
         absl::StrCat("Negative number of dimensions ", n));
   }
+  // Match `xla::ifrt::Shape`'s 128-bit element-size bound (`INT64_MAX / 128`).
+  constexpr int64_t kMaxNumElements = std::numeric_limits<int64_t>::max() / 128;
   absl::InlinedVector<int64_t, 6> dim_vec;
   dim_vec.reserve(n);
   int64_t num_elements = 1;
@@ -76,10 +79,11 @@ absl::StatusOr<Shape> MakeShapeHelper(const T* dims, int64_t n) {
     }
     dim_vec.push_back(dim);
     num_elements = MultiplyWithoutOverflow(num_elements, dim);
-    if (ABSL_PREDICT_FALSE(num_elements < 0)) {
+    if (ABSL_PREDICT_FALSE(num_elements < 0 ||
+                           num_elements > kMaxNumElements)) {
       return absl::InvalidArgumentError(absl::StrCat(
           "Shape [", absl::StrJoin(absl::MakeConstSpan(dims, n), ","),
-          "] would have more than 2**63 - 1 elements"));
+          "] would have more than 2**56 - 1 elements"));
     }
   }
   return Shape(dim_vec);

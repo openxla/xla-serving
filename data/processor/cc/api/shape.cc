@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
+#include <limits>
 #include <optional>
 #include <ostream>
 #include <string>
@@ -331,8 +332,11 @@ bool PartialShape::IsCompatibleWith(const PartialShape& shape) const {
 }
 
 absl::StatusOr<xla::ifrt::Shape> PartialShape::GetStatic() const {
+  constexpr int64_t kMaxNumElements = std::numeric_limits<int64_t>::max() / 128;
   xla::ifrt::Shape::Dimensions sizes;
   sizes.reserve(dims_.size());
+  int64_t count = 1;
+  bool overflow = false;
   for (size_t i = 0; i < dims_.size(); ++i) {
     const std::optional<int64_t> size = dims_[i].Value();
     if (!size.has_value()) [[unlikely]] {
@@ -340,7 +344,18 @@ absl::StatusOr<xla::ifrt::Shape> PartialShape::GetStatic() const {
           absl::StrCat("Shape ", DebugString(),
                        " is not fully known: dimension ", i, " is unknown"));
     }
+    if (*size == 0) {
+      count = 0;
+      overflow = false;
+    } else {
+      overflow |= __builtin_mul_overflow(count, *size, &count);
+    }
     sizes.push_back(*size);
+  }
+  if (overflow || count > kMaxNumElements) [[unlikely]] {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Shape ", DebugString(),
+                     " is too large (more than 2**56 - 1 entries)"));
   }
   return xla::ifrt::Shape(sizes);
 }
