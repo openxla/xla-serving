@@ -16,7 +16,7 @@
 
 #include "absl/flags/flag.h"  // from @abseil-cpp
 
-ABSL_FLAG(bool, jsv_use_queue_base, false,
+ABSL_FLAG(bool, jsv_use_queue_base, true,
           "Temporary migration flag to switch SharedBatchScheduler from legacy "
           "internal::Queue to QueueBase subclasses (FifoQueue and "
           "PriorityAwareQueue).");
