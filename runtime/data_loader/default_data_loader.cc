@@ -162,9 +162,16 @@ struct LoadOrbaxCheckpointTask {
         if (weight_spec->placement == Placement::kHost) {
           memory_kind = xla::ifrt::MemoryKind("pinned_host");
         }
+        std::optional<xla::ifrt::Shape> weight_shape =
+            MaybeToIfrtShape(weight_spec->shape);
+        if (!weight_shape.has_value()) {
+          return absl::InvalidArgumentError(
+              absl::StrCat("Weight '", weight_name, "' has a dynamic shape: {",
+                           weight_spec->DebugString(), "}."));
+        }
         used_weight_array_specs.push_back(ArraySpec{
             .dtype = weight_spec->dtype,
-            .shape = ToIfrtShape(weight_spec->shape),
+            .shape = *std::move(weight_shape),
             .sharding = weight_spec->sharding.ToProto(),
             .layout = weight_spec->layout,
             .memory_kind = std::move(memory_kind),

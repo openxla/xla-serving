@@ -738,6 +738,9 @@ TEST(PartialShapeTest, GetStatic) {
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Shape [2,?] is not fully known: "
                                  "dimension 1 is unknown")));
+  EXPECT_THAT(
+      PartialShapeOrDie({S(kInt64Max)}).GetStatic(),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("is too large")));
 }
 
 TEST(PartialShapeTest, RelaxWith) {
@@ -787,12 +790,6 @@ TEST(PartialShapeTest, BroadcastWith) {
       PartialShapeOrDie({S(kBig), S(1)})
           .BroadcastWith(PartialShapeOrDie({S(1), S(kBig)})),
       StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr(kTooLarge)));
-}
-
-TEST(PartialShapeDeathTest, ConversionFromIfrtShapeRequiresTheInvariant) {
-  EXPECT_DEBUG_DEATH(
-      { const PartialShape shape(xla::ifrt::Shape({kBig, kBig})); },
-      "too large");
 }
 
 }  // namespace

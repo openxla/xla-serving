@@ -326,16 +326,24 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
     // attribute (i.e. jax.uses_shape_polymorphism = True), since the latter
     // can be True when the JAX model is exported for multiple native
     // serialization platforms while all input shapes are concrete.
-    if (HasPolymorphicShape(stablehlo_io_spec.inputs)) {
-      TF_ASSIGN_OR_RETURN(bool use_shape_polymorphism,
-                          UsesPolymorphicShape(module.get()));
-      // jax.uses_shape_polymorphism is expected to be true if the model has
-      // polymorphic input shapes, but may not be the case the other way around
-      // as mentioned above.
-      if (!use_shape_polymorphism) {
-        return absl::InvalidArgumentError(
-            "StableHLO module has polymorphic shape in the input spec, but "
-            "jax.uses_shape_polymorphism is false");
+    const bool has_polymorphic_mlir_inputs =
+        HasPolymorphicShape(stablehlo_io_spec.inputs);
+    const bool has_polymorphic_user_inputs =
+        spec.inputs.size() > num_weights &&
+        HasPolymorphicShape(
+            absl::MakeConstSpan(spec.inputs).subspan(num_weights));
+    if (has_polymorphic_mlir_inputs || has_polymorphic_user_inputs) {
+      if (has_polymorphic_mlir_inputs) {
+        TF_ASSIGN_OR_RETURN(bool use_shape_polymorphism,
+                            UsesPolymorphicShape(module.get()));
+        // jax.uses_shape_polymorphism is expected to be true if the model has
+        // polymorphic input shapes, but may not be the case the other way
+        // around as mentioned above.
+        if (!use_shape_polymorphism) {
+          return absl::InvalidArgumentError(
+              "StableHLO module has polymorphic shape in the input spec, but "
+              "jax.uses_shape_polymorphism is false");
+        }
       }
       if (symbolic_module_bundle.has_value()) {
         return absl::InvalidArgumentError(
@@ -364,7 +372,14 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
       }
       user_input_shapes.reserve(spec.inputs.size() - num_weights);
       for (int i = num_weights; i < spec.inputs.size(); ++i) {
-        user_input_shapes.push_back(ToIfrtShape(spec.inputs[i].shape));
+        std::optional<xla::ifrt::Shape> user_input_shape =
+            MaybeToIfrtShape(spec.inputs[i].shape);
+        if (!user_input_shape.has_value()) {
+          return absl::InvalidArgumentError(
+              absl::StrCat("Expected concrete user input shape at index ", i,
+                           ", got {", spec.inputs[i].DebugString(), "}"));
+        }
+        user_input_shapes.push_back(*std::move(user_input_shape));
       }
       if (!concrete_module_bundles.has_value()) {
         concrete_module_bundles = absl::flat_hash_map<

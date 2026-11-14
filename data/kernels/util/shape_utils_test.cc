@@ -105,39 +105,42 @@ TEST(ShapeUtilsTest, MakeShape) {
   constexpr int64_t kInt64Max = std::numeric_limits<int64_t>::max();
   EXPECT_THAT(ShapeUtils::MakeShape(std::vector<int64_t>{kInt64Max, 2}),
               StatusIs(absl::StatusCode::kInvalidArgument,
-                       HasSubstr("would have more than 2**63 - 1 elements")));
+                       HasSubstr("would have more than 2**56 - 1 elements")));
 }
 
 TEST(ShapeUtilsTest, Large) {
-  // Ensure the supported shape bound is close to the limit.
+  // Ensure the supported shape bound matches `xla::ifrt::Shape`'s 128-bit
+  // element-size limit (`INT64_MAX / 128` = `2**56 - 1`).
   int64_t one = 1;
-  int64_t max = std::numeric_limits<int64_t>::max();
+  int64_t max = std::numeric_limits<int64_t>::max() / 128;
   EXPECT_THAT(ShapeUtils::MakeShape(absl::MakeConstSpan({max})),
               IsOkAndHolds(Shape({max})));
   EXPECT_THAT(ShapeUtils::MakeShape(absl::MakeConstSpan({one, max})),
               IsOkAndHolds(Shape({one, max})));
   EXPECT_THAT(ShapeUtils::MakeShape(absl::MakeConstSpan({max, one})),
               IsOkAndHolds(Shape({max, 1})));
-  EXPECT_THAT(ShapeUtils::MakeShape(absl::MakeConstSpan({one << 62})),
-              IsOkAndHolds(Shape({one << 62})));
+  EXPECT_THAT(ShapeUtils::MakeShape(absl::MakeConstSpan({one << 55})),
+              IsOkAndHolds(Shape({one << 55})));
   EXPECT_THAT(
-      ShapeUtils::MakeShape(absl::MakeConstSpan({one << 20, one << 41})),
-      IsOkAndHolds(Shape({one << 20, one << 41})));
+      ShapeUtils::MakeShape(absl::MakeConstSpan({one << 20, one << 35})),
+      IsOkAndHolds(Shape({one << 20, one << 35})));
   EXPECT_THAT(ShapeUtils::MakeShape(
-                  absl::MakeConstSpan({1000, 1000, 1000, 1000, 1000, 1000})),
-              IsOkAndHolds(Shape({1000, 1000, 1000, 1000, 1000, 1000})));
+                  absl::MakeConstSpan({500, 500, 500, 500, 500, 500})),
+              IsOkAndHolds(Shape({500, 500, 500, 500, 500, 500})));
 }
 
 TEST(ShapeUtilsTest, Overflow) {
   int64_t one = 1;
+  int64_t max = std::numeric_limits<int64_t>::max() / 128;
   std::vector<std::vector<int64_t>> overflows = {
+      {max + 1},
       {1 << 30, 1 << 30, 1 << 30},
       {1 << 5, (one << 60) + 1},
   };
   for (const auto& overflow : overflows) {
     EXPECT_THAT(ShapeUtils::MakeShape(overflow),
                 StatusIs(absl::StatusCode::kInvalidArgument,
-                         HasSubstr("would have more than 2**63 - 1 elements")));
+                         HasSubstr("would have more than 2**56 - 1 elements")));
   }
 }
 
