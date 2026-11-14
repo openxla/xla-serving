@@ -32,6 +32,7 @@ limitations under the License.
 #include "data/kernels/macros.h"  // from @xla_serving
 #include "data/kernels/util/bcast.h"  // from @xla_serving
 #include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/api/shape.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/core/transform.h"  // from @xla_serving
 #include "data/processor/proto/transform_config.pb.h"  // from @xla_serving
@@ -88,17 +89,15 @@ class ND_EXPORT_SYMBOL BinaryOpShared
       return absl::InvalidArgumentError(
           absl::StrCat(op_name, " inputs must have the same dtype"));
     }
-    // TODO: Broadcast partial shapes.
-    ASSIGN_OR_RETURN(const xla::ifrt::Shape a_shape, a.shape.GetStatic());
-    ASSIGN_OR_RETURN(const xla::ifrt::Shape b_shape, b.shape.GetStatic());
-    BCast bcast(a_shape, b_shape);
-    if (!bcast.IsValid()) {
+    absl::StatusOr<xla_serving::data::composite::api::PartialShape> out_shape =
+        a.shape.BroadcastWith(b.shape);
+    if (!out_shape.ok()) {
       return absl::InvalidArgumentError(absl::StrCat(
           op_name, " inputs are not broadcast-compatible: ", a.shape, " and ",
           b.shape));
     }
     context.outputs.push_back(xla_serving::data::composite::api::HostBufferSpec{
-        a.dtype, BCast::ToShape(bcast.output_shape())});
+        a.dtype, *std::move(out_shape)});
     return absl::OkStatus();
   }
 };

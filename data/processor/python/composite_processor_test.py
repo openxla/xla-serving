@@ -1177,6 +1177,29 @@ class CompositeProcessorTest(absltest.TestCase):
     self.assertEqual(context.outputs[0].spec().shape, (None, 3))
     self.assertEqual(context.outputs[0].spec().dtype, np.dtype(np.int32))
 
+    known_spec = composite_processor_pybind.HostBufferSpec(
+        np.dtype(np.int32), [2, 3]
+    )
+    merge_context = composite_processor_pybind.ShapeInferenceContext()
+    merge_context.inputs = [
+        composite_processor_pybind.ShapeInferenceValue(spec),
+        composite_processor_pybind.ShapeInferenceValue(known_spec),
+    ]
+    transform.propagate_signature(merge_context)
+    self.assertLen(merge_context.outputs, 1)
+    self.assertEqual(merge_context.outputs[0].spec().shape, (2, 3))
+
+    bad_spec = composite_processor_pybind.HostBufferSpec(
+        np.dtype(np.int32), [2, 4]
+    )
+    bad_context = composite_processor_pybind.ShapeInferenceContext()
+    bad_context.inputs = [
+        composite_processor_pybind.ShapeInferenceValue(spec),
+        composite_processor_pybind.ShapeInferenceValue(bad_spec),
+    ]
+    with self.assertRaisesRegex(Exception, "Inputs must have the same shape"):
+      transform.propagate_signature(bad_context)
+
 
 if __name__ == "__main__":
   absltest.main()
