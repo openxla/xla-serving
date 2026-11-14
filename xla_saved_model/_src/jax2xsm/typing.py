@@ -48,7 +48,11 @@ class ApplyFnBundle:
       function's outputs; they are not part of the model's caller-facing
       signature. Only meaningful for AOT serving, so input shapes must be
       concrete: with `input_polymorphic_shapes`,
-      `input_polymorphic_shape_symbol_values` is required.
+        `input_polymorphic_shape_symbol_values` is required. Callers address the
+        pre-allocated memory by output name, so a pipeline serving the model is
+        always exported as graph-based, whatever `Orchestration.graph_based`
+      says: the input signature must be a mapping keyed by input name, and every
+        `ModelCall` of an orchestration needs `input_keys` and `output_keys`.
   """
 
   apply_fn: ApplyFn
