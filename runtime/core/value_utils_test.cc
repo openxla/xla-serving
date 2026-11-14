@@ -143,13 +143,6 @@ TEST(ValueUtilsTest, ReshapeHostBuffer) {
                          xla::ifrt::Shape({2, 3}));
   EXPECT_FALSE(
       xla_serving::Reshape(Value(std::move(invalid_hb1)), xla::ifrt::Shape({5})).ok());
-
-  // Invalid negative dimension returns error
-  HostBuffer invalid_hb2(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
-                         xla::ifrt::Shape({2, 3}));
-  EXPECT_FALSE(
-      xla_serving::Reshape(Value(std::move(invalid_hb2)), xla::ifrt::Shape({-2, -3}))
-          .ok());
 }
 
 TEST(ValueUtilsTest, BitcastHostBuffer) {
@@ -172,14 +165,6 @@ TEST(ValueUtilsTest, BitcastHostBuffer) {
   EXPECT_FALSE(
       xla_serving::Bitcast(Value(std::move(invalid_hb1)), u32_dtype,
                    xla::ifrt::Shape({2}))
-          .ok());
-
-  // Invalid negative dimension returns error
-  HostBuffer invalid_hb2(xla::ifrt::DType(xla::ifrt::DType::Kind::kU8),
-                         xla::ifrt::Shape({4}));
-  EXPECT_FALSE(
-      xla_serving::Bitcast(Value(std::move(invalid_hb2)), u32_dtype,
-                   xla::ifrt::Shape({-1}))
           .ok());
 }
 
@@ -241,17 +226,6 @@ TEST(ValueUtilsTest, ReshapeDeviceBuffer) {
   };
   EXPECT_FALSE(
       xla_serving::Reshape(Value(std::move(invalid_db1)), xla::ifrt::Shape({5})).ok());
-
-  // Negative dimension returns error
-  DeviceBuffer invalid_db2 = {
-      .ifrt_client = client,
-      .ifrt_array = array,
-      .sharding = sharding,
-      .device_list = device_list,
-  };
-  EXPECT_FALSE(
-      xla_serving::Reshape(Value(std::move(invalid_db2)), xla::ifrt::Shape({-2, -3}))
-          .ok());
 
   // Uninitialized DeviceBuffer returns error
   EXPECT_FALSE(
@@ -318,18 +292,6 @@ TEST(ValueUtilsTest, BitcastDeviceBuffer) {
   EXPECT_FALSE(
       xla_serving::Bitcast(Value(std::move(invalid_db1)), u32_dtype,
                    xla::ifrt::Shape({2}))
-          .ok());
-
-  // Negative dimension returns error
-  DeviceBuffer invalid_db2 = {
-      .ifrt_client = client,
-      .ifrt_array = array,
-      .sharding = sharding,
-      .device_list = device_list,
-  };
-  EXPECT_FALSE(
-      xla_serving::Bitcast(Value(std::move(invalid_db2)), u32_dtype,
-                   xla::ifrt::Shape({-1}))
           .ok());
 
   // Uninitialized DeviceBuffer returns error

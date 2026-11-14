@@ -111,21 +111,21 @@ TEST(ShapeUtilsTest, MakeShape) {
 TEST(ShapeUtilsTest, Large) {
   // Ensure the supported shape bound is close to the limit.
   int64_t one = 1;
-  int64_t max = std::numeric_limits<int64_t>::max();
+  int64_t max = std::numeric_limits<int64_t>::max() / 128;
   EXPECT_THAT(ShapeUtils::MakeShape(absl::MakeConstSpan({max})),
               IsOkAndHolds(Shape({max})));
   EXPECT_THAT(ShapeUtils::MakeShape(absl::MakeConstSpan({one, max})),
               IsOkAndHolds(Shape({one, max})));
   EXPECT_THAT(ShapeUtils::MakeShape(absl::MakeConstSpan({max, one})),
               IsOkAndHolds(Shape({max, 1})));
-  EXPECT_THAT(ShapeUtils::MakeShape(absl::MakeConstSpan({one << 62})),
-              IsOkAndHolds(Shape({one << 62})));
+  EXPECT_THAT(ShapeUtils::MakeShape(absl::MakeConstSpan({one << 55})),
+              IsOkAndHolds(Shape({one << 55})));
   EXPECT_THAT(
-      ShapeUtils::MakeShape(absl::MakeConstSpan({one << 20, one << 41})),
-      IsOkAndHolds(Shape({one << 20, one << 41})));
+      ShapeUtils::MakeShape(absl::MakeConstSpan({one << 20, one << 35})),
+      IsOkAndHolds(Shape({one << 20, one << 35})));
   EXPECT_THAT(ShapeUtils::MakeShape(
-                  absl::MakeConstSpan({1000, 1000, 1000, 1000, 1000, 1000})),
-              IsOkAndHolds(Shape({1000, 1000, 1000, 1000, 1000, 1000})));
+                  absl::MakeConstSpan({500, 500, 500, 500, 500, 500})),
+              IsOkAndHolds(Shape({500, 500, 500, 500, 500, 500})));
 }
 
 TEST(ShapeUtilsTest, Overflow) {

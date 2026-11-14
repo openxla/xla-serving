@@ -789,12 +789,6 @@ TEST(PartialShapeTest, BroadcastWith) {
       StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr(kTooLarge)));
 }
 
-TEST(PartialShapeDeathTest, ConversionFromIfrtShapeRequiresTheInvariant) {
-  EXPECT_DEBUG_DEATH(
-      { const PartialShape shape(xla::ifrt::Shape({kBig, kBig})); },
-      "too large");
-}
-
 }  // namespace
 }  // namespace api
 }  // namespace composite

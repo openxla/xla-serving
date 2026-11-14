@@ -297,7 +297,7 @@ absl::StatusOr<ArgSpec> ConvertToArgSpec(
   if (type.has_layout()) {
     TF_ASSIGN_OR_RETURN(layout, xla::Layout::FromProto(type.layout()));
   }
-  xla::ifrt::Shape ifrt_shape = ToIfrtShape(shape);
+  std::optional<xla::ifrt::Shape> ifrt_shape = ToIfrtShape(shape);
   std::optional<Placement> placement = std::nullopt;
   if (type.has_placement()) {
     if (type.placement() == xla_saved_model_type::DEVICE) {

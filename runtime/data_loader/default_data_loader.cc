@@ -164,7 +164,7 @@ struct LoadOrbaxCheckpointTask {
         }
         used_weight_array_specs.push_back(ArraySpec{
             .dtype = weight_spec->dtype,
-            .shape = ToIfrtShape(weight_spec->shape),
+            .shape = weight_spec->GetIfrtShape(),
             .sharding = weight_spec->sharding.ToProto(),
             .layout = weight_spec->layout,
             .memory_kind = std::move(memory_kind),

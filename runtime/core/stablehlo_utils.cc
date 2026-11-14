@@ -137,7 +137,7 @@ absl::StatusOr<ArgSpec> BuildArgSpecFromArg(
   TF_ASSIGN_OR_RETURN(xla::HloSharding hlo_sharding,
                       xla::HloSharding::FromProto(sharding));
 
-  xla::ifrt::Shape ifrt_shape = ToIfrtShape(shape);
+  std::optional<xla::ifrt::Shape> ifrt_shape = ToIfrtShape(shape);
   return ArgSpec{.dtype = dtype,
                  .shape = std::move(shape),
                  .ifrt_shape = std::move(ifrt_shape),
@@ -174,7 +174,7 @@ absl::StatusOr<ArgSpec> BuildArgSpecFromResult(
   TF_ASSIGN_OR_RETURN(xla::HloSharding hlo_sharding,
                       xla::HloSharding::FromProto(sharding));
 
-  xla::ifrt::Shape ifrt_shape = ToIfrtShape(shape);
+  std::optional<xla::ifrt::Shape> ifrt_shape = ToIfrtShape(shape);
   return ArgSpec{.dtype = dtype,
                  .shape = std::move(shape),
                  .ifrt_shape = std::move(ifrt_shape),
@@ -373,7 +373,7 @@ absl::Status RefineShapesIfNeeded(
         return absl::InvalidArgumentError(
             absl::StrCat("Weight #", idx, " is required, but not loaded."));
       }
-      args_shapes.push_back(ToIfrtShape(weight_spec.value().shape));
+      args_shapes.push_back(weight_spec.value().GetIfrtShape());
       args_dtypes.push_back(weight_spec.value().dtype);
     } else {
       int64_t index = idx - num_weights;
@@ -513,17 +513,14 @@ absl::Status InputShapeEqual(ArgShape stablehlo_input_shape,
   return absl::OkStatus();
 }
 
-xla::ifrt::Shape ToIfrtShape(const ArgShape& shape) {
+std::optional<xla::ifrt::Shape> ToIfrtShape(const ArgShape& shape) {
   absl::InlinedVector<int64_t, 6> dimensions;
   dimensions.reserve(shape.size());
   for (std::optional<int64_t> dim : shape) {
-    // If a dimension is not set, it must be an input and won't actually affect
-    // checkpoint loading. We use an invalid value here to make sure that the
-    // shape is not used for anything else.
-    //
-    // If this ever causes problems, we should probably make it so the Orbax
-    // checkpoint loader doesn't require argument types to be passed in.
-    dimensions.push_back(dim.value_or(-1));
+    if (!dim.has_value()) {
+      return std::nullopt;
+    }
+    dimensions.push_back(*dim);
   }
   return xla::ifrt::Shape(dimensions);
 }
