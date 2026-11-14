@@ -804,10 +804,10 @@ StableHloRunnerBase::LookupWeights(std::optional<size_t> device_id) {
     // Check the shape and DType of loaded weight matches the weight spec.
     // Make sure the shape and dtype of IFRT array for the weight matches the
     // the spec of the weight.
-    if (loaded_weight_ifrt_array->shape() != ToIfrtShape(weight_spec.shape)) {
+    if (loaded_weight_ifrt_array->shape() != weight_spec.GetIfrtShape()) {
       return absl::FailedPreconditionError(absl::StrCat(
           "StableHlo expected weight #", i, " (", weights_[i],
-          ") to have shape: ", ToIfrtShape(weight_spec.shape), ", but got ",
+          ") to have shape: ", weight_spec.GetIfrtShape(), ", but got ",
           loaded_weight_ifrt_array->shape(), " from the actual weight."));
     }
     if (loaded_weight_ifrt_array->dtype() != weight_spec.dtype) {

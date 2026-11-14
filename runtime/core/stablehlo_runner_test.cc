@@ -496,6 +496,40 @@ INSTANTIATE_TEST_SUITE_P(
             .expected_status =
                 absl::InvalidArgumentError("Type: TOKEN is not supported"),
         },
+        {
+            .test_name = "ConcreteModuleWithDynamicPrunedUserInputError",
+            .model_path = kSimpleModelPath,
+            .stablehlo_spec =
+                {
+                    .inputs =
+                        {{.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                          .shape = ArgShape({2, 2}),
+                          .sharding = xla::HloSharding::Replicate()},
+                         {.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                          .shape = ArgShape({2, 8}),
+                          .sharding = xla::HloSharding::Replicate()},
+                         {.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                          .shape = ArgShape({2, std::nullopt}),
+                          .sharding = xla::HloSharding::Replicate()}},
+                    .outputs =
+                        {{.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                          .shape = ArgShape({2, 8}),
+                          .sharding = xla::HloSharding::Replicate()},
+                         {.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                          .shape = ArgShape({2, 8}),
+                          .sharding = xla::HloSharding::Replicate()}},
+                    .mlir_module_kept_var_idx = {0, 1},
+                },
+            .assigned_devices =
+                std::make_shared<const AssignedDevices>(AssignedDevices{
+                    .device_assignment = std::vector<int>{/*device0*/ 0, 0, 0,
+                                                          0},
+                    .num_replicas = 1,
+                    .num_cores_per_replica = 1,
+                }),
+            .expected_status =
+                absl::InvalidArgumentError("Expected concrete shape"),
+        },
         // TODO: Add more failure tests for errors occurring
         // during model loading, io_spec validation, platform index setting etc.
     }),
@@ -3582,6 +3616,50 @@ TEST_F(StableHloRunnerAotTest, AotCreateIoSpecInputsSmallerThanWeightsFails) {
   EXPECT_THAT(AotStableHloRunner::Create(std::move(options)),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("StableHLO module has fewer inputs")));
+}
+
+TEST_F(StableHloRunnerAotTest, AotCreateDynamicPrunedUserInputFails) {
+  auto mock_exec = std::make_unique<xla::ifrt::MockLoadedExecutable>();
+  EXPECT_CALL(*mock_exec, client()).WillRepeatedly(Return(ifrt_client.get()));
+  EXPECT_CALL(*mock_exec, name()).WillRepeatedly(Return("mock_exec"));
+  EXPECT_CALL(*mock_exec, devices()).WillRepeatedly(Return(std::nullopt));
+
+  std::vector<xla::ifrt::LoadedExecutableRef> executables;
+  executables.push_back(xla::ifrt::LoadedExecutableRef(std::move(mock_exec)));
+
+  std::vector<ArgSpec> inputs = {
+      {.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+       .shape = ArgShape{2, 2},
+       .sharding = xla::HloSharding::Replicate()},
+      {.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+       .shape = ArgShape{2, std::nullopt},
+       .sharding = xla::HloSharding::Replicate()}};
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<StableHlo> stablehlo,
+      StableHlo::Create(std::vector<StableHlo::Spec>{StableHlo::Spec{
+          .inputs = std::move(inputs),
+          .outputs = {},
+          .mlir_module = std::string("mock_mlir"),
+          .mlir_module_kept_var_idx = {0},
+      }}));
+
+  StableHloRunnerAotOptions options{
+      .base_options =
+          {
+              .client = ifrt_client,
+              .thread_pool = thread_pool.get(),
+              .ifrt_loaded_variable_registry = &ifrt_loaded_variable_registry,
+              .weights = {},
+              .assigned_devices = assigned_devices,
+          },
+      .executables = std::move(executables),
+      .stablehlo = std::shared_ptr<StableHlo>(std::move(stablehlo)),
+      .aot_memory_regions = {},
+  };
+
+  EXPECT_THAT(AotStableHloRunner::Create(std::move(options)),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Expected concrete shape")));
 }
 
 //===----------------------------------------------------------------------===//

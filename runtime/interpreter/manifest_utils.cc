@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <utility>
@@ -297,7 +298,11 @@ absl::StatusOr<ArgSpec> ConvertToArgSpec(
   if (type.has_layout()) {
     TF_ASSIGN_OR_RETURN(layout, xla::Layout::FromProto(type.layout()));
   }
-  xla::ifrt::Shape ifrt_shape = ToIfrtShape(shape);
+  std::optional<xla::ifrt::Shape> ifrt_shape;
+  if (std::all_of(shape.begin(), shape.end(),
+                  [](std::optional<int64_t> dim) { return dim.has_value(); })) {
+    TF_ASSIGN_OR_RETURN(ifrt_shape, ToIfrtShape(shape));
+  }
   std::optional<Placement> placement = std::nullopt;
   if (type.has_placement()) {
     if (type.placement() == xla_saved_model_type::DEVICE) {
@@ -336,7 +341,12 @@ absl::StatusOr<ArgShape> ToArgShape(const xla_saved_model_type::Shape& shape) {
   arg_shape.reserve(dimension_sizes.size());
   for (const auto& dim : dimension_sizes) {
     if (dim.has_size()) {
-      arg_shape.push_back(dim.size());
+      if (dim.size() >
+          static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Dimension size ", dim.size(), " exceeds maximum int64_t value"));
+      }
+      arg_shape.push_back(static_cast<int64_t>(dim.size()));
     } else {
       arg_shape.push_back(std::nullopt);
     }

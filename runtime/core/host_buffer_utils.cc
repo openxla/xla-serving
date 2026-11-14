@@ -23,11 +23,11 @@
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/strings/escaping.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "Eigen/Core"
 #include "xla/overflow_util.h"  // from @xla
 #include "xla/python/ifrt/dtype.h"  // from @xla
-#include "xla/python/ifrt/shape.h"  // from @xla
 #include "tsl/platform/bfloat16.h"  // from @tsl
 #include "tsl/platform/tstring.h"  // from @tsl
 
@@ -244,7 +244,7 @@ std::string SummarizeBuffer(
       if (overflow) {
         return absl::StrCat(
             "Overflowing dimensions in uninitialized Buffer of type ", dtype,
-            ": ", xla::ifrt::Shape(shape));
+            ": [", absl::StrJoin(shape, ","), "]");
       }
       num_elements = next_num_elements;
     }

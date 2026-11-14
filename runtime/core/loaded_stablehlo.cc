@@ -364,7 +364,9 @@ absl::StatusOr<std::unique_ptr<LoadedStableHlo>> LoadedStableHlo::Create(
       }
       user_input_shapes.reserve(spec.inputs.size() - num_weights);
       for (int i = num_weights; i < spec.inputs.size(); ++i) {
-        user_input_shapes.push_back(ToIfrtShape(spec.inputs[i].shape));
+        TF_ASSIGN_OR_RETURN(xla::ifrt::Shape input_shape,
+                            spec.inputs[i].TryGetIfrtShape());
+        user_input_shapes.push_back(std::move(input_shape));
       }
       if (!concrete_module_bundles.has_value()) {
         concrete_module_bundles = absl::flat_hash_map<
