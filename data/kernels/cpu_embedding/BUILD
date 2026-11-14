@@ -193,7 +193,9 @@ cc_library(
     deps = [
         ":cpu_embedding_cc_proto",
         ":cpu_embedding_resource",
+        "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/container:flat_hash_set",
+        "@abseil-cpp//absl/container:inlined_vector",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:status_macros",
         "@abseil-cpp//absl/status:statusor",
@@ -206,6 +208,7 @@ cc_library(
         "@xla_serving//data/processor/cc/api:shape",
         "@xla_serving//data/processor/cc/api:transform_context",
         "@xla_serving//data/processor/cc/api:type_info",
+        "@xla_serving//data/processor/cc/api:value",
         "@xla_serving//data/processor/cc/core:transform",
         "@xla_serving//data/processor/proto:transform_config_cc_proto",
         "@xla_serving//data/resource_manager/cc:resource",

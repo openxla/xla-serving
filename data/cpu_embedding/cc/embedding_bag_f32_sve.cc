@@ -43,8 +43,8 @@ inline svfloat32_t AddRow(svbool_t predicate, svfloat32_t accumulator,
 }
 
 // Accumulate selected rows in registers without changing FP32 addition order.
-template <bool kWeighted, size_t kNumIds>
-inline void AccumulateIdBlock(const int64_t* embedding_ids,
+template <bool kWeighted, size_t kNumIds, typename IdType>
+inline void AccumulateIdBlock(const IdType* embedding_ids,
                               const float* weights, const float* table_data,
                               size_t embedding_dim, float* output) {
   const size_t lanes = svcntw();
@@ -105,8 +105,8 @@ inline void AccumulateIdBlock(const int64_t* embedding_ids,
   }
 }
 
-template <bool kWeighted, size_t kNumIds>
-inline void ConsumeIdBlocks(const int64_t* embedding_ids, size_t* position,
+template <bool kWeighted, size_t kNumIds, typename IdType>
+inline void ConsumeIdBlocks(const IdType* embedding_ids, size_t* position,
                             size_t end, const float* weights,
                             const float* table_data, size_t embedding_dim,
                             float* output) {
@@ -118,8 +118,8 @@ inline void ConsumeIdBlocks(const int64_t* embedding_ids, size_t* position,
   }
 }
 
-template <bool kWeighted>
-void AccumulateEmbeddingBagsF32Impl(const int64_t* embedding_ids,
+template <bool kWeighted, typename IdType>
+void AccumulateEmbeddingBagsF32Impl(const IdType* embedding_ids,
                                     const int32_t* row_pointers,
                                     size_t num_bags, const float* weights,
                                     const float* table_data,
@@ -162,11 +162,31 @@ void AccumulateEmbeddingBagsF32(const int64_t* embedding_ids,
   }
 }
 
+void AccumulateEmbeddingBagsF32(const int32_t* embedding_ids,
+                                const int32_t* row_pointers, size_t num_bags,
+                                const float* weights, const float* table_data,
+                                size_t embedding_dim, float* output) {
+  if (weights == nullptr) {
+    AccumulateEmbeddingBagsF32Impl<false>(embedding_ids, row_pointers, num_bags,
+                                          nullptr, table_data, embedding_dim,
+                                          output);
+  } else {
+    AccumulateEmbeddingBagsF32Impl<true>(embedding_ids, row_pointers, num_bags,
+                                         weights, table_data, embedding_dim,
+                                         output);
+  }
+}
+
 #else
 
 int VectorLengthBytes() { return 0; }
 
 void AccumulateEmbeddingBagsF32(const int64_t*, const int32_t*, size_t,
+                                const float*, const float*, size_t, float*) {
+  std::abort();
+}
+
+void AccumulateEmbeddingBagsF32(const int32_t*, const int32_t*, size_t,
                                 const float*, const float*, size_t, float*) {
   std::abort();
 }
