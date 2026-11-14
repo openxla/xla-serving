@@ -80,7 +80,7 @@ autotune database from a warm JIT server on the target GPU and pass it in:
 
 ```bash
 # On a machine with the target GPU, while serving JIT:
-export XLA_FLAGS="--xla_gpu_dump_autotune_results_to=/tmp/autotune.pb"
+export XLA_FLAGS="--xla_dump_autotune_cache_to=/tmp/autotune.pb"
 
 # Then:
 xsm-cli recompile \
