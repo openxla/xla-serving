@@ -136,13 +136,16 @@ class StableHloRunnerBase {
     // entries are only usable when the model was exported for input aliasing.
     //
     // Each array must match the dtype, shape, sharding and layout of the
-    // output it backs, and must be solely owned by the caller.
+    // output it backs, and belong to the runner's IFRT client.
     //
-    // Lifecycle: the arrays are donated to the execution. Each one is deleted
-    // when it is passed in and must never be reused; from then on the runner
-    // manages its device memory. An output placed on the device is returned
-    // as a `DeviceBuffer` backed by that memory. An output placed on the host
-    // is copied off it, and the memory is released after the execution.
+    // Lifecycle: the execution writes into the array's memory in place, and
+    // shares ownership of that memory with the caller. The array stays valid
+    // and holds the result once the execution completes, so it can be read or
+    // passed to further executions. An output placed on the device is returned
+    // as a `DeviceBuffer` backed by the same memory. An output placed on the
+    // host is copied off it. The memory is released once the array and any
+    // returned `DeviceBuffer` backed by it are gone. The caller must not use
+    // the array while the execution may still be writing into it.
     std::vector<xla::ifrt::ArrayRef> output_arrays;
 
     // Host memory, typically pinned, that results are copied into from the
@@ -473,10 +476,11 @@ class StableHloRunnerBase {
   // arguments.
   //
   // `caller_provided` is `ExecuteOptions::output_arrays`. Each non-null entry
-  // is validated against the output it backs and handed through; for each
-  // null entry, or for every output when it is empty, the runner allocates
-  // uninitialized device memory instead. Either way the returned arrays are
-  // donated to the execution, which writes the results into them.
+  // is validated against the output it backs and replaced by an alias of its
+  // memory, so the caller keeps its array; for each null entry, or for every
+  // output when it is empty, the runner allocates uninitialized device memory
+  // instead. Either way the returned arrays are donated to the execution,
+  // which writes the results into them.
   absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
   ResolveInputAliasedOutputArrays(
       const CachedExecutableBundle& executable_bundle,
