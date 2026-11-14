@@ -148,6 +148,7 @@ cc_library(
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/hlo/ir:hlo",
         "@xla//xla/python/ifrt",
+        "@xla//xla/python/ifrt:cleanup",
         "@xla//xla/python/pjrt_ifrt:xla_ifrt",
         "@xla//xla/tsl/concurrency:future",
         "@xla//xla/tsl/concurrency:ref_count",

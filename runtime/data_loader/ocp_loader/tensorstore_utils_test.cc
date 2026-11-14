@@ -332,7 +332,7 @@ TEST(AssembleOpaqueIfrtArrayTest, AssembleArraysSuccess) {
             data_ptr, dtype, shape, /*byte_strides=*/std::nullopt,
             xla::ifrt::ShardingRef(std::move(sharding)), /*layout=*/nullptr,
             xla::ifrt::Client::HostBufferSemantics::kImmutableOnlyDuringCall,
-            /*on_done_with_host_buffer=*/[] {}));
+            nullptr));
     arrays.push_back(std::move(arr));
   }
   TF_ASSERT_OK_AND_ASSIGN(
@@ -376,7 +376,7 @@ TEST(AssembleOpaqueIfrtArrayTest, FailsWithDifferentMemoryKinds) {
           data_ptr, dtype, shape, /*byte_strides=*/std::nullopt,
           xla::ifrt::ShardingRef(std::move(sharding_1)), /*layout=*/nullptr,
           xla::ifrt::Client::HostBufferSemantics::kImmutableOnlyDuringCall,
-          /*on_done_with_host_buffer=*/[] {}));
+          nullptr));
   arrays.push_back(std::move(arr_1));
 
   xla::ifrt::MemoryKind memory_kind_2("pinned_host");
@@ -388,7 +388,7 @@ TEST(AssembleOpaqueIfrtArrayTest, FailsWithDifferentMemoryKinds) {
           data_ptr, dtype, shape, /*byte_strides=*/std::nullopt,
           xla::ifrt::ShardingRef(std::move(sharding_2)), /*layout=*/nullptr,
           xla::ifrt::Client::HostBufferSemantics::kImmutableOnlyDuringCall,
-          /*on_done_with_host_buffer=*/[] {}));
+          nullptr));
   arrays.push_back(std::move(arr_2));
 
   EXPECT_THAT(AssembleOpaqueIfrtArray(client.get(), absl::MakeSpan(arrays),
