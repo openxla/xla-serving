@@ -42,18 +42,20 @@ std::string DimsDebugString(absl::Span<const Dim> dims) {
   return absl::StrCat("[", absl::StrJoin(dims, ","), "]");
 }
 
-// Returns OK iff the product of the known, nonzero sizes in `dims` fits in
-// int64_t: the PartialShape invariant. Skipping the zeros, as TF's
-// BuildTensorShapeBase does, makes the product fit in any order.
+// Returns OK iff the product of the known, nonzero sizes in `dims` is at most
+// PartialShape::kMaxNumElements: the PartialShape invariant. Skipping the
+// zeros, as TF's BuildTensorShapeBase does, makes the product fit in any
+// order.
 absl::Status CheckNumElements(absl::Span<const Dim> dims) {
   int64_t product = 1;
   for (const Dim& d : dims) {
     const std::optional<int64_t> size = d.Value();
     if (!size.has_value() || *size <= 0) continue;
-    if (__builtin_mul_overflow(product, *size, &product)) [[unlikely]] {
-      return absl::InvalidArgumentError(
-          absl::StrCat("Shape ", DimsDebugString(dims),
-                       " is too large (more than 2**63 - 1 entries)"));
+    if (__builtin_mul_overflow(product, *size, &product) ||
+        product > PartialShape::kMaxNumElements) [[unlikely]] {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Shape ", DimsDebugString(dims),
+          " is too large (more than (2**63 - 1) / 128 entries)"));
     }
   }
   return absl::OkStatus();

@@ -175,10 +175,12 @@ std::ostream& operator<<(std::ostream& os, const Dim& d);
 //   dims.insert(dims.begin() + axis, Dim::Static(1));
 //   ASSIGN_OR_RETURN(PartialShape out, PartialShape::Create(dims));
 //
-// Invariant: the product of the known, nonzero sizes fits in int64_t, so no
-// product of known sizes overflows, in any order. TF's BuildTensorShapeBase
-// checks the same. Create and FromProto return InvalidArgument instead of
-// breaking it. The conversion from xla::ifrt::Shape requires it.
+// Invariant: the product of the known, nonzero sizes is at most
+// kMaxNumElements ((2**63 - 1) / 128), so no product of known sizes exceeds
+// xla::ifrt::Shape's element-count bound, in any order. TF's
+// BuildTensorShapeBase skips zeros the same way. Create and FromProto return
+// InvalidArgument instead of breaking it. The conversion from
+// xla::ifrt::Shape requires it.
 //
 // `==` and IsIdenticalTo are structural, as in TF: [?] == [?], although the two
 // dimensions may differ at run time. They are for tests, containers and caches.
@@ -186,6 +188,12 @@ std::ostream& operator<<(std::ostream& os, const Dim& d);
 // BroadcastWith and IsCompatibleWith for everything else.
 class PartialShape {
  public:
+  // Maximum product of known, nonzero dimensions, matching xla::ifrt::Shape's
+  // (2**63 - 1) / 128 bound so bit-size calculations up to 128-bit elements fit
+  // in int64_t.
+  static constexpr int64_t kMaxNumElements =
+      std::numeric_limits<int64_t>::max() / 128;
+
   // Up to rank 6 without allocating, like xla::ifrt::Shape::Dimensions.
   using Dimensions = absl::InlinedVector<Dim, 6>;
 
