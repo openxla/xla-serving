@@ -1156,6 +1156,17 @@ class SharedBatchSchedulerPriorityTest
           std::tuple<bool, MixedPriorityBatchingPolicy>>,
       public SharedBatchSchedulerTestBase {
  protected:
+  // TODO: Remove legacy priority tests once internal::Queue
+  // is deleted.
+  void SetUp() override {
+    prev_flag_value_ = absl::GetFlag(FLAGS_jsv_use_queue_base);
+    absl::SetFlag(&FLAGS_jsv_use_queue_base, false);
+  }
+
+  void TearDown() override {
+    absl::SetFlag(&FLAGS_jsv_use_queue_base, prev_flag_value_);
+  }
+
   bool enable_input_batch_split() const override {
     return std::get<0>(GetParam());
   }
@@ -1163,6 +1174,9 @@ class SharedBatchSchedulerPriorityTest
   MixedPriorityBatchingPolicy mixed_priority_batching_policy() const {
     return std::get<1>(GetParam());
   }
+
+ private:
+  bool prev_flag_value_ = true;
 };
 
 TEST_P(SharedBatchSchedulerPriorityTest,
@@ -1421,7 +1435,21 @@ class SharedBatchSchedulerPriorityPolicyTest
     : public ::testing::TestWithParam<bool>,
       public SharedBatchSchedulerTestBase {
  protected:
+  // TODO: Remove legacy priority tests once internal::Queue
+  // is deleted.
+  void SetUp() override {
+    prev_flag_value_ = absl::GetFlag(FLAGS_jsv_use_queue_base);
+    absl::SetFlag(&FLAGS_jsv_use_queue_base, false);
+  }
+
+  void TearDown() override {
+    absl::SetFlag(&FLAGS_jsv_use_queue_base, prev_flag_value_);
+  }
+
   bool enable_input_batch_split() const override { return GetParam(); }
+
+ private:
+  bool prev_flag_value_ = true;
 };
 
 TEST_P(SharedBatchSchedulerPriorityPolicyTest,
@@ -2552,8 +2580,7 @@ TEST_P(SharedBatchSchedulerPriorityPolicyTest, PriorityMergedRankingFullBatch) {
   stop_teardown.Notify();
 }
 
-TEST_P(SharedBatchSchedulerPriorityPolicyTest,
-       ReuseGlobalSchedulerAcrossCreations) {
+TEST_P(SharedBatchSchedulerTest, ReuseGlobalSchedulerAcrossCreations) {
   Scheduler* scheduler_ptr = nullptr;
 
   {
@@ -2607,17 +2634,7 @@ class SharedBatchSchedulerPriorityAwareQueueTest
     : public ::testing::Test,
       public SharedBatchSchedulerTestBase {
  protected:
-  void SetUp() override {
-    prev_flag_value_ = absl::GetFlag(FLAGS_jsv_use_queue_base);
-    absl::SetFlag(&FLAGS_jsv_use_queue_base, true);
-  }
-  void TearDown() override {
-    absl::SetFlag(&FLAGS_jsv_use_queue_base, prev_flag_value_);
-  }
   bool enable_input_batch_split() const override { return true; }
-
- private:
-  bool prev_flag_value_;
 };
 
 TEST_F(SharedBatchSchedulerPriorityAwareQueueTest,

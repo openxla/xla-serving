@@ -705,6 +705,12 @@ absl::Status SharedBatchScheduler<TaskType>::AddQueueAfterRewritingOptions(
         options, options_.env, std::move(queue_base_callback),
         schedulable_batch_callback);
   } else {
+    if (options.enable_priority_queue) {
+      LOG(WARNING) << "enable_priority_queue (low_priority_batch_options) is "
+                      "deprecated and ignored when jsv_use_queue_base is "
+                      "enabled; use PriorityBatchingPolicy::kPriorityAware "
+                      "instead.";
+    }
     LOG(INFO) << "SharedBatchScheduler creating internal::FifoQueue.";
     internal_queue = std::make_unique<internal::FifoQueue<TaskType>>(
         options, options_.env, std::move(queue_base_callback),
