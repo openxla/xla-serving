@@ -147,6 +147,7 @@ cc_library(
         "@xla//xla:status_macros",
         "@xla//xla:xla_data_proto_cc",
         "@xla//xla/hlo/ir:hlo",
+        "@xla//xla/python:version",
         "@xla//xla/python/ifrt",
         "@xla//xla/python/pjrt_ifrt:xla_ifrt",
         "@xla//xla/tsl/concurrency:future",

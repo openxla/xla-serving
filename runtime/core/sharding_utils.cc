@@ -23,6 +23,7 @@
 #include <cstdlib>
 #include <memory>
 #include <optional>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -53,6 +54,7 @@
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
 #include "xla/python/pjrt_ifrt/xla_sharding.h"  // from @xla
+#include "xla/python/version.h"  // from @xla
 #include "xla/status_macros.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/concurrency/ref_count.h"  // from @xla
@@ -64,6 +66,28 @@
 
 namespace xla_serving::sharding_internal {
 namespace {
+
+// TODO: Replace with `xla::ifrt::MakeSharedCleanup` and remove
+// `JAX_XLA_VERSION_NUMBER` guards once `MODULE.bazel` pins XLA past
+// `JAX_XLA_VERSION_NUMBER >= 88`.
+#if JAX_XLA_VERSION_NUMBER >= 88
+template <typename F>
+std::shared_ptr<const void> MakeHostBufferCleanup(F&& cleanup) {
+  struct Cleanup {
+    explicit Cleanup(std::decay_t<F> fn) : fn(std::move(fn)) {}
+
+    ~Cleanup() { std::move(fn)(); }
+
+    std::decay_t<F> fn;
+  };
+  return std::make_shared<Cleanup>(std::forward<F>(cleanup));
+}
+#else
+template <typename F>
+std::decay_t<F> MakeHostBufferCleanup(F&& cleanup) {
+  return std::forward<F>(cleanup);
+}
+#endif
 
 // Returns custom byte strides if `host_buffer` has non-default striding, or
 // `std::nullopt` for strings / default dense row-major buffers.
@@ -135,11 +159,11 @@ SplitAndCreateArraysFromHostBuffer(
               /*layout=*/nullptr,
               xla::ifrt::Client::HostBufferSemantics::
                   kImmutableUntilTransferCompletes,
-              [host_buffer, slice_idx]() {
+              MakeHostBufferCleanup([host_buffer, slice_idx]() {
                 // Keep host_buffer alive
                 VLOG(2) << "Done with host buffer for slice " << slice_idx
                         << " at " << host_buffer.base();
-              }));
+              })));
       arrays.push_back(std::move(array));
       device_iter++;
     }
@@ -265,11 +289,12 @@ absl::StatusOr<xla::ifrt::ArrayRef> CreateArrayFromHostBufferForSingleDevice(
   return ifrt_client.MakeArrayFromHostBuffer(
       host_buffer.base(), host_buffer.dtype(), host_buffer.shape(),
       GetByteStrides(host_buffer), std::move(single_device_sharding),
-      /*layout=*/nullptr, semantics, [host_buffer]() {
+      /*layout=*/nullptr, semantics,
+      MakeHostBufferCleanup([host_buffer]() {
         // Keep host_buffer alive
         VLOG(2) << "Done with single device host buffer for slice " << " at "
                 << host_buffer.base();
-      });
+      }));
 }
 
 absl::StatusOr<xla::ifrt::ArrayRef> MakeAssembledArrayFromHostBuffer(
@@ -737,8 +762,12 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
         input_host_buffer.base(), ifrt_dtype, input_host_buffer.shape(),
         GetByteStrides(input_host_buffer), std::move(ifrt_sharding),
         /*layout=*/nullptr, semantics,
+#if JAX_XLA_VERSION_NUMBER >= 88
+        std::make_shared<HostBuffer>(input_host_buffer));
+#else
         [input_host_buffer]() {  // keep host_buffer alive
         });
+#endif
   }
 
   return MakeAssembledArrayFromHostBuffer(ifrt_client, input_host_buffer,
