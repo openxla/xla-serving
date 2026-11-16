@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <utility>
@@ -27,6 +28,7 @@
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
+#include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
@@ -137,7 +139,11 @@ absl::StatusOr<ArgSpec> BuildArgSpecFromArg(
   TF_ASSIGN_OR_RETURN(xla::HloSharding hlo_sharding,
                       xla::HloSharding::FromProto(sharding));
 
-  xla::ifrt::Shape ifrt_shape = ToIfrtShape(shape);
+  std::optional<xla::ifrt::Shape> ifrt_shape;
+  if (std::all_of(shape.begin(), shape.end(),
+                  [](std::optional<int64_t> dim) { return dim.has_value(); })) {
+    TF_ASSIGN_OR_RETURN(ifrt_shape, ToIfrtShape(shape));
+  }
   return ArgSpec{.dtype = dtype,
                  .shape = std::move(shape),
                  .ifrt_shape = std::move(ifrt_shape),
@@ -174,7 +180,11 @@ absl::StatusOr<ArgSpec> BuildArgSpecFromResult(
   TF_ASSIGN_OR_RETURN(xla::HloSharding hlo_sharding,
                       xla::HloSharding::FromProto(sharding));
 
-  xla::ifrt::Shape ifrt_shape = ToIfrtShape(shape);
+  std::optional<xla::ifrt::Shape> ifrt_shape;
+  if (std::all_of(shape.begin(), shape.end(),
+                  [](std::optional<int64_t> dim) { return dim.has_value(); })) {
+    TF_ASSIGN_OR_RETURN(ifrt_shape, ToIfrtShape(shape));
+  }
   return ArgSpec{.dtype = dtype,
                  .shape = std::move(shape),
                  .ifrt_shape = std::move(ifrt_shape),
@@ -373,8 +383,10 @@ absl::Status RefineShapesIfNeeded(
         return absl::InvalidArgumentError(
             absl::StrCat("Weight #", idx, " is required, but not loaded."));
       }
-      args_shapes.push_back(ToIfrtShape(weight_spec.value().shape));
-      args_dtypes.push_back(weight_spec.value().dtype);
+      TF_ASSIGN_OR_RETURN(xla::ifrt::Shape weight_shape,
+                          weight_spec->TryGetIfrtShape());
+      args_shapes.push_back(std::move(weight_shape));
+      args_dtypes.push_back(weight_spec->dtype);
     } else {
       int64_t index = idx - num_weights;
       args_shapes.push_back(input_shapes[index]);
@@ -513,17 +525,40 @@ absl::Status InputShapeEqual(ArgShape stablehlo_input_shape,
   return absl::OkStatus();
 }
 
-xla::ifrt::Shape ToIfrtShape(const ArgShape& shape) {
+absl::StatusOr<xla::ifrt::Shape> ToIfrtShape(const ArgShape& shape) {
+  constexpr int64_t kMaxNumElements = std::numeric_limits<int64_t>::max() / 128;
   absl::InlinedVector<int64_t, 6> dimensions;
   dimensions.reserve(shape.size());
   for (std::optional<int64_t> dim : shape) {
-    // If a dimension is not set, it must be an input and won't actually affect
-    // checkpoint loading. We use an invalid value here to make sure that the
-    // shape is not used for anything else.
-    //
-    // If this ever causes problems, we should probably make it so the Orbax
-    // checkpoint loader doesn't require argument types to be passed in.
-    dimensions.push_back(dim.value_or(-1));
+    if (!dim.has_value()) {
+      return absl::InvalidArgumentError(
+          "Expected concrete shape, but got dynamic dimension");
+    }
+    if (*dim < 0) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Shape dimensions must be non-negative, got ", *dim));
+    }
+    dimensions.push_back(*dim);
+  }
+  int64_t count = 1;
+  bool overflow = false;
+  for (int64_t dim : dimensions) {
+    if (dim == 0) {
+      overflow = false;
+      break;
+    }
+    if (!overflow) {
+      if (dim > kMaxNumElements / count) {
+        overflow = true;
+      } else {
+        count *= dim;
+      }
+    }
+  }
+  if (overflow) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Shape [", absl::StrJoin(dimensions, ","),
+        "] element count exceeds maximum supported ", kMaxNumElements));
   }
   return xla::ifrt::Shape(dimensions);
 }

@@ -790,8 +790,11 @@ TEST(PartialShapeTest, BroadcastWith) {
 }
 
 TEST(PartialShapeDeathTest, ConversionFromIfrtShapeRequiresTheInvariant) {
+  // A leading zero dimension keeps all `xla::ifrt::Shape` prefix products at 0,
+  // whereas `PartialShape` requires the product of non-zero dimensions to fit
+  // in `int64_t`.
   EXPECT_DEBUG_DEATH(
-      { const PartialShape shape(xla::ifrt::Shape({kBig, kBig})); },
+      { const PartialShape shape(xla::ifrt::Shape({0, kBig, kBig})); },
       "too large");
 }
 

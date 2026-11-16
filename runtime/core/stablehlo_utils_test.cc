@@ -15,6 +15,7 @@
 #include "runtime/core/stablehlo_utils.h"  // from @xla_serving
 
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <vector>
@@ -52,6 +53,7 @@
 namespace xla_serving {
 namespace {
 using ::absl::ScopedMockLog;
+using ::absl_testing::IsOkAndHolds;
 using ::absl_testing::StatusIs;
 using ::testing::_;
 using ::testing::AtLeast;
@@ -1065,6 +1067,43 @@ INSTANTIATE_TEST_SUITE_P(
     [](const testing::TestParamInfo<InputShapeEqualTestParam>& info) {
       return info.param.test_name;
     });
+
+TEST(ToIfrtShapeTest, ValidShapes) {
+  constexpr int64_t kMaxNumElements = std::numeric_limits<int64_t>::max() / 128;
+  EXPECT_THAT(ToIfrtShape(ArgShape{}), IsOkAndHolds(xla::ifrt::Shape({})));
+  EXPECT_THAT(ToIfrtShape(ArgShape{2, 3}),
+              IsOkAndHolds(xla::ifrt::Shape({2, 3})));
+  EXPECT_THAT(ToIfrtShape(ArgShape{std::optional<int64_t>(kMaxNumElements)}),
+              IsOkAndHolds(xla::ifrt::Shape({kMaxNumElements})));
+  EXPECT_THAT(ToIfrtShape(ArgShape{kMaxNumElements + 1, 0}),
+              IsOkAndHolds(xla::ifrt::Shape({kMaxNumElements + 1, 0})));
+}
+
+TEST(ToIfrtShapeTest, RejectsDynamicAndInvalidShapes) {
+  constexpr int64_t kMaxNumElements = std::numeric_limits<int64_t>::max() / 128;
+  EXPECT_THAT(ToIfrtShape(ArgShape{2, std::nullopt}),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Expected concrete shape")));
+  EXPECT_THAT(
+      ToIfrtShape(ArgShape{std::optional<int64_t>(-1)}),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("non-negative")));
+  EXPECT_THAT(
+      ToIfrtShape(ArgShape{std::optional<int64_t>(kMaxNumElements + 1)}),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("exceeds maximum supported")));
+  EXPECT_THAT(ToIfrtShape(ArgShape{1LL << 30, 1LL << 30}),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("exceeds maximum supported")));
+
+  ArgSpec dynamic_spec{
+      .dtype = xla::ifrt::DType(kF32),
+      .shape = ArgShape{2, std::nullopt},
+      .sharding = xla::HloSharding::Replicate(),
+  };
+  EXPECT_THAT(dynamic_spec.TryGetIfrtShape(),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Expected concrete shape")));
+}
 
 }  // namespace
 }  // namespace xla_serving

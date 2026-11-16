@@ -14,7 +14,6 @@
 
 #include "runtime/data_loader/default_data_loader.h"  // from @xla_serving
 
-#include <cstddef>
 #include <iterator>
 #include <memory>
 #include <optional>
@@ -50,6 +49,7 @@
 #include "xla/python/ifrt/device.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
 #include "xla/python/ifrt/memory.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
@@ -162,9 +162,11 @@ struct LoadOrbaxCheckpointTask {
         if (weight_spec->placement == Placement::kHost) {
           memory_kind = xla::ifrt::MemoryKind("pinned_host");
         }
+        TF_ASSIGN_OR_RETURN(xla::ifrt::Shape weight_shape,
+                            weight_spec->TryGetIfrtShape());
         used_weight_array_specs.push_back(ArraySpec{
             .dtype = weight_spec->dtype,
-            .shape = ToIfrtShape(weight_spec->shape),
+            .shape = std::move(weight_shape),
             .sharding = weight_spec->sharding.ToProto(),
             .layout = weight_spec->layout,
             .memory_kind = std::move(memory_kind),
@@ -381,6 +383,12 @@ absl::StatusOr<std::vector<std::optional<ArgSpec>>> GetWeightSpecsFromFunction(
          func.body().stable_hlo_body().module_kept_var_idx()) {
       if (kept_var_idx >= num_weights) {
         break;
+      }
+      if (!input_specs[kept_var_idx].ifrt_shape.has_value()) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("Weight should have concrete shape, but found weight "
+                         "with polymorphic shape: ",
+                         input_specs[kept_var_idx].DebugString()));
       }
       const auto& weight_spec = weight_specs[kept_var_idx];
       // TODO: Move the following to a util function.
