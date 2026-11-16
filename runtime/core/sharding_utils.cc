@@ -42,6 +42,7 @@
 #include "runtime/core/sharding_utils_core.h"  // from @xla_serving
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
+#include "xla/python/ifrt/cleanup.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
@@ -135,11 +136,11 @@ SplitAndCreateArraysFromHostBuffer(
               /*layout=*/nullptr,
               xla::ifrt::Client::HostBufferSemantics::
                   kImmutableUntilTransferCompletes,
-              [host_buffer, slice_idx]() {
+              xla::ifrt::MakeSharedCleanup([host_buffer, slice_idx]() {
                 // Keep host_buffer alive
                 VLOG(2) << "Done with host buffer for slice " << slice_idx
                         << " at " << host_buffer.base();
-              }));
+              })));
       arrays.push_back(std::move(array));
       device_iter++;
     }
@@ -265,11 +266,12 @@ absl::StatusOr<xla::ifrt::ArrayRef> CreateArrayFromHostBufferForSingleDevice(
   return ifrt_client.MakeArrayFromHostBuffer(
       host_buffer.base(), host_buffer.dtype(), host_buffer.shape(),
       GetByteStrides(host_buffer), std::move(single_device_sharding),
-      /*layout=*/nullptr, semantics, [host_buffer]() {
+      /*layout=*/nullptr, semantics,
+      xla::ifrt::MakeSharedCleanup([host_buffer]() {
         // Keep host_buffer alive
         VLOG(2) << "Done with single device host buffer for slice " << " at "
                 << host_buffer.base();
-      });
+      }));
 }
 
 absl::StatusOr<xla::ifrt::ArrayRef> MakeAssembledArrayFromHostBuffer(
@@ -737,8 +739,7 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
         input_host_buffer.base(), ifrt_dtype, input_host_buffer.shape(),
         GetByteStrides(input_host_buffer), std::move(ifrt_sharding),
         /*layout=*/nullptr, semantics,
-        [input_host_buffer]() {  // keep host_buffer alive
-        });
+        std::make_shared<HostBuffer>(input_host_buffer));
   }
 
   return MakeAssembledArrayFromHostBuffer(ifrt_client, input_host_buffer,
