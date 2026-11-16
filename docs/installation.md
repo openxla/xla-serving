@@ -16,7 +16,7 @@ models and one container image where the model is served.
 - **OS:** Linux on `x86_64` (binary wheels are `manylinux_2_28`; `aarch64` can
   be built from source).
 - **Python:** 3.12, 3.13, or 3.14. Binary wheels are built for these three
-  versions; `xla-saved-model` itself is pure Python (`>=3.10`) and tested on
+  versions; `xla-saved-model` itself is pure Python (`>=3.11`) and tested on
   3.12+.
 - **NVIDIA GPU (for serving):** An NVIDIA driver supporting CUDA 12 or 13, and
   the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/)
