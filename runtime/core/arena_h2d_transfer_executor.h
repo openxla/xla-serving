@@ -15,6 +15,7 @@
 #ifndef XLA_SERVING_RUNTIME_CORE_ARENA_H2D_TRANSFER_EXECUTOR_H_
 #define XLA_SERVING_RUNTIME_CORE_ARENA_H2D_TRANSFER_EXECUTOR_H_
 
+#include <cstddef>
 #include <memory>
 #include <vector>
 
@@ -23,6 +24,8 @@
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "xla/pjrt/common_pjrt_client.h"  // from @xla
+#include "xla/pjrt/host_memory_allocator.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
@@ -34,12 +37,15 @@ namespace xla_serving {
 
 // Executor that performs explicit arena-based host-to-device transfers using
 // OpenXLA's CommonPjRtClient and PjRtRawBuffer APIs across TPU and GPU.
+//
+// Per target device, allocates a single device arena and a single host staging
+// arena, linearizes eligible inputs into the host arena, and transfers them
+// into aligned slices of the device arena.
 class ArenaH2DTransferExecutor : public H2DTransferExecutor {
  public:
-  // Creates an ArenaH2DTransferExecutor, validating backend prerequisites
-  // (non-CPU CommonPjRtClient with HostMemoryAllocator and power-of-two
-  // GetDeviceAddressAlignment). Returns a non-OK status if `client` or
-  // `thread_pool` is invalid or `client` does not support arena transfers.
+  // Creates an ArenaH2DTransferExecutor if `client` supports arena-based
+  // transfers, or returns a non-OK status if `client` or `thread_pool` is
+  // invalid or `client` is unsupported (e.g. CPU).
   static absl::StatusOr<std::unique_ptr<H2DTransferExecutor>> Create(
       xla::ifrt::Client* client, tsl::thread::ThreadPool* thread_pool);
 
@@ -52,14 +58,22 @@ class ArenaH2DTransferExecutor : public H2DTransferExecutor {
  private:
   ArenaH2DTransferExecutor(
       xla::ifrt::PjRtCompatibleClient* absl_nonnull client,
+      xla::CommonPjRtClient* absl_nonnull common_pjrt_client,
+      xla::HostMemoryAllocator* absl_nonnull host_memory_allocator,
+      size_t arena_alignment,
       tsl::thread::ThreadPool* absl_nonnull thread_pool);
 
-  // IFRT client used for device lookup, PjRtArray assembly, and fallback
-  // transfers via MakeArrayFromHostBuffer. Not owned.
+  // IFRT client used for device lookup, array assembly, and fallback
+  // transfers. Not owned.
   xla::ifrt::PjRtCompatibleClient* absl_nonnull client_;
-  // Thread pool used to parallelize host-arena tensor linearization
-  // (CommonPjRtClient::Linearize) and fallback transfers
-  // (MakeArrayFromHostBuffer). Not owned.
+  // Underlying PJRT client, cached to avoid repeated dynamic casts during
+  // arena allocation and tensor linearization. Not owned.
+  xla::CommonPjRtClient* absl_nonnull common_pjrt_client_;
+  // Allocator for pinned host staging arenas. Not owned.
+  xla::HostMemoryAllocator* absl_nonnull host_memory_allocator_;
+  // Required byte alignment for slice offsets within a device arena.
+  const size_t arena_alignment_;
+  // Thread pool used for fallback transfers. Not owned.
   tsl::thread::ThreadPool* absl_nonnull thread_pool_;
 };
 
