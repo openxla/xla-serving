@@ -51,10 +51,12 @@ using ::testing::IsEmpty;
 using ::testing::Optional;
 
 constexpr int64_t kInt64Max = std::numeric_limits<int64_t>::max();
-// Fits in int64_t, but its square does not.
+constexpr int64_t kMax = PartialShape::kMaxNumElements;
+// Fits in kMax, but its square exceeds kMax (and overflows int64_t).
 constexpr int64_t kBig = int64_t{1} << 40;
 
-constexpr char kTooLarge[] = "is too large (more than 2**63 - 1 entries)";
+constexpr char kTooLarge[] =
+    "is too large (more than (2**63 - 1) / 128 entries)";
 
 consteval Dim S(int64_t v) { return Dim::Static(v); }
 Dim U() { return Dim::Unknown(); }
@@ -119,17 +121,24 @@ TEST(PartialShapeTest, FromProtoRejectsInvalidShapes) {
 
   // Unknown dimensions don't count toward the number of elements.
   proto.Clear();
-  proto.add_dims()->set_size(kInt64Max);
+  proto.add_dims()->set_size(kMax);
   proto.add_dims();
   EXPECT_OK(PartialShape::FromProto(proto));
 
-  // Nor do zeros: the product of the nonzero sizes must fit.
+  // Nor do zeros: the product of the nonzero sizes must fit in kMax.
   proto.add_dims()->set_size(0);
   proto.add_dims()->set_size(2);
   EXPECT_THAT(PartialShape::FromProto(proto),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr(absl::StrCat(
-                           "Shape [9223372036854775807,?,0,2] ", kTooLarge))));
+                           "Shape [72057594037927935,?,0,2] ", kTooLarge))));
+
+  // A single dimension above kMax (fitting in int64_t) is also rejected.
+  PartialShapeProto over_max;
+  over_max.add_dims()->set_size(kMax + 1);
+  EXPECT_THAT(
+      PartialShape::FromProto(over_max),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr(kTooLarge)));
 
   // A negative size is reported before an overflow.
   proto.add_dims()->set_size(-1);
@@ -296,7 +305,7 @@ TEST(PartialShapeTest, PartialShapeMergeWithInvalidData) {
   // returns its result.
   const PartialShape b = PartialShapeOrDie({U(), S(0), S(2)});
   const PartialShape c = PartialShapeOrDie({S(1), U(), S(3)});
-  const PartialShape d = PartialShapeOrDie({U(), S(kInt64Max), U()});
+  const PartialShape d = PartialShapeOrDie({U(), S(kMax), U()});
 
   EXPECT_THAT(b.MergeWith(c),
               StatusIs(absl::StatusCode::kInvalidArgument,
@@ -305,7 +314,7 @@ TEST(PartialShapeTest, PartialShapeMergeWithInvalidData) {
   EXPECT_THAT(c.MergeWith(d),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr(absl::StrCat(
-                           "Shape [1,9223372036854775807,3] ", kTooLarge))));
+                           "Shape [1,72057594037927935,3] ", kTooLarge))));
 
   // Each side satisfies the invariant, but the merged shape would not.
   const PartialShape e = PartialShapeOrDie({S(kBig), U()});
@@ -322,8 +331,8 @@ TEST(PartialShapeTest, ZeroAndDynamicDims) {
   EXPECT_EQ(s2.num_elements(), S(0));
 
   // A shape with a zero and a large size has 0 elements: no overflow.
-  const PartialShape s3 = PartialShapeOrDie({S(0), S(kInt64Max)});
-  const PartialShape s4 = PartialShapeOrDie({S(kInt64Max), S(0)});
+  const PartialShape s3 = PartialShapeOrDie({S(0), S(kMax)});
+  const PartialShape s4 = PartialShapeOrDie({S(kMax), S(0)});
   EXPECT_EQ(s3.num_elements(), S(0));
   EXPECT_EQ(s4.num_elements(), S(0));
 }
@@ -651,9 +660,21 @@ TEST(PartialShapeTest, Create) {
                HasSubstr(absl::StrCat("Shape [1099511627776,?,1099511627776] ",
                                       kTooLarge))));
   // Unknown dimensions and zeros don't count, but a zero doesn't hide an
-  // overflow of the other sizes.
-  EXPECT_THAT(PartialShape::Create({S(kBig), U(), S(0)}),
-              IsOkAndHolds(PartialShapeOrDie({S(kBig), U(), S(0)})));
+  // overflow of the other sizes (including sizes in (kMax, kInt64Max]).
+  EXPECT_THAT(PartialShape::Create({S(kMax), U(), S(0)}),
+              IsOkAndHolds(PartialShapeOrDie({S(kMax), U(), S(0)})));
+  EXPECT_THAT(
+      PartialShape::Create({S(kMax + 1)}),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr(kTooLarge)));
+  EXPECT_THAT(
+      PartialShape::Create({S(kMax / 2 + 1), S(2)}),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr(kTooLarge)));
+  EXPECT_THAT(
+      PartialShape::Create({S(0), S(kMax + 1)}),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr(kTooLarge)));
+  EXPECT_THAT(
+      PartialShape::Create({S(kMax + 1), S(0)}),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr(kTooLarge)));
   EXPECT_THAT(
       PartialShape::Create({S(kBig), S(0), S(kBig)}),
       StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr(kTooLarge)));
@@ -718,7 +739,7 @@ TEST(PartialShapeTest, ProtoRoundTrip) {
   const std::vector<PartialShape> shapes = {
       Scalar(), PartialShapeOrDie({S(0)}), PartialShapeOrDie({U()}),
       PartialShapeOrDie({S(2), U(), S(0)}),
-      PartialShapeOrDie({S(kInt64Max), U(), S(0)})};
+      PartialShapeOrDie({S(kMax), U(), S(0)})};
   for (const PartialShape& s : shapes) {
     EXPECT_THAT(PartialShape::FromProto(s.ToProto()), IsOkAndHolds(s)) << s;
   }
@@ -791,7 +812,7 @@ TEST(PartialShapeTest, BroadcastWith) {
 
 TEST(PartialShapeDeathTest, ConversionFromIfrtShapeRequiresTheInvariant) {
   EXPECT_DEBUG_DEATH(
-      { const PartialShape shape(xla::ifrt::Shape({kBig, kBig})); },
+      { const PartialShape shape(xla::ifrt::Shape({0, kMax + 1})); },
       "too large");
 }
 
