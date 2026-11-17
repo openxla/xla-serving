@@ -243,12 +243,12 @@ output memory through `RunOptions` in two ways:
 
 - **`RunOptions::preallocated_output_arrays`** (device memory): a map from
   component output name to pre-allocated `xla::ifrt::ArrayRef`. Requires an AOT
-  component exported with `use_input_aliasing=True`, and GPU device memory.
-  Each array must match the output's dtype, shape, sharding, and layout. The
-  result is written into the array's memory in place, and the caller keeps the
-  array, so it can pass the same array to every run. A result returned on the
-  device shares that memory and is overwritten by the next run given the
-  array. On CPU and TPU, a run given an array fails.
+  component exported with `use_input_aliasing=True`, and GPU or CPU device
+  memory. Each array must match the output's dtype, shape, sharding, and
+  layout. The result is written into the array's memory in place, and the
+  caller keeps the array, so it can pass the same array to every run. A result
+  returned on the device shares that memory and is overwritten by the next run
+  given the array. On TPU, a run given an array fails.
 - **`RunOptions::preallocated_output_host_buffers`** (host memory): a map from
   component output name to pre-allocated `HostBuffer` (typically pinned host
   memory for fast DMA). Works with any component and avoids host-side output
