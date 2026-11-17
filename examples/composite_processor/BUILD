@@ -88,7 +88,7 @@ transform_pybind_library(
 
 cc_library(
     name = "example_transforms_and_resources",
-    visibility = ["@xla_serving//:__subpackages__"],
+    visibility = ["//visibility:private"],
     deps = [
         ":add_int_from_resource_transform",
         ":add_two_input_buffers_transform",
@@ -99,7 +99,7 @@ cc_library(
 
 cc_library(
     name = "composite_processor_example_support",
-    visibility = ["@xla_serving//:__subpackages__"],
+    visibility = ["//visibility:private"],
     deps = [":example_transforms_and_resources"],
     alwayslink = True,
 )
