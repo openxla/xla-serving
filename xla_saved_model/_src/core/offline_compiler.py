@@ -150,29 +150,44 @@ def _build_compile_options(
     # assignments and are rejected by runtime if portable.
     compile_options.compile_portable_executable = True
 
-  # Autotune database routing
+  # Autotune database routing. Prefer the backend-neutral autotune cache
+  # options, falling back to their deprecated xla_gpu_* names on jaxlib
+  # versions that don't expose them yet.
   if config.autotune_database_path:
     debug_options = compile_options.executable_build_options.debug_options
     if file_utils.isdir(config.autotune_database_path):
-      debug_options.xla_gpu_per_fusion_autotune_cache_dir = (
-          config.autotune_database_path
-      )
+      if hasattr(debug_options, "xla_autotune_cache_dir"):
+        debug_options.xla_autotune_cache_dir = config.autotune_database_path
+      else:
+        debug_options.xla_gpu_per_fusion_autotune_cache_dir = (
+            config.autotune_database_path
+        )
     else:
-      debug_options.xla_gpu_load_autotune_results_from = (
-          config.autotune_database_path
-      )
+      if hasattr(debug_options, "xla_load_autotune_cache_from"):
+        debug_options.xla_load_autotune_cache_from = (
+            config.autotune_database_path
+        )
+      else:
+        debug_options.xla_gpu_load_autotune_results_from = (
+            config.autotune_database_path
+        )
 
   return compile_options
 
 
 # The debug options and environment option overrides that only apply to the
 # offline compilation, and aren't recorded with the compiled executables: the
-# autotune database is a path on the compiling host.
+# autotune database is a path on the compiling host. Both the backend-neutral
+# names and their deprecated xla_gpu_* aliases are listed; debug options that
+# the XLA version in use doesn't define are skipped.
 _OFFLINE_ONLY_DEBUG_OPTIONS = (
+    "xla_load_autotune_cache_from",
+    "xla_autotune_cache_dir",
     "xla_gpu_load_autotune_results_from",
     "xla_gpu_per_fusion_autotune_cache_dir",
 )
 _OFFLINE_ONLY_ENV_OPTION_OVERRIDES = (
+    "xla_fail_on_autotune_cache_miss",
     "xla_gpu_require_complete_aot_autotune_results",
 )
 
@@ -195,7 +210,8 @@ def _to_recorded_compile_options(
   )
   debug_options = proto.executable_build_options.debug_options
   for field in _OFFLINE_ONLY_DEBUG_OPTIONS:
-    debug_options.ClearField(field)
+    if field in debug_options.DESCRIPTOR.fields_by_name:
+      debug_options.ClearField(field)
   for key in _OFFLINE_ONLY_ENV_OPTION_OVERRIDES:
     proto.env_option_overrides.pop(key, None)
   return proto
