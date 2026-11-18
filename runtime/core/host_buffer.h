@@ -38,6 +38,7 @@
 #include "protos/grpc/host_buffer.pb.h"  // from @xla_serving
 #include "runtime/core/allocator.h"  // from @xla_serving
 #include "runtime/core/default_allocator.h"  // from @xla_serving
+#include "runtime/core/host_buffer_type_utils.h"  // from @xla_serving
 #include "xla/overflow_util.h"  // from @xla
 #include "xla/python/ifrt/dtype.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
@@ -473,7 +474,23 @@ absl::StatusOr<HostBuffer> Concat(
   if (inputs.empty()) {
     return absl::InvalidArgumentError("inputs is empty");
   }
+  const xla::ifrt::DType expected_dtype(NativeAsDTypeKind<T>::value);
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    if (!inputs[i].has_data()) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Input buffer at index ", i, " is uninitialized"));
+    }
+    if (inputs[i].dtype() != expected_dtype) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Dtypes of all input buffers must match expected dtype ",
+          expected_dtype, ": dtype[", i, "] = ", inputs[i].dtype()));
+    }
+  }
   const int input_dims = inputs[0].shape().dims().size();
+  if (input_dims == 0) {
+    return absl::InvalidArgumentError(
+        "Concat inputs must have at least one dimension");
+  }
   const xla::ifrt::Shape& input_shape = inputs[0].shape();
   const xla::ifrt::DType& input_dtype = inputs[0].dtype();
 

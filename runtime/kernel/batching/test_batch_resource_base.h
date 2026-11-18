@@ -73,6 +73,12 @@ class TestBatchResourceBase : public BatchResourceBase {
     return BatchResourceBase::GetLatestDeadlineTask(batch);
   }
 
+  static absl::Status ValidateBatch(
+      const BatchT& batch,
+      absl::Span<const std::unique_ptr<BatchTask>> unbatched_tasks = {}) {
+    return BatchResourceBase::ValidateBatch(batch, unbatched_tasks);
+  }
+
  protected:
   // Simple function that adds 1 to each element in the input buffer.
   void ProcessFuncBatchImpl(

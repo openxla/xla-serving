@@ -1847,5 +1847,111 @@ TEST_P(PadVariableLengthInputsTest, PadVariableLengthInputs) {
 INSTANTIATE_TEST_SUITE_P(PadVariableLengthInputsTests,
                          PadVariableLengthInputsTest, ::testing::Bool());
 
+TEST_F(BatchResourceBaseTest, BatchingFailedOnMismatchedInputDTypes) {
+  std::shared_ptr<SharedBatchScheduler<BatchResourceBase::BatchTask>> batcher;
+  ASSERT_OK(SharedBatchScheduler<BatchResourceBase::BatchTask>::Create(
+      GetDefaultBatcherOptions(/*num_batch_threads=*/1), &batcher));
+  std::vector<int32_t> allowed_batch_sizes = {4};
+  BatchResourceBase::BatcherT::QueueOptions queue_options =
+      TestBatchResourceBase::GetBatcherQueueOptions(
+          /*num_batch_threads=*/1, /*max_batch_size=*/3,
+          /*batch_timeout_micros=*/1000000, /*max_enqueued_batches=*/10,
+          allowed_batch_sizes, /*enable_large_batch_splitting=*/false,
+          /*disable_padding=*/false, /*pad_variable_length_inputs=*/false,
+          kPadUpPolicy,
+          /*low_priority_max_batch_size=*/0,
+          /*low_priority_batch_timeout_micros=*/0,
+          /*low_priority_max_enqueued_batches=*/0,
+          /*low_priority_allowed_batch_sizes=*/{},
+          MixedPriorityBatchingPolicy::kLowPriorityPaddingWithMaxBatchSize,
+          PriorityBatchingPolicy::kStrictFifo,
+          /*priority_aware_batching_options=*/{}, thread_pool_.get(),
+          allocator_);
+  tsl::core::RefCountPtr<BatchResourceBase> batch_resource(
+      new TestBatchResourceBase(batcher, queue_options, allowed_batch_sizes,
+                                /*low_priority_allowed_batch_sizes=*/{},
+                                thread_pool_.get()));
+
+  std::vector<Value> inputs0 = {
+      Value(AsHostBuffer<double>({1.0, 2.0}, xla::ifrt::Shape({1, 2})))};
+  std::vector<Value> inputs1 = {Value(
+      AsHostBuffer<float>({3.0f, 4.0f, 5.0f, 6.0f}, xla::ifrt::Shape({2, 2})))};
+
+  Kernel::ExecuteContext context0{
+      .metadata = {.model_name = kModelName, .model_version = kModelVersion},
+      .inputs = inputs0};
+  Kernel::ExecuteContext context1{
+      .metadata = {.model_name = kModelName, .model_version = kModelVersion},
+      .inputs = inputs1};
+
+  auto [promise0, future0] = tsl::MakePromise<>();
+  auto [promise1, future1] = tsl::MakePromise<>();
+  auto create_batch_task_fn = []() {
+    return std::make_unique<BatchResourceBase::BatchTask>();
+  };
+
+  ASSERT_OK(batch_resource->RegisterInput(
+      /*guid=*/0, &context0, /*num_outputs=*/1, "batch_queue",
+      create_batch_task_fn,
+      [promise = std::move(promise0)](absl::Status status) mutable {
+        promise.Set(status);
+      }));
+  ASSERT_OK(batch_resource->RegisterInput(
+      /*guid=*/1, &context1, /*num_outputs=*/1, "batch_queue",
+      create_batch_task_fn,
+      [promise = std::move(promise1)](absl::Status status) mutable {
+        promise.Set(status);
+      }));
+
+  EXPECT_THAT(future0.Await(),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       testing::HasSubstr("dtype mismatch across tasks")));
+  EXPECT_THAT(future1.Await(),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       testing::HasSubstr("dtype mismatch across tasks")));
+}
+
+TEST_F(BatchResourceBaseTest,
+       ValidateBatchRejectsUnbatchedDTypeMismatchAndUninitializedInputs) {
+  BatchResourceBase::BatchT batch;
+  auto ref_task = std::make_unique<BatchResourceBase::BatchTask>();
+  ref_task->inputs.push_back(
+      AsHostBuffer<float>({1.0f, 2.0f}, xla::ifrt::Shape({1, 2})));
+  batch.AddTask(std::move(ref_task));
+  batch.Close();
+
+  auto mismatched_unbatched = std::make_unique<BatchResourceBase::BatchTask>();
+  mismatched_unbatched->inputs.push_back(
+      AsHostBuffer<double>({3.0, 4.0}, xla::ifrt::Shape({1, 2})));
+  std::vector<std::unique_ptr<BatchResourceBase::BatchTask>> unbatched_tasks;
+  unbatched_tasks.push_back(std::move(mismatched_unbatched));
+  EXPECT_THAT(TestBatchResourceBase::ValidateBatch(batch, unbatched_tasks),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       testing::HasSubstr("dtype mismatch across tasks")));
+
+  auto uninit_unbatched = std::make_unique<BatchResourceBase::BatchTask>();
+  uninit_unbatched->inputs.push_back(HostBuffer());
+  unbatched_tasks.clear();
+  unbatched_tasks.push_back(std::move(uninit_unbatched));
+  EXPECT_THAT(TestBatchResourceBase::ValidateBatch(batch, unbatched_tasks),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       testing::HasSubstr("is uninitialized")));
+
+  unbatched_tasks.clear();
+  unbatched_tasks.push_back(nullptr);
+  EXPECT_THAT(TestBatchResourceBase::ValidateBatch(batch, unbatched_tasks),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       testing::HasSubstr("Unbatched task is null")));
+
+  BatchResourceBase::BatchT uninit_batch;
+  auto uninit_task = std::make_unique<BatchResourceBase::BatchTask>();
+  uninit_task->inputs.push_back(HostBuffer());
+  uninit_batch.AddTask(std::move(uninit_task));
+  uninit_batch.Close();
+  EXPECT_THAT(TestBatchResourceBase::ValidateBatch(uninit_batch),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       testing::HasSubstr("is uninitialized")));
+}
+
 }  // namespace
 }  // namespace xla_serving

@@ -34,7 +34,7 @@
 #include "absl/strings/str_format.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
-#include "Eigen/Core"  // IWYU pragma: keep
+#include "Eigen/Core"
 #include "runtime/core/allocator.h"  // from @xla_serving
 #include "runtime/core/default_allocator.h"  // from @xla_serving
 #include "runtime/core/host_buffer_type_utils.h"  // from @xla_serving
@@ -46,8 +46,6 @@
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "tsl/platform/tstring.h"  // from @tsl
-
-// IWYU pragma: no_include "Eigen/src/Core/util/ConfigureVectorization.h"
 
 ABSL_FLAG(int64_t, xla_serving_host_buffer_max_elements, int64_t{1} << 32,
           "Maximum number of elements allowed in a HostBuffer to prevent "
@@ -200,7 +198,7 @@ HostBuffer::HostBuffer(const xla::ifrt::DType& dtype,
           static_cast<uint64_t>(size) <= std::numeric_limits<size_t>::max())
         << "Integer overflow in buffer allocation";
     void* aligned_raw_ptr =
-        allocator->Allocate(static_cast<size_t>(size), EIGEN_MAX_ALIGN_BYTES);
+        allocator->Allocate(static_cast<size_t>(size), Eigen::AlignedMax);
     CHECK(size == 0 || aligned_raw_ptr != nullptr)
         << "Failed to allocate buffer of size " << size;
     if (num_elements > 0) {
@@ -217,7 +215,7 @@ HostBuffer::HostBuffer(const xla::ifrt::DType& dtype,
               for (int64_t i = 0; i < n; ++i) {
                 tstring_ptr[i].~tstring();
               }
-              allocator->Free(ptr, EIGEN_MAX_ALIGN_BYTES);
+              allocator->Free(ptr, Eigen::AlignedMax);
             }));
     return;
   }
@@ -233,12 +231,12 @@ HostBuffer::HostBuffer(const xla::ifrt::DType& dtype,
         static_cast<uint64_t>(size) <= std::numeric_limits<size_t>::max())
       << "Integer overflow in buffer allocation";
   void* aligned_raw_ptr =
-      allocator->Allocate(static_cast<size_t>(size), EIGEN_MAX_ALIGN_BYTES);
+      allocator->Allocate(static_cast<size_t>(size), Eigen::AlignedMax);
   CHECK(size == 0 || aligned_raw_ptr != nullptr)
       << "Failed to allocate buffer of size " << size;
   auto owner = std::shared_ptr<void>(aligned_raw_ptr, [allocator](void* ptr) {
     if (ptr == nullptr) return;
-    allocator->Free(ptr, EIGEN_MAX_ALIGN_BYTES);
+    allocator->Free(ptr, Eigen::AlignedMax);
   });
   auto strides = CreateDefaultStrides(shape.dims(), storage_dtype);
   buffer_data_.emplace(aligned_raw_ptr, storage_dtype, shape, strides,
@@ -266,7 +264,7 @@ absl::StatusOr<HostBuffer> HostBuffer::Create(xla::ifrt::DType dtype,
   }
 
   void* aligned_raw_ptr =
-      allocator->Allocate(static_cast<size_t>(size), EIGEN_MAX_ALIGN_BYTES);
+      allocator->Allocate(static_cast<size_t>(size), Eigen::AlignedMax);
   if (size > 0 && aligned_raw_ptr == nullptr) {
     return absl::ResourceExhaustedError(absl::StrCat(
         "Failed to allocate ", size, " bytes for HostBuffer ", dtype, shape));
@@ -283,7 +281,7 @@ absl::StatusOr<HostBuffer> HostBuffer::Create(xla::ifrt::DType dtype,
           for (int64_t i = 0; i < n; ++i) {
             tstring_ptr[i].~tstring();
           }
-          allocator->Free(ptr, EIGEN_MAX_ALIGN_BYTES);
+          allocator->Free(ptr, Eigen::AlignedMax);
         });
     return HostBuffer(aligned_raw_ptr, dtype, std::move(shape), strides,
                       std::move(owner));
@@ -291,7 +289,7 @@ absl::StatusOr<HostBuffer> HostBuffer::Create(xla::ifrt::DType dtype,
 
   auto owner = std::shared_ptr<void>(aligned_raw_ptr, [allocator](void* ptr) {
     if (ptr == nullptr) return;
-    allocator->Free(ptr, EIGEN_MAX_ALIGN_BYTES);
+    allocator->Free(ptr, Eigen::AlignedMax);
   });
   return HostBuffer(aligned_raw_ptr, dtype, std::move(shape), strides,
                     std::move(owner));
@@ -437,8 +435,7 @@ absl::string_view HostBuffer::raw_data() const {
                            total_storage_bytes());
 }
 
-// Returns true iff each row of dim0 is a multiple of EIGEN_MAX_ALIGN_BYTES
-// bytes.
+// Returns true iff each row of dim0 is a multiple of Eigen::AlignedMax bytes.
 bool HostBuffer::IsInnerDimsSizeAligned() const {
   const xla::ifrt::Shape& s = shape();
   const absl::Span<const int64_t> shape_dims = s.dims();
@@ -449,25 +446,25 @@ bool HostBuffer::IsInnerDimsSizeAligned() const {
   if (dim0_size == 0) {
     return false;
   }
-#if EIGEN_MAX_ALIGN_BYTES == 0
-  return true;
-#else
-  int dtype_byte_size;
-  xla::ifrt::DType dtype = storage_dtype();
-  std::optional<int> dtype_byte_size_opt = dtype.byte_size();
-  if (dtype_byte_size_opt.has_value()) {
-    dtype_byte_size = *dtype_byte_size_opt;
-  } else if (dtype.kind() == xla::ifrt::DType::Kind::kString) {
-    dtype_byte_size = sizeof(tsl::tstring);
+  if constexpr (Eigen::AlignedMax == 0) {
+    return true;
   } else {
-    // Storage dtype should never by sub-byte types.
-    // Non-fixed, non-string types are not supported for now.
-    return false;
+    int dtype_byte_size;
+    xla::ifrt::DType dtype = storage_dtype();
+    std::optional<int> dtype_byte_size_opt = dtype.byte_size();
+    if (dtype_byte_size_opt.has_value()) {
+      dtype_byte_size = *dtype_byte_size_opt;
+    } else if (dtype.kind() == xla::ifrt::DType::Kind::kString) {
+      dtype_byte_size = sizeof(tsl::tstring);
+    } else {
+      // Storage dtype should never by sub-byte types.
+      // Non-fixed, non-string types are not supported for now.
+      return false;
+    }
+    const int64_t bytes_per_dim0_row =
+        (s.num_elements() / dim0_size) * dtype_byte_size;
+    return bytes_per_dim0_row % static_cast<int64_t>(Eigen::AlignedMax) == 0;
   }
-  const int64_t bytes_per_dim0_row =
-      (s.num_elements() / dim0_size) * dtype_byte_size;
-  return bytes_per_dim0_row % EIGEN_MAX_ALIGN_BYTES == 0;
-#endif
 }
 
 absl::Status HostBuffer::SplitEasyCases(Allocator* allocator,
@@ -595,6 +592,10 @@ absl::StatusOr<HostBuffer> Concat(tsl::thread::ThreadPool* threadpool,
                                   Allocator* allocator) {
   if (inputs.empty()) {
     return absl::InvalidArgumentError("inputs is empty");
+  }
+  if (!inputs[0].has_data()) {
+    return absl::InvalidArgumentError(
+        "Input buffer at index 0 is uninitialized");
   }
   xla::ifrt::DType::Kind type = inputs[0].dtype().kind();
   switch (type) {
