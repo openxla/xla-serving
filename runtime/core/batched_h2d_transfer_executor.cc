@@ -32,13 +32,17 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "runtime/core/dynamic_dma_utils.h"  // from @xla_serving
 #include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "runtime/core/sharding_utils.h"  // from @xla_serving
 #include "xla/layout_util.h"  // from @xla
 #include "xla/literal.h"  // from @xla
+#include "xla/pjrt/common_pjrt_client.h"  // from @xla
+#include "xla/pjrt/device_event.h"  // from @xla
 #include "xla/pjrt/pjrt_client.h"  // from @xla
 #include "xla/pjrt/pjrt_layout.h"  // from @xla
+#include "xla/pjrt/raw_buffer.h"  // from @xla
 #include "xla/pjrt/transpose.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
@@ -59,12 +63,52 @@
 #include "xla/tsl/concurrency/ref_count.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
+#include "xla/xla_data.pb.h"  // from @xla
+#include "tsl/profiler/lib/traceme.h"  // from @tsl
+#include "tsl/profiler/lib/traceme_encode.h"  // from @tsl
 
 namespace xla_serving {
 
 namespace {
 
 using PjRtBuffers = std::vector<std::shared_ptr<xla::PjRtBuffer>>;
+
+// The device that holds a whole array, and the sharding to create the array
+// with.
+struct SingleDeviceTarget {
+  xla::ifrt::Device* device;
+  xla::ifrt::ShardingRef sharding;
+};
+
+// Returns the device that `sharding` places the whole array on: the device of
+// a single-device `HloSharding`, or the only device of a one-device list (which
+// includes `SingleDeviceSharding`). Returns `std::nullopt` if the array is
+// spread over several devices.
+absl::StatusOr<std::optional<SingleDeviceTarget>> GetSingleDeviceTarget(
+    const xla::ifrt::ShardingRef& sharding, xla::ifrt::Client* client) {
+  if (const auto* hlo_sharding =
+          xla::ifrt::dyn_cast_or_null<xla::ifrt::HloSharding>(sharding.get());
+      hlo_sharding != nullptr &&
+      hlo_sharding->xla_hlo_sharding().IsSingleDevice()) {
+    TF_ASSIGN_OR_RETURN(
+        xla::ifrt::Device * device,
+        client->LookupDevice(xla::ifrt::DeviceId(
+            hlo_sharding->xla_hlo_sharding().GetUniqueDevice())));
+    if (device == nullptr) {
+      return std::nullopt;
+    }
+    // `PjRtArray::Create` takes one buffer per device of the sharding.
+    return SingleDeviceTarget{
+        .device = device,
+        .sharding = xla::ifrt::SingleDeviceSharding::Create(
+            device, sharding->memory_kind())};
+  }
+  if (sharding->devices()->size() == 1) {
+    return SingleDeviceTarget{.device = sharding->devices()->devices()[0],
+                              .sharding = sharding};
+  }
+  return std::nullopt;
+}
 
 // Represents a target shard destination on a device.
 struct ShardTarget {
@@ -448,9 +492,13 @@ BatchedH2DTransferExecutor::BatchedH2DTransferExecutor(
 absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
 BatchedH2DTransferExecutor::ExecuteTransfer(
     absl::Span<const HostBuffer> inputs,
-    absl::Span<const xla::ifrt::ShardingRef> input_shardings) const {
+    absl::Span<const xla::ifrt::ShardingRef> input_shardings,
+    absl::Span<const std::optional<StaticShape>> static_shapes) const {
   if (inputs.size() != input_shardings.size()) {
     return absl::InvalidArgumentError("inputs and shardings size mismatch");
+  }
+  if (!static_shapes.empty() && static_shapes.size() != inputs.size()) {
+    return absl::InvalidArgumentError("inputs and static_shapes size mismatch");
   }
 
   absl::flat_hash_map<xla::ifrt::Device*, DeviceBatchData> batches_by_device;
@@ -460,9 +508,17 @@ BatchedH2DTransferExecutor::ExecuteTransfer(
   fallback_input_indices.reserve(inputs.size());
 
   std::vector<xla::ifrt::ArrayRef> results(inputs.size());
+  // Inputs that are smaller than their static shape.
+  std::vector<int> dynamic_dma_input_indices;
 
   // Phase 1: Classify inputs into per-device batches or fallback paths.
   for (int i = 0; i < inputs.size(); ++i) {
+    // A static shape equal to the shape of the input changes nothing.
+    if (!static_shapes.empty() && static_shapes[i].has_value() &&
+        static_shapes[i]->shape != inputs[i].shape()) {
+      dynamic_dma_input_indices.push_back(i);
+      continue;
+    }
     TF_ASSIGN_OR_RETURN(std::optional<BatchPlan> batch_plan,
                         GetBatchPlanIfEligible(inputs[i], input_shardings[i],
                                                client_, *thread_pool_));
@@ -577,7 +633,106 @@ BatchedH2DTransferExecutor::ExecuteTransfer(
             *thread_pool_));
   }
 
+  // Phase 5: Transfer each input that is smaller than its static shape with a
+  // device buffer and a DMA of its own.
+  for (int idx : dynamic_dma_input_indices) {
+    TF_ASSIGN_OR_RETURN(results[idx], ExecuteDynamicDmaTransfer(
+                                          inputs[idx], input_shardings[idx],
+                                          *static_shapes[idx]));
+  }
+
   return results;
+}
+
+absl::StatusOr<xla::ifrt::ArrayRef>
+BatchedH2DTransferExecutor::ExecuteDynamicDmaTransfer(
+    const HostBuffer& input, const xla::ifrt::ShardingRef& sharding,
+    const StaticShape& static_shape) const {
+  tsl::profiler::TraceMe trace_me([&]() {
+    return tsl::profiler::TraceMeEncode(
+        "BatchedH2DTransferExecutor::ExecuteDynamicDmaTransfer",
+        {{"shape", absl::StrCat(input.shape())},
+         {"static_shape", absl::StrCat(static_shape.shape)}});
+  });
+
+  TF_ASSIGN_OR_RETURN(std::optional<SingleDeviceTarget> target,
+                      GetSingleDeviceTarget(sharding, client_));
+  if (!target.has_value()) {
+    return absl::UnimplementedError(absl::StrCat(
+        "Dynamic DMA only supports single-device inputs, but the input of "
+        "shape ",
+        input.shape(), " with static shape ", static_shape.shape,
+        " has sharding ", *sharding, "."));
+  }
+  auto* common_client =
+      dynamic_cast<xla::CommonPjRtClient*>(client_->pjrt_client());
+  if (common_client == nullptr) {
+    return absl::UnimplementedError(
+        "Dynamic DMA requires a PjRt client derived from "
+        "xla::CommonPjRtClient.");
+  }
+  auto* pjrt_compatible_device =
+      xla::ifrt::dyn_cast_or_null<xla::ifrt::PjRtCompatibleDevice>(
+          target->device);
+  if (pjrt_compatible_device == nullptr ||
+      pjrt_compatible_device->pjrt_device() == nullptr) {
+    return absl::InternalError("Target device is not PJRT compatible.");
+  }
+  TF_ASSIGN_OR_RETURN(
+      xla::PjRtMemorySpace * memory_space,
+      pjrt_compatible_device->pjrt_device()->default_memory_space());
+  TF_ASSIGN_OR_RETURN(
+      DynamicDmaTransfer transfer,
+      PlanDynamicDmaTransfer(input, sharding->memory_kind(), static_shape,
+                             *common_client, memory_space));
+
+  TF_ASSIGN_OR_RETURN(
+      xla::PjRtRawBufferRef raw_buffer,
+      common_client->AllocateRawBuffer(memory_space, transfer.device_bytes,
+                                       /*retry_on_oom=*/true,
+                                       /*allocate_after=*/{}));
+
+  xla::PjRtDeviceEventRef definition_event;
+  if (input.shape().num_elements() == 0) {
+    // Nothing to copy.
+    TF_ASSIGN_OR_RETURN(definition_event,
+                        raw_buffer->MakeAllocationReadyEvent());
+  } else {
+    std::optional<absl::Span<const int64_t>> byte_strides;
+    if (input.byte_strides().has_value()) {
+      byte_strides = absl::MakeConstSpan(*input.byte_strides());
+    }
+    // Keeps the host data alive until the client is done reading it.
+    HostBuffer keep_alive = input;
+    // The host data is linearized as an array of the layout of the device
+    // buffer with fewer rows.
+    TF_ASSIGN_OR_RETURN(
+        definition_event,
+        common_client->LinearizeIntoImpl(
+            input.base(), transfer.transfer_shape.element_type(),
+            input.shape().dims(), byte_strides,
+            xla::PjRtClient::HostBufferSemantics::
+                kImmutableUntilTransferCompletes,
+            /*on_done_with_host_buffer=*/
+            [keep_alive = std::move(keep_alive)]() {}, transfer.transfer_shape,
+            /*dynamic_sizes=*/{}, raw_buffer));
+  }
+  TF_ASSIGN_OR_RETURN(
+      std::unique_ptr<xla::PjRtBuffer> buffer,
+      common_client->DefineBuffer(std::move(transfer.device_shape),
+                                  memory_space, std::move(raw_buffer),
+                                  {std::move(definition_event)}));
+
+  RecordDynamicDmaBytes(transfer.device_bytes, transfer.dma_bytes);
+
+  xla::ifrt::PjRtArray::PjRtBuffers pjrt_buffers;
+  pjrt_buffers.push_back(std::shared_ptr<xla::PjRtBuffer>(buffer.release()));
+  TF_ASSIGN_OR_RETURN(tsl::RCReference<xla::ifrt::PjRtArray> array,
+                      xla::ifrt::PjRtArray::Create(
+                          client_, input.dtype(), static_shape.shape,
+                          std::move(target->sharding), std::move(pjrt_buffers),
+                          static_shape.layout));
+  return tsl::RCReference<xla::ifrt::Array>(std::move(array));
 }
 
 absl::StatusOr<std::unique_ptr<H2DTransferExecutor>>

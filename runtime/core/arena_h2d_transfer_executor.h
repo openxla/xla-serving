@@ -17,6 +17,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "absl/base/nullability.h"  // from @abseil-cpp
@@ -41,6 +42,14 @@ namespace xla_serving {
 // Per target device, allocates a single device arena and a single host staging
 // arena, linearizes eligible inputs into the host arena, and transfers them
 // into aligned slices of the device arena.
+//
+// An input with fewer rows than its static shape (`static_shapes` in
+// `ExecuteTransfer`) is transferred with dynamic DMA: its slice of the device
+// arena is sized for the static shape, and a transfer of its own copies its
+// rows to the front of the slice. The rest of the slice is left uninitialized.
+// This needs a single-device sharding. `PlanDynamicDmaTransfer()` in
+// dynamic_dma_utils.h lists what it needs of the input and of the layout of
+// the static shape.
 class ArenaH2DTransferExecutor : public H2DTransferExecutor {
  public:
   // Creates an ArenaH2DTransferExecutor if `client` supports arena-based
@@ -53,7 +62,9 @@ class ArenaH2DTransferExecutor : public H2DTransferExecutor {
 
   absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ExecuteTransfer(
       absl::Span<const HostBuffer> inputs,
-      absl::Span<const xla::ifrt::ShardingRef> input_shardings) const override;
+      absl::Span<const xla::ifrt::ShardingRef> input_shardings,
+      absl::Span<const std::optional<StaticShape>> static_shapes)
+      const override;
 
  private:
   ArenaH2DTransferExecutor(

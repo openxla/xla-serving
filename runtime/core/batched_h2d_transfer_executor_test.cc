@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "gmock/gmock.h"
@@ -24,11 +25,14 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_matchers.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "runtime/core/host_buffer_matcher.h"  // from @xla_serving
 #include "runtime/core/host_buffer_test_utils.h"  // from @xla_serving
 #include "runtime/core/sharding_utils.h"  // from @xla_serving
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
+#include "xla/layout_util.h"  // from @xla
+#include "xla/pjrt/pjrt_layout.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
@@ -39,6 +43,7 @@
 #include "xla/python/ifrt/sharding.h"  // from @xla
 #include "xla/python/ifrt/test_util.h"  // from @xla
 #include "xla/python/pjrt_ifrt/xla_sharding.h"  // from @xla
+#include "xla/tsl/lib/monitoring/cell_reader.h"  // from @xla
 #include "xla/tsl/platform/env.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
@@ -50,6 +55,13 @@ namespace xla_serving {
 namespace {
 
 using ::absl_testing::StatusIs;
+using ::testing::ElementsAre;
+using ::testing::HasSubstr;
+using ::tsl::monitoring::testing::CellReader;
+using StaticShape = H2DTransferExecutor::StaticShape;
+
+constexpr char kDynamicDmaBytesCounter[] =
+    "/xla_serving/input_transfer/dynamic_dma_bytes";
 
 class BatchedH2DTransferExecutorTest : public ::testing::Test {
  protected:
@@ -82,8 +94,9 @@ TEST_F(BatchedH2DTransferExecutorTest, SizeMismatchReturnsInvalidArgument) {
       device_list_->devices()[0], xla::ifrt::MemoryKind());
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding};  // size 1 vs 2
 
-  EXPECT_THAT(executor->ExecuteTransfer(inputs, shardings),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}),
+      StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST_F(BatchedH2DTransferExecutorTest, NullThreadPoolReturnsInvalidArgument)
@@ -111,8 +124,9 @@ TEST_F(BatchedH2DTransferExecutorTest, EmptyInputsSucceeds) {
   std::vector<HostBuffer> inputs = {};
   std::vector<xla::ifrt::ShardingRef> shardings = {};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   EXPECT_TRUE(results.empty());
 }
 
@@ -140,8 +154,9 @@ TEST_F(BatchedH2DTransferExecutorTest,
                                                    sharding};
 
   // 1. Run new batched transfer.
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 3);
 
   // 2. Validate side-by-side against old/default method and ground truth.
@@ -188,8 +203,9 @@ TEST_F(BatchedH2DTransferExecutorTest, StringTensorsRouteToDefaultPath) {
 
   // String tensors bypass batched PJRT literal transfer and route to
   // sharding_internal::MakeArrayFromHostBuffer.
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
   TF_ASSERT_OK_AND_ASSIGN(
       HostBuffer out,
@@ -218,8 +234,9 @@ TEST_F(BatchedH2DTransferExecutorTest, PackedSubByteDtypeRoutesToDefaultPath) {
   std::vector<HostBuffer> inputs = {float_in, int4_in};
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding, sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 2);
 
   for (int i = 0; i < 2; ++i) {
@@ -254,8 +271,9 @@ TEST_F(BatchedH2DTransferExecutorTest, BatchedTransferStridedSingleDevice) {
   std::vector<HostBuffer> inputs = {strided_in};
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
 
   TF_ASSERT_OK_AND_ASSIGN(
@@ -291,8 +309,9 @@ TEST_F(BatchedH2DTransferExecutorTest, BatchedTransferStridedReplicated) {
   std::vector<HostBuffer> inputs = {strided_in};
   std::vector<xla::ifrt::ShardingRef> shardings = {ifrt_sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
 
   TF_ASSERT_OK_AND_ASSIGN(
@@ -330,8 +349,9 @@ TEST_F(BatchedH2DTransferExecutorTest, BatchedTransferStridedTiled) {
   std::vector<HostBuffer> inputs = {strided_in};
   std::vector<xla::ifrt::ShardingRef> shardings = {ifrt_sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
 
   TF_ASSERT_OK_AND_ASSIGN(
@@ -367,8 +387,9 @@ TEST_F(BatchedH2DTransferExecutorTest, BatchedTransferTransposed2D) {
   std::vector<HostBuffer> inputs = {transposed_in};
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
 
   TF_ASSERT_OK_AND_ASSIGN(
@@ -399,8 +420,9 @@ TEST_F(BatchedH2DTransferExecutorTest, ZeroElementTensorSupport) {
   std::vector<HostBuffer> inputs = {empty_in, non_empty_in};
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding, sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 2);
   EXPECT_EQ(results[0]->shape(), xla::ifrt::Shape({0}));
 
@@ -439,8 +461,9 @@ TEST_F(BatchedH2DTransferExecutorTest, HloShardingSingleDeviceSupport) {
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding_dev0,
                                                    sharding_dev1};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 2);
 
   EXPECT_THAT(results[0]->sharding().devices()->devices(),
@@ -481,8 +504,9 @@ TEST_F(BatchedH2DTransferExecutorTest, MultiDeviceSingleDeviceSharding) {
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding0, sharding1,
                                                    sharding0, sharding1};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 4);
 
   for (int i = 0; i < 4; ++i) {
@@ -519,8 +543,9 @@ TEST_F(BatchedH2DTransferExecutorTest, BatchedTransferReplicated) {
   std::vector<xla::ifrt::ShardingRef> shardings = {ifrt_sharding, ifrt_sharding,
                                                    ifrt_sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 3);
 
   for (int i = 0; i < 3; ++i) {
@@ -576,8 +601,9 @@ TEST_F(BatchedH2DTransferExecutorTest,
   std::vector<xla::ifrt::ShardingRef> shardings = {
       sharding_dev0, sharding_replicated, sharding_dev1, sharding_replicated};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 4);
 
   for (int i = 0; i < 4; ++i) {
@@ -611,8 +637,9 @@ TEST_F(BatchedH2DTransferExecutorTest, BatchedTransferTiled1D) {
   std::vector<xla::ifrt::ShardingRef> shardings = {ifrt_sharding,
                                                    ifrt_sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 2);
 
   for (int i = 0; i < 2; ++i) {
@@ -667,8 +694,9 @@ TEST_F(BatchedH2DTransferExecutorTest, BatchedTransferTiled2D) {
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding_axis0,
                                                    sharding_axis1};
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 2);
 
   for (int i = 0; i < 2; ++i) {
@@ -716,8 +744,9 @@ TEST_F(BatchedH2DTransferExecutorTest, BatchedTransferTiled3D) {
   std::vector<HostBuffer> inputs = {in};
   std::vector<xla::ifrt::ShardingRef> shardings = {ifrt_sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
 
   TF_ASSERT_OK_AND_ASSIGN(
@@ -763,8 +792,9 @@ TEST_F(BatchedH2DTransferExecutorTest, BatchedTransferTiled4D) {
   std::vector<HostBuffer> inputs = {in};
   std::vector<xla::ifrt::ShardingRef> shardings = {ifrt_sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
 
   TF_ASSERT_OK_AND_ASSIGN(
@@ -827,8 +857,9 @@ TEST_F(BatchedH2DTransferExecutorTest,
       sharding_dev0, sharding_replicated, sharding_tiled_2d,
       sharding_tiled_1d, sharding_dev1};
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 5);
 
   for (int i = 0; i < 5; ++i) {
@@ -874,8 +905,9 @@ TEST_F(BatchedH2DTransferExecutorTest, UnevenTiledInputReturnsError) {
 
   // A size-3 tensor tiled over 2 devices yields unequal shard shapes ([2] vs
   // [1]), which the batching planner rejects with UnimplementedError.
-  EXPECT_THAT(executor->ExecuteTransfer(inputs, shardings),
-              StatusIs(absl::StatusCode::kUnimplemented));
+  EXPECT_THAT(
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}),
+      StatusIs(absl::StatusCode::kUnimplemented));
 }
 
 TEST_F(BatchedH2DTransferExecutorTest, FactoryCreate) {
@@ -894,8 +926,9 @@ TEST_F(BatchedH2DTransferExecutorTest, FactoryCreate) {
   std::vector<HostBuffer> inputs = {in};
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(auto results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
 
   TF_ASSERT_OK_AND_ASSIGN(
@@ -904,6 +937,340 @@ TEST_F(BatchedH2DTransferExecutorTest, FactoryCreate) {
           *client_, *results[0], sharding, device_list_, *thread_pool_)
           .Await());
   EXPECT_THAT(out, HostBufferEq(in));
+}
+
+// Reads back the first `num_rows` rows of `array`.
+absl::StatusOr<HostBuffer> ReadBackRows(xla::ifrt::Client& client,
+                                        xla::ifrt::Array& array,
+                                        const xla::ifrt::ShardingRef& sharding,
+                                        const xla::ifrt::DeviceListRef& devices,
+                                        tsl::thread::ThreadPool& thread_pool,
+                                        int64_t num_rows) {
+  TF_ASSIGN_OR_RETURN(HostBuffer out,
+                      sharding_internal::MakeHostBufferFromArray(
+                          client, array, sharding, devices, thread_pool)
+                          .Await());
+  return out.SliceAlongFirstDimension(0, num_rows);
+}
+
+TEST_F(BatchedH2DTransferExecutorTest, DynamicDmaAllocatesStaticShape) {
+  BatchedH2DTransferExecutor::Options options;
+  TF_ASSERT_OK_AND_ASSIGN(auto executor, BatchedH2DTransferExecutor::Create(
+                                             client_.get(), device_list_,
+                                             thread_pool_.get(), options));
+  xla::ifrt::ShardingRef sharding = xla::ifrt::SingleDeviceSharding::Create(
+      device_list_->devices()[0], xla::ifrt::MemoryKind());
+  CellReader<int64_t> dynamic_dma_bytes(kDynamicDmaBytesCounter);
+
+  // Two rows for a static shape of four rows.
+  HostBuffer in = AsHostBuffer<float>({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f},
+                                      xla::ifrt::Shape({2, 3}));
+  // A regular input in the same call goes through the batched transfer.
+  HostBuffer regular_in =
+      AsHostBuffer<int32_t>({10, 20, 30, 40}, xla::ifrt::Shape({2, 2}));
+
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(
+          {in, regular_in}, {sharding, sharding},
+          {StaticShape{.shape = xla::ifrt::Shape({4, 3})}, std::nullopt}));
+  ASSERT_EQ(results.size(), 2);
+
+  // The array has the static shape. Its first two rows hold the data.
+  EXPECT_EQ(results[0]->shape(), xla::ifrt::Shape({4, 3}));
+  EXPECT_EQ(results[0]->dtype(), in.dtype());
+  TF_ASSERT_OK_AND_ASSIGN(
+      HostBuffer rows,
+      ReadBackRows(*client_, *results[0], sharding, device_list_, *thread_pool_,
+                   /*num_rows=*/2));
+  EXPECT_THAT(rows, HostBufferEq(in));
+
+  TF_ASSERT_OK_AND_ASSIGN(
+      HostBuffer regular_out,
+      sharding_internal::MakeHostBufferFromArray(
+          *client_, *results[1], sharding, device_list_, *thread_pool_)
+          .Await());
+  EXPECT_THAT(regular_out, HostBufferEq(regular_in));
+
+  // Four rows are allocated and two are copied.
+  EXPECT_EQ(dynamic_dma_bytes.Delta("allocated"), 4 * 3 * sizeof(float));
+  EXPECT_EQ(dynamic_dma_bytes.Delta("transferred"), 2 * 3 * sizeof(float));
+}
+
+TEST_F(BatchedH2DTransferExecutorTest, DynamicDmaWithNoDataRows) {
+  BatchedH2DTransferExecutor::Options options;
+  TF_ASSERT_OK_AND_ASSIGN(auto executor, BatchedH2DTransferExecutor::Create(
+                                             client_.get(), device_list_,
+                                             thread_pool_.get(), options));
+  xla::ifrt::ShardingRef sharding = xla::ifrt::SingleDeviceSharding::Create(
+      device_list_->devices()[0], xla::ifrt::MemoryKind());
+  CellReader<int64_t> dynamic_dma_bytes(kDynamicDmaBytesCounter);
+
+  HostBuffer in = AsHostBuffer<float>({}, xla::ifrt::Shape({0, 3}));
+
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(
+          {in}, {sharding}, {StaticShape{.shape = xla::ifrt::Shape({4, 3})}}));
+  ASSERT_EQ(results.size(), 1);
+  EXPECT_EQ(results[0]->shape(), xla::ifrt::Shape({4, 3}));
+  // The buffer can be read although nothing was written to it.
+  TF_ASSERT_OK_AND_ASSIGN(
+      HostBuffer out,
+      sharding_internal::MakeHostBufferFromArray(
+          *client_, *results[0], sharding, device_list_, *thread_pool_)
+          .Await());
+  EXPECT_EQ(out.shape(), xla::ifrt::Shape({4, 3}));
+  EXPECT_EQ(dynamic_dma_bytes.Delta("allocated"), 4 * 3 * sizeof(float));
+  EXPECT_EQ(dynamic_dma_bytes.Delta("transferred"), 0);
+}
+
+TEST_F(BatchedH2DTransferExecutorTest, DynamicDmaWithStridedInput) {
+  BatchedH2DTransferExecutor::Options options;
+  TF_ASSERT_OK_AND_ASSIGN(auto executor, BatchedH2DTransferExecutor::Create(
+                                             client_.get(), device_list_,
+                                             thread_pool_.get(), options));
+  xla::ifrt::ShardingRef sharding = xla::ifrt::SingleDeviceSharding::Create(
+      device_list_->devices()[0], xla::ifrt::MemoryKind());
+
+  // [[1, 2, 3], [4, 5, 6]] stored column by column.
+  auto storage = std::make_shared<std::vector<float>>(
+      std::vector<float>{1.0f, 4.0f, 2.0f, 5.0f, 3.0f, 6.0f});
+  constexpr int64_t kF32Bytes = sizeof(float);
+  HostBuffer in(storage->data(), xla::ifrt::DType(xla::ifrt::DType::kF32),
+                xla::ifrt::Shape({2, 3}),
+                absl::InlinedVector<int64_t, 4>{kF32Bytes, 2 * kF32Bytes},
+                storage);
+
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(
+          {in}, {sharding}, {StaticShape{.shape = xla::ifrt::Shape({4, 3})}}));
+  ASSERT_EQ(results.size(), 1);
+  EXPECT_EQ(results[0]->shape(), xla::ifrt::Shape({4, 3}));
+  TF_ASSERT_OK_AND_ASSIGN(
+      HostBuffer rows,
+      ReadBackRows(*client_, *results[0], sharding, device_list_, *thread_pool_,
+                   /*num_rows=*/2));
+  EXPECT_THAT(rows, HostBufferEq(AsHostBuffer<float>(
+                        {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f},
+                        xla::ifrt::Shape({2, 3}))));
+}
+
+TEST_F(BatchedH2DTransferExecutorTest, DynamicDmaWithSingleDeviceHloSharding) {
+  BatchedH2DTransferExecutor::Options options;
+  TF_ASSERT_OK_AND_ASSIGN(auto executor, BatchedH2DTransferExecutor::Create(
+                                             client_.get(), device_list_,
+                                             thread_pool_.get(), options));
+  // The whole array is on the second device of a two-device list.
+  xla::ifrt::Device* device = device_list_->devices()[1];
+  xla::ifrt::ShardingRef sharding = xla::ifrt::HloSharding::Create(
+      device_list_, xla::ifrt::MemoryKind(),
+      xla::HloSharding::SingleDevice(device->Id().value()));
+
+  HostBuffer in = AsHostBuffer<float>({1.0f, 2.0f}, xla::ifrt::Shape({1, 2}));
+
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(
+          {in}, {sharding}, {StaticShape{.shape = xla::ifrt::Shape({3, 2})}}));
+  ASSERT_EQ(results.size(), 1);
+  EXPECT_EQ(results[0]->shape(), xla::ifrt::Shape({3, 2}));
+  EXPECT_THAT(results[0]->sharding().devices()->devices(), ElementsAre(device));
+  xla::ifrt::ShardingRef read_sharding =
+      xla::ifrt::SingleDeviceSharding::Create(device, xla::ifrt::MemoryKind());
+  TF_ASSERT_OK_AND_ASSIGN(
+      HostBuffer rows,
+      ReadBackRows(*client_, *results[0], read_sharding, device_list_,
+                   *thread_pool_, /*num_rows=*/1));
+  EXPECT_THAT(rows, HostBufferEq(in));
+}
+
+TEST_F(BatchedH2DTransferExecutorTest, DynamicDmaWithOneDeviceList) {
+  BatchedH2DTransferExecutor::Options options;
+  TF_ASSERT_OK_AND_ASSIGN(auto executor, BatchedH2DTransferExecutor::Create(
+                                             client_.get(), device_list_,
+                                             thread_pool_.get(), options));
+  // A replicated sharding over one device puts the whole array on it.
+  xla::ifrt::Device* device = device_list_->devices()[0];
+  TF_ASSERT_OK_AND_ASSIGN(xla::ifrt::DeviceListRef one_device,
+                          client_->MakeDeviceList({device}));
+  xla::ifrt::ShardingRef sharding = xla::ifrt::HloSharding::Create(
+      one_device, xla::ifrt::MemoryKind(), xla::HloSharding::Replicate());
+
+  HostBuffer in = AsHostBuffer<float>({1.0f, 2.0f}, xla::ifrt::Shape({1, 2}));
+
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(
+          {in}, {sharding}, {StaticShape{.shape = xla::ifrt::Shape({3, 2})}}));
+  ASSERT_EQ(results.size(), 1);
+  EXPECT_EQ(results[0]->shape(), xla::ifrt::Shape({3, 2}));
+  TF_ASSERT_OK_AND_ASSIGN(
+      HostBuffer rows, ReadBackRows(*client_, *results[0], sharding, one_device,
+                                    *thread_pool_, /*num_rows=*/1));
+  EXPECT_THAT(rows, HostBufferEq(in));
+}
+
+TEST_F(BatchedH2DTransferExecutorTest, DynamicDmaWith64BitInput) {
+  BatchedH2DTransferExecutor::Options options;
+  TF_ASSERT_OK_AND_ASSIGN(auto executor, BatchedH2DTransferExecutor::Create(
+                                             client_.get(), device_list_,
+                                             thread_pool_.get(), options));
+  xla::ifrt::ShardingRef sharding = xla::ifrt::SingleDeviceSharding::Create(
+      device_list_->devices()[0], xla::ifrt::MemoryKind());
+
+  // Only TPU rejects element types wider than 32 bits. The CPU client keeps an
+  // s64 element in one piece.
+  HostBuffer in = AsHostBuffer<int64_t>(
+      {(int64_t{1} << 32) + 2, (int64_t{3} << 32) + 4}, xla::ifrt::Shape({2}));
+
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer({in}, {sharding},
+                                {StaticShape{.shape = xla::ifrt::Shape({4})}}));
+  ASSERT_EQ(results.size(), 1);
+  EXPECT_EQ(results[0]->shape(), xla::ifrt::Shape({4}));
+  TF_ASSERT_OK_AND_ASSIGN(
+      HostBuffer rows,
+      ReadBackRows(*client_, *results[0], sharding, device_list_, *thread_pool_,
+                   /*num_rows=*/2));
+  EXPECT_THAT(rows, HostBufferEq(in));
+}
+
+TEST_F(BatchedH2DTransferExecutorTest, DynamicDmaUsesLayoutOfStaticShape) {
+  BatchedH2DTransferExecutor::Options options;
+  TF_ASSERT_OK_AND_ASSIGN(auto executor, BatchedH2DTransferExecutor::Create(
+                                             client_.get(), device_list_,
+                                             thread_pool_.get(), options));
+  xla::ifrt::ShardingRef sharding = xla::ifrt::SingleDeviceSharding::Create(
+      device_list_->devices()[0], xla::ifrt::MemoryKind());
+  HostBuffer in = AsHostBuffer<float>({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f},
+                                      xla::ifrt::Shape({2, 3}));
+
+  // Dimension 0 is the major-most dimension, as in the default layout. The
+  // array is created with the layout that was passed.
+  auto row_major = std::make_shared<const xla::PjRtLayout>(
+      xla::LayoutUtil::MakeLayout({1, 0}));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer({in}, {sharding},
+                                {StaticShape{.shape = xla::ifrt::Shape({4, 3}),
+                                             .layout = row_major}}));
+  ASSERT_EQ(results.size(), 1);
+  EXPECT_EQ(results[0]->shape(), xla::ifrt::Shape({4, 3}));
+  TF_ASSERT_OK_AND_ASSIGN(std::shared_ptr<const xla::PjRtLayout> layout,
+                          results[0]->pjrt_layout());
+  ASSERT_NE(layout, nullptr);
+  EXPECT_EQ(*layout, *row_major);
+  TF_ASSERT_OK_AND_ASSIGN(
+      HostBuffer rows,
+      ReadBackRows(*client_, *results[0], sharding, device_list_, *thread_pool_,
+                   /*num_rows=*/2));
+  EXPECT_THAT(rows, HostBufferEq(in));
+
+  // Dimension 0 is the minor-most dimension: the buffer starts with the first
+  // column of all four rows, so the two rows of the input are not its front.
+  auto column_major = std::make_shared<const xla::PjRtLayout>(
+      xla::LayoutUtil::MakeLayout({0, 1}));
+  EXPECT_THAT(
+      executor->ExecuteTransfer({in}, {sharding},
+                                {StaticShape{.shape = xla::ifrt::Shape({4, 3}),
+                                             .layout = column_major}}),
+      StatusIs(absl::StatusCode::kUnimplemented,
+               HasSubstr("major-most dimension")));
+}
+
+TEST_F(BatchedH2DTransferExecutorTest, StaticShapeEqualToInputShapeIsRegular) {
+  BatchedH2DTransferExecutor::Options options;
+  TF_ASSERT_OK_AND_ASSIGN(auto executor, BatchedH2DTransferExecutor::Create(
+                                             client_.get(), device_list_,
+                                             thread_pool_.get(), options));
+  xla::ifrt::ShardingRef sharding = xla::ifrt::SingleDeviceSharding::Create(
+      device_list_->devices()[0], xla::ifrt::MemoryKind());
+  CellReader<int64_t> dynamic_dma_bytes(kDynamicDmaBytesCounter);
+
+  HostBuffer in = AsHostBuffer<float>({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f},
+                                      xla::ifrt::Shape({2, 3}));
+
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto results,
+      executor->ExecuteTransfer(
+          {in}, {sharding}, {StaticShape{.shape = xla::ifrt::Shape({2, 3})}}));
+  ASSERT_EQ(results.size(), 1);
+  TF_ASSERT_OK_AND_ASSIGN(
+      HostBuffer out,
+      sharding_internal::MakeHostBufferFromArray(
+          *client_, *results[0], sharding, device_list_, *thread_pool_)
+          .Await());
+  EXPECT_THAT(out, HostBufferEq(in));
+  EXPECT_EQ(dynamic_dma_bytes.Delta("allocated"), 0);
+  EXPECT_EQ(dynamic_dma_bytes.Delta("transferred"), 0);
+}
+
+TEST_F(BatchedH2DTransferExecutorTest, DynamicDmaRejectsMultiDeviceSharding) {
+  BatchedH2DTransferExecutor::Options options;
+  TF_ASSERT_OK_AND_ASSIGN(auto executor, BatchedH2DTransferExecutor::Create(
+                                             client_.get(), device_list_,
+                                             thread_pool_.get(), options));
+  xla::ifrt::ShardingRef replicated = xla::ifrt::HloSharding::Create(
+      device_list_, xla::ifrt::MemoryKind(), xla::HloSharding::Replicate());
+
+  HostBuffer in = AsHostBuffer<float>({1.0f, 2.0f}, xla::ifrt::Shape({1, 2}));
+  EXPECT_THAT(
+      executor->ExecuteTransfer(
+          {in}, {replicated}, {StaticShape{.shape = xla::ifrt::Shape({3, 2})}}),
+      StatusIs(absl::StatusCode::kUnimplemented, HasSubstr("single-device")));
+}
+
+TEST_F(BatchedH2DTransferExecutorTest, DynamicDmaRejectsUnsupportedDtypes) {
+  BatchedH2DTransferExecutor::Options options;
+  TF_ASSERT_OK_AND_ASSIGN(auto executor, BatchedH2DTransferExecutor::Create(
+                                             client_.get(), device_list_,
+                                             thread_pool_.get(), options));
+  xla::ifrt::ShardingRef sharding = xla::ifrt::SingleDeviceSharding::Create(
+      device_list_->devices()[0], xla::ifrt::MemoryKind());
+
+  tsl::tstring str_data[2] = {"hello", "world"};
+  HostBuffer str_in(str_data, xla::ifrt::DType(xla::ifrt::DType::Kind::kString),
+                    xla::ifrt::Shape({2}));
+  EXPECT_THAT(
+      executor->ExecuteTransfer({str_in}, {sharding},
+                                {StaticShape{.shape = xla::ifrt::Shape({4})}}),
+      StatusIs(absl::StatusCode::kUnimplemented, HasSubstr("dtype")));
+
+  HostBuffer int4_in =
+      AsHostBuffer<tsl::int4, int32_t>({1, 2}, xla::ifrt::Shape({2}));
+  EXPECT_THAT(
+      executor->ExecuteTransfer({int4_in}, {sharding},
+                                {StaticShape{.shape = xla::ifrt::Shape({4})}}),
+      StatusIs(absl::StatusCode::kUnimplemented, HasSubstr("dtype")));
+}
+
+TEST_F(BatchedH2DTransferExecutorTest, DynamicDmaRejectsInvalidStaticShapes) {
+  BatchedH2DTransferExecutor::Options options;
+  TF_ASSERT_OK_AND_ASSIGN(auto executor, BatchedH2DTransferExecutor::Create(
+                                             client_.get(), device_list_,
+                                             thread_pool_.get(), options));
+  xla::ifrt::ShardingRef sharding = xla::ifrt::SingleDeviceSharding::Create(
+      device_list_->devices()[0], xla::ifrt::MemoryKind());
+  HostBuffer in = AsHostBuffer<float>({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f},
+                                      xla::ifrt::Shape({2, 3}));
+
+  // Fewer rows than the input, another inner dimension, another rank.
+  for (const xla::ifrt::Shape& static_shape :
+       {xla::ifrt::Shape({1, 3}), xla::ifrt::Shape({4, 2}),
+        xla::ifrt::Shape({12})}) {
+    EXPECT_THAT(executor->ExecuteTransfer({in}, {sharding},
+                                          {StaticShape{.shape = static_shape}}),
+                StatusIs(absl::StatusCode::kInvalidArgument,
+                         HasSubstr("not a dimension-0 prefix")))
+        << static_shape;
+  }
+  // One entry too many.
+  EXPECT_THAT(
+      executor->ExecuteTransfer({in}, {sharding}, {std::nullopt, std::nullopt}),
+      StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 }  // namespace
