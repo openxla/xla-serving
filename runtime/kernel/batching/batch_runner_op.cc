@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -26,6 +27,7 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/batching/shared_batch_scheduler.h"  // from @xla_serving
@@ -40,6 +42,7 @@
 #include "runtime/kernel/batching/warmup.h"  // from @xla_serving
 #include "runtime/kernel/kernel.h"  // from @xla_serving
 #include "runtime/kernel/kernel_builder_context.h"  // from @xla_serving
+#include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
@@ -52,6 +55,68 @@
 #include "tsl/profiler/lib/traceme_encode.h"  // from @tsl
 
 namespace xla_serving {
+namespace {
+
+// Returns, for each input of the batched kernels, whether its dimension 0 is
+// an upper bound for `first_kernel`, which takes the inputs
+// (`Kernel::upper_bound_input_shapes()`). Such an input is not padded. Returns
+// an empty vector if there is no such input.
+//
+// The kernels then return as many rows as the bound, whatever the size of the
+// batch, and `BatchResourceBase::SplitOutputBuffers()` expects as many rows as
+// the padded batch has. So every batch must be padded to the bound: it has to
+// be the only allowed batch size.
+absl::StatusOr<std::vector<bool>> GetUpperBoundInputs(
+    const Kernel& first_kernel, const BatchRunnerOpOptions& options) {
+  const absl::Span<const std::optional<xla::ifrt::Shape>> shapes =
+      first_kernel.upper_bound_input_shapes();
+  std::vector<bool> upper_bound_inputs(shapes.size(), false);
+  std::optional<int64_t> bound;
+  for (int i = 0; i < shapes.size(); ++i) {
+    if (!shapes[i].has_value()) {
+      continue;
+    }
+    if (shapes[i]->dims().empty()) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Input #", i, " of ", first_kernel.Name(),
+                       " is a scalar, so it cannot have an upper bound on "
+                       "dimension 0."));
+    }
+    const int64_t rows = shapes[i]->dims()[0];
+    if (bound.has_value() && *bound != rows) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "The inputs of ", first_kernel.Name(),
+          " that have an upper bound on dimension 0 must have the same one, "
+          "but input #",
+          i, " has ", rows, " rows and another one has ", *bound, "."));
+    }
+    bound = rows;
+    upper_bound_inputs[i] = true;
+  }
+  if (!bound.has_value()) {
+    return std::vector<bool>();
+  }
+
+  const auto is_the_bound = [&bound](const std::vector<int32_t>& sizes) {
+    return sizes.size() == 1 && sizes[0] == *bound;
+  };
+  const bool has_low_priority_queue = options.low_priority_max_batch_size > 0;
+  if (options.disable_padding || !is_the_bound(options.allowed_batch_sizes) ||
+      (has_low_priority_queue &&
+       !is_the_bound(options.low_priority_allowed_batch_sizes))) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        first_kernel.Name(), " has inputs with an upper bound of ", *bound,
+        " on dimension 0. Batching them requires padding, with ", *bound,
+        " as the only allowed batch size, but got disable_padding=",
+        options.disable_padding ? "true" : "false", ", allowed_batch_sizes=[",
+        absl::StrJoin(options.allowed_batch_sizes, ","),
+        "] and low_priority_allowed_batch_sizes=[",
+        absl::StrJoin(options.low_priority_allowed_batch_sizes, ","), "]."));
+  }
+  return upper_bound_inputs;
+}
+
+}  // namespace
 
 void XlaServingBatchResource::ProcessFuncBatchImpl(
     const BatchResourceBase::BatchTask& propagated_task,
@@ -183,6 +248,8 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateBatchRunnerOp(
   if (kernels.empty()) {
     return absl::InvalidArgumentError("At least one kernel is required.");
   }
+  TF_ASSIGN_OR_RETURN(std::vector<bool> upper_bound_inputs,
+                      GetUpperBoundInputs(*kernels.front(), options));
   SharedBatchScheduler<BatchResourceBase::BatchTask>::Options scheduler_options;
 
   scheduler_options.num_batch_threads = options.num_batch_threads;
@@ -212,7 +279,8 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateBatchRunnerOp(
   tsl::core::RefCountPtr<XlaServingBatchResource> batch_resource(
       new XlaServingBatchResource(std::move(kernels), batcher, queue_options,
                                   options.allowed_batch_sizes, thread_pool,
-                                  options.ragged_inputs));
+                                  options.ragged_inputs,
+                                  std::move(upper_bound_inputs)));
   std::unique_ptr<FlatSignature> input_signature;
 
   if (!options.input_signature.empty()) {

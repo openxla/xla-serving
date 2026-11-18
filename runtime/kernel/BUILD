@@ -102,6 +102,7 @@ cc_library(
         "@abseil-cpp//absl/synchronization",
         "@abseil-cpp//absl/types:span",
         "@xla//xla/pjrt:pjrt_future",
+        "@xla//xla/python/ifrt",
         "@xla//xla/tsl/concurrency:future",
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",

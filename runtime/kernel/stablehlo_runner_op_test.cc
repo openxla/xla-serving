@@ -88,6 +88,7 @@ namespace {
 using ::absl_testing::StatusIs;
 using ::testing::ElementsAreArray;
 using ::testing::HasSubstr;
+using ::testing::IsEmpty;
 
 class TestMemoryRegion : public tsl::ReadOnlyMemoryRegion {
  public:
@@ -197,6 +198,23 @@ TEST_F(SimpleMlirStableHloRunnerOpTest, Basic) {
               ElementsAreArray(
                   {ValueOfType<HostBuffer>(HostBufferEq(expected_out_0_)),
                    ValueOfType<HostBuffer>(HostBufferEq(expected_out_1_))}));
+}
+
+TEST_F(SimpleMlirStableHloRunnerOpTest,
+       UpperBoundInputShapesRequireH2DTransferExecutor) {
+  TF_ASSERT_OK_AND_ASSIGN(
+      const std::string stablehlo_str,
+      helper_->GetStableHloStrFromDataDependency(
+          "runtime/kernel/testdata/simple.mlir"));
+  stablehlo_spec_simple_->mlir_module = stablehlo_str;
+  stablehlo_spec_simple_->inputs[0].leading_dim_is_upper_bound = true;
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<Kernel> runner,
+      helper_->MakeRunnerOp(stablehlo_spec_simple_, assigned_devices_simple_));
+
+  // The JIT runner has no `H2DTransferExecutor`, so it cannot take the input
+  // with fewer rows.
+  EXPECT_THAT(runner->upper_bound_input_shapes(), IsEmpty());
 }
 
 TEST_F(SimpleMlirStableHloRunnerOpTest, Spmd) {

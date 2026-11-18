@@ -154,6 +154,7 @@ cc_library(
         "@tsl//tsl/profiler/lib:context_types_hdrs",
         "@tsl//tsl/profiler/lib:traceme",
         "@tsl//tsl/profiler/lib:traceme_encode",
+        "@xla//xla/python/ifrt",
         "@xla//xla/tsl/concurrency:future",
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:errors",
