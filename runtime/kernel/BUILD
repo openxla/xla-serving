@@ -143,6 +143,7 @@ cc_library(
         "@xla_serving//runtime/core/streaming:utils",
         "@xla_serving//runtime/interpreter:manifest_utils",
         "@xla_serving//runtime/interpreter:run_options",
+        "@xla_serving//runtime/kernel/batching:upper_bound_input_provider",
     ],
 )
 
@@ -293,6 +294,7 @@ cc_test(
         "@xla_serving//runtime/core:value",
         "@xla_serving//runtime/core:value_matcher",
         "@xla_serving//runtime/interpreter:manifest_utils",
+        "@xla_serving//runtime/kernel/batching:upper_bound_input_provider",
         "@xla_serving//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",
     ],
 )

@@ -59,6 +59,12 @@ struct ArgSpec {
   xla::HloSharding sharding;
   std::optional<xla::Layout> layout;
   std::optional<Placement> placement = std::nullopt;
+  // If true, `shape[0]` is an upper bound on the size at serving time rather
+  // than the exact size (`DimensionSize.is_upper_bound` in the manifest). The
+  // function is still compiled for `shape`, but a caller may pass an input
+  // with fewer rows. See `ModelIoMetadata::user_input_static_shapes`. Only
+  // meaningful for inputs.
+  bool leading_dim_is_upper_bound = false;
 
   // Returns the concrete `xla::ifrt::Shape` for this `ArgSpec`, or an
   // `InvalidArgumentError` if `shape` is dynamic or has invalid dimensions.
@@ -77,6 +83,8 @@ struct ArgSpec {
     return *std::move(converted);
   }
 
+  // Compares dtype, shape and sharding only: the remaining fields are
+  // annotations that do not change what the argument is.
   bool operator==(const ArgSpec& other) const {
     return dtype == other.dtype && shape == other.shape &&
            sharding == other.sharding;
@@ -106,8 +114,13 @@ struct ArgSpec {
       }
     }
     absl::StrAppend(&shape_str, "}");
-    return absl::StrCat("dtype: ", dtype, ", shape: ", shape_str,
-                        ", sharding: ", sharding.ToString());
+    std::string debug_string =
+        absl::StrCat("dtype: ", dtype, ", shape: ", shape_str,
+                     ", sharding: ", sharding.ToString());
+    if (leading_dim_is_upper_bound) {
+      absl::StrAppend(&debug_string, ", leading_dim_is_upper_bound: true");
+    }
+    return debug_string;
   }
 };
 

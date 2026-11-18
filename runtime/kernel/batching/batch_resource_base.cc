@@ -744,8 +744,12 @@ absl::Status BatchResourceBase::ConcatInputBuffers(
       }
     }
     // Add padding as needed if padding is allowed. Use the first row of the
-    // first task's buffer as the data for padding.
-    if (padding_amount != 0) {
+    // first task's buffer as the data for padding. An input whose dimension 0
+    // is an upper bound is passed on with only the rows it has. A warmup batch
+    // has no rows of its own, so it is still made of padding.
+    const bool is_upper_bound_input =
+        i < upper_bound_inputs_.size() && upper_bound_inputs_[i];
+    if (padding_amount != 0 && (just_for_warmup || !is_upper_bound_input)) {
       const HostBuffer& padding_source =
           just_for_warmup ? batch.task(0).inputs.at(i) : to_concatenate.front();
       HostBuffer padding;
