@@ -127,6 +127,7 @@ void AnnotateConstantWeights(mlir::ModuleOp module, int input_offset) {
 
 StableHloRunner::StableHloRunner(
     absl_nonnull std::unique_ptr<LoadedStableHlo> loaded_stablehlo,
+    std::vector<std::optional<xla::ifrt::Shape>> user_input_static_shapes,
     std::optional<xla::CompileOptionsProto> compile_options,
     absl_nonnull std::shared_ptr<xla::ifrt::Client> client,
     IfrtLoadedVariableRegistry* absl_nonnull ifrt_loaded_variable_registry,
@@ -146,6 +147,7 @@ StableHloRunner::StableHloRunner(
               .num_user_inputs = loaded_stablehlo->num_user_inputs(),
               .num_outputs = loaded_stablehlo->num_outputs(),
               .has_streaming = loaded_stablehlo->has_streaming(),
+              .user_input_static_shapes = std::move(user_input_static_shapes),
           },
           client, ifrt_loaded_variable_registry, std::move(weights),
           std::move(assigned_device_list), std::move(assigned_devices),
@@ -202,6 +204,10 @@ absl::StatusOr<std::unique_ptr<StableHloRunner>> StableHloRunner::Create(
       std::unique_ptr<LoadedStableHlo> loaded_stablehlo,
       LoadedStableHlo::Create(stablehlo, num_weights, client->platform_name(),
                               compile_options));
+  TF_ASSIGN_OR_RETURN(
+      std::vector<std::optional<xla::ifrt::Shape>> user_input_static_shapes,
+      ModelIoMetadata::GetUserInputStaticShapes(
+          *stablehlo, num_weights, loaded_stablehlo->num_user_inputs()));
 
   if (loaded_stablehlo->has_streaming() && !callback_id.has_value()) {
     return absl::InvalidArgumentError(
@@ -218,11 +224,12 @@ absl::StatusOr<std::unique_ptr<StableHloRunner>> StableHloRunner::Create(
                       client->MakeDeviceList(assigned_ifrt_devices));
 
   auto runner = absl::WrapUnique(new StableHloRunner(
-      std::move(loaded_stablehlo), std::move(compile_options), client,
-      ifrt_loaded_variable_registry, std::move(weights), assigned_device_list,
-      compilation_environment_proto, persistent_compilation_cache, optimizer,
-      assigned_devices, serving_core_selector,
-      std::move(h2d_transfer_executor_factory), callback_id));
+      std::move(loaded_stablehlo), std::move(user_input_static_shapes),
+      std::move(compile_options), client, ifrt_loaded_variable_registry,
+      std::move(weights), assigned_device_list, compilation_environment_proto,
+      persistent_compilation_cache, optimizer, assigned_devices,
+      serving_core_selector, std::move(h2d_transfer_executor_factory),
+      callback_id));
   TF_RETURN_IF_ERROR(runner->Init(thread_pool));
   return runner;
 }
