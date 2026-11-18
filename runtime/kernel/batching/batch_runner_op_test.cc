@@ -28,6 +28,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/flags/flag.h"  // from @abseil-cpp
+#include "absl/flags/reflection.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_matchers.h"  // from @abseil-cpp
@@ -42,6 +43,7 @@
 #include "runtime/core/batching/batch_stats.h"  // from @xla_serving
 #include "runtime/core/batching/shared_batch_scheduler.h"  // from @xla_serving
 #include "runtime/core/default_allocator.h"  // from @xla_serving
+#include "runtime/core/dynamic_dma_flag.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "runtime/core/host_buffer_matcher.h"  // from @xla_serving
 #include "runtime/core/host_buffer_test_utils.h"  // from @xla_serving
@@ -86,6 +88,7 @@ using ::tensorflow::CostMeasurement;
 using ::tensorflow::kTpuCostName;
 using ::testing::ElementsAre;
 using ::testing::ElementsAreArray;
+using ::testing::HasSubstr;
 using ::tsl::monitoring::testing::CellReader;
 using ::tsl::monitoring::testing::Histogram;
 
@@ -1619,6 +1622,275 @@ TEST_F(BatchRunnerOpWarmupTest, PadVariableLengthInputs) {
                   kModelName, absl::StrCat(kModelVersion), batch_size_str),
               0);
   }
+}
+
+// A kernel whose `upper_bound_input_shapes()` are `input_shapes`. Its inputs
+// are columns of int32. Like a function compiled for `num_output_rows` rows,
+// it returns that many rows whatever the number of rows of input 0: input 0 in
+// the rows that input 0 has, and -1 in the others.
+class UpperBoundKernel : public Kernel {
+ public:
+  UpperBoundKernel(std::vector<std::optional<xla::ifrt::Shape>> input_shapes,
+                   int64_t num_output_rows)
+      : input_shapes_(std::move(input_shapes)),
+        num_output_rows_(num_output_rows) {}
+
+  std::string Name() const override { return "UpperBoundKernel"; }
+
+  absl::Status Run(ExecuteContext& context) override {
+    for (const Value& input : context.inputs) {
+      captured_inputs.push_back(input.Get<HostBuffer>());
+    }
+    const HostBuffer& input_0 = context.inputs[0].Get<HostBuffer>();
+    HostBuffer output(xla::ifrt::DType(xla::ifrt::DType::kS32),
+                      xla::ifrt::Shape({num_output_rows_, 1}),
+                      DefaultAllocator::GetInstance());
+    for (int64_t row = 0; row < num_output_rows_; ++row) {
+      output.flat<int32_t>()(row) = row < input_0.shape().dims()[0]
+                                        ? input_0.unaligned_flat<int32_t>()(row)
+                                        : -1;
+    }
+    context.outputs.push_back(Value(std::move(output)));
+    return absl::OkStatus();
+  }
+
+  int GetNumInputs() const override { return input_shapes_.size(); }
+  int GetNumOutputs() const override { return 1; }
+  IODataTypes GetIODataTypes() const override {
+    return {.input = KernelIODataType::kHostBuffer,
+            .output = KernelIODataType::kHostBuffer};
+  }
+  absl::Span<const std::optional<xla::ifrt::Shape>> upper_bound_input_shapes()
+      const override {
+    return input_shapes_;
+  }
+
+  std::vector<HostBuffer> captured_inputs;
+
+ private:
+  const std::vector<std::optional<xla::ifrt::Shape>> input_shapes_;
+  const int64_t num_output_rows_;
+};
+
+// Tests of a batched kernel that takes some of its inputs with fewer rows than
+// the batch size (`Kernel::upper_bound_input_shapes()`), with dynamic DMA
+// enabled.
+class BatchRunnerOpUpperBoundInputTest : public BatchRunnerOpWarmupTest {
+ protected:
+  void SetUp() override {
+    BatchRunnerOpWarmupTest::SetUp();
+    absl::SetFlag(&FLAGS_xla_serving_enable_dynamic_dma, true);
+  }
+
+  // Returns options with `batch_size` as the only allowed batch size.
+  static BatchRunnerOpOptions Options(int batch_size) {
+    BatchRunnerOpOptions options;
+    options.allowed_batch_sizes = {batch_size};
+    options.max_batch_size = batch_size;
+    options.batch_timeout_micros = 100000;
+    options.num_batch_threads = 1;
+    options.max_enqueued_batches = 10;
+    return options;
+  }
+
+  // Creates a `BatchRunnerOp` of one `UpperBoundKernel`.
+  absl::StatusOr<std::unique_ptr<Kernel>> CreateRunner(
+      std::unique_ptr<UpperBoundKernel> kernel,
+      const BatchRunnerOpOptions& options) {
+    std::vector<std::unique_ptr<Kernel>> batched_graph;
+    batched_graph.push_back(std::move(kernel));
+    return CreateBatchRunnerOp(std::move(batched_graph), options,
+                               batch_thread_pool_.get());
+  }
+
+ private:
+  absl::FlagSaver flag_saver_;
+};
+
+TEST_F(BatchRunnerOpUpperBoundInputTest, UpperBoundInputIsNotPadded) {
+  // The kernel is compiled for four rows and takes input 0 with fewer.
+  auto kernel = std::make_unique<UpperBoundKernel>(
+      std::vector<std::optional<xla::ifrt::Shape>>{xla::ifrt::Shape({4, 1}),
+                                                   std::nullopt},
+      /*num_output_rows=*/4);
+  UpperBoundKernel* kernel_ptr = kernel.get();
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Kernel> runner,
+                          CreateRunner(std::move(kernel), Options(4)));
+
+  std::vector<Value> inputs = {
+      Value(AsHostBuffer<int32_t>({1, 2}, xla::ifrt::Shape({2, 1}))),
+      Value(AsHostBuffer<int32_t>({3, 4}, xla::ifrt::Shape({2, 1})))};
+  Kernel::ExecuteContext context;
+  context.inputs = absl::MakeSpan(inputs);
+  context.metadata = {.model_name = kModelName, .model_version = kModelVersion};
+  TF_ASSERT_OK(runner->Run(context));
+
+  // Input 0 is passed on with its two rows. Input 1 is padded to four rows
+  // with copies of its first row.
+  EXPECT_THAT(kernel_ptr->captured_inputs,
+              ElementsAre(HostBufferEq(AsHostBuffer<int32_t>(
+                              {1, 2}, xla::ifrt::Shape({2, 1}))),
+                          HostBufferEq(AsHostBuffer<int32_t>(
+                              {3, 4, 3, 3}, xla::ifrt::Shape({4, 1})))));
+  // The kernel returns four rows. The request gets its two.
+  EXPECT_THAT(context.outputs,
+              ElementsAre(ValueOfType<HostBuffer>(HostBufferEq(
+                  AsHostBuffer<int32_t>({1, 2}, xla::ifrt::Shape({2, 1}))))));
+  EXPECT_EQ(executed_batch_size_reader_->Delta(
+                kModelName, absl::StrCat(kModelVersion), "4"),
+            1);
+}
+
+TEST_F(BatchRunnerOpUpperBoundInputTest, PadsEveryInputWithoutDynamicDma) {
+  absl::SetFlag(&FLAGS_xla_serving_enable_dynamic_dma, false);
+  auto kernel = std::make_unique<UpperBoundKernel>(
+      std::vector<std::optional<xla::ifrt::Shape>>{xla::ifrt::Shape({4, 1}),
+                                                   std::nullopt},
+      /*num_output_rows=*/4);
+  UpperBoundKernel* kernel_ptr = kernel.get();
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Kernel> runner,
+                          CreateRunner(std::move(kernel), Options(4)));
+
+  std::vector<Value> inputs = {
+      Value(AsHostBuffer<int32_t>({1, 2}, xla::ifrt::Shape({2, 1}))),
+      Value(AsHostBuffer<int32_t>({3, 4}, xla::ifrt::Shape({2, 1})))};
+  Kernel::ExecuteContext context;
+  context.inputs = absl::MakeSpan(inputs);
+  context.metadata = {.model_name = kModelName, .model_version = kModelVersion};
+  TF_ASSERT_OK(runner->Run(context));
+
+  // Both inputs are padded to four rows.
+  EXPECT_THAT(kernel_ptr->captured_inputs,
+              ElementsAre(HostBufferEq(AsHostBuffer<int32_t>(
+                              {1, 2, 1, 1}, xla::ifrt::Shape({4, 1}))),
+                          HostBufferEq(AsHostBuffer<int32_t>(
+                              {3, 4, 3, 3}, xla::ifrt::Shape({4, 1})))));
+  EXPECT_THAT(context.outputs,
+              ElementsAre(ValueOfType<HostBuffer>(HostBufferEq(
+                  AsHostBuffer<int32_t>({1, 2}, xla::ifrt::Shape({2, 1}))))));
+}
+
+TEST_F(BatchRunnerOpUpperBoundInputTest, RequiresBoundAsOnlyAllowedBatchSize) {
+  const auto create = [this](const BatchRunnerOpOptions& options) {
+    return CreateRunner(std::make_unique<UpperBoundKernel>(
+                            std::vector<std::optional<xla::ifrt::Shape>>{
+                                xla::ifrt::Shape({4, 1}), std::nullopt},
+                            /*num_output_rows=*/4),
+                        options)
+        .status();
+  };
+  TF_EXPECT_OK(create(Options(4)));
+
+  // The kernel returns four rows for a batch padded to two, which cannot be
+  // split.
+  BatchRunnerOpOptions options = Options(4);
+  options.allowed_batch_sizes = {2, 4};
+  EXPECT_THAT(create(options),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("as the only allowed batch size")));
+
+  EXPECT_THAT(create(Options(8)),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("as the only allowed batch size")));
+
+  options = Options(4);
+  options.allowed_batch_sizes = {};
+  EXPECT_THAT(create(options),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("as the only allowed batch size")));
+
+  options = Options(4);
+  options.disable_padding = true;
+  EXPECT_THAT(create(options), StatusIs(absl::StatusCode::kInvalidArgument,
+                                        HasSubstr("disable_padding=true")));
+
+  // Low priority batches are padded to their own allowed batch sizes.
+  options = Options(4);
+  options.low_priority_max_batch_size = 4;
+  EXPECT_THAT(create(options),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("low_priority_allowed_batch_sizes=[]")));
+  options.low_priority_allowed_batch_sizes = {4};
+  TF_EXPECT_OK(create(options));
+}
+
+// The whole path on the host: the batching kernel, the JIT runner and
+// `BatchedH2DTransferExecutor`.
+TEST_F(BatchRunnerOpTest, DynamicDmaWithStableHloRunner) {
+  absl::FlagSaver flag_saver;
+  absl::SetFlag(&FLAGS_xla_serving_enable_dynamic_dma, true);
+
+  // `x + x` for an f32[4,2] `x` whose dimension 0 is an upper bound.
+  auto stablehlo_spec = std::make_shared<StableHlo::Spec>(StableHlo::Spec{
+      .inputs = {{.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                  .shape = ArgShape({4, 2}),
+                  .sharding = replicated_sharding_,
+                  .leading_dim_is_upper_bound = true}},
+      .outputs = {{.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                   .shape = ArgShape({4, 2}),
+                   .sharding = replicated_sharding_}},
+      .mlir_module = std::string(R"mlir(
+module @main {
+  func.func @main(%arg0: tensor<4x2xf32>) -> tensor<4x2xf32> {
+    %0 = stablehlo.add %arg0, %arg0 : tensor<4x2xf32>
+    return %0 : tensor<4x2xf32>
+  }
+}
+)mlir"),
+      .mlir_module_kept_var_idx = {0},
+  });
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<Kernel> runner,
+      helper_->MakeRunnerOp(stablehlo_spec, assigned_devices_));
+  std::vector<std::unique_ptr<Kernel>> batched_graph;
+  batched_graph.push_back(std::move(runner));
+
+  auto thread_pool = std::make_unique<tsl::thread::ThreadPool>(
+      tsl::Env::Default(), tsl::ThreadOptions(), "BatchThreadPool",
+      /*num_threads=*/4);
+  BatchRunnerOpOptions options;
+  options.allowed_batch_sizes = {4};
+  options.max_batch_size = 4;
+  options.batch_timeout_micros = 100000;
+  options.num_batch_threads = 1;
+  options.max_enqueued_batches = 10;
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Kernel> batch_runner_op,
+                          CreateBatchRunnerOp(std::move(batched_graph), options,
+                                              thread_pool.get()));
+  CellReader<int64_t> dynamic_dma_bytes(
+      "/xla_serving/input_transfer/dynamic_dma_bytes");
+
+  // The request has two of the four rows that the model is compiled for.
+  std::vector<Value> inputs{Value(
+      AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0}, xla::ifrt::Shape({2, 2})))};
+  Kernel::ExecuteContext execute_context{
+      .metadata = {.model_name = kModelName, .model_version = kModelVersion},
+      .inputs = absl::MakeSpan(inputs)};
+  TF_ASSERT_OK(batch_runner_op->Run(execute_context));
+
+  EXPECT_THAT(
+      execute_context.outputs,
+      ElementsAre(ValueOfType<HostBuffer>(HostBufferEq(AsHostBuffer<float>(
+          {2.0, 4.0, 6.0, 8.0}, xla::ifrt::Shape({2, 2}))))));
+  // The batch counts as one of four rows.
+  EXPECT_EQ(executed_batch_size_reader_->Delta(
+                kModelName, absl::StrCat(kModelVersion), "4"),
+            1);
+  // The batching kernel passes on the two rows of the request. The device
+  // buffer has four, of which only those two are copied.
+  EXPECT_EQ(dynamic_dma_bytes.Delta("allocated"), 4 * 2 * sizeof(float));
+  EXPECT_EQ(dynamic_dma_bytes.Delta("transferred"), 2 * 2 * sizeof(float));
+}
+
+TEST_F(BatchRunnerOpUpperBoundInputTest, RequiresSameBoundForAllInputs) {
+  EXPECT_THAT(
+      CreateRunner(std::make_unique<UpperBoundKernel>(
+                       std::vector<std::optional<xla::ifrt::Shape>>{
+                           xla::ifrt::Shape({4, 1}), xla::ifrt::Shape({8, 1})},
+                       /*num_output_rows=*/4),
+                   Options(4)),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("must have the same one")));
 }
 
 }  // namespace

@@ -52,6 +52,38 @@ class ShloTypeTest(parameterized.TestCase):
     )
     self.assertEqual(spec.default_val, 10.0)
 
+  def test_shlo_tensor_spec_upper_bound_dims(self):
+    spec = shlo_type.ShloTensorSpec(
+        shape=(8, 4), dtype=shlo_type.ShloDType.f32, upper_bound_dims=[0]
+    )
+    self.assertEqual(spec.upper_bound_dims, (0,))
+    self.assertIsInstance(spec.upper_bound_dims, tuple)
+
+    default_spec = shlo_type.ShloTensorSpec(
+        shape=(8, 4), dtype=shlo_type.ShloDType.f32
+    )
+    self.assertIsNone(default_spec.upper_bound_dims)
+    empty_spec = shlo_type.ShloTensorSpec(
+        shape=(8, 4), dtype=shlo_type.ShloDType.f32, upper_bound_dims=()
+    )
+    self.assertIsNone(empty_spec.upper_bound_dims)
+
+  @parameterized.named_parameters(
+      ("out_of_range", (8, 4), (2,), "out of range"),
+      ("negative", (8, 4), (-1,), "out of range"),
+      ("unknown_size", (None, 4), (0,), "unknown size"),
+      ("unknown_rank", None, (0,), "known rank"),
+  )
+  def test_shlo_tensor_spec_rejects_invalid_upper_bound_dims(
+      self, shape, upper_bound_dims, message
+  ):
+    with self.assertRaisesRegex(ValueError, message):
+      shlo_type.ShloTensorSpec(
+          shape=shape,
+          dtype=shlo_type.ShloDType.f32,
+          upper_bound_dims=upper_bound_dims,
+      )
+
   def test_shlo_tensor_spec_sharding_and_layout_propagation(self):
     sharding = xla_data_pb2.OpSharding(type=xla_data_pb2.OpSharding.REPLICATED)
     layout = xla_data_pb2.LayoutProto(minor_to_major=[1, 0])
