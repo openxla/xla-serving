@@ -59,6 +59,7 @@ class CpuEmbeddingEngine final {
     absl::Span<const int32_t> row_pointers;
     absl::Span<const float> weights = {};
     absl::AnyInvocable<absl::Span<T>(size_t)> output_allocator = nullptr;
+    absl::Span<const int32_t> embedding_ids_i32 = {};
   };
 
   CpuEmbeddingEngine();

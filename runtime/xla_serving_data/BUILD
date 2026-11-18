@@ -17,6 +17,7 @@ cc_library(
     hdrs = ["composite_processor_op.h"],
     deps = [
         "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/container:inlined_vector",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/types:span",
         "@xla_serving//data/processor/cc/api:transform_context",
