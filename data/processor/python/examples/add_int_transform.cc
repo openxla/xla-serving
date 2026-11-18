@@ -15,11 +15,13 @@
 #include "data/processor/python/examples/add_int_transform.h"  // from @xla_serving
 
 #include <memory>
+#include <utility>
 
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "data/processor/cc/api/registry.h"  // from @xla_serving
+#include "data/processor/cc/api/shape.h"  // from @xla_serving
 #include "data/processor/cc/api/transform_context.h"  // from @xla_serving
 #include "data/processor/cc/core/transform.h"  // from @xla_serving
 #include "data/processor/cc/core/transform_registry.h"  // from @xla_serving
@@ -60,13 +62,16 @@ absl::Status AddIntTransform::PropagateSignatureImpl(
   }
   const auto& spec0 = context.inputs[0].spec();
   const auto& spec1 = context.inputs[1].spec();
-  if (spec0.shape != spec1.shape) {
+  absl::StatusOr<api::PartialShape> merged_shape =
+      spec0.shape.MergeWith(spec1.shape);
+  if (!merged_shape.ok()) {
     return absl::InvalidArgumentError("Inputs must have the same shape");
   }
   if (spec0.dtype != spec1.dtype) {
     return absl::InvalidArgumentError("Inputs must have the same dtype");
   }
-  context.outputs.push_back(context.inputs[0]);
+  context.outputs.push_back(
+      api::HostBufferSpec{spec0.dtype, *std::move(merged_shape)});
   return absl::OkStatus();
 }
 

@@ -86,6 +86,7 @@ cc_library(
         "@xla//xla/python/ifrt",
         "@xla_serving//data/kernels/util:bcast",
         "@xla_serving//data/processor/cc/api:registry",
+        "@xla_serving//data/processor/cc/api:shape",
         "@xla_serving//data/processor/cc/api:transform_context",
         "@xla_serving//data/processor/cc/core:transform",
         "@xla_serving//data/processor/proto:transform_config_cc_proto",

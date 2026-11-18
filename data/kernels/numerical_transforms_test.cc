@@ -1993,21 +1993,50 @@ TEST(NumericalTransformsTest, ReduceSumTransformPropagateSignature) {
   EXPECT_EQ(context.outputs[0].spec().shape, Shape({2}));
 }
 
-TEST(NumericalTransformsTest, ReduceSumTransformRejectsUnknownDimension) {
-  ASSERT_OK_AND_ASSIGN(auto sum_t,
-                       ReduceSumTransform::Create(std::vector<int64_t>{1}));
+TEST(NumericalTransformsTest,
+     ReduceSumTransformPropagateSignatureUnknownDimension) {
   const std::vector<ShapeInferenceValue> inputs = {
       HostBufferSpec{DType(DType::kF32),
                      PartialShapeOrDie({Dim::Unknown(), Dim::Static(3)})},
   };
-  ShapeInferenceContext context;
-  context.inputs = inputs;
 
-  // The error names the transform.
-  EXPECT_THAT(sum_t->PropagateSignature(context),
-              StatusIs(absl::StatusCode::kInvalidArgument,
-                       HasSubstr("ReduceSumTransform: Shape [?,3] is not fully "
-                                 "known: dimension 0 is unknown")));
+  ASSERT_OK_AND_ASSIGN(auto sum_axis1,
+                       ReduceSumTransform::Create(std::vector<int64_t>{1}));
+  ShapeInferenceContext ctx_axis1;
+  ctx_axis1.inputs = inputs;
+  ASSERT_OK(sum_axis1->PropagateSignature(ctx_axis1));
+  ASSERT_EQ(ctx_axis1.outputs.size(), 1);
+  EXPECT_EQ(ctx_axis1.outputs[0].spec().shape,
+            PartialShapeOrDie({Dim::Unknown()}));
+
+  ASSERT_OK_AND_ASSIGN(
+      auto sum_keep_dims,
+      ReduceSumTransform::Create(std::vector<int64_t>{1}, /*keep_dims=*/true));
+  ShapeInferenceContext ctx_keep;
+  ctx_keep.inputs = inputs;
+  ASSERT_OK(sum_keep_dims->PropagateSignature(ctx_keep));
+  ASSERT_EQ(ctx_keep.outputs.size(), 1);
+  EXPECT_EQ(ctx_keep.outputs[0].spec().shape,
+            PartialShapeOrDie({Dim::Unknown(), Dim::Static(1)}));
+
+  ASSERT_OK_AND_ASSIGN(auto sum_axis0,
+                       ReduceSumTransform::Create(std::vector<int64_t>{0}));
+  ShapeInferenceContext ctx_axis0;
+  ctx_axis0.inputs = inputs;
+  ASSERT_OK(sum_axis0->PropagateSignature(ctx_axis0));
+  ASSERT_EQ(ctx_axis0.outputs.size(), 1);
+  EXPECT_EQ(ctx_axis0.outputs[0].spec().shape, Shape({3}));
+
+  // Out-of-range axis still names the transform in the error.
+  ASSERT_OK_AND_ASSIGN(auto sum_bad_axis,
+                       ReduceSumTransform::Create(std::vector<int64_t>{2}));
+  ShapeInferenceContext ctx_bad;
+  ctx_bad.inputs = inputs;
+  EXPECT_THAT(
+      sum_bad_axis->PropagateSignature(ctx_bad),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("ReduceSumTransform: Invalid reduction "
+                         "dimension (2 for input with 2 dimension(s))")));
 }
 
 TEST(NumericalTransformsTest, MaximumMinimumTransforms) {

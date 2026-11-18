@@ -17,6 +17,7 @@ cc_library(
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
         "@xla_serving//data/processor/cc/api:registry",
+        "@xla_serving//data/processor/cc/api:shape",
         "@xla_serving//data/processor/cc/api:transform_context",
         "@xla_serving//data/processor/cc/api:type_info",
         "@xla_serving//data/processor/cc/core:transform",
