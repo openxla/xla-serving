@@ -6,6 +6,9 @@ common --repo_env USE_HERMETIC_CC_TOOLCHAIN=1
 common --repo_env SYSROOT_DIST=linux_glibc_2_31
 common --@rules_ml_toolchain//common:stdlib=libc++
 common --@rules_ml_toolchain//common:static_libcxx=true
+# LLVM >=21 needed for ARM FP8 intrinsics (e.g. mfloat8x16_t, ...) required
+# by libraries like XNNPACK.
+common --repo_env=LLVM_VERSION=21
 
 common --define=PREFIX=/usr
 common --define=LIBDIR=$(PREFIX)/lib
