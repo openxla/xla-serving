@@ -42,6 +42,7 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "runtime/core/aliasing_array.h"  // from @xla_serving
 #include "runtime/core/device_buffer.h"  // from @xla_serving
 #include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
@@ -867,15 +868,10 @@ StableHloRunnerBase::ResolveInputAliasedOutputArrays(
                      executable_bundle.input_aliased_output_arg_layouts[i]));
       continue;
     }
-    // Donation consumes the array, so a deleted one was almost certainly
-    // passed to an earlier execution. Say so here rather than letting PjRt
-    // fail on it obscurely.
+    // Say so here rather than letting PjRt fail on it obscurely.
     if (array->IsDeleted()) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "Output array #", i,
-          " has already been deleted, most likely because it was donated to "
-          "an earlier execution. A pre-allocated output array is consumed by "
-          "the execution it is passed to and must not be reused."));
+      return absl::InvalidArgumentError(
+          absl::StrCat("Output array #", i, " has been deleted."));
     }
     // Verify the caller-provided array matches the output it backs.
     const ArgSpec& output_spec = executable_bundle.io_spec.outputs[i];
@@ -924,6 +920,12 @@ StableHloRunnerBase::ResolveInputAliasedOutputArrays(
           "Output array #", i, " has layout ", layout->ToString(),
           ", but output ", i, " has layout ", expected_layout->ToString()));
     }
+    // The execution writes the result into the memory of the argument by
+    // consuming it, through donation. Donate an alias of the caller's memory
+    // rather than the caller's array, so that the caller keeps its array, and
+    // shares the memory with the output instead of handing it over.
+    TF_ASSIGN_OR_RETURN(array, MakeAliasingArray(*array, *ifrt_client_,
+                                                 AliasAccess::kWritable));
   }
   return caller_provided;
 }
@@ -1181,9 +1183,10 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
   }
 
   // The memory the results are written into is passed in like any other
-  // argument, at the very end, and donated to the execution. The caller either
-  // supplied it or the runner just allocated it; either way the executable
-  // aliases output `i` onto argument `num_inputs + i`.
+  // argument, at the very end, and donated to the execution. It is either an
+  // alias of memory the caller supplied or memory the runner just allocated;
+  // either way the executable aliases output `i` onto argument
+  // `num_inputs + i`.
   if (executable_bundle->num_input_aliased_output > 0) {
     TF_ASSIGN_OR_RETURN(
         std::vector<xla::ifrt::ArrayRef> input_aliased_outputs,
