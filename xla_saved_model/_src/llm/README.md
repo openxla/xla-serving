@@ -149,12 +149,11 @@ export TPU_LIBRARY_PATH=$(python3 -c "import libtpu; print(libtpu.get_library_pa
   --model_name=qwen3 \
   --model_path=/tmp/qwen3_serving_b30_p2000 \
   --port=8500 \
-  --use_insecure_grpc_credentials=true \
   --orbax_grpc_server_platform=tpu
 ```
 
 When the server finishes loading the Orbax model bundle, it prints:
-`JAX Serving listening on [::]:8500`.
+`JAX Serving listening on localhost:8500`.
 
 ### C. Send Requests via Benchmark CLI
 Query the running server and measure throughput using `benchmark_llm`:
@@ -208,7 +207,9 @@ import numpy as np
 from xla_saved_model.protos.grpc import host_buffer_pb2, predict_pb2
 from xla_saved_model.protos.xla.python.ifrt import dtype_pb2
 
-channel = grpc.insecure_channel("localhost:8500")
+channel = grpc.secure_channel(
+    "localhost:8500", grpc.local_channel_credentials()
+)
 predict_fn = channel.unary_unary(
     "/xla_serving.serving.PredictionService/Predict",
     request_serializer=predict_pb2.PredictRequest.SerializeToString,
@@ -294,7 +295,9 @@ def score_candidates(
 #include <string>
 #include <vector>
 
+#include "include/grpc/grpc_security_constants.h"
 #include "include/grpcpp/create_channel.h"
+#include "include/grpcpp/security/credentials.h"
 #include "protos/grpc/host_buffer.pb.h"
 #include "protos/grpc/predict.pb.h"
 #include "protos/grpc/prediction_service.grpc.pb.h"
@@ -355,8 +358,8 @@ void QueryCandidateScoring(
 }
 
 int main() {
-  auto channel = grpc::CreateChannel("localhost:8500",
-                                     grpc::InsecureChannelCredentials());
+  auto channel = grpc::CreateChannel(
+      "localhost:8500", grpc::experimental::LocalCredentials(LOCAL_TCP));
   auto stub = xla_serving::serving::PredictionService::NewStub(channel);
   QueryTextGeneration(stub.get());
   QueryCandidateScoring(stub.get());

@@ -88,10 +88,9 @@ def make_channel(
   """Creates a plaintext gRPC channel to an XSE or Python baseline server.
 
   For loopback targets (the benchmark's single-node setup) gRPC *local*
-  credentials are used: plaintext on the wire—compatible with a server started
-  with `--use_insecure_grpc_credentials=true` or bound via `add_local_port`—and
-  verifying that the peer is local. Remote targets fall back to
-  `grpc.insecure_channel`.
+  credentials are used: zero-overhead loopback verification matching XSE's
+  default `LocalServerCredentials` and the Python baseline's `add_local_port`.
+  Remote targets fall back to `grpc.insecure_channel`.
 
   Args:
     target: `host:port`.
@@ -109,9 +108,9 @@ def make_channel(
 def add_local_port(server: grpc.Server, port: int) -> int:
   """Binds `server` to `port` (0 = ephemeral) for plaintext loopback clients.
 
-  Uses gRPC *local* server credentials: plaintext on the wire (so the same
-  clients that talk to XSE's `--use_insecure_grpc_credentials=true` port work
-  unchanged) while accepting only loopback peers.
+  Uses gRPC *local* server credentials, matching XSE's default
+  `LocalServerCredentials` so the same loopback clients work against both
+  servers while accepting only loopback peers.
 
   Args:
     server: The gRPC server.

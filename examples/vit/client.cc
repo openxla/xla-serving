@@ -48,6 +48,7 @@
 #include "runtime/serving/gcp/auth/utils.h"  // from @xla_serving
 #include "xla/python/ifrt/dtype.pb.h"  // from @xla
 #include "xla/python/ifrt/shape.pb.h"  // from @xla
+#include "tsl/platform/init_main.h"  // from @tsl
 
 ABSL_FLAG(std::string, server_address, "", "Server IP address and port.");
 ABSL_FLAG(std::string, model_name, "", "Name of the model to query.");
@@ -64,9 +65,12 @@ ABSL_FLAG(int32_t, num_requests, 1,
 ABSL_FLAG(int32_t, warmup_requests, 1,
           "Number of warmup requests to discard before benchmarking.");
 ABSL_FLAG(std::string, server_cert_chain_path, "",
-          "Path to the server's certificate chain file for SSL/TLS. For a "
-          "client, this is the server's certificate chain for verification. If "
-          "not provided, the client will fall back on default trust stores.");
+          "Path to the server's PEM-encoded certificate chain file for "
+          "SSL/TLS. When unset (and neither --use_alts_credentials nor "
+          "--use_insecure_grpc_credentials is set), LocalCredentials are used "
+          "for loopback connections.");
+ABSL_FLAG(bool, use_alts_credentials, false,
+          "Whether to use ALTS credentials for Google Cloud endpoints.");
 ABSL_FLAG(bool, use_insecure_grpc_credentials, false,
           "Whether to use insecure credentials for the server. WARNING: THIS "
           "SHOULD NOT BE USED IN PRODUCTION.");
@@ -237,6 +241,7 @@ absl::StatusOr<xla_serving::serving::PredictResponse> RunPredict(
 
 int main(int argc, char* argv[]) {
   absl::ParseCommandLine(argc, argv);
+  tsl::port::InitMain(argv[0], &argc, &argv);
   std::string server_address = absl::GetFlag(FLAGS_server_address);
   std::string model_name = absl::GetFlag(FLAGS_model_name);
   int32_t batch_size = absl::GetFlag(FLAGS_batch_size);
@@ -244,6 +249,7 @@ int main(int argc, char* argv[]) {
   std::string labels_file = absl::GetFlag(FLAGS_labels_file);
   std::string server_cert_chain_path =
       absl::GetFlag(FLAGS_server_cert_chain_path);
+  bool use_alts_credentials = absl::GetFlag(FLAGS_use_alts_credentials);
   bool use_insecure_grpc_credentials =
       absl::GetFlag(FLAGS_use_insecure_grpc_credentials);
 
@@ -277,7 +283,8 @@ int main(int argc, char* argv[]) {
   // Build the gRPC stub once so per-request latencies don't include channel
   // setup cost.
   auto creds_or = xla_serving::serving::CreateChannelCredentials(
-      server_cert_chain_path, use_insecure_grpc_credentials);
+      server_cert_chain_path, use_insecure_grpc_credentials,
+      use_alts_credentials);
   if (!creds_or.ok()) {
     LOG(ERROR) << "Failed to create channel credentials: " << creds_or.status();
     return 1;

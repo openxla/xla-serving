@@ -19,23 +19,34 @@
 #include <string>
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
+#include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "include/grpcpp/security/credentials.h"  // from @grpc
 #include "include/grpcpp/security/server_credentials.h"  // from @grpc
 
 namespace xla_serving {
 namespace serving {
 
+// Returns true when the server credential flags select LocalServerCredentials
+// (loopback-only TCP transport).
+bool UsesLocalServerCredentials(absl::string_view private_key_path,
+                                absl::string_view cert_chain_path,
+                                absl::string_view root_certs_path,
+                                bool use_insecure_grpc_credentials,
+                                bool use_alts_credentials = false);
+
 // Creates gRPC server credentials based on the provided flags.
 absl::StatusOr<std::shared_ptr<grpc::ServerCredentials>>
 CreateServerCredentials(std::string private_key_path,
                         std::string cert_chain_path,
                         std::string root_certs_path,
-                        bool use_insecure_grpc_credentials);
+                        bool use_insecure_grpc_credentials,
+                        bool use_alts_credentials = false);
 
 // Creates gRPC channel credentials based on the provided flags.
 absl::StatusOr<std::shared_ptr<grpc::ChannelCredentials>>
 CreateChannelCredentials(std::string server_cert_chain_path,
-                         bool use_insecure_grpc_credentials);
+                         bool use_insecure_grpc_credentials,
+                         bool use_alts_credentials = false);
 
 }  // namespace serving
 }  // namespace xla_serving
