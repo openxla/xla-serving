@@ -44,6 +44,38 @@ class JaxProcessorTest(test_utils.XsmTestCase):
       # for argument-keyword split without model parameters.
       self.assertEqual(((input_spec,), {}), ((input_spec,), {}))
 
+  def test_input_signature_upper_bound_dims_reach_exported_function(self):
+    """Tests that `ShloTensorSpec.upper_bound_dims` survive the export."""
+    model = jax_model.JaxModel(
+        apply_fn_bundle=jax_model.ApplyFnBundle(
+            apply_fn=lambda params, x: x * params['w'],
+            jax_export_kwargs={'platforms': ['cpu']},
+        ),
+        params={'w': jnp.array([2.0], dtype=jnp.float32)},
+    )
+    input_signature = shlo_type.ShloTensorSpec(
+        shape=(8, 1), dtype=shlo_type.ShloDType.f32, upper_bound_dims=(0,)
+    )
+    processor = jax_processor.JaxProcessor(
+        name='serving_default',
+        apply_fn_bundle=model.apply_fn_bundles[jax_model.DEFAULT_METHOD_KEY],
+        params=model.params,
+    )
+
+    prepared_processor = processor.prepare(input_signature)
+
+    # The exported function's signature is ((params, inputs), {}); the
+    # annotation is on the user input, not on the parameters.
+    for shlo_fn in prepared_processor.shlo_fns:
+      (params_spec, input_spec), _ = shlo_fn.input_signature
+      self.assertEqual(input_spec.shape, (8, 1))
+      self.assertEqual(input_spec.upper_bound_dims, (0,))
+      self.assertIsNone(params_spec['w'].upper_bound_dims)
+    # And it is carried into the pipeline-level input signature.
+    self.assertEqual(
+        prepared_processor.input_signature[0][0].upper_bound_dims, (0,)
+    )
+
   def test_input_signature_with_polymorphic_shape(self):
     """Tests that JaxProcessor.prepare works with polymorphic shapes."""
     model = jax_model.JaxModel(
