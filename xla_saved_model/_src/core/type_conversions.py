@@ -17,7 +17,7 @@
 from collections.abc import Sequence
 import dataclasses
 import functools
-from typing import Any, TypeVar
+from typing import Any
 
 import jax
 import jaxtyping
@@ -26,10 +26,8 @@ import numpy as np
 from xla_saved_model._src.core import shlo_type
 from xla_saved_model.protos.xla import xla_data_pb2  # pylint: disable=g-direct-tensorflow-import
 
-_ProtoT = TypeVar("_ProtoT")
 
-
-def _extract_proto(obj: Any, proto_cls: type[_ProtoT]) -> _ProtoT | None:
+def _extract_proto[ProtoT](obj: Any, proto_cls: type[ProtoT]) -> ProtoT | None:
   """Extracts or deserializes a Protobuf message from an object or .to_proto()."""
   if isinstance(obj, proto_cls):
     return obj

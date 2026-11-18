@@ -16,7 +16,7 @@
 
 from collections.abc import Iterable, Mapping, Sequence
 import itertools
-from typing import Any, TypeVar
+from typing import Any
 
 from absl import logging
 import jax
@@ -132,11 +132,7 @@ def hlo_sharding_to_op_sharding(
   return output
 
 
-T1 = TypeVar("T1")
-T2 = TypeVar("T2")
-
-
-def unzip2(
+def unzip2[T1, T2](
     xys: Iterable[tuple[T1, T2]],
 ) -> tuple[tuple[T1, ...], tuple[T2, ...]]:
   """Unzip a sequence of tuples into two separate tuples."""

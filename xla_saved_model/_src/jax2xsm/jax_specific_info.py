@@ -17,7 +17,7 @@
 # pylint: disable=g-importing-member
 from collections.abc import Iterable, Sequence
 import dataclasses
-from typing import Any, TypeVar
+from typing import Any
 
 from absl import logging
 import jax
@@ -45,9 +45,6 @@ from xla_saved_model._src.jax2xsm import constants
 from xla_saved_model._src.jax2xsm import pytree_proto
 from xla_saved_model.protos.xla import xla_data_pb2
 
-T1 = TypeVar("T1")
-T2 = TypeVar("T2")
-
 try:
   # JAX v0.10.0 or newer
   Effect = jex.core.Effect
@@ -56,7 +53,7 @@ except AttributeError:
   Effect = getattr(jax.core, "Effect", Any)  # pyrefly: ignore
 
 
-def unzip2(
+def unzip2[T1, T2](
     xys: Iterable[tuple[T1, T2]],
 ) -> tuple[tuple[T1, ...], tuple[T2, ...]]:
   """Unzip a sequence of tuples into two separate tuples."""
