@@ -352,6 +352,14 @@ absl::StatusOr<std::unique_ptr<Kernel>> BuildBatchKernel(
   TF_ASSIGN_OR_RETURN(
       PriorityBatchingPolicy priority_batching_policy,
       GetPriorityBatchingPolicy(batch_options.priority_batching_policy()));
+  if (create_options->enable_priority_aware_batching &&
+      priority_batching_policy != PriorityBatchingPolicy::kPriorityAware) {
+    LOG(INFO) << "Overriding the exported priority batching policy "
+              << PriorityBatchingPolicyToString(priority_batching_policy)
+              << " with " << kPriorityAwareAttrValue
+              << " because enable_priority_aware_batching is set.";
+    priority_batching_policy = PriorityBatchingPolicy::kPriorityAware;
+  }
 
   BatchRunnerOpOptions batch_runner_op_options = {
       .input_signature = std::move(input_signature),
@@ -804,6 +812,11 @@ absl::Status ValidateInterpreterCreateOptions(
   if (create_options.computation_thread_pool == nullptr) {
     return absl::InvalidArgumentError(
         "Computation thread pool must not be null.");
+  }
+  if (create_options.enable_priority_aware_batching &&
+      !create_options.enable_batching) {
+    LOG(WARNING) << "enable_priority_aware_batching has no effect because "
+                    "enable_batching is false.";
   }
   return absl::OkStatus();
 }
