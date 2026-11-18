@@ -100,7 +100,6 @@ py_library(
 py_wheel(
     name = "xla_saved_model_runner",
     abi = select({
-        "@rules_python//python/config_settings:is_python_3.11": "cp311",
         "@rules_python//python/config_settings:is_python_3.12": "cp312",
         "@rules_python//python/config_settings:is_python_3.13": "cp313",
         "@rules_python//python/config_settings:is_python_3.14": "cp314",
@@ -111,7 +110,6 @@ py_wheel(
         ":linux_aarch64": "manylinux_2_28_aarch64",
     }),
     python_tag = select({
-        "@rules_python//python/config_settings:is_python_3.11": "cp311",
         "@rules_python//python/config_settings:is_python_3.12": "cp312",
         "@rules_python//python/config_settings:is_python_3.13": "cp313",
         "@rules_python//python/config_settings:is_python_3.14": "cp314",
