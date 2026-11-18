@@ -143,6 +143,7 @@ cc_library(
         "@xla_serving//runtime/core/streaming:utils",
         "@xla_serving//runtime/interpreter:manifest_utils",
         "@xla_serving//runtime/interpreter:run_options",
+        "@xla_serving//runtime/kernel/batching:upper_bound_input_provider",
     ],
 )
 
@@ -185,6 +186,7 @@ cc_library(
         "@com_google_protobuf//:protobuf",
         "@xla//xla/pjrt/proto:compile_options_proto_cc",
         "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/core:h2d_transfer_executor_flag",
         "@xla_serving//runtime/core:stablehlo",
         "@xla_serving//runtime/core:stablehlo_optimizer",
         "@xla_serving//runtime/core:stablehlo_runner",
@@ -269,6 +271,8 @@ cc_test(
         ":kernel_builder_context",
         ":stablehlo_runner_op",
         ":test_utils",
+        "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/flags:reflection",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:status_matchers",
         "@abseil-cpp//absl/strings",
@@ -283,6 +287,8 @@ cc_test(
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:statusor",
         "@xla_serving//runtime/core:aot_stablehlo_runner",
+        "@xla_serving//runtime/core:dynamic_dma_flag",
+        "@xla_serving//runtime/core:h2d_transfer_executor_flag",
         "@xla_serving//runtime/core:host_buffer",
         "@xla_serving//runtime/core:host_buffer_matcher",
         "@xla_serving//runtime/core:host_buffer_test_utils",
@@ -293,6 +299,7 @@ cc_test(
         "@xla_serving//runtime/core:value",
         "@xla_serving//runtime/core:value_matcher",
         "@xla_serving//runtime/interpreter:manifest_utils",
+        "@xla_serving//runtime/kernel/batching:upper_bound_input_provider",
         "@xla_serving//runtime/libs/ifrt/persistent_compilation_cache:ifrt_persistent_compilation_cache",
     ],
 )

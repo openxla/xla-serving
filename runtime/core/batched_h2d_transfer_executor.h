@@ -17,6 +17,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -37,6 +38,18 @@ namespace xla_serving {
 // Executor that groups and issues batched host-to-device transfers.
 // This implementation groups HostBuffers targeted for the same devices and
 // delegates them as a batched multi-slice allocation to the IFRT client.
+//
+// An input with fewer rows than its static shape (`static_shapes` in
+// `ExecuteTransfer`) is transferred with dynamic DMA, outside the batched
+// transfer: it gets a device buffer of the static shape, and a transfer of its
+// own copies its rows to the front of that buffer. This needs a single-device
+// sharding and a PjRt client derived from `xla::CommonPjRtClient`. With any
+// other PjRt client, such as `PjRtCApiClient`, `SupportsStaticShapes()` is
+// false. `PlanDynamicDmaTransfer()` in dynamic_dma_utils.h lists what it needs
+// of the input and of the layout of the static shape.
+//
+// `ArenaH2DTransferExecutor` transfers such an input within its arena, but
+// does not run on CPU.
 class BatchedH2DTransferExecutor : public H2DTransferExecutor {
  public:
   struct Options {};
@@ -50,13 +63,24 @@ class BatchedH2DTransferExecutor : public H2DTransferExecutor {
 
   absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ExecuteTransfer(
       absl::Span<const HostBuffer> inputs,
-      absl::Span<const xla::ifrt::ShardingRef> input_shardings) const override;
+      absl::Span<const xla::ifrt::ShardingRef> input_shardings,
+      absl::Span<const std::optional<StaticShape>> static_shapes)
+      const override;
+
+  bool SupportsStaticShapes() const override;
 
  private:
   BatchedH2DTransferExecutor(xla::ifrt::PjRtCompatibleClient* client,
                              xla::ifrt::DeviceListRef device_list,
                              tsl::thread::ThreadPool* absl_nonnull thread_pool,
                              Options options);
+
+  // Transfers `input`, which has fewer rows than `static_shape`, with dynamic
+  // DMA (see the class comment). Returns an array of the static shape, in its
+  // layout.
+  absl::StatusOr<xla::ifrt::ArrayRef> ExecuteDynamicDmaTransfer(
+      const HostBuffer& input, const xla::ifrt::ShardingRef& sharding,
+      const StaticShape& static_shape) const;
 
   xla::ifrt::PjRtCompatibleClient* client_;  // Not owned.
   xla::ifrt::DeviceListRef device_list_;
