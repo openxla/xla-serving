@@ -1,4 +1,5 @@
 # Copyright 2026 Google LLC
+# Copyright 2026 Arm Ltd. and affiliates
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -87,7 +88,7 @@ _BATCH_SIZE = 64
 
 
 def uniform_init(bound: float):
-  def init(key, shape, dtype=jnp.float_):
+  def init(key, shape, dtype=jnp.float32):
     return jax.random.uniform(
         key, shape=shape, dtype=dtype, minval=-bound, maxval=bound
     )
