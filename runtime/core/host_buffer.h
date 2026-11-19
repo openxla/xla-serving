@@ -151,6 +151,17 @@ class HostBuffer {
       xla::ifrt::DType dtype, xla::ifrt::Shape shape,
       Allocator* allocator = DefaultAllocator::GetInstance());
 
+  // Checks, without allocating, whether a HostBuffer of `dtype` and `shape` can
+  // be created. Applies the same rules as `Create`.
+  //
+  // Returns OK if valid. Otherwise returns `absl::StatusCode::kInvalidArgument`
+  // with a message describing the violation: unsupported `dtype`, a negative
+  // dimension in `shape`, or an element count or byte size that overflows or
+  // exceeds `--xla_serving_host_buffer_max_elements`. These errors are not
+  // transient, so callers should propagate them rather than retry.
+  static absl::Status ValidateShape(xla::ifrt::DType dtype,
+                                    const xla::ifrt::Shape& shape);
+
   /// Returns a `string_view` mapping the current host buffer.
   ///
   /// The returned `string_view` may point to memory location on devices

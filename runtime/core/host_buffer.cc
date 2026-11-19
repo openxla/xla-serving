@@ -157,6 +157,11 @@ absl::Status ValidateHostBufferShape(xla::ifrt::DType dtype,
 
 }  // namespace
 
+absl::Status HostBuffer::ValidateShape(xla::ifrt::DType dtype,
+                                       const xla::ifrt::Shape& shape) {
+  return ValidateHostBufferShape(dtype, shape);
+}
+
 HostBuffer::HostBuffer(void* base, xla::ifrt::DType dtype,
                        xla::ifrt::Shape shape, std::shared_ptr<void> owner)
     : dtype_(dtype) {

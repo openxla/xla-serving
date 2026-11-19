@@ -70,6 +70,7 @@ class HostBufferSplitEasyCasesTest : public ::testing::Test {
 
 namespace {
 
+using ::absl_testing::IsOk;
 using ::absl_testing::StatusIs;
 using ::testing::ElementsAre;
 using ::testing::HasSubstr;
@@ -1346,6 +1347,32 @@ TEST(HostBufferTest, CreateValidatesShapesAndAllocationFailures) {
   HostBufferProto valid_proto = HostBuffer::ToHostBufferProto(valid);
   EXPECT_THAT(HostBuffer::FromProto(valid_proto, &failing_allocator),
               StatusIs(absl::StatusCode::kResourceExhausted));
+}
+
+TEST(HostBufferTest, ValidateShapeMatchesCreateRules) {
+  const xla::ifrt::DType f32(xla::ifrt::DType::Kind::kF32);
+  EXPECT_THAT(HostBuffer::ValidateShape(f32, xla::ifrt::Shape({2, 3})), IsOk());
+  EXPECT_THAT(HostBuffer::ValidateShape(f32, xla::ifrt::Shape({0, 3})), IsOk());
+  EXPECT_THAT(
+      HostBuffer::ValidateShape(xla::ifrt::DType(xla::ifrt::DType::Kind::kS4),
+                                xla::ifrt::Shape({8})),
+      IsOk());
+
+  for (xla::ifrt::DType::Kind kind :
+       {xla::ifrt::DType::Kind::kInvalid, xla::ifrt::DType::Kind::kToken,
+        xla::ifrt::DType::Kind::kOpaque}) {
+    EXPECT_THAT(HostBuffer::ValidateShape(xla::ifrt::DType(kind),
+                                          xla::ifrt::Shape({4})),
+                StatusIs(absl::StatusCode::kInvalidArgument,
+                         HasSubstr("Unsupported HostBuffer dtype")));
+  }
+
+  EXPECT_THAT(HostBuffer::ValidateShape(f32, xla::ifrt::Shape({-1, 4})),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("negative dimension")));
+  EXPECT_THAT(HostBuffer::ValidateShape(
+                  f32, xla::ifrt::Shape({2000000000LL, 5000000000LL})),
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(HostBufferTest, ConcatAndSplitRejectInvalidOrTooLargeSizes) {
