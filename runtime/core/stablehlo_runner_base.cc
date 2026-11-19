@@ -290,6 +290,173 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeUninitializedOutputArray(
   return xla::ifrt::ArrayRef(std::move(array));
 }
 
+// Keeps a caller's buffer and its device memory alive for as long as a view of
+// that memory is in use.
+//
+// The external reference is what holds the memory: it keeps the memory alive
+// even if the caller deletes its buffer, and it stops the caller's buffer from
+// being donated, which would hand the memory to another execution. Holding the
+// buffer object alone does neither, since deleting or donating a buffer frees
+// or moves its memory however many references to the object remain.
+//
+// The buffer must outlive the external reference, because a PjRt buffer
+// CHECK-fails if it is destroyed while a hold on it is outstanding. The
+// destructor drops them in that order explicitly.
+class CallerMemoryPin {
+ public:
+  CallerMemoryPin(
+      std::shared_ptr<xla::PjRtBuffer> buffer,
+      std::unique_ptr<xla::PjRtBuffer::ExternalReference> external_reference)
+      : buffer_(std::move(buffer)),
+        external_reference_(std::move(external_reference)) {}
+
+  CallerMemoryPin(const CallerMemoryPin&) = delete;
+  CallerMemoryPin& operator=(const CallerMemoryPin&) = delete;
+
+  ~CallerMemoryPin() {
+    external_reference_.reset();
+    buffer_.reset();
+  }
+
+ private:
+  std::shared_ptr<xla::PjRtBuffer> buffer_;
+  std::unique_ptr<xla::PjRtBuffer::ExternalReference> external_reference_;
+};
+
+// Returns a new array over the same device memory as `array`, for an execution
+// to donate in its place.
+//
+// Donation consumes the array it is given: PjRt moves the memory out of it and
+// leaves it deleted. A caller that supplies output memory expects to keep its
+// array and pass it again on later runs, so the caller's array is never
+// donated. Instead each of its shards gets a view over the same device memory
+// (`PjRtClient::CreateViewOfDeviceBuffer`), and that is what the execution
+// consumes. The caller's buffers are left untouched and see the results the
+// execution writes in place.
+//
+// The view does not own the memory. Its delete callback holds a
+// `CallerMemoryPin`, so the memory stays alive for as long as the view, or the
+// result that takes the view's memory over on donation, is still using it,
+// even if the caller deletes its array in the meantime. While it does, the
+// caller's array cannot be donated.
+//
+// Whether PjRt writes into a view depends on the backend: views of GPU device
+// memory are writable, but CPU views are read-only, and PjRt writes the result
+// of a read-only donated buffer into new memory without reporting it. TPU does
+// not support views of device memory at all, so the view creation fails there.
+// `CheckResultsWrittenInPlace` turns the silent case into an error.
+//
+// PjRt tracks readiness and usage per buffer, not per allocation, so the view
+// inherits none of the caller's pending work. Wait here for pending writes;
+// the caller is responsible for anything else still reading or writing that
+// memory, which this runner has no way to see.
+absl::StatusOr<xla::ifrt::ArrayRef> MakeDonatableAliasOf(
+    xla::ifrt::Array& array) {
+  auto* pjrt_array =
+      xla::ifrt::dyn_cast<xla::ifrt::PjRtCompatibleArray>(&array);
+  auto* pjrt_client =
+      xla::ifrt::dyn_cast<xla::ifrt::PjRtCompatibleClient>(array.client());
+  if (pjrt_array == nullptr || pjrt_client == nullptr) {
+    return absl::UnimplementedError(
+        "Caller-provided output arrays are only supported on a PjRt-backed "
+        "IFRT client.");
+  }
+
+  TF_RETURN_IF_ERROR(array.GetReadyFuture().Await());
+
+  xla::ifrt::PjRtArray::PjRtBuffers aliases;
+  aliases.reserve(pjrt_array->pjrt_buffers().size());
+  for (const std::shared_ptr<xla::PjRtBuffer>& buffer :
+       pjrt_array->pjrt_buffers()) {
+    xla::PjRtClient* client = buffer->client();
+    // Fails if the buffer has been deleted or donated since it was validated.
+    TF_ASSIGN_OR_RETURN(
+        std::unique_ptr<xla::PjRtBuffer::ExternalReference> external_reference,
+        buffer->AcquireExternalReference());
+    void* device_ptr = external_reference->OpaqueDeviceMemoryDataPointer();
+    // `std::function` requires a copyable callback, so the pin is shared.
+    auto pin = std::make_shared<CallerMemoryPin>(buffer,
+                                                 std::move(external_reference));
+    absl::StatusOr<std::unique_ptr<xla::PjRtBuffer>> view =
+        client->CreateViewOfDeviceBuffer(
+            device_ptr, buffer->on_device_shape(), buffer->memory_space(),
+            /*on_delete_callback=*/[pin = std::move(pin)]() {});
+    if (!view.ok()) {
+      return absl::Status(
+          view.status().code(),
+          absl::StrCat("Caller-provided output arrays are not supported on "
+                       "PjRt platform ",
+                       client->platform_name(),
+                       ": cannot create a view of the array's memory: ",
+                       view.status().message()));
+    }
+    aliases.push_back(std::shared_ptr<xla::PjRtBuffer>(*std::move(view)));
+  }
+
+  TF_ASSIGN_OR_RETURN(std::shared_ptr<const xla::PjRtLayout> layout,
+                      array.pjrt_layout());
+  TF_ASSIGN_OR_RETURN(
+      tsl::RCReference<xla::ifrt::PjRtArray> alias_array,
+      xla::ifrt::PjRtArray::Create(pjrt_client, array.dtype(), array.shape(),
+                                   array.shared_ptr_sharding(),
+                                   std::move(aliases), std::move(layout)));
+  return xla::ifrt::ArrayRef(std::move(alias_array));
+}
+
+// Where a shard's memory lives: its memory space (device and memory kind) and
+// its address there.
+using ShardLocation = std::pair<const xla::PjRtMemorySpace*, std::uintptr_t>;
+
+// Returns where the memory of each shard of `array` lives, in shard order.
+absl::StatusOr<std::vector<ShardLocation>> ShardLocations(
+    xla::ifrt::Array& array) {
+  auto* pjrt_array =
+      xla::ifrt::dyn_cast<xla::ifrt::PjRtCompatibleArray>(&array);
+  if (pjrt_array == nullptr) {
+    return absl::UnimplementedError(
+        "Caller-provided output arrays are only supported on a PjRt-backed "
+        "IFRT client.");
+  }
+  std::vector<ShardLocation> locations;
+  locations.reserve(pjrt_array->pjrt_buffers().size());
+  for (const std::shared_ptr<xla::PjRtBuffer>& buffer :
+       pjrt_array->pjrt_buffers()) {
+    TF_ASSIGN_OR_RETURN(std::uintptr_t address,
+                        buffer->client()->UnsafeBufferPointer(buffer.get()));
+    locations.emplace_back(buffer->memory_space(), address);
+  }
+  return locations;
+}
+
+// Checks that every output the caller supplied memory for was written into
+// that memory.
+//
+// PjRt does not report it when it declines to write into a donated view: if
+// the view is read-only (as CPU views are), it allocates new memory for the
+// result instead and the caller's array keeps its old contents. Compare
+// addresses so that this fails loudly instead of returning a result the
+// caller will not find where it expects.
+absl::Status CheckResultsWrittenInPlace(
+    absl::Span<const xla::ifrt::ArrayRef> caller_arrays,
+    absl::Span<const xla::ifrt::ArrayRef> outputs) {
+  for (int i = 0; i < caller_arrays.size() && i < outputs.size(); ++i) {
+    if (caller_arrays[i] == nullptr) continue;
+    TF_ASSIGN_OR_RETURN(std::vector<ShardLocation> expected,
+                        ShardLocations(*caller_arrays[i]));
+    TF_ASSIGN_OR_RETURN(std::vector<ShardLocation> actual,
+                        ShardLocations(*outputs[i]));
+    if (expected != actual) {
+      return absl::FailedPreconditionError(absl::StrCat(
+          "Output #", i,
+          " was written to new memory instead of the caller-provided output "
+          "array, because this platform's views of device memory are "
+          "read-only. Caller-provided output arrays require writable views "
+          "of device memory, which GPU provides."));
+    }
+  }
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 absl::StatusOr<ModelIoMetadata> ModelIoMetadata::CreateFromStableHlo(
@@ -828,7 +995,19 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
 StableHloRunnerBase::ResolveInputAliasedOutputArrays(
     const CachedExecutableBundle& executable_bundle,
     const xla::ifrt::DeviceListRef& device_list,
-    std::vector<xla::ifrt::ArrayRef> caller_provided) {
+    std::vector<xla::ifrt::ArrayRef> caller_provided,
+    absl::Span<const std::pair<int, xla::ifrt::ArrayRef>>
+        caller_device_inputs) {
+  tsl::profiler::TraceMe trace_me([&]() {
+    return tsl::profiler::TraceMeEncode(
+        "StableHloRunnerBase::ResolveInputAliasedOutputArrays",
+        {{"num_caller_output_arrays",
+          absl::c_count_if(caller_provided,
+                           [](const xla::ifrt::ArrayRef& array) {
+                             return array != nullptr;
+                           })},
+         {"num_caller_device_inputs", caller_device_inputs.size()}});
+  });
   const int num_outputs = executable_bundle.num_input_aliased_output;
   TF_RET_CHECK(num_outputs == executable_bundle.io_spec.outputs.size())
       << "Input-aliased output argument count (" << num_outputs
@@ -855,6 +1034,9 @@ StableHloRunnerBase::ResolveInputAliasedOutputArrays(
                                                    " output arrays, but got ",
                                                    caller_provided.size()));
   }
+  // Where the memory of each shard of a caller-provided array lives, mapped to
+  // the output it backs.
+  absl::flat_hash_map<ShardLocation, int> output_index_by_location;
   for (int i = 0; i < num_outputs; ++i) {
     xla::ifrt::ArrayRef& array = caller_provided[i];
     // The caller supplied no memory for this output, so allocate it. The
@@ -867,16 +1049,20 @@ StableHloRunnerBase::ResolveInputAliasedOutputArrays(
                      executable_bundle.input_aliased_output_arg_layouts[i]));
       continue;
     }
-    // Donation consumes the array, so a deleted one was almost certainly
-    // passed to an earlier execution. Say so here rather than letting PjRt
-    // fail on it obscurely.
+    // The caller's array is never donated (see below), so a deleted one was
+    // deleted or donated by the caller itself. Say so here rather than letting
+    // PjRt fail on it obscurely.
     if (array->IsDeleted()) {
       return absl::InvalidArgumentError(absl::StrCat(
           "Output array #", i,
-          " has already been deleted, most likely because it was donated to "
-          "an earlier execution. A pre-allocated output array is consumed by "
-          "the execution it is passed to and must not be reused."));
+          " has already been deleted or donated, so it has no memory to write "
+          "the results into."));
     }
+    // The checks below read the array's device addresses, which is only safe
+    // once its memory exists: an array still being produced, by an earlier
+    // execution or a host-to-device transfer, may not have it yet. This also
+    // surfaces an array that holds an error.
+    TF_RETURN_IF_ERROR(array->GetReadyFuture().Await());
     // Verify the caller-provided array matches the output it backs.
     const ArgSpec& output_spec = executable_bundle.io_spec.outputs[i];
     if (array->dtype() != output_spec.dtype) {
@@ -889,6 +1075,15 @@ StableHloRunnerBase::ResolveInputAliasedOutputArrays(
           "Output array #", i, " has shape ", array->shape(), ", but output ",
           i, " has shape ", output_spec.GetIfrtShape()));
     }
+    // An output with no elements has no memory to pre-allocate: allocators
+    // return a null address for 0 bytes, which would also make every such
+    // array look like it shares memory with the others.
+    if (array->shape().num_elements() == 0) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Output array #", i, " has shape ", array->shape(),
+          ", which has no elements, so there is no memory to pre-allocate. "
+          "Pass a null array for this output instead."));
+    }
     // Resharding here would reintroduce exactly the copies this feature
     // exists to avoid, so an array sharded differently from the output it
     // backs is an error rather than something to fix up.
@@ -896,6 +1091,29 @@ StableHloRunnerBase::ResolveInputAliasedOutputArrays(
       return absl::InvalidArgumentError(absl::StrCat(
           "Output array #", i, " has sharding ", array->sharding(),
           ", but output ", i, " has sharding ", *output_shardings[i]));
+    }
+    // `HasSamePartitioning` compares neither the devices nor the memory kind,
+    // and PjRt ignores the memory space when it compares argument shapes, so an
+    // array in, say, pinned host memory would otherwise back an output in
+    // device memory. An unspecified memory kind means the device's default.
+    if (*array->sharding().devices() != *output_shardings[i]->devices()) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Output array #", i, " is on devices ", *array->sharding().devices(),
+          ", but output ", i, " is on devices ",
+          *output_shardings[i]->devices()));
+    }
+    const xla::ifrt::Device* first_device =
+        array->sharding().devices()->devices().front();
+    const xla::ifrt::MemoryKind array_memory_kind =
+        xla::ifrt::CanonicalizeMemoryKind(array->sharding().memory_kind(),
+                                          first_device);
+    const xla::ifrt::MemoryKind output_memory_kind =
+        xla::ifrt::CanonicalizeMemoryKind(output_shardings[i]->memory_kind(),
+                                          first_device);
+    if (array_memory_kind != output_memory_kind) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Output array #", i, " is in memory kind ", array_memory_kind,
+          ", but output ", i, " is in memory kind ", output_memory_kind));
     }
     // PjRt only compares byte sizes when validating execution arguments, so a
     // layout mismatch that preserves the byte count (any permutation of
@@ -923,6 +1141,51 @@ StableHloRunnerBase::ResolveInputAliasedOutputArrays(
       return absl::InvalidArgumentError(absl::StrCat(
           "Output array #", i, " has layout ", layout->ToString(),
           ", but output ", i, " has layout ", expected_layout->ToString()));
+    }
+    // Each output gets its own view, and PjRt detects an argument donated
+    // twice by buffer object, not by memory, so memory backing two outputs
+    // would not be caught there: both results would be written into it.
+    TF_ASSIGN_OR_RETURN(std::vector<ShardLocation> locations,
+                        ShardLocations(*array));
+    for (const ShardLocation& location : locations) {
+      auto [it, inserted] = output_index_by_location.try_emplace(location, i);
+      if (!inserted) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Output arrays #", it->second, " and #", i,
+            " share device memory, so both results would be written into "
+            "it. Pass a separate array for each output."));
+      }
+    }
+    // Donate an alias of the caller's memory rather than the caller's array,
+    // so that the caller keeps its array and can pass it again.
+    TF_ASSIGN_OR_RETURN(array, MakeDonatableAliasOf(*array));
+  }
+
+  // The executable assumes an output's memory overlaps no input, so it may
+  // write an output before it has finished reading an input. PjRt rejects a
+  // buffer that is both donated and passed as an input, but it compares buffer
+  // objects, and what is donated here is a separate view of the caller's
+  // memory. Only inputs the caller passed as device arrays can share that
+  // memory: the runner copies host inputs into memory it just allocated.
+  if (!output_index_by_location.empty()) {
+    for (const auto& [input_index, input] : caller_device_inputs) {
+      // As for the output arrays, the addresses can only be read once the
+      // memory exists.
+      TF_RETURN_IF_ERROR(input->GetReadyFuture().Await());
+      TF_ASSIGN_OR_RETURN(std::vector<ShardLocation> locations,
+                          ShardLocations(*input));
+      for (const ShardLocation& location : locations) {
+        if (auto it = output_index_by_location.find(location);
+            it != output_index_by_location.end()) {
+          return absl::InvalidArgumentError(absl::StrCat(
+              "Input #", input_index,
+              " shares device memory with output array #", it->second,
+              ", so the execution could overwrite the input while still "
+              "reading it. To carry state such as a KV cache from one run to "
+              "the next, alternate between two output arrays, passing the "
+              "previous run's result as the input."));
+        }
+      }
     }
   }
   return caller_provided;
@@ -1100,6 +1363,16 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
 
   std::vector<std::optional<xla::ifrt::ArrayRef>> final_used_inputs(
       used_input_indices.size(), std::nullopt);
+  // Inputs the caller passed as device arrays, with their indices among the
+  // caller's inputs. Only these can share memory with the caller's output
+  // arrays, so they are only collected when there are output arrays to check
+  // them against.
+  const bool has_caller_output_arrays =
+      absl::c_any_of(options.output_arrays,
+                     [](const xla::ifrt::ArrayRef& array) {
+                       return array != nullptr;
+                     });
+  std::vector<std::pair<int, xla::ifrt::ArrayRef>> caller_device_inputs;
 
   for (int i = 0; i < used_input_indices.size(); ++i) {
     int idx_in_stablehlo_spec = i + executable_bundle->input_offset;
@@ -1115,6 +1388,10 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
       TF_RETURN_IF_ERROR(ValidateDeviceBufferInput(*device_buffer.ifrt_array,
                                                    target_dtype, target_shape,
                                                    idx_in_stablehlo_spec));
+      if (has_caller_output_arrays) {
+        caller_device_inputs.emplace_back(original_input_idx,
+                                          device_buffer.ifrt_array);
+      }
       final_used_inputs[i] = std::move(device_buffer.ifrt_array);
     } else if (original_input_value.IsType<HostBuffer>()) {
       auto& original_input = original_input_value.Get<HostBuffer>();
@@ -1184,11 +1461,16 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
   // argument, at the very end, and donated to the execution. The caller either
   // supplied it or the runner just allocated it; either way the executable
   // aliases output `i` onto argument `num_inputs + i`.
+  // The caller's own arrays, kept to check after the execution that the
+  // results landed in them (see `CheckResultsWrittenInPlace`).
+  std::vector<xla::ifrt::ArrayRef> caller_output_arrays;
   if (executable_bundle->num_input_aliased_output > 0) {
+    caller_output_arrays = options.output_arrays;
     TF_ASSIGN_OR_RETURN(
         std::vector<xla::ifrt::ArrayRef> input_aliased_outputs,
         ResolveInputAliasedOutputArrays(*executable_bundle, device_list,
-                                        std::move(options.output_arrays)));
+                                        std::move(options.output_arrays),
+                                        caller_device_inputs));
     inputs_with_weights.insert(
         inputs_with_weights.end(),
         std::make_move_iterator(input_aliased_outputs.begin()),
@@ -1229,6 +1511,8 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
               ? std::make_optional(data_converter->device_list())
               : std::nullopt));
   TF_RETURN_IF_ERROR(execution_result.status.Await());
+  TF_RETURN_IF_ERROR(CheckResultsWrittenInPlace(caller_output_arrays,
+                                                execution_result.outputs));
 
   std::vector<Placement> placements;
   // Branch 1: Explicit runtime placement overrides.

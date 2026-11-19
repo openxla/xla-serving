@@ -135,14 +135,41 @@ class StableHloRunnerBase {
     // entry lets the runner allocate that output's memory itself. Non-null
     // entries are only usable when the model was exported for input aliasing.
     //
-    // Each array must match the dtype, shape, sharding and layout of the
-    // output it backs, and must be solely owned by the caller.
+    // Each array must match the dtype, shape, sharding (including devices and
+    // memory kind) and layout of the output it backs, and must be in GPU
+    // device memory on a PjRt-backed client. On other platforms the execution
+    // cannot write into memory the caller keeps, and `Execute` returns an
+    // error. No two outputs may be backed by the same memory, and no array
+    // may share memory with an input of the same execution, such as the
+    // `DeviceBuffer` an earlier execution returned over it; `Execute` rejects
+    // both. To carry state such as a KV cache from one execution to the next,
+    // alternate between two arrays: pass the previous result as the input and
+    // the other array as the output.
     //
-    // Lifecycle: the arrays are donated to the execution. Each one is deleted
-    // when it is passed in and must never be reused; from then on the runner
-    // manages its device memory. An output placed on the device is returned
-    // as a `DeviceBuffer` backed by that memory. An output placed on the host
-    // is copied off it, and the memory is released after the execution.
+    // Lifecycle: the caller keeps the arrays. The runner donates a view of
+    // each array's memory (`PjRtClient::CreateViewOfDeviceBuffer`) rather
+    // than the array itself, so the execution writes the result into that
+    // memory in place and the same arrays can be passed again. The runner
+    // checks after the execution that each result landed in the caller's
+    // memory. An output placed on the device is returned as a
+    // `DeviceBuffer` over a different array backed by that same memory, which
+    // the next execution given the caller's array overwrites. An output placed
+    // on the host is copied off that memory, which stays with the caller.
+    //
+    // The memory stays alive while any result backed by it does, even if the
+    // caller deletes its array, and until then the caller's array cannot be
+    // donated.
+    //
+    // The runner waits for pending writes to each array, but cannot see other
+    // uses of its memory, so the caller must ensure that:
+    //  - when an array is passed in, nothing is still reading or writing its
+    //    memory, whether through the array itself, through a `DeviceBuffer`
+    //    returned by an earlier execution that it backs, or through any other
+    //    handle;
+    //  - the same array is not passed to executions that overlap in time;
+    //  - results returned by earlier executions that it backs are treated as
+    //    overwritten once it is passed to a new execution.
+    // None of these is detected; violating them silently produces wrong data.
     std::vector<xla::ifrt::ArrayRef> output_arrays;
 
     // Host memory, typically pinned, that results are copied into from the
@@ -473,15 +500,24 @@ class StableHloRunnerBase {
   // arguments.
   //
   // `caller_provided` is `ExecuteOptions::output_arrays`. Each non-null entry
-  // is validated against the output it backs and handed through; for each
-  // null entry, or for every output when it is empty, the runner allocates
+  // is validated against the output it backs and replaced by an alias of its
+  // memory, so that the caller's array survives the donation; for each null
+  // entry, or for every output when it is empty, the runner allocates
   // uninitialized device memory instead. Either way the returned arrays are
   // donated to the execution, which writes the results into them.
+  //
+  // `caller_device_inputs` are the inputs the caller passed as device arrays,
+  // each with its index among the caller's inputs. None of them may share
+  // memory with a non-null entry of `caller_provided`: the executable assumes
+  // an output's memory overlaps no input, so it could overwrite an input before
+  // it has finished reading it.
   absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
   ResolveInputAliasedOutputArrays(
       const CachedExecutableBundle& executable_bundle,
       const xla::ifrt::DeviceListRef& device_list,
-      std::vector<xla::ifrt::ArrayRef> caller_provided);
+      std::vector<xla::ifrt::ArrayRef> caller_provided,
+      absl::Span<const std::pair<int, xla::ifrt::ArrayRef>>
+          caller_device_inputs);
 
   const ModelIoMetadata model_io_metadata_;
   const xla::ifrt::DeviceListRef assigned_device_list_;

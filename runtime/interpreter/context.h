@@ -60,10 +60,9 @@ struct RunContext {
   //
   // `RunContext` is copied once per kernel, so each kernel holds its own
   // handles and can move its entries out without disturbing anyone else. The
-  // copies other kernels hold keep the (by then donated, and so deleted) array
-  // shells, and references to the host buffers, alive until the request ends.
-  // That costs nothing: donation has already handed the device memory itself
-  // to the execution, and the host memory belongs to the caller anyway.
+  // copies other kernels hold keep references to the caller's arrays and host
+  // buffers alive until the request ends. That costs nothing: the caller owns
+  // that memory anyway.
   absl::flat_hash_map<std::string, xla::ifrt::ArrayRef>
       preallocated_output_arrays;
   absl::flat_hash_map<std::string, HostBuffer> preallocated_output_host_buffers;
