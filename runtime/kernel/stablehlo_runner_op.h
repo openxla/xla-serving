@@ -20,6 +20,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/base/no_destructor.h"  // from @abseil-cpp
 #include "absl/base/thread_annotations.h"  // from @abseil-cpp
@@ -31,9 +32,11 @@
 #include "runtime/core/flat_signature.h"  // from @xla_serving
 #include "runtime/core/stablehlo.h"  // from @xla_serving
 #include "runtime/core/stablehlo_runner_base.h"  // from @xla_serving
+#include "runtime/kernel/batching/upper_bound_input_provider.h"  // from @xla_serving
 #include "runtime/kernel/kernel.h"  // from @xla_serving
 #include "runtime/kernel/kernel_builder_context.h"  // from @xla_serving
 #include "runtime/kernel/kernel_io_data_type.h"  // from @xla_serving
+#include "xla/python/ifrt/shape.h"  // from @xla
 
 namespace xla_serving {
 
@@ -85,7 +88,8 @@ class StableHloRunnerFactoryRegistry {
 // computation. It is also assumed that variables will always be at the
 // beginning of the argument list. The input arguments will follow the
 // variables.
-class StableHloRunnerOp : public CancellableKernel {
+class StableHloRunnerOp : public CancellableKernel,
+                          public UpperBoundInputProvider {
  public:
   static absl::StatusOr<std::unique_ptr<Kernel>> Create(
       const KernelBuilderContext& context);
@@ -113,6 +117,11 @@ class StableHloRunnerOp : public CancellableKernel {
 
   bool has_streaming() const override {
     return stablehlo_runner_->has_streaming();
+  }
+
+  std::vector<std::vector<std::optional<xla::ifrt::Shape>>>
+  upper_bound_input_shapes() const override {
+    return stablehlo_runner_->upper_bound_input_shapes();
   }
 
   std::optional<int64_t> streaming_host_callback_id() const {

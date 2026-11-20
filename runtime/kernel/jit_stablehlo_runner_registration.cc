@@ -19,6 +19,7 @@
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
+#include "runtime/core/h2d_transfer_executor_flag.h"  // from @xla_serving
 #include "runtime/core/stablehlo.h"  // from @xla_serving
 #include "runtime/core/stablehlo_optimizer.h"  // from @xla_serving
 #include "runtime/core/stablehlo_runner.h"  // from @xla_serving
@@ -74,6 +75,13 @@ absl::StatusOr<std::unique_ptr<StableHloRunnerBase>> CreateJitRunner(
     return optimizer.status();
   }
 
+  // `--xla_serving_h2d_transfer_executor` selects the `H2DTransferExecutor`
+  // that the runner transfers its host inputs with. Without an executor, or
+  // with one that cannot copy fewer rows of an input on the client, the runner
+  // takes an input with an upper bound on dimension 0 only with its compiled
+  // shape.
+  TF_ASSIGN_OR_RETURN(auto h2d_transfer_executor_factory,
+                      CreateH2DTransferExecutorFactoryFromFlag());
   return StableHloRunner::Create(
       std::move(stablehlo),
       compile_options.ok() ? std::make_optional(*compile_options)
@@ -83,7 +91,7 @@ absl::StatusOr<std::unique_ptr<StableHloRunnerBase>> CreateJitRunner(
       std::move(base_options.weights), compilation_environment_proto,
       base_options.thread_pool, *optimizer,
       std::move(base_options.assigned_devices), serving_core_selector,
-      /*h2d_transfer_executor_factory=*/nullptr, base_options.callback_id);
+      std::move(h2d_transfer_executor_factory), base_options.callback_id);
 }
 
 // Registers the JIT `StableHloRunner` factory at link time.
