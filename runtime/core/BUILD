@@ -338,6 +338,7 @@ cc_library(
         "@xla//xla:status_macros",
         "@xla//xla/hlo/ir:hlo_sharding",
         "@xla//xla/pjrt:pjrt_client",
+        "@xla//xla/pjrt:pjrt_compiler",
         "@xla//xla/pjrt:pjrt_layout",
         "@xla//xla/pjrt:transpose",
         "@xla//xla/python/ifrt",

@@ -77,15 +77,15 @@ struct RunOptions {
   // Device memory, written into directly through input aliasing. The
   // component's StableHLO function must have been exported for input aliasing.
   // Each array must match the dtype, shape, sharding (including devices and
-  // memory kind) and layout of the output it backs, and must be in GPU device
-  // memory on a PjRt-backed client. Other platforms cannot write a result into
-  // memory the caller keeps, so a run given an array there fails: on CPU after
-  // the execution, on TPU before it. No two outputs may be backed by the same
-  // memory, and no array may share memory with an input of the same run, such
-  // as the `DeviceBuffer` an earlier run returned over it; the run fails in
-  // both cases. To carry state such as a KV cache from one run to the next,
-  // alternate between two arrays: pass the previous result as the input and
-  // the other array as the output.
+  // memory kind) and layout of the output it backs, and must be in GPU or CPU
+  // device memory on a PjRt-backed client. TPU cannot write a result into
+  // memory the caller keeps, so a run given an array there fails before the
+  // execution. No two outputs may be backed by the same memory, and no array
+  // may share memory with an input of the same run, such as the `DeviceBuffer`
+  // an earlier run returned over it; the run fails in both cases. To carry
+  // state such as a KV cache from one run to the next, alternate between two
+  // arrays: pass the previous result as the input and the other array as the
+  // output.
   //
   // Lifecycle: the caller keeps the array. The run writes the result into its
   // memory in place, and the same array can be passed again to later runs. If
