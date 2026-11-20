@@ -17,6 +17,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -33,6 +34,7 @@
 #include "runtime/interpreter/context.h"  // from @xla_serving
 #include "runtime/kernel/kernel_builder_context.h"  // from @xla_serving
 #include "runtime/kernel/kernel_io_data_type.h"  // from @xla_serving
+#include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
 
 namespace xla_serving {
@@ -116,6 +118,19 @@ class Kernel {
 
   // Returns true if the kernel has streaming enabled.
   virtual bool has_streaming() const { return false; }
+
+  // Returns the shapes of the inputs whose dimension 0 is an upper bound: the
+  // kernel takes such an input with fewer rows than the shape has, and its
+  // outputs have the same number of rows either way. Either empty, or one
+  // entry per shape bucket that the kernel is compiled for. A bucket has one
+  // entry per input, where `std::nullopt` marks an input that must be passed
+  // with its full shape, and the same inputs are marked in every bucket. The
+  // kernel runs its inputs on the smallest bucket that fits them. A batching
+  // kernel does not pad the inputs that have an entry.
+  virtual std::vector<std::vector<std::optional<xla::ifrt::Shape>>>
+  upper_bound_input_shapes() const {
+    return {};
+  }
 
  protected:
   std::unique_ptr<FlatSignature> input_signature_;
