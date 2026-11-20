@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "gmock/gmock.h"
@@ -181,8 +182,9 @@ TEST_F(ArenaH2DTransferExecutorTest, SizeMismatchReturnsInvalidArgument) {
       device_list_->devices()[0], xla::ifrt::MemoryKind());
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding};
 
-  EXPECT_THAT(executor->ExecuteTransfer(inputs, shardings),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}),
+      StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST_F(ArenaH2DTransferExecutorTest, EmptyInputsSucceeds) {
@@ -193,8 +195,9 @@ TEST_F(ArenaH2DTransferExecutorTest, EmptyInputsSucceeds) {
   std::vector<HostBuffer> inputs = {};
   std::vector<xla::ifrt::ShardingRef> shardings = {};
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   EXPECT_TRUE(results.empty());
 }
 
@@ -218,8 +221,9 @@ TEST_F(ArenaH2DTransferExecutorTest, ArenaTransferSingleDevice) {
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding, sharding,
                                                    sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 3);
 
   for (int i = 0; i < 3; ++i) {
@@ -248,7 +252,8 @@ TEST_F(ArenaH2DTransferExecutorTest, ArenaTransferStridedSingleDevice) {
                         xla::ifrt::Shape({2}), byte_strides, owner);
 
   TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer({strided_in}, {sharding}));
+                          executor->ExecuteTransfer({strided_in}, {sharding},
+                                                    /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
 
   TF_ASSERT_OK_AND_ASSIGN(
@@ -276,9 +281,9 @@ TEST_F(ArenaH2DTransferExecutorTest, ArenaTransferTransposed2D) {
                            xla::ifrt::DType(xla::ifrt::DType::kS32),
                            xla::ifrt::Shape({2, 3}), byte_strides, owner);
 
-  TF_ASSERT_OK_AND_ASSIGN(
-      std::vector<xla::ifrt::ArrayRef> results,
-      executor->ExecuteTransfer({transposed_in}, {sharding}));
+  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
+                          executor->ExecuteTransfer({transposed_in}, {sharding},
+                                                    /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
 
   TF_ASSERT_OK_AND_ASSIGN(
@@ -312,8 +317,9 @@ TEST_F(ArenaH2DTransferExecutorTest, MultiDeviceSingleDeviceSharding) {
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding0, sharding1,
                                                    sharding0, sharding1};
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 4);
 
   for (int i = 0; i < 4; ++i) {
@@ -341,8 +347,9 @@ TEST_F(ArenaH2DTransferExecutorTest,
   HostBuffer bad_in(owner->data(), xla::ifrt::DType(xla::ifrt::DType::kS32),
                     xla::ifrt::Shape({2}), mismatched_strides, owner);
 
-  EXPECT_THAT(executor->ExecuteTransfer({bad_in}, {sharding}),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(
+      executor->ExecuteTransfer({bad_in}, {sharding}, /*static_shapes=*/{}),
+      StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST_F(ArenaH2DTransferExecutorTest, StringTensorsRouteToDefaultPath) {
@@ -358,8 +365,9 @@ TEST_F(ArenaH2DTransferExecutorTest, StringTensorsRouteToDefaultPath) {
   HostBuffer str_in(str_data, xla::ifrt::DType(xla::ifrt::DType::Kind::kString),
                     xla::ifrt::Shape({2}));
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer({str_in}, {sharding}));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer({str_in}, {sharding}, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
   TF_ASSERT_OK_AND_ASSIGN(
       HostBuffer out,
@@ -386,8 +394,9 @@ TEST_F(ArenaH2DTransferExecutorTest, PackedSubByteDtypeRoutesToDefaultPath) {
   std::vector<HostBuffer> inputs = {float_in, int4_in};
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding, sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 2);
 
   for (int i = 0; i < 2; ++i) {
@@ -416,8 +425,9 @@ TEST_F(ArenaH2DTransferExecutorTest, ZeroElementTensorSupport) {
   std::vector<HostBuffer> inputs = {empty_in, non_empty_in};
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding, sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 2);
   EXPECT_EQ(results[0]->shape(), xla::ifrt::Shape({0}));
 
@@ -452,8 +462,9 @@ TEST_F(ArenaH2DTransferExecutorTest, HloShardingSingleDeviceSupport) {
   std::vector<xla::ifrt::ShardingRef> shardings = {sharding_dev0,
                                                    sharding_dev1};
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 2);
 
   EXPECT_THAT(results[0]->sharding().devices()->devices(), ElementsAre(dev0));
@@ -488,8 +499,9 @@ TEST_F(ArenaH2DTransferExecutorTest,
   std::vector<xla::ifrt::ShardingRef> shardings = {replicated_sharding,
                                                    tiled_sharding};
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer(inputs, shardings));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer(inputs, shardings, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 2);
 
   for (int i = 0; i < 2; ++i) {
@@ -520,14 +532,39 @@ TEST_F(ArenaH2DTransferExecutorTest,
   HostBuffer in0 = AsHostBuffer<float>({1.0f, 2.0f}, xla::ifrt::Shape({2}));
   HostBuffer in1 = AsHostBuffer<float>({3.0f, 4.0f}, xla::ifrt::Shape({2}));
 
-  EXPECT_THAT(executor->ExecuteTransfer({in0, in1},
-                                        {single_device_sharding,
-                                         manual_sharding}),
+  EXPECT_THAT(executor->ExecuteTransfer(
+                  {in0, in1}, {single_device_sharding, manual_sharding},
+                  /*static_shapes=*/{}),
               StatusIs(absl::StatusCode::kUnimplemented));
-  EXPECT_THAT(executor->ExecuteTransfer({in0, in1},
-                                        {single_device_sharding,
-                                         opaque_sharding}),
+  EXPECT_THAT(executor->ExecuteTransfer(
+                  {in0, in1}, {single_device_sharding, opaque_sharding},
+                  /*static_shapes=*/{}),
               StatusIs(absl::StatusCode::kUnimplemented));
+}
+
+TEST_F(ArenaH2DTransferExecutorTest, StaticShapeIsUnimplemented) {
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<H2DTransferExecutor> executor,
+      ArenaH2DTransferExecutor::Create(client_.get(), thread_pool_.get()));
+
+  xla::ifrt::ShardingRef sharding = xla::ifrt::SingleDeviceSharding::Create(
+      device_list_->devices()[0], xla::ifrt::MemoryKind());
+  HostBuffer in =
+      AsHostBuffer<float>({1.0f, 2.0f, 3.0f}, xla::ifrt::Shape({1, 3}));
+
+  EXPECT_THAT(
+      executor->ExecuteTransfer({in}, {sharding}, {xla::ifrt::Shape({4, 3})}),
+      StatusIs(absl::StatusCode::kUnimplemented));
+  // One entry too many.
+  EXPECT_THAT(
+      executor->ExecuteTransfer({in}, {sharding}, {std::nullopt, std::nullopt}),
+      StatusIs(absl::StatusCode::kInvalidArgument));
+  // An unset entry is a regular input.
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer({in}, {sharding}, {std::nullopt}));
+  ASSERT_EQ(results.size(), 1);
+  EXPECT_EQ(results[0]->shape(), xla::ifrt::Shape({1, 3}));
 }
 
 TEST_F(ArenaH2DTransferExecutorTest, FactoryCreate) {
@@ -542,8 +579,9 @@ TEST_F(ArenaH2DTransferExecutorTest, FactoryCreate) {
       device_list_->devices()[0], xla::ifrt::MemoryKind());
   HostBuffer in = AsHostBuffer<float>({42.0f}, xla::ifrt::Shape({1}));
 
-  TF_ASSERT_OK_AND_ASSIGN(std::vector<xla::ifrt::ArrayRef> results,
-                          executor->ExecuteTransfer({in}, {sharding}));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla::ifrt::ArrayRef> results,
+      executor->ExecuteTransfer({in}, {sharding}, /*static_shapes=*/{}));
   ASSERT_EQ(results.size(), 1);
 
   TF_ASSERT_OK_AND_ASSIGN(
