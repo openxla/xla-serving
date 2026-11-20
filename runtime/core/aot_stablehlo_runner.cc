@@ -238,7 +238,9 @@ absl::Status AotStableHloRunner::PopulateAotExecutableCache(
         spec.inputs.size() - num_input_aliased_output;
     user_input_shapes.reserve(num_user_inputs - num_weights);
     for (size_t j = num_weights; j < num_user_inputs; ++j) {
-      user_input_shapes.push_back(spec.inputs[j].GetIfrtShape());
+      TF_ASSIGN_OR_RETURN(xla::ifrt::Shape input_shape,
+                          spec.inputs[j].TryGetIfrtShape());
+      user_input_shapes.push_back(std::move(input_shape));
     }
 
     // IFRT requires an explicit device mapping when executing unbound

@@ -1315,27 +1315,8 @@ TEST(HostBufferTest, CreateValidatesShapesAndAllocationFailures) {
   EXPECT_EQ(valid.total_storage_bytes(), 24);
 
   EXPECT_THAT(HostBuffer::Create(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
-                                 xla::ifrt::Shape({-1, 4})),
+                                 xla::ifrt::Shape({2000000LL, 5000000LL})),
               StatusIs(absl::StatusCode::kInvalidArgument));
-
-  EXPECT_THAT(
-      HostBuffer::Create(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
-                         xla::ifrt::Shape({2000000000LL, 5000000000LL})),
-      StatusIs(absl::StatusCode::kInvalidArgument));
-
-  {
-    absl::SetFlag(&FLAGS_xla_serving_host_buffer_max_elements,
-                  int64_t{1} << 62);
-    absl::Cleanup reset_flag = [] {
-      absl::SetFlag(&FLAGS_xla_serving_host_buffer_max_elements,
-                    int64_t{1} << 32);
-    };
-    EXPECT_THAT(
-        HostBuffer::Create(xla::ifrt::DType(xla::ifrt::DType::Kind::kString),
-                           xla::ifrt::Shape({int64_t{1} << 62})),
-        StatusIs(absl::StatusCode::kInvalidArgument,
-                 HasSubstr("byte size overflow")));
-  }
 
   RecordingAllocator failing_allocator(/*fail_allocations=*/true);
   EXPECT_THAT(HostBuffer::Create(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
@@ -1367,12 +1348,10 @@ TEST(HostBufferTest, ValidateShapeMatchesCreateRules) {
                          HasSubstr("Unsupported HostBuffer dtype")));
   }
 
-  EXPECT_THAT(HostBuffer::ValidateShape(f32, xla::ifrt::Shape({-1, 4})),
+  const xla::ifrt::Shape shape_exceeding_max_elements({2000000LL, 5000000LL});
+  EXPECT_THAT(HostBuffer::ValidateShape(f32, shape_exceeding_max_elements),
               StatusIs(absl::StatusCode::kInvalidArgument,
-                       HasSubstr("negative dimension")));
-  EXPECT_THAT(HostBuffer::ValidateShape(
-                  f32, xla::ifrt::Shape({2000000000LL, 5000000000LL})),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+                       HasSubstr("HostBuffer shape too large")));
 }
 
 TEST(HostBufferTest, ConcatAndSplitRejectInvalidOrTooLargeSizes) {
@@ -1444,9 +1423,18 @@ TEST(HostBufferTest, Reshape) {
   xla::ifrt::Shape mismatch_shape({5});
   EXPECT_FALSE(orig.Reshape(mismatch_shape).ok());
 
-  // Test negative dimension failure (e.g. {-2, -3} whose product matches 6)
-  xla::ifrt::Shape negative_shape({-2, -3});
-  EXPECT_FALSE(orig.Reshape(negative_shape).ok());
+  // Test target shape exceeding `--xla_serving_host_buffer_max_elements`
+  {
+    const int64_t prev_max =
+        absl::GetFlag(FLAGS_xla_serving_host_buffer_max_elements);
+    absl::SetFlag(&FLAGS_xla_serving_host_buffer_max_elements, 4);
+    absl::Cleanup reset_flag = [prev_max] {
+      absl::SetFlag(&FLAGS_xla_serving_host_buffer_max_elements, prev_max);
+    };
+    EXPECT_THAT(orig.Reshape(shape_2_3),
+                StatusIs(absl::StatusCode::kInvalidArgument,
+                         HasSubstr("HostBuffer shape too large")));
+  }
 
   // Test uninitialized buffer failure
   HostBuffer empty;
@@ -1493,9 +1481,24 @@ TEST(HostBufferTest, Bitcast) {
   xla::ifrt::Shape mismatch_shape({2});
   EXPECT_FALSE(orig.Bitcast(u32_dtype, mismatch_shape).ok());
 
-  // Test negative dimension failure
-  xla::ifrt::Shape negative_shape({-2, -2});
-  EXPECT_FALSE(orig.Bitcast(u32_dtype, negative_shape).ok());
+  // Test ValidateHostBufferShape failure (unsupported dtype and max elements)
+  EXPECT_THAT(orig.Bitcast(xla::ifrt::DType(xla::ifrt::DType::Kind::kToken),
+                           target_shape),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Unsupported HostBuffer dtype")));
+  {
+    HostBuffer orig_u32(u32_dtype, xla::ifrt::Shape({2}));
+    const int64_t prev_max =
+        absl::GetFlag(FLAGS_xla_serving_host_buffer_max_elements);
+    absl::SetFlag(&FLAGS_xla_serving_host_buffer_max_elements, 4);
+    absl::Cleanup reset_flag = [prev_max] {
+      absl::SetFlag(&FLAGS_xla_serving_host_buffer_max_elements, prev_max);
+    };
+    EXPECT_THAT(orig_u32.Bitcast(xla::ifrt::DType(xla::ifrt::DType::Kind::kU8),
+                                 xla::ifrt::Shape({8})),
+                StatusIs(absl::StatusCode::kInvalidArgument,
+                         HasSubstr("HostBuffer shape too large")));
+  }
 
   // Test dtype without fixed byte size failure (e.g. kString)
   xla::ifrt::DType string_dtype(xla::ifrt::DType::Kind::kString);

@@ -17,6 +17,7 @@
 
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/base/nullability.h"  // from @abseil-cpp
@@ -45,10 +46,11 @@ enum class Placement { kHost = 0, kDevice = 1 };
 // std::vector<std::optional<int64_t>>, where std::nullopt means dynamic.
 using ArgShape = sharding_internal::MlirShape;
 
-// Converts an `ArgShape` to `xla::ifrt::Shape` for the purposes of checkpoint
-// loading. The result will be fake if the shape is dynamic, so don't use this
-// function for anything else.
-xla::ifrt::Shape ToIfrtShape(const ArgShape& shape);
+// Converts a static `ArgShape` to `xla::ifrt::Shape`. Returns an
+// `InvalidArgumentError` if any dimension in `shape` is dynamic
+// (`std::nullopt`), negative, or if the element count exceeds
+// `xla::ifrt::Shape`'s supported bound.
+absl::StatusOr<xla::ifrt::Shape> ToIfrtShape(const ArgShape& shape);
 
 struct ArgSpec {
   xla::ifrt::DType dtype;
@@ -58,11 +60,21 @@ struct ArgSpec {
   std::optional<xla::Layout> layout;
   std::optional<Placement> placement = std::nullopt;
 
-  xla::ifrt::Shape GetIfrtShape() const {
+  // Returns the concrete `xla::ifrt::Shape` for this `ArgSpec`, or an
+  // `InvalidArgumentError` if `shape` is dynamic or has invalid dimensions.
+  absl::StatusOr<xla::ifrt::Shape> TryGetIfrtShape() const {
     if (ifrt_shape.has_value()) {
       return *ifrt_shape;
     }
     return ToIfrtShape(shape);
+  }
+
+  // Returns the concrete `xla::ifrt::Shape` for this `ArgSpec`, `CHECK`-failing
+  // if `shape` is dynamic or has invalid dimensions.
+  xla::ifrt::Shape GetIfrtShape() const {
+    absl::StatusOr<xla::ifrt::Shape> converted = TryGetIfrtShape();
+    CHECK_OK(converted.status());
+    return *std::move(converted);
   }
 
   bool operator==(const ArgSpec& other) const {
@@ -167,11 +179,6 @@ absl::Status ValidateIOSpecs(absl::Span<const ArgSpec> stablehlo_arg_specs,
 // function assumes input shapes are fully defined.
 absl::Status InputShapeEqual(ArgShape stablehlo_input_shape,
                              xla::ifrt::Shape input_shape);
-
-// Converts an `ArgShape` to `xla::ifrt::Shape` for the purposes of checkpoint
-// loading. The result will be fake if the shape is dynamic, so don't use this
-// function for anything else.
-xla::ifrt::Shape ToIfrtShape(const ArgShape& shape);
 
 };  // namespace xla_serving
 
