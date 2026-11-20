@@ -46,6 +46,7 @@
 #include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "runtime/core/host_buffer_converter.h"  // from @xla_serving
+#include "runtime/core/host_buffer_utils.h"  // from @xla_serving
 #include "runtime/core/ifrt_loaded_variable_registry.h"  // from @xla_serving
 #include "runtime/core/sharding_utils.h"  // from @xla_serving
 #include "runtime/core/stablehlo.h"  // from @xla_serving
@@ -73,6 +74,7 @@
 #include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_dtype.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_memory.h"  // from @xla
+#include "xla/python/pjrt_ifrt/xla_sharding.h"  // from @xla
 #include "xla/shape_util.h"  // from @xla
 #include "xla/status_macros.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
@@ -122,6 +124,167 @@ absl::Status ValidateDeviceBufferInput(const xla::ifrt::Array& original_input,
         "StableHloRunner to perform the reshape via host memory."));
   }
   return absl::OkStatus();
+}
+
+// Returns true if a host buffer of `shape` can be transferred with dynamic DMA
+// into a device buffer of `static_shape`: same rank, no larger along dimension
+// 0, and equal along every other dimension, so that the host data is a
+// dimension-0 prefix of the device buffer.
+bool FitsStaticShape(const xla::ifrt::Shape& shape,
+                     const xla::ifrt::Shape& static_shape) {
+  if (shape.dims().size() != static_shape.dims().size()) {
+    return false;
+  }
+  for (int i = 0; i < shape.dims().size(); ++i) {
+    const int64_t dim = shape.dims()[i];
+    const int64_t static_dim = static_shape.dims()[i];
+    if (i == 0 ? dim > static_dim : dim != static_dim) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Returns an error unless `host_buffer` fits `static_shape`
+// (`FitsStaticShape()`).
+absl::Status ValidateStaticShape(const HostBuffer& host_buffer,
+                                 const xla::ifrt::Shape& static_shape) {
+  const xla::ifrt::Shape& actual_shape = host_buffer.shape();
+  if (static_shape.dims().size() != actual_shape.dims().size()) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Static shape ", static_shape,
+        " must have the same rank as the host buffer shape ", actual_shape));
+  }
+  if (!FitsStaticShape(actual_shape, static_shape)) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Host buffer shape ", actual_shape,
+        " is not compatible with static shape ", static_shape,
+        ": only dimension 0 may be smaller than the static shape; all "
+        "other dimensions must be equal."));
+  }
+  return absl::OkStatus();
+}
+
+// Returns true if `shape` is `arg_shape`, where a dimension of `arg_shape`
+// that is not set stands for any size.
+bool MatchesArgShape(const xla::ifrt::Shape& shape, const ArgShape& arg_shape) {
+  if (shape.dims().size() != arg_shape.size()) {
+    return false;
+  }
+  for (int i = 0; i < arg_shape.size(); ++i) {
+    if (arg_shape[i].has_value() && *arg_shape[i] != shape.dims()[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Returns the shape of `input`, which holds a `HostBuffer` or a
+// `xla_serving::DeviceBuffer`.
+const xla::ifrt::Shape& ShapeOf(const xla_serving::Value& input) {
+  return input.IsType<HostBuffer>()
+             ? input.Get<HostBuffer>().shape()
+             : input.Get<xla_serving::DeviceBuffer>().ifrt_array->shape();
+}
+
+// Returns the number of elements that the bounded inputs of `bucket` are
+// compiled for.
+int64_t NumBoundedElements(const ModelIoMetadata::StaticShapeBucket& bucket) {
+  int64_t num_elements = 0;
+  for (const std::optional<xla::ifrt::Shape>& static_shape :
+       bucket.static_shapes) {
+    if (static_shape.has_value()) {
+      num_elements += static_shape->num_elements();
+    }
+  }
+  return num_elements;
+}
+
+// Returns true if `inputs` fit `bucket`: every `HostBuffer` for a bounded
+// input fits the compiled shape (`FitsStaticShape()`), and every other input
+// has the shape in the bucket. `inputs` hold `HostBuffer`s and
+// `xla_serving::DeviceBuffer`s. Only the user inputs are looked at: a streaming model
+// may take one more input after them.
+bool FitsBucket(const ModelIoMetadata::StaticShapeBucket& bucket,
+                absl::Span<const xla_serving::Value> inputs) {
+  for (int i = 0; i < bucket.input_shapes.size(); ++i) {
+    const xla::ifrt::Shape& shape = ShapeOf(inputs[i]);
+    const std::optional<xla::ifrt::Shape>& static_shape =
+        bucket.static_shapes[i];
+    if (static_shape.has_value() && inputs[i].IsType<HostBuffer>()) {
+      if (!FitsStaticShape(shape, *static_shape)) {
+        return false;
+      }
+    } else if (!MatchesArgShape(shape, bucket.input_shapes[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Returns `shape` as a string, with "?" for a dimension that is not set.
+std::string ArgShapeToString(const ArgShape& shape) {
+  return absl::StrCat(
+      "[",
+      absl::StrJoin(shape, ",",
+                    [](std::string* out, const std::optional<int64_t>& dim) {
+                      absl::StrAppend(
+                          out, dim.has_value() ? absl::StrCat(*dim) : "?");
+                    }),
+      "]");
+}
+
+// Returns the error for `inputs` that fit none of `buckets` (`FitsBucket()`).
+absl::Status NoFittingBucketError(
+    absl::Span<const ModelIoMetadata::StaticShapeBucket> buckets,
+    absl::Span<const xla_serving::Value> inputs) {
+  std::vector<std::string> bucket_strs;
+  bucket_strs.reserve(buckets.size());
+  for (const ModelIoMetadata::StaticShapeBucket& bucket : buckets) {
+    bucket_strs.push_back(absl::StrCat(
+        "{",
+        absl::StrJoin(bucket.input_shapes, ",",
+                      [](std::string* out, const ArgShape& shape) {
+                        absl::StrAppend(out, ArgShapeToString(shape));
+                      }),
+        "}"));
+  }
+  const size_t num_user_inputs = buckets.front().input_shapes.size();
+  return absl::InvalidArgumentError(absl::StrCat(
+      "No shape bucket fits the input shapes {",
+      absl::StrJoin(inputs.first(num_user_inputs), ",",
+                    [](std::string* out, const xla_serving::Value& input) {
+                      absl::StrAppend(out, ShapeOf(input));
+                    }),
+      "}. A host buffer for an input whose leading dimension is an upper "
+      "bound may have fewer rows than in the bucket. Every other input must "
+      "have the shape in the bucket. Shape buckets: ",
+      absl::StrJoin(bucket_strs, " ")));
+}
+
+// Returns true if the elements of `host_buffer` are dense and in row-major
+// order, so that the same bytes can be read with another shape.
+bool IsDenseRowMajor(const HostBuffer& host_buffer) {
+  return !host_buffer.byte_strides().has_value() ||
+         host_buffer.byte_strides() ==
+             CreateDefaultStrides(host_buffer.shape().dims(),
+                                  host_buffer.storage_dtype());
+}
+
+// Returns true if `sharding` places the whole array on exactly one device:
+// either a `SingleDeviceSharding`, a maximal `HloSharding`, or any sharding
+// over a one-device device list.
+bool IsSingleDeviceSharding(const xla::ifrt::Sharding& sharding) {
+  if (xla::ifrt::isa<xla::ifrt::SingleDeviceSharding>(sharding)) {
+    return true;
+  }
+  if (const auto* hlo_sharding =
+          xla::ifrt::dyn_cast<xla::ifrt::HloSharding>(&sharding);
+      hlo_sharding != nullptr &&
+      hlo_sharding->xla_hlo_sharding().IsSingleDevice()) {
+    return true;
+  }
+  return sharding.devices()->size() == 1;
 }
 
 absl::Status ValidateOutputArray(const xla::ifrt::Array& array_for_copy,
@@ -569,6 +732,10 @@ absl::StatusOr<ModelIoMetadata> ModelIoMetadata::CreateFromStableHlo(
     }
   }
 
+  TF_ASSIGN_OR_RETURN(
+      std::vector<StaticShapeBucket> user_input_static_shapes,
+      GetUserInputStaticShapes(stablehlo, num_weights, num_user_inputs));
+
   return ModelIoMetadata{
       .weight_specs = std::move(weight_specs),
       .output_specs = stablehlo.specs()[0].outputs,
@@ -577,7 +744,74 @@ absl::StatusOr<ModelIoMetadata> ModelIoMetadata::CreateFromStableHlo(
       // TODO: Set has_streaming based on AOT executable metadata
       // when AOT + streaming execution is formally supported.
       .has_streaming = false,
+      .user_input_static_shapes = std::move(user_input_static_shapes),
   };
+}
+
+absl::StatusOr<std::vector<ModelIoMetadata::StaticShapeBucket>>
+ModelIoMetadata::GetUserInputStaticShapes(const StableHlo& stablehlo,
+                                          int num_weights,
+                                          int num_user_inputs) {
+  std::vector<StaticShapeBucket> buckets;
+  buckets.reserve(stablehlo.specs().size());
+  bool has_bounded_input = false;
+  for (int bucket_idx = 0; bucket_idx < stablehlo.specs().size();
+       ++bucket_idx) {
+    const StableHlo::Spec& spec = stablehlo.specs()[bucket_idx];
+    StaticShapeBucket bucket;
+    bucket.static_shapes.reserve(num_user_inputs);
+    bucket.input_shapes.reserve(num_user_inputs);
+    for (int i = 0; i < num_user_inputs; ++i) {
+      const int spec_input_idx = num_weights + i;
+      if (spec_input_idx >= spec.inputs.size()) {
+        return absl::InvalidArgumentError(absl::StrFormat(
+            "StableHLO module #%d has %d inputs, but user input #%d maps to "
+            "input #%d",
+            bucket_idx, spec.inputs.size(), i, spec_input_idx));
+      }
+      const ArgSpec& arg_spec = spec.inputs[spec_input_idx];
+      const bool is_bounded = arg_spec.leading_dim_is_upper_bound;
+      if (bucket_idx > 0 &&
+          is_bounded != buckets[0].static_shapes[i].has_value()) {
+        return absl::UnimplementedError(absl::StrCat(
+            "User input #", i,
+            " has its leading dimension marked as an upper bound in bucket #",
+            is_bounded ? bucket_idx : 0, " but not in bucket #",
+            is_bounded ? 0 : bucket_idx, ": ", arg_spec.DebugString()));
+      }
+      bucket.input_shapes.push_back(arg_spec.shape);
+      if (!is_bounded) {
+        bucket.static_shapes.push_back(std::nullopt);
+        continue;
+      }
+      if (absl::c_any_of(arg_spec.shape, [](const std::optional<int64_t>& dim) {
+            return !dim.has_value();
+          })) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "User input #", i,
+            " has its leading dimension marked as an upper bound, which "
+            "requires a concrete shape, but its shape is polymorphic: ",
+            arg_spec.DebugString()));
+      }
+      TF_ASSIGN_OR_RETURN(xla::ifrt::Shape static_shape,
+                          arg_spec.TryGetIfrtShape());
+      bucket.static_shapes.push_back(std::move(static_shape));
+      has_bounded_input = true;
+    }
+    buckets.push_back(std::move(bucket));
+  }
+  if (!has_bounded_input) {
+    buckets.clear();
+    return buckets;
+  }
+  // `Execute()` runs on the first bucket that fits its inputs. Order the
+  // buckets by the number of elements of their bounded inputs, so that it is
+  // the smallest one that fits. Buckets of the same size keep their order.
+  absl::c_stable_sort(
+      buckets, [](const StaticShapeBucket& a, const StaticShapeBucket& b) {
+        return NumBoundedElements(a) < NumBoundedElements(b);
+      });
+  return buckets;
 }
 
 StableHloRunnerBase::DataConverter::DataConverter(
@@ -597,15 +831,21 @@ StableHloRunnerBase::DataConverter::ValidateAndResolveShardings(
     absl::Span<const HostBuffer> inputs,
     const CachedExecutableBundle& executable_bundle,
     absl::Span<const int> stablehlo_indices,
+    absl::Span<const std::optional<xla::ifrt::Shape>> static_shapes,
     absl::InlinedVector<xla::ifrt::ShardingRef, 16>& mixed_shardings_storage)
     const {
   if (stablehlo_indices.size() != inputs.size()) {
     return absl::InvalidArgumentError(
         "Mismatched inputs and stablehlo_indices size.");
   }
+  if (!static_shapes.empty() && static_shapes.size() != inputs.size()) {
+    return absl::InvalidArgumentError(
+        "Mismatched inputs and static_shapes size.");
+  }
 
   // Validate data types and shapes before passing to executor to prevent
   // buffer over-reads during memcpy.
+  bool has_short_input = false;
   for (int i = 0; i < inputs.size(); ++i) {
     int idx_in_stablehlo_spec = stablehlo_indices[i];
     if (idx_in_stablehlo_spec >= executable_bundle.io_spec.inputs.size()) {
@@ -618,7 +858,22 @@ StableHloRunnerBase::DataConverter::ValidateAndResolveShardings(
           absl::StrCat("Input dtype mismatch. Expected: ", input_spec.dtype,
                        ", but got: ", inputs[i].dtype()));
     }
-    TF_RETURN_IF_ERROR(InputShapeEqual(input_spec.shape, inputs[i].shape()));
+    // An input with a static shape has fewer rows than the executable
+    // expects. The executable must expect the static shape, and the input must
+    // be a dimension-0 prefix of it.
+    if (!static_shapes.empty() && static_shapes[i].has_value()) {
+      has_short_input = true;
+      TF_RETURN_IF_ERROR(ValidateStaticShape(inputs[i], *static_shapes[i]));
+      TF_RETURN_IF_ERROR(InputShapeEqual(input_spec.shape, *static_shapes[i]));
+    } else {
+      TF_RETURN_IF_ERROR(InputShapeEqual(input_spec.shape, inputs[i].shape()));
+    }
+  }
+  if (has_short_input && h2d_transfer_executor_ == nullptr) {
+    return absl::FailedPreconditionError(
+        "An input has fewer rows than its static shape, but this runner has no "
+        "H2DTransferExecutor. The default IFRT transfer cannot allocate a "
+        "device buffer that is larger than the host buffer.");
   }
 
   absl::Span<const xla::ifrt::ShardingRef> all_shardings;
@@ -651,6 +906,7 @@ StableHloRunnerBase::DataConverter::ValidateAndResolveShardings(
     }
   }
 
+  absl::Span<const xla::ifrt::ShardingRef> shardings;
   if (is_contiguous) {
     if (executable_bundle.input_offset + stablehlo_indices.size() >
         all_shardings.size()) {
@@ -658,20 +914,37 @@ StableHloRunnerBase::DataConverter::ValidateAndResolveShardings(
           "IFRT Executable arg shardings size mismatch.");
     }
     // O(1) Zero-allocation, zero-refcount-bump fast path
-    return all_shardings.subspan(executable_bundle.input_offset,
-                                 stablehlo_indices.size());
+    shardings = all_shardings.subspan(executable_bundle.input_offset,
+                                      stablehlo_indices.size());
+  } else {
+    // Fallback for mixed inputs, pushing into the caller-owned InlinedVector
+    mixed_shardings_storage.reserve(stablehlo_indices.size());
+    for (int idx : stablehlo_indices) {
+      if (idx >= all_shardings.size()) {
+        return absl::InternalError(
+            "IFRT Executable arg shardings size mismatch.");
+      }
+      mixed_shardings_storage.push_back(all_shardings[idx]);
+    }
+    shardings = absl::MakeConstSpan(mixed_shardings_storage);
   }
 
-  // Fallback for mixed inputs, pushing into the caller-owned InlinedVector
-  mixed_shardings_storage.reserve(stablehlo_indices.size());
-  for (int idx : stablehlo_indices) {
-    if (idx >= all_shardings.size()) {
-      return absl::InternalError(
-          "IFRT Executable arg shardings size mismatch.");
+  if (has_short_input) {
+    // The rows of a short input are a dimension-0 prefix of the device buffer.
+    // That only works if the whole buffer is on one device.
+    for (int i = 0; i < inputs.size(); ++i) {
+      if (static_shapes[i].has_value() &&
+          !IsSingleDeviceSharding(*shardings[i])) {
+        return absl::UnimplementedError(absl::StrCat(
+            "Input at StableHLO index ", stablehlo_indices[i],
+            " has fewer rows than its static shape, but its sharding ",
+            *shardings[i],
+            " spans more than one device. Only single-device inputs may be "
+            "shorter than their static shape."));
+      }
     }
-    mixed_shardings_storage.push_back(all_shardings[idx]);
   }
-  return absl::MakeConstSpan(mixed_shardings_storage);
+  return shardings;
 }
 
 absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
@@ -701,7 +974,8 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
 StableHloRunnerBase::DataConverter::ConvertInput(
     absl::Span<const HostBuffer> inputs,
     const CachedExecutableBundle& executable_bundle,
-    absl::Span<const int> stablehlo_indices) const {
+    absl::Span<const int> stablehlo_indices,
+    absl::Span<const std::optional<xla::ifrt::Shape>> static_shapes) const {
   tsl::profiler::TraceMe trace_me([&]() {
     return tsl::profiler::TraceMeEncode(h2d_transfer_executor_ != nullptr
                                             ? "ArenaTransferFromHostToDevice"
@@ -715,11 +989,12 @@ StableHloRunnerBase::DataConverter::ConvertInput(
   TF_ASSIGN_OR_RETURN(
       absl::Span<const xla::ifrt::ShardingRef> shardings_span,
       ValidateAndResolveShardings(inputs, executable_bundle, stablehlo_indices,
-                                  mixed_shardings_storage));
+                                  static_shapes, mixed_shardings_storage));
 
   if (h2d_transfer_executor_ != nullptr) {
     arena_cell_->IncrementBy(1);
-    return h2d_transfer_executor_->ExecuteTransfer(inputs, shardings_span);
+    return h2d_transfer_executor_->ExecuteTransfer(inputs, shardings_span,
+                                                   static_shapes);
   }
 
   default_cell_->IncrementBy(1);
@@ -882,7 +1157,25 @@ absl::Status StableHloRunnerBase::Init(
     TF_RETURN_IF_ERROR(
         CreateResourcesPerDeviceList(assigned_device_list_, thread_pool));
   }
+  if (!model_io_metadata_.user_input_static_shapes.empty() &&
+      h2d_transfer_executor_factory_ != nullptr &&
+      !H2DTransferSupportsStaticShapes()) {
+    LOG(WARNING) << "The model has inputs whose dimension 0 is an upper "
+                    "bound, but the H2D transfer executor cannot transfer an "
+                    "input with fewer rows than its compiled shape. These "
+                    "inputs have to be passed with their compiled shape.";
+  }
   return absl::OkStatus();
+}
+
+bool StableHloRunnerBase::H2DTransferSupportsStaticShapes() const {
+  // `Execute()` may run on any of the device lists.
+  return !device_list_to_resources_map_.empty() &&
+         absl::c_all_of(device_list_to_resources_map_,
+                        [](const auto& device_list_and_resources) {
+                          return device_list_and_resources.second
+                              ->data_converter->SupportsStaticShapes();
+                        });
 }
 
 absl::Status StableHloRunnerBase::CreateResourcesPerDeviceList(
@@ -1191,6 +1484,20 @@ StableHloRunnerBase::ResolveInputAliasedOutputArrays(
   return caller_provided;
 }
 
+std::vector<std::vector<std::optional<xla::ifrt::Shape>>>
+StableHloRunnerBase::upper_bound_input_shapes() const {
+  std::vector<std::vector<std::optional<xla::ifrt::Shape>>> shapes;
+  if (!H2DTransferSupportsStaticShapes()) {
+    return shapes;
+  }
+  shapes.reserve(model_io_metadata_.user_input_static_shapes.size());
+  for (const ModelIoMetadata::StaticShapeBucket& bucket :
+       model_io_metadata_.user_input_static_shapes) {
+    shapes.push_back(bucket.static_shapes);
+  }
+  return shapes;
+}
+
 absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
     absl::Span<const xla_serving::Value> inputs, ExecuteOptions options,
     const RunContext& run_context) {
@@ -1270,16 +1577,64 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
     inputs = host_converted_inputs;
   }
 
+  // The shape bucket that a model with bounded inputs runs these inputs on
+  // (`ModelIoMetadata::user_input_static_shapes`), or null if the model has no
+  // bounded input. With a single bucket there is nothing to choose: an input
+  // that does not fit it is reported below. Otherwise it is the smallest
+  // bucket that fits the inputs.
+  const ModelIoMetadata::StaticShapeBucket* bucket = nullptr;
+  const std::vector<ModelIoMetadata::StaticShapeBucket>& buckets =
+      model_io_metadata_.user_input_static_shapes;
+  if (buckets.size() == 1) {
+    bucket = &buckets.front();
+  } else if (buckets.size() > 1) {
+    const auto fitting_bucket = absl::c_find_if(
+        buckets,
+        [&inputs](const ModelIoMetadata::StaticShapeBucket& candidate) {
+          return FitsBucket(candidate, inputs);
+        });
+    if (fitting_bucket == buckets.end()) {
+      return NoFittingBucketError(buckets, inputs);
+    }
+    bucket = &*fitting_bucket;
+  }
+
+  // Returns the static shape of user input `i` if the model signature marks
+  // its dimension 0 as an upper bound, or null otherwise. A host buffer for
+  // such an input may have fewer rows than the static shape. It still runs on
+  // the executable compiled for the static shape. The H2D transfer allocates
+  // the static shape on the device and copies only the rows it is given.
+  const auto static_shape_of = [bucket](int i) -> const xla::ifrt::Shape* {
+    if (bucket == nullptr || i >= bucket->static_shapes.size()) {
+      return nullptr;
+    }
+    const std::optional<xla::ifrt::Shape>& static_shape =
+        bucket->static_shapes[i];
+    return static_shape.has_value() ? &*static_shape : nullptr;
+  };
+
   std::vector<xla::ifrt::Shape> input_shapes;
   input_shapes.reserve(inputs.size() + 1);
   std::vector<xla::ifrt::DType> input_dtypes;
   input_dtypes.reserve(inputs.size() + 1);
 
   // Gather shapes before appending streaming IDs to match cache signature.
-  for (const auto& input : inputs) {
+  for (int i = 0; i < inputs.size(); ++i) {
+    const xla_serving::Value& input = inputs[i];
     if (input.IsType<HostBuffer>()) {
       const auto& host_buf = input.Get<HostBuffer>();
-      input_shapes.push_back(host_buf.shape());
+      // A host buffer for an input with a static shape selects the executable
+      // compiled for that shape, however many rows it has.
+      const xla::ifrt::Shape* static_shape = static_shape_of(i);
+      if (static_shape != nullptr) {
+        if (absl::Status status = ValidateStaticShape(host_buf, *static_shape);
+            !status.ok()) {
+          return absl::InvalidArgumentError(
+              absl::StrCat("Input #", i, ": ", status.message()));
+        }
+      }
+      input_shapes.push_back(static_shape != nullptr ? *static_shape
+                                                     : host_buf.shape());
       input_dtypes.push_back(host_buf.dtype());
     } else {
       const auto& device_buf = input.Get<xla_serving::DeviceBuffer>();
@@ -1358,8 +1713,14 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
 
   std::vector<HostBuffer> host_buffers_to_convert;
   std::vector<int> host_buffers_stablehlo_indices;
+  // Parallel to `host_buffers_to_convert`. An entry is set for a host buffer
+  // that has fewer rows than the executable expects, to the shape the
+  // executable expects. Passed to the transfer only if some entry is set.
+  std::vector<std::optional<xla::ifrt::Shape>> host_buffers_static_shapes;
+  bool has_short_host_buffer = false;
   host_buffers_to_convert.reserve(used_input_indices.size());
   host_buffers_stablehlo_indices.reserve(used_input_indices.size());
+  host_buffers_static_shapes.reserve(used_input_indices.size());
 
   std::vector<std::optional<xla::ifrt::ArrayRef>> final_used_inputs(
       used_input_indices.size(), std::nullopt);
@@ -1395,16 +1756,64 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
       final_used_inputs[i] = std::move(device_buffer.ifrt_array);
     } else if (original_input_value.IsType<HostBuffer>()) {
       auto& original_input = original_input_value.Get<HostBuffer>();
-      if (auto it = executable_bundle->host_transpose_permutations.find(
-              idx_in_stablehlo_spec);
-          it != executable_bundle->host_transpose_permutations.end()) {
-        // The optimized module expects this input transposed on the host.
-        TF_ASSIGN_OR_RETURN(original_input,
-                            TransposeHostBuffer(original_input, it->second));
-      }
       const xla::ifrt::Shape target_shape =
           executable_bundle->io_spec.inputs[idx_in_stablehlo_spec]
               .GetIfrtShape();
+      const auto transpose_it =
+          executable_bundle->host_transpose_permutations.find(
+              idx_in_stablehlo_spec);
+      const bool has_host_transpose =
+          transpose_it != executable_bundle->host_transpose_permutations.end();
+      const xla::ifrt::Shape* static_shape =
+          static_shape_of(original_input_idx);
+      if (static_shape != nullptr && original_input.shape() != *static_shape) {
+        // The input has fewer rows than its static shape (it was validated
+        // against it above). Its rows must reach the H2D transfer executor as
+        // a dimension-0 prefix of the shape the executable expects. A host
+        // transpose would break that. So would any reshape other than the
+        // flattening to rank 1 below.
+        if (has_host_transpose) {
+          return absl::UnimplementedError(absl::StrCat(
+              "Input #", original_input_idx, " of shape ",
+              original_input.shape(), " has fewer rows than its static shape ",
+              *static_shape,
+              ", but the optimized module expects it to be transposed on the "
+              "host. Host transposes are not supported for such inputs."));
+        }
+        if (target_shape == *static_shape) {
+          host_buffers_to_convert.push_back(std::move(original_input));
+        } else if (target_shape.dims().size() == 1 &&
+                   target_shape.num_elements() ==
+                       static_shape->num_elements() &&
+                   IsDenseRowMajor(original_input)) {
+          // The optimized module takes this input flattened to rank 1. Flatten
+          // the rows that are present. They are a prefix of the flattened
+          // static shape because the buffer is dense and row-major.
+          host_buffers_to_convert.push_back(HostBuffer(
+              original_input.base(), original_input.dtype(),
+              xla::ifrt::Shape({original_input.shape().num_elements()}),
+              original_input.owner()));
+        } else {
+          return absl::UnimplementedError(absl::StrCat(
+              "Input #", original_input_idx, " of shape ",
+              original_input.shape(), " has fewer rows than its static shape ",
+              *static_shape, ", but the optimized module expects shape ",
+              target_shape,
+              ". Such an input can only be flattened to rank 1, and only if "
+              "its data is dense and row-major."));
+        }
+        host_buffers_stablehlo_indices.push_back(idx_in_stablehlo_spec);
+        host_buffers_static_shapes.push_back(target_shape);
+        has_short_host_buffer = true;
+        continue;
+      }
+      host_buffers_static_shapes.push_back(std::nullopt);
+      if (has_host_transpose) {
+        // The optimized module expects this input transposed on the host.
+        TF_ASSIGN_OR_RETURN(
+            original_input,
+            TransposeHostBuffer(original_input, transpose_it->second));
+      }
       if (original_input.shape() == target_shape) {
         // Shapes match, use the buffer directly.
         host_buffers_to_convert.push_back(std::move(original_input));
@@ -1422,10 +1831,14 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
 
   std::vector<xla::ifrt::ArrayRef> converted_inputs;
   if (!host_buffers_to_convert.empty()) {
-    TF_ASSIGN_OR_RETURN(converted_inputs,
-                        data_converter->ConvertInput(
-                            host_buffers_to_convert, *executable_bundle,
-                            host_buffers_stablehlo_indices));
+    TF_ASSIGN_OR_RETURN(
+        converted_inputs,
+        data_converter->ConvertInput(
+            host_buffers_to_convert, *executable_bundle,
+            host_buffers_stablehlo_indices,
+            has_short_host_buffer
+                ? absl::MakeConstSpan(host_buffers_static_shapes)
+                : absl::Span<const std::optional<xla::ifrt::Shape>>()));
   }
 
   int host_buf_idx = 0;

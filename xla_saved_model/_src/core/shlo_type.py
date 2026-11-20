@@ -118,6 +118,16 @@ class ShloTensorSpec:
     placement: Optional placement enum (e.g. type_pb2.HOST or type_pb2.DEVICE).
     host_transpose: Optional dimension permutation to apply on the host before
       passing the tensor to the compiled function.
+    upper_bound_dims: Optional indices of dimensions whose size is an upper
+      bound rather than the exact size at serving time. The function is compiled
+      for the full size; a caller may pass fewer elements along such a
+      dimension, and the runtime transfers only the elements present (dynamic
+      DMA), leaving the rest of the device buffer uninitialized. Each listed
+      dimension needs a concrete size in every exported function: either the
+      size in `shape`, or, if that is `None`, one of the values the export
+      concretizes the dimension to (one exported function, and so one bound, per
+      shape bucket). The runtime currently only supports dimension 0 of model
+      function inputs.
   """
 
   shape: ShloShape
@@ -128,12 +138,29 @@ class ShloTensorSpec:
   default_val: Any | None = None
   placement: Placement | None = None
   host_transpose: Sequence[int] | None = None
+  upper_bound_dims: Sequence[int] | None = None
 
   def __post_init__(self) -> None:
     if self.shape is not None:
       object.__setattr__(self, "shape", tuple(self.shape))
     if self.host_transpose is not None:
       object.__setattr__(self, "host_transpose", tuple(self.host_transpose))
+    if self.upper_bound_dims is not None:
+      upper_bound_dims = tuple(self.upper_bound_dims)
+      if not upper_bound_dims:
+        upper_bound_dims = None
+      else:
+        if self.shape is None:
+          raise ValueError(
+              "upper_bound_dims requires a shape of known rank, got shape=None"
+          )
+        for dim in upper_bound_dims:
+          if not 0 <= dim < len(self.shape):
+            raise ValueError(
+                f"upper_bound_dims entry {dim} is out of range for shape"
+                f" {self.shape}"
+            )
+      object.__setattr__(self, "upper_bound_dims", upper_bound_dims)
     if not isinstance(self.dtype, ShloDType):
       raw_dt = self.dtype
       if hasattr(raw_dt, "as_numpy_dtype"):
