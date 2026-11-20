@@ -340,11 +340,10 @@ class CallerMemoryPin {
 // even if the caller deletes its array in the meantime. While it does, the
 // caller's array cannot be donated.
 //
-// Whether PjRt writes into a view depends on the backend: views of GPU device
-// memory are writable, but CPU views are read-only, and PjRt writes the result
-// of a read-only donated buffer into new memory without reporting it. TPU does
-// not support views of device memory at all, so the view creation fails there.
-// `CheckResultsWrittenInPlace` turns the silent case into an error.
+// Whether PjRt writes into a view depends on the backend: views of GPU and CPU
+// device memory are writable, while TPU does not support views of device
+// memory at all, so the view creation fails there.
+// `CheckResultsWrittenInPlace` turns any silent fallback into an error.
 //
 // PjRt tracks readiness and usage per buffer, not per allocation, so the view
 // inherits none of the caller's pending work. Wait here for pending writes;
@@ -380,7 +379,8 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeDonatableAliasOf(
     absl::StatusOr<std::unique_ptr<xla::PjRtBuffer>> view =
         client->CreateViewOfDeviceBuffer(
             device_ptr, buffer->on_device_shape(), buffer->memory_space(),
-            /*on_delete_callback=*/[pin = std::move(pin)]() {});
+            /*on_delete_callback=*/[pin = std::move(pin)]() {},
+            /*stream=*/std::nullopt, /*is_mutable=*/true);
     if (!view.ok()) {
       return absl::Status(
           view.status().code(),
@@ -432,7 +432,7 @@ absl::StatusOr<std::vector<ShardLocation>> ShardLocations(
 // that memory.
 //
 // PjRt does not report it when it declines to write into a donated view: if
-// the view is read-only (as CPU views are), it allocates new memory for the
+// the view is read-only or cannot be aliased, it allocates new memory for the
 // result instead and the caller's array keeps its old contents. Compare
 // addresses so that this fails loudly instead of returning a result the
 // caller will not find where it expects.
@@ -449,9 +449,8 @@ absl::Status CheckResultsWrittenInPlace(
       return absl::FailedPreconditionError(absl::StrCat(
           "Output #", i,
           " was written to new memory instead of the caller-provided output "
-          "array, because this platform's views of device memory are "
-          "read-only. Caller-provided output arrays require writable views "
-          "of device memory, which GPU provides."));
+          "array, because PjRt could not write into that array's memory in "
+          "place."));
     }
   }
   return absl::OkStatus();
