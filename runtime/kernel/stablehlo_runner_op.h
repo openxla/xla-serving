@@ -28,12 +28,14 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
+#include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/flat_signature.h"  // from @xla_serving
 #include "runtime/core/stablehlo.h"  // from @xla_serving
 #include "runtime/core/stablehlo_runner_base.h"  // from @xla_serving
 #include "runtime/kernel/kernel.h"  // from @xla_serving
 #include "runtime/kernel/kernel_builder_context.h"  // from @xla_serving
 #include "runtime/kernel/kernel_io_data_type.h"  // from @xla_serving
+#include "xla/python/ifrt/shape.h"  // from @xla
 
 namespace xla_serving {
 
@@ -113,6 +115,11 @@ class StableHloRunnerOp : public CancellableKernel {
 
   bool has_streaming() const override {
     return stablehlo_runner_->has_streaming();
+  }
+
+  absl::Span<const std::optional<xla::ifrt::Shape>> upper_bound_input_shapes()
+      const override {
+    return stablehlo_runner_->upper_bound_input_shapes();
   }
 
   std::optional<int64_t> streaming_host_callback_id() const {

@@ -17,6 +17,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "absl/base/nullability.h"  // from @abseil-cpp
@@ -29,6 +30,7 @@
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
@@ -51,9 +53,13 @@ class ArenaH2DTransferExecutor : public H2DTransferExecutor {
 
   ~ArenaH2DTransferExecutor() override = default;
 
+  // Returns Unimplemented if any entry of `static_shapes` is set: an arena
+  // slice is sized for the host buffer, not for a larger static shape.
   absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ExecuteTransfer(
       absl::Span<const HostBuffer> inputs,
-      absl::Span<const xla::ifrt::ShardingRef> input_shardings) const override;
+      absl::Span<const xla::ifrt::ShardingRef> input_shardings,
+      absl::Span<const std::optional<xla::ifrt::Shape>> static_shapes)
+      const override;
 
  private:
   ArenaH2DTransferExecutor(
