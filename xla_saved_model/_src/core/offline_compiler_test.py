@@ -441,6 +441,40 @@ class OfflineCompilerTest(parameterized.TestCase):
     self.assertEqual(artifacts[0].target_topology_label, "cuda_file_db")
     self.assertNotEmpty(artifacts[0].pjrt_executable_bytes)
 
+  @parameterized.named_parameters(
+      dict(
+          testcase_name="directory",
+          make_db=test_utils.create_sample_autotune_dir,
+          new_field="xla_autotune_cache_dir",
+          deprecated_field="xla_gpu_per_fusion_autotune_cache_dir",
+      ),
+      dict(
+          testcase_name="file",
+          make_db=test_utils.create_sample_autotune_file,
+          new_field="xla_load_autotune_cache_from",
+          deprecated_field="xla_gpu_load_autotune_results_from",
+      ),
+  )
+  def test_build_compile_options_sets_new_autotune_db_field(
+      self, make_db, new_field, deprecated_field
+  ):
+    if not test_utils.jaxlib_has_new_autotune_cache_fields():
+      self.skipTest("jaxlib doesn't expose the new autotune cache fields.")
+    db_path = make_db(self.create_tempdir().full_path)
+    config = offline_compiler.TargetConfig(
+        target_topology_label="cuda_db",
+        platform="cuda",
+        autotune_database_path=db_path,
+    )
+
+    compile_options = offline_compiler._build_compile_options(
+        config, device_count=1
+    )
+
+    debug_options = compile_options.executable_build_options.debug_options
+    self.assertEqual(getattr(debug_options, new_field), db_path)
+    self.assertEmpty(getattr(debug_options, deprecated_field))
+
   def test_cuda_deviceless_nonexistent_autotune_db_raises_file_not_found(self):
     """Verifies FileNotFoundError when nonexistent autotune db is given."""
     serialized_topo = test_utils.get_serialized_topology(
@@ -554,8 +588,13 @@ class OfflineCompilerTest(parameterized.TestCase):
     compile_options = artifacts[0].compile_options
     self.assertIsNotNone(compile_options)
     # The autotune database is a path on the compiling host.
+    recorded_debug_options = (
+        compile_options.executable_build_options.debug_options
+    )
+    if test_utils.jaxlib_has_new_autotune_cache_fields():
+      self.assertEmpty(recorded_debug_options.xla_autotune_cache_dir)
     self.assertEmpty(
-        compile_options.executable_build_options.debug_options.xla_gpu_per_fusion_autotune_cache_dir
+        recorded_debug_options.xla_gpu_per_fusion_autotune_cache_dir
     )
 
   def test_deviceless_multi_device_compilation_records_no_compile_options(
@@ -582,8 +621,13 @@ class OfflineCompilerTest(parameterized.TestCase):
     debug_options = compile_options.executable_build_options.debug_options
     debug_options.xla_gpu_load_autotune_results_from = "/tmp/autotune.textproto"
     debug_options.xla_gpu_per_fusion_autotune_cache_dir = "/tmp/autotune"
+    has_new_fields = test_utils.jaxlib_has_new_autotune_cache_fields()
+    if has_new_fields:
+      debug_options.xla_load_autotune_cache_from = "/tmp/autotune.textproto"
+      debug_options.xla_autotune_cache_dir = "/tmp/autotune"
     compile_options.env_option_overrides = [
         ("xla_gpu_require_complete_aot_autotune_results", True),
+        ("xla_fail_on_autotune_cache_miss", True),
         ("xla_gpu_autotune_level", 4),
     ]
 
@@ -595,6 +639,9 @@ class OfflineCompilerTest(parameterized.TestCase):
     self.assertEmpty(
         recorded_debug_options.xla_gpu_per_fusion_autotune_cache_dir
     )
+    if has_new_fields:
+      self.assertEmpty(recorded_debug_options.xla_load_autotune_cache_from)
+      self.assertEmpty(recorded_debug_options.xla_autotune_cache_dir)
     self.assertEqual(
         set(recorded.env_option_overrides), {"xla_gpu_autotune_level"}
     )
