@@ -34,6 +34,7 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "unsupported/Eigen/CXX11/Tensor"
 #include "runtime/core/device_buffer.h"  // from @xla_serving
@@ -239,13 +240,21 @@ absl::StatusOr<int> VerifyIndexDomainsAndGetReplicas(
   const auto& bounded_box = first_index_domain->shape();
   while (prev_iter != unique_index_domains.end() &&
          next_iter != unique_index_domains.end()) {
-    xla::ifrt::Index offset = next_iter->origin() - prev_iter->origin();
+    const absl::Span<const int64_t> prev_origin =
+        prev_iter->origin().elements();
+    const absl::Span<const int64_t> next_origin =
+        next_iter->origin().elements();
+    absl::InlinedVector<int64_t, 6> offset(bounded_box.dims().size());
     for (int dim = 0; dim < bounded_box.dims().size(); ++dim) {
-      if (std::abs(offset.elements()[dim]) != bounded_box.dims()[dim] &&
-          offset.elements()[dim] != 0) {
+      offset[dim] = next_origin[dim] - prev_origin[dim];
+    }
+    for (int dim = 0; dim < bounded_box.dims().size(); ++dim) {
+      if (std::abs(offset[dim]) != bounded_box.dims()[dim] &&
+          offset[dim] != 0) {
         return absl::FailedPreconditionError(absl::StrCat(
             "IndexDomains should not have gap or overlap, but got ", *prev_iter,
-            " and ", *next_iter, " that have offset of ", offset));
+            " and ", *next_iter, " that have offset of [",
+            absl::StrJoin(offset, ","), "]"));
       }
     }
     prev_iter = next_iter;
