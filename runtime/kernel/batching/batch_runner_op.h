@@ -80,10 +80,12 @@ class XlaServingBatchResource : public BatchResourceBase {
       const BatchResourceBase::QueueOptions& batcher_queue_options,
       std::vector<int32_t> allowed_batch_sizes,
       tsl::thread::ThreadPool* thread_pool,
-      std::vector<RaggedInputSpec> ragged_inputs = {})
+      std::vector<RaggedInputSpec> ragged_inputs = {},
+      std::vector<bool> upper_bound_inputs = {})
       : BatchResourceBase(std::move(batcher), batcher_queue_options,
                           allowed_batch_sizes, thread_pool,
-                          std::move(ragged_inputs)),
+                          std::move(ragged_inputs),
+                          std::move(upper_bound_inputs)),
         batched_graph_(std::move(batched_graph)) {}
 
   const std::vector<std::unique_ptr<Kernel>>& batched_graph() const {
@@ -148,6 +150,12 @@ class BatchRunnerOp : public CancellableAsyncKernel {
 // The `thread_pool` will be used for non-blocking tasks such as concat and
 // split, so here we reuse the worker pool. Note that the threads executing the
 // batched kernels will not be in this pool.
+//
+// With `--xla_serving_enable_dynamic_dma`, the inputs that the first kernel
+// takes with fewer rows than the batch size
+// (`Kernel::upper_bound_input_shapes()`) are not padded. The kernels then
+// always return as many rows as that upper bound, so it must be the only
+// allowed batch size.
 absl::StatusOr<std::unique_ptr<Kernel>> CreateBatchRunnerOp(
     std::vector<std::unique_ptr<Kernel>> kernels,
     const BatchRunnerOpOptions& options, tsl::thread::ThreadPool* thread_pool);
