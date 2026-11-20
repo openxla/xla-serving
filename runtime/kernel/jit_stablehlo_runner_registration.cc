@@ -16,9 +16,12 @@
 #include <optional>
 #include <utility>
 
+#include "absl/flags/flag.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
+#include "runtime/core/batched_h2d_transfer_executor.h"  // from @xla_serving
+#include "runtime/core/dynamic_dma_flag.h"  // from @xla_serving
 #include "runtime/core/stablehlo.h"  // from @xla_serving
 #include "runtime/core/stablehlo_optimizer.h"  // from @xla_serving
 #include "runtime/core/stablehlo_runner.h"  // from @xla_serving
@@ -74,6 +77,11 @@ absl::StatusOr<std::unique_ptr<StableHloRunnerBase>> CreateJitRunner(
     return optimizer.status();
   }
 
+  // With dynamic DMA, the runner transfers its host inputs with
+  // `BatchedH2DTransferExecutor`, which copies only the rows that an input
+  // with an upper bound on dimension 0 has. Without an executor, or with one
+  // that cannot do this on the client, the runner takes such an input only
+  // with its compiled shape.
   return StableHloRunner::Create(
       std::move(stablehlo),
       compile_options.ok() ? std::make_optional(*compile_options)
@@ -83,7 +91,10 @@ absl::StatusOr<std::unique_ptr<StableHloRunnerBase>> CreateJitRunner(
       std::move(base_options.weights), compilation_environment_proto,
       base_options.thread_pool, *optimizer,
       std::move(base_options.assigned_devices), serving_core_selector,
-      /*h2d_transfer_executor_factory=*/nullptr, base_options.callback_id);
+      absl::GetFlag(FLAGS_xla_serving_enable_dynamic_dma)
+          ? std::make_unique<BatchedH2DTransferExecutorFactory>()
+          : nullptr,
+      base_options.callback_id);
 }
 
 // Registers the JIT `StableHloRunner` factory at link time.

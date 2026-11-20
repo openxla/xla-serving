@@ -16,6 +16,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <optional>
 #include <string>
@@ -36,6 +37,7 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/cord.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
+#include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
@@ -50,6 +52,7 @@
 #include "mlir/include/mlir/IR/Types.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/Value.h"  // from @llvm-project
 #include "runtime/core/aot_stablehlo_runner.h"  // from @xla_serving
+#include "runtime/core/batched_h2d_transfer_executor.h"  // from @xla_serving
 #include "runtime/core/device_buffer.h"  // from @xla_serving
 #include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
@@ -61,6 +64,7 @@
 #include "runtime/core/sharding_utils.h"  // from @xla_serving
 #include "runtime/core/stablehlo.h"  // from @xla_serving
 #include "runtime/core/stablehlo_optimizer.h"  // from @xla_serving
+#include "runtime/core/stablehlo_runner_base.h"  // from @xla_serving
 #include "runtime/core/stablehlo_utils.h"  // from @xla_serving
 #include "runtime/core/value.h"  // from @xla_serving
 #include "runtime/interpreter/context.h"  // from @xla_serving
@@ -69,6 +73,7 @@
 #include "xla/debug_options_flags.h"  // from @xla
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
 #include "xla/hlo/ir/tile_assignment.h"  // from @xla
+#include "xla/pjrt/common_pjrt_client.h"  // from @xla
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
@@ -77,15 +82,18 @@
 #include "xla/python/ifrt/executable.h"  // from @xla
 #include "xla/python/ifrt/memory.h"  // from @xla
 #include "xla/python/ifrt/mock.h"  // from @xla
+#include "xla/python/ifrt/rtti.h"  // from @xla
 #include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
 #include "xla/python/ifrt/test_util.h"  // from @xla
+#include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
 #include "xla/python/pjrt_ifrt/xla_sharding.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
 #include "xla/tsl/framework/serving_device_selector.h"  // from @xla
 #include "xla/tsl/framework/test_util/mock_serving_device_selector.h"  // from @xla
 #include "xla/tsl/lib/monitoring/cell_reader.h"  // from @xla
 #include "xla/tsl/platform/env.h"  // from @xla
+#include "xla/tsl/platform/errors.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 #include "xla/xla_data.pb.h"  // from @xla
@@ -103,7 +111,9 @@ class MockH2DTransferExecutor : public H2DTransferExecutor {
 
   absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ExecuteTransfer(
       absl::Span<const xla_serving::HostBuffer> inputs,
-      absl::Span<const xla::ifrt::ShardingRef> input_shardings) const override {
+      absl::Span<const xla::ifrt::ShardingRef> input_shardings,
+      absl::Span<const std::optional<xla::ifrt::Shape>> static_shapes)
+      const override {
     std::vector<xla::ifrt::ArrayRef> result;
     for (int i = 0; i < inputs.size(); ++i) {
       TF_ASSIGN_OR_RETURN(auto array_result,
@@ -141,7 +151,9 @@ class MockErrorH2DTransferExecutor : public H2DTransferExecutor {
 
   absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ExecuteTransfer(
       absl::Span<const xla_serving::HostBuffer> inputs,
-      absl::Span<const xla::ifrt::ShardingRef> input_shardings) const override {
+      absl::Span<const xla::ifrt::ShardingRef> input_shardings,
+      absl::Span<const std::optional<xla::ifrt::Shape>> static_shapes)
+      const override {
     return absl::InternalError("Simulated Arena Transfer Failure");
   }
 };
@@ -155,6 +167,84 @@ class MockErrorH2DTransferExecutorFactory : public H2DTransferExecutorFactory {
     return std::make_unique<MockErrorH2DTransferExecutor>(
         std::move(client), std::move(device_list), thread_pool);
   }
+};
+
+// The shape of an input passed to `H2DTransferExecutor::ExecuteTransfer`, and
+// the static shape passed with it, if any.
+struct RecordedTransfer {
+  xla::ifrt::Shape shape;
+  std::optional<xla::ifrt::Shape> static_shape;
+};
+
+// An executor that accepts inputs with a static shape and records what it is
+// asked to transfer. It pads such an input with zeros on the host and transfers
+// the padded buffer, so the array has the static shape. A real executor
+// allocates the static shape on the device and transfers only the rows it is
+// given.
+class MockPaddingH2DTransferExecutor : public H2DTransferExecutor {
+ public:
+  MockPaddingH2DTransferExecutor(
+      xla::ifrt::Client* client, xla::ifrt::DeviceListRef device_list,
+      tsl::thread::ThreadPool* thread_pool,
+      std::shared_ptr<std::vector<RecordedTransfer>> recorded_transfers)
+      : client_(client),
+        device_list_(std::move(device_list)),
+        thread_pool_(thread_pool),
+        recorded_transfers_(std::move(recorded_transfers)) {}
+
+  absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ExecuteTransfer(
+      absl::Span<const xla_serving::HostBuffer> inputs,
+      absl::Span<const xla::ifrt::ShardingRef> input_shardings,
+      absl::Span<const std::optional<xla::ifrt::Shape>> static_shapes)
+      const override {
+    std::vector<xla::ifrt::ArrayRef> result;
+    for (int i = 0; i < inputs.size(); ++i) {
+      const std::optional<xla::ifrt::Shape> static_shape =
+          static_shapes.empty() ? std::nullopt : static_shapes[i];
+      recorded_transfers_->push_back(
+          {.shape = inputs[i].shape(), .static_shape = static_shape});
+      HostBuffer to_transfer = inputs[i];
+      if (static_shape.has_value()) {
+        HostBuffer padded(inputs[i].dtype(), *static_shape);
+        std::memset(padded.base(), 0, padded.total_storage_bytes());
+        std::memcpy(padded.base(), inputs[i].raw_data().data(),
+                    inputs[i].raw_data().size());
+        to_transfer = std::move(padded);
+      }
+      TF_ASSIGN_OR_RETURN(auto array_result,
+                          sharding_internal::MakeArrayFromHostBuffer(
+                              *client_, to_transfer, device_list_,
+                              input_shardings[i], *thread_pool_));
+      result.push_back(std::move(array_result));
+    }
+    return result;
+  }
+
+  bool SupportsStaticShapes() const override { return true; }
+
+ private:
+  xla::ifrt::Client* client_;
+  xla::ifrt::DeviceListRef device_list_;
+  tsl::thread::ThreadPool* thread_pool_;
+  std::shared_ptr<std::vector<RecordedTransfer>> recorded_transfers_;
+};
+
+class MockPaddingH2DTransferExecutorFactory
+    : public H2DTransferExecutorFactory {
+ public:
+  explicit MockPaddingH2DTransferExecutorFactory(
+      std::shared_ptr<std::vector<RecordedTransfer>> recorded_transfers)
+      : recorded_transfers_(std::move(recorded_transfers)) {}
+
+  absl::StatusOr<std::unique_ptr<H2DTransferExecutor>> Create(
+      xla::ifrt::Client* client, xla::ifrt::DeviceListRef device_list,
+      tsl::thread::ThreadPool* thread_pool) override {
+    return std::make_unique<MockPaddingH2DTransferExecutor>(
+        client, std::move(device_list), thread_pool, recorded_transfers_);
+  }
+
+ private:
+  std::shared_ptr<std::vector<RecordedTransfer>> recorded_transfers_;
 };
 
 class MockStablehloOptimizer : public StablehloOptimizer {
@@ -333,10 +423,14 @@ std::shared_ptr<StableHlo> CreateMockStableHloTestHelper(
       StableHlo::Create(std::move(specs)).value().release());
 }
 
+using ::absl_testing::IsOkAndHolds;
 using ::absl_testing::StatusIs;
 using ::testing::_;
+using ::testing::ElementsAre;
 using ::testing::Eq;
+using ::testing::FieldsAre;
 using ::testing::HasSubstr;
+using ::testing::IsEmpty;
 using ::testing::Optional;
 using ::testing::Return;
 using ::testing::TestWithParam;
@@ -1457,6 +1551,737 @@ TEST(StableHloRunnerTest, ArenaTransferFailure) {
   EXPECT_THAT(runner->Execute(value_inputs, RunContext{}),
               StatusIs(absl::StatusCode::kInternal,
                        HasSubstr("Simulated Arena Transfer Failure")));
+}
+
+// Tests of an input whose leading dimension the model signature marks as an
+// upper bound (`ArgSpec::leading_dim_is_upper_bound`).
+class StableHloRunnerUpperBoundInputTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    TF_ASSERT_OK_AND_ASSIGN(ifrt_client_, xla::ifrt::test_util::GetClient());
+    thread_pool_ = std::make_unique<tsl::thread::ThreadPool>(
+        tsl::Env::Default(), tsl::ThreadOptions(), "IfrtWorkerThreadPool", 16);
+  }
+
+  // Returns the spec of `simple.mlir`: `dot(arg0: f32[2,2], arg1: f32[2,8])`,
+  // which returns the product and the product minus one. The leading dimension
+  // of arg0 is an upper bound.
+  static absl::StatusOr<StableHlo::Spec> SimpleModelSpec() {
+    const std::string file_path =
+        tsl::GetDataDependencyFilepath(kSimpleModelPath);
+    std::string hlo_str;
+    TF_RETURN_IF_ERROR(
+        tsl::ReadFileToString(tsl::Env::Default(), file_path, &hlo_str));
+    StableHlo::Spec spec = {
+        .inputs = {{.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                    .shape = ArgShape({2, 2}),
+                    .sharding = xla::HloSharding::Replicate(),
+                    .leading_dim_is_upper_bound = true},
+                   {.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                    .shape = ArgShape({2, 8}),
+                    .sharding = xla::HloSharding::Replicate()}},
+        .outputs = {{.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                     .shape = ArgShape({2, 8}),
+                     .sharding = xla::HloSharding::Replicate()},
+                    {.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                     .shape = ArgShape({2, 8}),
+                     .sharding = xla::HloSharding::Replicate()}},
+        .mlir_module_kept_var_idx = {0, 1},
+    };
+    spec.mlir_module = hlo_str;
+    return spec;
+  }
+
+  // Returns the spec of a module that takes one f32 input of `input_shape`,
+  // whose leading dimension is an upper bound, and returns it reshaped to
+  // `output_shape`. `FlattenInputsTestOptimizer` turns the reshape into the
+  // shape of the input.
+  static StableHlo::Spec ReshapeModelSpec(std::vector<int64_t> input_shape,
+                                          std::vector<int64_t> output_shape) {
+    const std::string input_type =
+        absl::StrCat("tensor<", absl::StrJoin(input_shape, "x"), "xf32>");
+    const std::string output_type =
+        absl::StrCat("tensor<", absl::StrJoin(output_shape, "x"), "xf32>");
+    return {
+        .inputs = {{.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                    .shape = ArgShape(input_shape.begin(), input_shape.end()),
+                    .sharding = xla::HloSharding::Replicate(),
+                    .leading_dim_is_upper_bound = true}},
+        .outputs = {{.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                     .shape =
+                         ArgShape(output_shape.begin(), output_shape.end()),
+                     .sharding = xla::HloSharding::Replicate()}},
+        .mlir_module = absl::StrCat(
+            "module @main {\n  func.func @main(%arg0: ", input_type, ") -> ",
+            output_type, " {\n    %0 = stablehlo.reshape %arg0 : (", input_type,
+            ") -> ", output_type, "\n    return %0 : ", output_type,
+            "\n  }\n}\n"),
+        .mlir_module_kept_var_idx = {0},
+    };
+  }
+
+  // Returns the spec of a module that takes x: f32[`rows`,3], whose leading
+  // dimension is an upper bound, and y: f32[`rows`]. It returns x flattened
+  // and y as f32[`rows`,1].
+  static StableHlo::Spec TwoInputModelSpec(int64_t rows) {
+    const std::string x_type = absl::StrCat("tensor<", rows, "x3xf32>");
+    const std::string y_type = absl::StrCat("tensor<", rows, "xf32>");
+    const std::string flat_x_type = absl::StrCat("tensor<", rows * 3, "xf32>");
+    const std::string column_y_type = absl::StrCat("tensor<", rows, "x1xf32>");
+    return {
+        .inputs = {{.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                    .shape = ArgShape({rows, 3}),
+                    .sharding = xla::HloSharding::Replicate(),
+                    .leading_dim_is_upper_bound = true},
+                   {.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                    .shape = ArgShape(1, rows),
+                    .sharding = xla::HloSharding::Replicate()}},
+        .outputs = {{.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                     .shape = ArgShape(1, rows * 3),
+                     .sharding = xla::HloSharding::Replicate()},
+                    {.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                     .shape = ArgShape({rows, 1}),
+                     .sharding = xla::HloSharding::Replicate()}},
+        .mlir_module = absl::StrCat(
+            "module @main {\n  func.func @main(%arg0: ", x_type,
+            ", %arg1: ", y_type, ") -> (", flat_x_type, ", ", column_y_type,
+            ") {\n    %0 = stablehlo.reshape %arg0 : (", x_type, ") -> ",
+            flat_x_type, "\n    %1 = stablehlo.reshape %arg1 : (", y_type,
+            ") -> ", column_y_type, "\n    return %0, %1 : ", flat_x_type, ", ",
+            column_y_type, "\n  }\n}\n"),
+        .mlir_module_kept_var_idx = {0, 1},
+    };
+  }
+
+  // Returns a factory of `MockPaddingH2DTransferExecutor`s that record their
+  // transfers in `recorded_transfers_`.
+  std::unique_ptr<H2DTransferExecutorFactory> MockPaddingFactory() {
+    return std::make_unique<MockPaddingH2DTransferExecutorFactory>(
+        recorded_transfers_);
+  }
+
+  // Returns true if `ifrt_client_` wraps a PjRt client, which
+  // `BatchedH2DTransferExecutor` needs. The NanoRT client that one variant of
+  // this test runs with does not.
+  bool HasPjRtClient() const {
+    return xla::ifrt::dyn_cast<xla::ifrt::PjRtCompatibleClient>(
+               ifrt_client_.get()) != nullptr;
+  }
+
+  // Returns true if `BatchedH2DTransferExecutor` can copy fewer rows of an
+  // input on `ifrt_client_`: the PjRt client is derived from
+  // `xla::CommonPjRtClient`. The PjRt CPU, GPU and TPU clients are. The PjRt C
+  // API client that one variant of this test runs with is not.
+  bool HasCommonPjRtClient() const {
+    auto* pjrt_compatible_client =
+        xla::ifrt::dyn_cast<xla::ifrt::PjRtCompatibleClient>(
+            ifrt_client_.get());
+    return pjrt_compatible_client != nullptr &&
+           dynamic_cast<xla::CommonPjRtClient*>(
+               pjrt_compatible_client->pjrt_client()) != nullptr;
+  }
+
+  // Creates a runner for `spec`, on device 0 unless `assigned_devices` is set.
+  // The runner has no H2D transfer executor if `h2d_factory` is null.
+  absl::StatusOr<std::unique_ptr<StableHloRunner>> CreateRunner(
+      StableHlo::Spec spec,
+      std::unique_ptr<H2DTransferExecutorFactory> h2d_factory,
+      StablehloOptimizer* optimizer = nullptr,
+      std::shared_ptr<const AssignedDevices> assigned_devices = nullptr) {
+    std::vector<StableHlo::Spec> buckets;
+    buckets.push_back(std::move(spec));
+    return CreateBucketedRunner(std::move(buckets), std::move(h2d_factory),
+                                optimizer, std::move(assigned_devices));
+  }
+
+  // Same as `CreateRunner()`, for a model with one spec per shape bucket.
+  absl::StatusOr<std::unique_ptr<StableHloRunner>> CreateBucketedRunner(
+      std::vector<StableHlo::Spec> buckets,
+      std::unique_ptr<H2DTransferExecutorFactory> h2d_factory,
+      StablehloOptimizer* optimizer = nullptr,
+      std::shared_ptr<const AssignedDevices> assigned_devices = nullptr) {
+    TF_ASSIGN_OR_RETURN(std::unique_ptr<StableHlo> stablehlo,
+                        StableHlo::Create(std::move(buckets)));
+    if (assigned_devices == nullptr) {
+      assigned_devices =
+          std::make_shared<const AssignedDevices>(AssignedDevices{
+              .device_assignment = std::vector<int>{/*device0*/ 0, 0, 0, 0},
+              .num_replicas = 1,
+              .num_cores_per_replica = 1});
+    }
+    return StableHloRunner::Create(
+        std::move(stablehlo), GetCompileOptions(assigned_devices), ifrt_client_,
+        /*persistent_compilation_cache=*/nullptr,
+        &ifrt_loaded_variable_registry_, {},
+        /*compilation_environment_proto=*/nullptr, thread_pool_.get(),
+        optimizer, assigned_devices,
+        /*serving_core_selector=*/nullptr, std::move(h2d_factory));
+  }
+
+  // Inputs of `simple.mlir`. `ShortArg0()` is the first row of `Arg0()`.
+  static HostBuffer Arg0() {
+    return AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0}, xla::ifrt::Shape({2, 2}));
+  }
+  static HostBuffer ShortArg0() {
+    return AsHostBuffer<float>({1.0, 2.0}, xla::ifrt::Shape({1, 2}));
+  }
+  static HostBuffer Arg1() {
+    return AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0,
+                                10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0},
+                               xla::ifrt::Shape({2, 8}));
+  }
+
+  std::shared_ptr<xla::ifrt::Client> ifrt_client_;
+  IfrtLoadedVariableRegistry ifrt_loaded_variable_registry_;
+  std::unique_ptr<tsl::thread::ThreadPool> thread_pool_;
+  std::shared_ptr<std::vector<RecordedTransfer>> recorded_transfers_ =
+      std::make_shared<std::vector<RecordedTransfer>>();
+};
+
+TEST_F(StableHloRunnerUpperBoundInputTest,
+       ShortInputUsesExecutableOfStaticShape) {
+  TF_ASSERT_OK_AND_ASSIGN(StableHlo::Spec spec, SimpleModelSpec());
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHloRunner> runner,
+                          CreateRunner(std::move(spec), MockPaddingFactory()));
+
+  // arg0 has one of the two rows the model is compiled for.
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla_serving::Value> outputs,
+      runner->Execute({xla_serving::Value(ShortArg0()), xla_serving::Value(Arg1())},
+                      RunContext{}));
+
+  // The executor gets the short input together with the shape to allocate.
+  ASSERT_EQ(recorded_transfers_->size(), 2);
+  EXPECT_EQ((*recorded_transfers_)[0].shape, xla::ifrt::Shape({1, 2}));
+  EXPECT_THAT((*recorded_transfers_)[0].static_shape,
+              Optional(xla::ifrt::Shape({2, 2})));
+  EXPECT_EQ((*recorded_transfers_)[1].shape, xla::ifrt::Shape({2, 8}));
+  EXPECT_EQ((*recorded_transfers_)[1].static_shape, std::nullopt);
+
+  // The outputs have the compiled batch size. Row 0 is the result for the row
+  // that was passed. Row 1 is the result for the zeros the mock padded with.
+  ASSERT_EQ(outputs.size(), 2);
+  EXPECT_THAT(outputs[0].Get<HostBuffer>(),
+              HostBufferEq(AsHostBuffer<float>(
+                  {19.0, 22.0, 25.0, 28.0, 31.0, 34.0, 37.0, 40.0,  //
+                   0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+                  xla::ifrt::Shape({2, 8}))));
+  EXPECT_THAT(outputs[1].Get<HostBuffer>(),
+              HostBufferEq(AsHostBuffer<float>(
+                  {18.0, 21.0, 24.0, 27.0, 30.0, 33.0, 36.0, 39.0,  //
+                   -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0},
+                  xla::ifrt::Shape({2, 8}))));
+
+  // An input with both rows is a regular input and runs on the same
+  // executable.
+  recorded_transfers_->clear();
+  TF_ASSERT_OK_AND_ASSIGN(
+      outputs,
+      runner->Execute({xla_serving::Value(Arg0()), xla_serving::Value(Arg1())}, RunContext{}));
+  ASSERT_EQ(recorded_transfers_->size(), 2);
+  EXPECT_EQ((*recorded_transfers_)[0].shape, xla::ifrt::Shape({2, 2}));
+  EXPECT_EQ((*recorded_transfers_)[0].static_shape, std::nullopt);
+  ASSERT_EQ(outputs.size(), 2);
+  EXPECT_THAT(outputs[0].Get<HostBuffer>(),
+              HostBufferEq(AsHostBuffer<float>(
+                  {19.0, 22.0, 25.0, 28.0, 31.0, 34.0, 37.0, 40.0,  //
+                   39.0, 46.0, 53.0, 60.0, 67.0, 74.0, 81.0, 88.0},
+                  xla::ifrt::Shape({2, 8}))));
+  // `GetProgramFingerprint` fails unless exactly one executable was cached.
+  EXPECT_OK(StableHloRunnerTestPeer::GetProgramFingerprint(*runner));
+}
+
+TEST_F(StableHloRunnerUpperBoundInputTest,
+       ShortInputWithBatchedH2DTransferExecutor) {
+  if (!HasCommonPjRtClient()) {
+    GTEST_SKIP() << "Dynamic DMA requires a xla::CommonPjRtClient.";
+  }
+  TF_ASSERT_OK_AND_ASSIGN(StableHlo::Spec spec, SimpleModelSpec());
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<StableHloRunner> runner,
+      CreateRunner(std::move(spec),
+                   std::make_unique<BatchedH2DTransferExecutorFactory>()));
+  CellReader<int64_t> dynamic_dma_bytes(
+      "/xla_serving/input_transfer/dynamic_dma_bytes");
+
+  // The executor allocates f32[2,2] on the device and copies the one row of
+  // arg0 into it. The second row is uninitialized, so only the first row of
+  // the outputs is defined.
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla_serving::Value> outputs,
+      runner->Execute({xla_serving::Value(ShortArg0()), xla_serving::Value(Arg1())},
+                      RunContext{}));
+  ASSERT_EQ(outputs.size(), 2);
+  const HostBuffer& out0 = outputs[0].Get<HostBuffer>();
+  ASSERT_EQ(out0.shape(), xla::ifrt::Shape({2, 8}));
+  TF_ASSERT_OK_AND_ASSIGN(HostBuffer out0_row0,
+                          out0.SliceAlongFirstDimension(0, 1));
+  EXPECT_THAT(out0_row0, HostBufferEq(AsHostBuffer<float>(
+                             {19.0, 22.0, 25.0, 28.0, 31.0, 34.0, 37.0, 40.0},
+                             xla::ifrt::Shape({1, 8}))));
+
+  // On the CPU client the device layout is dense, so the sizes are those of
+  // f32[2,2] and f32[1,2]. A device with a tiled layout (TPU) rounds both up
+  // to whole tiles.
+  const int64_t allocated_bytes = dynamic_dma_bytes.Delta("allocated");
+  const int64_t transferred_bytes = dynamic_dma_bytes.Delta("transferred");
+  EXPECT_GE(allocated_bytes, 2 * 2 * sizeof(float));
+  EXPECT_GE(transferred_bytes, 1 * 2 * sizeof(float));
+  EXPECT_LE(transferred_bytes, allocated_bytes);
+  if (ifrt_client_->platform_name() == "cpu") {
+    EXPECT_EQ(allocated_bytes, 2 * 2 * sizeof(float));
+    EXPECT_EQ(transferred_bytes, 1 * 2 * sizeof(float));
+  }
+}
+
+TEST_F(StableHloRunnerUpperBoundInputTest,
+       RejectsInputThatDoesNotFitStaticShape) {
+  TF_ASSERT_OK_AND_ASSIGN(StableHlo::Spec spec, SimpleModelSpec());
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHloRunner> runner,
+                          CreateRunner(std::move(spec), MockPaddingFactory()));
+
+  // More rows than the bound, a different inner dimension, a different rank.
+  for (const HostBuffer& bad_arg0 :
+       {AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0, 5.0, 6.0},
+                            xla::ifrt::Shape({3, 2})),
+        AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0}, xla::ifrt::Shape({1, 4})),
+        AsHostBuffer<float>({1.0, 2.0}, xla::ifrt::Shape({2}))}) {
+    EXPECT_THAT(
+        runner->Execute({xla_serving::Value(bad_arg0), xla_serving::Value(Arg1())},
+                        RunContext{}),
+        StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("Input #0")))
+        << bad_arg0.shape();
+  }
+  EXPECT_TRUE(recorded_transfers_->empty());
+}
+
+TEST_F(StableHloRunnerUpperBoundInputTest,
+       ShortInputRequiresH2DTransferExecutor) {
+  TF_ASSERT_OK_AND_ASSIGN(StableHlo::Spec spec, SimpleModelSpec());
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<StableHloRunner> runner,
+      CreateRunner(std::move(spec), /*h2d_factory=*/nullptr));
+
+  EXPECT_THAT(runner->Execute({xla_serving::Value(ShortArg0()), xla_serving::Value(Arg1())},
+                              RunContext{}),
+              StatusIs(absl::StatusCode::kFailedPrecondition,
+                       HasSubstr("has no H2DTransferExecutor")));
+
+  // An input with both rows needs no executor.
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla_serving::Value> outputs,
+      runner->Execute({xla_serving::Value(Arg0()), xla_serving::Value(Arg1())}, RunContext{}));
+  ASSERT_EQ(outputs.size(), 2);
+  EXPECT_THAT(outputs[0].Get<HostBuffer>(),
+              HostBufferEq(AsHostBuffer<float>(
+                  {19.0, 22.0, 25.0, 28.0, 31.0, 34.0, 37.0, 40.0,  //
+                   39.0, 46.0, 53.0, 60.0, 67.0, 74.0, 81.0, 88.0},
+                  xla::ifrt::Shape({2, 8}))));
+}
+
+TEST_F(StableHloRunnerUpperBoundInputTest,
+       UpperBoundInputShapesRequireH2DTransferExecutor) {
+  TF_ASSERT_OK_AND_ASSIGN(StableHlo::Spec spec, SimpleModelSpec());
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHloRunner> runner,
+                          CreateRunner(spec, MockPaddingFactory()));
+  // The model has one shape bucket, in which arg0 may have fewer than its two
+  // rows. arg1 may not.
+  EXPECT_THAT(runner->upper_bound_input_shapes(),
+              ElementsAre(ElementsAre(Optional(xla::ifrt::Shape({2, 2})),
+                                      Eq(std::nullopt))));
+
+  // Without an executor the runner cannot transfer a short input.
+  TF_ASSERT_OK_AND_ASSIGN(runner, CreateRunner(spec, /*h2d_factory=*/nullptr));
+  EXPECT_THAT(runner->upper_bound_input_shapes(), IsEmpty());
+}
+
+TEST_F(StableHloRunnerUpperBoundInputTest,
+       UpperBoundInputShapesRequireExecutorThatSupportsStaticShapes) {
+  TF_ASSERT_OK_AND_ASSIGN(StableHlo::Spec spec, SimpleModelSpec());
+  // `MockH2DTransferExecutor` does not support static shapes.
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<StableHloRunner> runner,
+      CreateRunner(std::move(spec),
+                   std::make_unique<MockH2DTransferExecutorFactory>()));
+
+  EXPECT_THAT(runner->upper_bound_input_shapes(), IsEmpty());
+}
+
+TEST_F(StableHloRunnerUpperBoundInputTest,
+       UpperBoundInputShapesWithBatchedH2DTransferExecutor) {
+  if (!HasCommonPjRtClient()) {
+    GTEST_SKIP() << "Dynamic DMA requires a xla::CommonPjRtClient.";
+  }
+  TF_ASSERT_OK_AND_ASSIGN(StableHlo::Spec spec, SimpleModelSpec());
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<StableHloRunner> runner,
+      CreateRunner(std::move(spec),
+                   std::make_unique<BatchedH2DTransferExecutorFactory>()));
+
+  EXPECT_THAT(runner->upper_bound_input_shapes(),
+              ElementsAre(ElementsAre(Optional(xla::ifrt::Shape({2, 2})),
+                                      Eq(std::nullopt))));
+}
+
+TEST_F(StableHloRunnerUpperBoundInputTest,
+       BatchedH2DTransferExecutorWithoutCommonPjRtClientTakesOnlyFullInputs) {
+  // The PjRt C API client is a PjRt client that is not derived from
+  // `xla::CommonPjRtClient`: `BatchedH2DTransferExecutor` transfers inputs on
+  // it, but cannot copy fewer rows of one.
+  if (!HasPjRtClient() || HasCommonPjRtClient()) {
+    GTEST_SKIP() << "Needs a PjRt client that is not a xla::CommonPjRtClient.";
+  }
+  TF_ASSERT_OK_AND_ASSIGN(StableHlo::Spec spec, SimpleModelSpec());
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<StableHloRunner> runner,
+      CreateRunner(std::move(spec),
+                   std::make_unique<BatchedH2DTransferExecutorFactory>()));
+
+  // The runner reports no input that it takes with fewer rows, so a batching
+  // kernel keeps padding arg0.
+  EXPECT_THAT(runner->upper_bound_input_shapes(), IsEmpty());
+  EXPECT_THAT(runner->Execute({xla_serving::Value(ShortArg0()), xla_serving::Value(Arg1())},
+                              RunContext{}),
+              StatusIs(absl::StatusCode::kUnimplemented,
+                       HasSubstr("xla::CommonPjRtClient")));
+  // An input with both rows goes through the regular batched transfer.
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla_serving::Value> outputs,
+      runner->Execute({xla_serving::Value(Arg0()), xla_serving::Value(Arg1())}, RunContext{}));
+  ASSERT_EQ(outputs.size(), 2);
+  EXPECT_THAT(outputs[0].Get<HostBuffer>(),
+              HostBufferEq(AsHostBuffer<float>(
+                  {19.0, 22.0, 25.0, 28.0, 31.0, 34.0, 37.0, 40.0,  //
+                   39.0, 46.0, 53.0, 60.0, 67.0, 74.0, 81.0, 88.0},
+                  xla::ifrt::Shape({2, 8}))));
+}
+
+TEST_F(StableHloRunnerUpperBoundInputTest,
+       ShortInputRequiresSingleDeviceSharding) {
+  ASSERT_GE(ifrt_client_->addressable_devices().size(), 4);
+  // Both inputs are replicated over four devices.
+  TF_ASSERT_OK_AND_ASSIGN(StableHlo::Spec spec, SimpleModelSpec());
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<StableHloRunner> runner,
+      CreateRunner(std::move(spec), MockPaddingFactory(),
+                   /*optimizer=*/nullptr,
+                   std::make_shared<const AssignedDevices>(AssignedDevices{
+                       .device_assignment = std::vector<int>{
+                           /*device0*/ 0, 0, 0, 0, /*device1*/ 0, 0, 0, 1,
+                           /*device2*/ 1, 0, 0, 0, /*device3*/ 1, 0, 0, 1},
+                       .num_replicas = 1,
+                       .num_cores_per_replica = 4})));
+
+  EXPECT_THAT(runner->Execute({xla_serving::Value(ShortArg0()), xla_serving::Value(Arg1())},
+                              RunContext{}),
+              StatusIs(absl::StatusCode::kUnimplemented,
+                       HasSubstr("spans more than one device")));
+  EXPECT_TRUE(recorded_transfers_->empty());
+
+  // An input with both rows runs on four devices as usual.
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla_serving::Value> outputs,
+      runner->Execute({xla_serving::Value(Arg0()), xla_serving::Value(Arg1())}, RunContext{}));
+  ASSERT_EQ(outputs.size(), 2);
+  EXPECT_THAT(outputs[0].Get<HostBuffer>(),
+              HostBufferEq(AsHostBuffer<float>(
+                  {19.0, 22.0, 25.0, 28.0, 31.0, 34.0, 37.0, 40.0,  //
+                   39.0, 46.0, 53.0, 60.0, 67.0, 74.0, 81.0, 88.0},
+                  xla::ifrt::Shape({2, 8}))));
+}
+
+TEST_F(StableHloRunnerUpperBoundInputTest,
+       ShortInputIsFlattenedForOptimizedModule) {
+  // The optimized module takes the f32[4,3] input as f32[12].
+  FlattenInputsTestOptimizer optimizer;
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHloRunner> runner,
+                          CreateRunner(ReshapeModelSpec({4, 3}, {12}),
+                                       MockPaddingFactory(), &optimizer));
+
+  // Two of the four rows: the six elements are flattened, and the executor is
+  // asked to allocate the flattened static shape.
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla_serving::Value> outputs,
+      runner->Execute(
+          {xla_serving::Value(AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0, 5.0, 6.0},
+                                          xla::ifrt::Shape({2, 3})))},
+          RunContext{}));
+  ASSERT_EQ(recorded_transfers_->size(), 1);
+  EXPECT_EQ((*recorded_transfers_)[0].shape, xla::ifrt::Shape({6}));
+  EXPECT_THAT((*recorded_transfers_)[0].static_shape,
+              Optional(xla::ifrt::Shape({12})));
+  ASSERT_EQ(outputs.size(), 1);
+  EXPECT_THAT(outputs[0].Get<HostBuffer>(),
+              HostBufferEq(AsHostBuffer<float>(
+                  {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+                  xla::ifrt::Shape({12}))));
+
+  // A short input that is not row-major cannot be flattened without a copy.
+  auto storage = std::make_shared<std::vector<float>>(
+      std::vector<float>{1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+  constexpr int64_t kF32Bytes = sizeof(float);
+  HostBuffer strided_input(
+      storage->data(), xla::ifrt::DType(xla::ifrt::DType::kF32),
+      xla::ifrt::Shape({2, 3}),
+      absl::InlinedVector<int64_t, 4>{kF32Bytes, 2 * kF32Bytes}, storage);
+  EXPECT_THAT(
+      runner->Execute({xla_serving::Value(std::move(strided_input))}, RunContext{}),
+      StatusIs(absl::StatusCode::kUnimplemented,
+               HasSubstr("can only be flattened to rank 1")));
+}
+
+TEST_F(StableHloRunnerUpperBoundInputTest, ShortInputRejectsOtherReshapes) {
+  // The optimized module takes the f32[4,3] input as f32[2,6].
+  FlattenInputsTestOptimizer optimizer;
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHloRunner> runner,
+                          CreateRunner(ReshapeModelSpec({4, 3}, {2, 6}),
+                                       MockPaddingFactory(), &optimizer));
+
+  EXPECT_THAT(
+      runner->Execute(
+          {xla_serving::Value(AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0, 5.0, 6.0},
+                                          xla::ifrt::Shape({2, 3})))},
+          RunContext{}),
+      StatusIs(absl::StatusCode::kUnimplemented,
+               HasSubstr("can only be flattened to rank 1")));
+  EXPECT_TRUE(recorded_transfers_->empty());
+
+  // An input with all four rows is reshaped as usual.
+  EXPECT_OK(runner->Execute(
+      {xla_serving::Value(AsHostBuffer<float>(
+          {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0},
+          xla::ifrt::Shape({4, 3})))},
+      RunContext{}));
+}
+
+TEST_F(StableHloRunnerUpperBoundInputTest, ShortInputRejectsHostTranspose) {
+  // The optimized module takes the f32[2,2,3,2] input transposed on the host
+  // and flattened.
+  FlattenInputsTestOptimizer optimizer(/*nchw_transposed_args=*/{0});
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHloRunner> runner,
+                          CreateRunner(ReshapeModelSpec({2, 2, 3, 2}, {24}),
+                                       MockPaddingFactory(), &optimizer));
+
+  EXPECT_THAT(
+      runner->Execute(
+          {xla_serving::Value(AsHostBuffer<float>(std::vector<float>(12, 1.0f),
+                                          xla::ifrt::Shape({1, 2, 3, 2})))},
+          RunContext{}),
+      StatusIs(absl::StatusCode::kUnimplemented,
+               HasSubstr("transposed on the host")));
+  EXPECT_TRUE(recorded_transfers_->empty());
+
+  // An input with both rows is transposed as usual.
+  EXPECT_OK(runner->Execute(
+      {xla_serving::Value(AsHostBuffer<float>(std::vector<float>(24, 1.0f),
+                                      xla::ifrt::Shape({2, 2, 3, 2})))},
+      RunContext{}));
+}
+
+TEST_F(StableHloRunnerUpperBoundInputTest,
+       ShortInputRunsOnSmallestBucketThatFits) {
+  // Shape buckets of f32[4,3] and f32[2,3], listed from the largest. Each
+  // returns its input flattened.
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHloRunner> runner,
+                          CreateBucketedRunner({ReshapeModelSpec({4, 3}, {12}),
+                                                ReshapeModelSpec({2, 3}, {6})},
+                                               MockPaddingFactory()));
+
+  // One row fits both buckets.
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla_serving::Value> outputs,
+      runner->Execute({xla_serving::Value(AsHostBuffer<float>(
+                          {1.0, 2.0, 3.0}, xla::ifrt::Shape({1, 3})))},
+                      RunContext{}));
+
+  // It runs on the two row bucket. The mock pads the other row with zeros.
+  ASSERT_EQ(recorded_transfers_->size(), 1);
+  EXPECT_EQ((*recorded_transfers_)[0].shape, xla::ifrt::Shape({1, 3}));
+  EXPECT_THAT((*recorded_transfers_)[0].static_shape,
+              Optional(xla::ifrt::Shape({2, 3})));
+  ASSERT_EQ(outputs.size(), 1);
+  EXPECT_THAT(outputs[0].Get<HostBuffer>(),
+              HostBufferEq(AsHostBuffer<float>({1.0, 2.0, 3.0, 0.0, 0.0, 0.0},
+                                               xla::ifrt::Shape({6}))));
+}
+
+TEST_F(StableHloRunnerUpperBoundInputTest, ShortInputSkipsBucketsItDoesNotFit) {
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHloRunner> runner,
+                          CreateBucketedRunner({ReshapeModelSpec({4, 3}, {12}),
+                                                ReshapeModelSpec({2, 3}, {6})},
+                                               MockPaddingFactory()));
+
+  // Three rows are too many for the two row bucket.
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla_serving::Value> outputs,
+      runner->Execute({xla_serving::Value(AsHostBuffer<float>(
+                          {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0},
+                          xla::ifrt::Shape({3, 3})))},
+                      RunContext{}));
+
+  ASSERT_EQ(recorded_transfers_->size(), 1);
+  EXPECT_EQ((*recorded_transfers_)[0].shape, xla::ifrt::Shape({3, 3}));
+  EXPECT_THAT((*recorded_transfers_)[0].static_shape,
+              Optional(xla::ifrt::Shape({4, 3})));
+  ASSERT_EQ(outputs.size(), 1);
+  EXPECT_THAT(outputs[0].Get<HostBuffer>(),
+              HostBufferEq(AsHostBuffer<float>(
+                  {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 0.0, 0.0, 0.0},
+                  xla::ifrt::Shape({12}))));
+}
+
+TEST_F(StableHloRunnerUpperBoundInputTest, FullInputRunsOnBucketOfItsShape) {
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHloRunner> runner,
+                          CreateBucketedRunner({ReshapeModelSpec({4, 3}, {12}),
+                                                ReshapeModelSpec({2, 3}, {6})},
+                                               MockPaddingFactory()));
+
+  // Two rows are all the rows of the two row bucket.
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla_serving::Value> outputs,
+      runner->Execute(
+          {xla_serving::Value(AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0, 5.0, 6.0},
+                                          xla::ifrt::Shape({2, 3})))},
+          RunContext{}));
+
+  // The input is a regular one: it is transferred without a static shape.
+  ASSERT_EQ(recorded_transfers_->size(), 1);
+  EXPECT_EQ((*recorded_transfers_)[0].shape, xla::ifrt::Shape({2, 3}));
+  EXPECT_EQ((*recorded_transfers_)[0].static_shape, std::nullopt);
+  ASSERT_EQ(outputs.size(), 1);
+  EXPECT_THAT(outputs[0].Get<HostBuffer>(),
+              HostBufferEq(AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0, 5.0, 6.0},
+                                               xla::ifrt::Shape({6}))));
+}
+
+TEST_F(StableHloRunnerUpperBoundInputTest, RejectsInputThatFitsNoBucket) {
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHloRunner> runner,
+                          CreateBucketedRunner({ReshapeModelSpec({4, 3}, {12}),
+                                                ReshapeModelSpec({2, 3}, {6})},
+                                               MockPaddingFactory()));
+
+  // More rows than the largest bucket, a different inner dimension, a
+  // different rank.
+  for (const HostBuffer& bad_input :
+       {AsHostBuffer<float>(std::vector<float>(15, 1.0f),
+                            xla::ifrt::Shape({5, 3})),
+        AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0}, xla::ifrt::Shape({1, 4})),
+        AsHostBuffer<float>({1.0, 2.0, 3.0}, xla::ifrt::Shape({3}))}) {
+    EXPECT_THAT(runner->Execute({xla_serving::Value(bad_input)}, RunContext{}),
+                StatusIs(absl::StatusCode::kInvalidArgument,
+                         HasSubstr("No shape bucket fits")))
+        << bad_input.shape();
+  }
+  EXPECT_TRUE(recorded_transfers_->empty());
+}
+
+TEST_F(StableHloRunnerUpperBoundInputTest, OtherInputsMustMatchTheBucket) {
+  // Shape buckets of two and four rows. x is bounded and y is not.
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<StableHloRunner> runner,
+      CreateBucketedRunner({TwoInputModelSpec(2), TwoInputModelSpec(4)},
+                           MockPaddingFactory()));
+  const HostBuffer x =
+      AsHostBuffer<float>({1.0, 2.0, 3.0}, xla::ifrt::Shape({1, 3}));
+
+  // The one row of x fits both buckets, but y has the four rows of the larger
+  // one.
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<xla_serving::Value> outputs,
+      runner->Execute(
+          {xla_serving::Value(x), xla_serving::Value(AsHostBuffer<float>(
+                              {1.0, 2.0, 3.0, 4.0}, xla::ifrt::Shape({4})))},
+          RunContext{}));
+  ASSERT_EQ(outputs.size(), 2);
+  EXPECT_THAT(outputs[0].Get<HostBuffer>(),
+              HostBufferEq(AsHostBuffer<float>(
+                  {1.0, 2.0, 3.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+                  xla::ifrt::Shape({12}))));
+  EXPECT_THAT(outputs[1].Get<HostBuffer>(),
+              HostBufferEq(AsHostBuffer<float>({1.0, 2.0, 3.0, 4.0},
+                                               xla::ifrt::Shape({4, 1}))));
+
+  // y is not bounded, so it cannot have fewer rows than a bucket.
+  EXPECT_THAT(runner->Execute(
+                  {xla_serving::Value(x), xla_serving::Value(AsHostBuffer<float>(
+                                      {1.0, 2.0, 3.0}, xla::ifrt::Shape({3})))},
+                  RunContext{}),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("No shape bucket fits")));
+}
+
+TEST(ModelIoMetadataTest, GetUserInputStaticShapes) {
+  StableHlo::Spec bucket = {
+      .inputs = {{.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                  .shape = ArgShape(1, 3),
+                  .sharding = xla::HloSharding::Replicate()},
+                 {.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                  .shape = ArgShape({2, 2}),
+                  .sharding = xla::HloSharding::Replicate(),
+                  .leading_dim_is_upper_bound = true},
+                 {.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                  .shape = ArgShape({2, 8}),
+                  .sharding = xla::HloSharding::Replicate()}},
+      .outputs = {{.dtype = xla::ifrt::DType(xla::ifrt::DType::kF32),
+                   .shape = ArgShape({2, 2}),
+                   .sharding = xla::HloSharding::Replicate()}},
+      .mlir_module = std::string("mock_mlir"),
+      .mlir_module_kept_var_idx = {0, 1, 2},
+  };
+
+  // Input 0 is a weight, so the bounded input is user input 0.
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<StableHlo> stablehlo,
+                          StableHlo::Create({bucket}));
+  EXPECT_THAT(
+      ModelIoMetadata::GetUserInputStaticShapes(*stablehlo, /*num_weights=*/1,
+                                                /*num_user_inputs=*/2),
+      IsOkAndHolds(ElementsAre(FieldsAre(
+          ElementsAre(Optional(xla::ifrt::Shape({2, 2})), Eq(std::nullopt)),
+          ElementsAre(ArgShape({2, 2}), ArgShape({2, 8}))))));
+
+  // No input is bounded.
+  StableHlo::Spec plain_bucket = bucket;
+  plain_bucket.inputs[1].leading_dim_is_upper_bound = false;
+  TF_ASSERT_OK_AND_ASSIGN(stablehlo, StableHlo::Create({plain_bucket}));
+  EXPECT_THAT(
+      ModelIoMetadata::GetUserInputStaticShapes(*stablehlo, /*num_weights=*/1,
+                                                /*num_user_inputs=*/2),
+      IsOkAndHolds(IsEmpty()));
+
+  // A bounded input has its own shape in every shape bucket. The buckets are
+  // ordered from the smallest, whatever the order of the specs.
+  StableHlo::Spec larger_bucket = bucket;
+  larger_bucket.inputs[1].shape = ArgShape({4, 2});
+  larger_bucket.inputs[2].shape = ArgShape({4, 8});
+  TF_ASSERT_OK_AND_ASSIGN(stablehlo,
+                          StableHlo::Create({larger_bucket, bucket}));
+  EXPECT_THAT(
+      ModelIoMetadata::GetUserInputStaticShapes(*stablehlo, /*num_weights=*/1,
+                                                /*num_user_inputs=*/2),
+      IsOkAndHolds(ElementsAre(
+          FieldsAre(
+              ElementsAre(Optional(xla::ifrt::Shape({2, 2})), Eq(std::nullopt)),
+              ElementsAre(ArgShape({2, 2}), ArgShape({2, 8}))),
+          FieldsAre(
+              ElementsAre(Optional(xla::ifrt::Shape({4, 2})), Eq(std::nullopt)),
+              ElementsAre(ArgShape({4, 2}), ArgShape({4, 8}))))));
+
+  // It must be bounded in every shape bucket.
+  TF_ASSERT_OK_AND_ASSIGN(stablehlo, StableHlo::Create({bucket, plain_bucket}));
+  EXPECT_THAT(
+      ModelIoMetadata::GetUserInputStaticShapes(*stablehlo, /*num_weights=*/1,
+                                                /*num_user_inputs=*/2),
+      StatusIs(absl::StatusCode::kUnimplemented,
+               HasSubstr("but not in bucket #1")));
+
+  // Its shape must be concrete.
+  StableHlo::Spec polymorphic_bucket = bucket;
+  polymorphic_bucket.inputs[1].shape = ArgShape({std::nullopt, 2});
+  TF_ASSERT_OK_AND_ASSIGN(stablehlo, StableHlo::Create({polymorphic_bucket}));
+  EXPECT_THAT(
+      ModelIoMetadata::GetUserInputStaticShapes(*stablehlo, /*num_weights=*/1,
+                                                /*num_user_inputs=*/2),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("polymorphic")));
 }
 
 class StableHloRunnerExecuteOptionsTest : public ::testing::Test {

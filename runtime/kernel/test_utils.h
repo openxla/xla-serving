@@ -87,9 +87,17 @@ class StableHloRunnerOpTestHelper {
   absl::StatusOr<std::unique_ptr<Kernel>> MakeRunnerOp(
       std::shared_ptr<const StableHlo::Spec> stablehlo_spec,
       std::shared_ptr<const AssignedDevices> assigned_devices) {
+    return MakeRunnerOp(std::vector<StableHlo::Spec>{*stablehlo_spec},
+                        std::move(assigned_devices));
+  }
+
+  // Same as above, for a model with one spec per shape bucket.
+  absl::StatusOr<std::unique_ptr<Kernel>> MakeRunnerOp(
+      std::vector<StableHlo::Spec> stablehlo_specs,
+      std::shared_ptr<const AssignedDevices> assigned_devices) {
     KernelBuilderContext builder_context;
     TF_ASSIGN_OR_RETURN(std::shared_ptr<StableHlo> stablehlo,
-                        StableHlo::Create({*stablehlo_spec}));
+                        StableHlo::Create(std::move(stablehlo_specs)));
     TF_RETURN_IF_ERROR(builder_context.SetConfig(kStableHlo, stablehlo));
     TF_RETURN_IF_ERROR(builder_context.SetConfig(kIfrtClient, client_));
     TF_RETURN_IF_ERROR(builder_context.SetConfig(

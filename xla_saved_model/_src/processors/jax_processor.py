@@ -63,7 +63,16 @@ def _infer_polymorphic_signature(
       raise ValueError("`specs` must not be empty.")
     shapes = zip(*(s.shape for s in specs))
     poly_shape = [dims[0] if len(set(dims)) == 1 else None for dims in shapes]
-    return dataclasses.replace(specs[0], shape=poly_shape)
+    # An upper bound that differs between the signatures (one per shape bucket)
+    # has no single size. It stays on the concrete signatures only.
+    upper_bound_dims = [
+        dim
+        for dim in specs[0].upper_bound_dims or ()
+        if poly_shape[dim] is not None
+    ]
+    return dataclasses.replace(
+        specs[0], shape=poly_shape, upper_bound_dims=upper_bound_dims
+    )
 
   return jax.tree_util.tree_map(
       _infer_spec,
@@ -204,10 +213,14 @@ class JaxProcessor:
     else:
       model_param_names = None
 
+    # The original specs are passed through (rather than only their
+    # `jax.ShapeDtypeStruct` form, which `convert_apply_fn_bundle_to_shlo`
+    # derives itself) so that annotations such as
+    # `ShloTensorSpec.upper_bound_dims` reach the exported function.
     shlo_functions = jax2xsm.convert_apply_fn_bundle_to_shlo(
         apply_fn_bundle=self.apply_fn_bundle,
         params=self.params,
-        input_signature=jax2xsm.utils.to_jax_spec(input_signature),
+        input_signature=input_signature,
         model_param_names=model_param_names,
         jax_mesh=self.jax_mesh,
         weights_name=self.weights_name or None,
