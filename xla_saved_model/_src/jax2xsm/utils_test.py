@@ -270,6 +270,26 @@ class UtilsTest(parameterized.TestCase):
         type_pb2.HOST,
     )
 
+  def test_assert_not_in_jax_transformation_allows_explicit_abstract_mesh(self):
+    abstract_mesh = jax.sharding.AbstractMesh(
+        (1,),
+        ('model',),
+        axis_types=(jax.sharding.AxisType.Explicit,),
+    )
+    with jax.sharding.use_abstract_mesh(abstract_mesh):
+      utils.assert_not_in_jax_transformation()
+
+  def test_assert_not_in_jax_transformation_raises_inside_jit(self):
+    @jax.jit
+    def _traced_fn(x):
+      utils.assert_not_in_jax_transformation()
+      return x
+
+    with self.assertRaisesRegex(
+        ValueError, r'convert must be used outside all JAX transformations\.'
+    ):
+      _traced_fn(jnp.array(0))
+
 
 if __name__ == '__main__':
   absltest.main()

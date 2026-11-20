@@ -61,7 +61,8 @@ def get_physical_dtype(dtype) -> shlo_type.ShloDType | None:  # pylint: disable=
 
 def assert_not_in_jax_transformation():
   """Raises an error if executed within a JAX transformation."""
-  arr = jax.lax.iota("int32", 0)
+  with jax.sharding.use_abstract_mesh(jax.sharding.AbstractMesh((), ())):
+    arr = jax.lax.iota("int32", 0)
   if isinstance(arr, jax.core.Tracer):
     raise ValueError("convert must be used outside all JAX transformations.")
 
