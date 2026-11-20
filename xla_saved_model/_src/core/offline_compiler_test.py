@@ -321,7 +321,7 @@ class OfflineCompilerTest(parameterized.TestCase):
     ):
       offline_compiler.create_offline_compiler_hook([])
 
-  @parameterized.parameters("rocm", "unknown_backend", "directx")
+  @parameterized.parameters("unknown_backend", "directx")
   def test_unsupported_platform_raises_error(self, invalid_platform: str):
     """Verifies ValueError when platform is completely unrecognized."""
     config = offline_compiler.TargetConfig(
@@ -459,8 +459,8 @@ class OfflineCompilerTest(parameterized.TestCase):
     with self.assertRaises(FileNotFoundError):
       offline_compiler.create_offline_compiler_hook([config])
 
-  def test_non_cuda_autotune_db_raises_value_error(self):
-    """Verifies ValueError when autotune db is given for non-CUDA platform."""
+  def test_non_gpu_autotune_db_raises_value_error(self):
+    """Verifies ValueError when autotune db is given for a non-GPU platform."""
     config = offline_compiler.TargetConfig(
         target_topology_label="tpu_with_db",
         platform="tpu",
@@ -469,8 +469,20 @@ class OfflineCompilerTest(parameterized.TestCase):
     )
     with self.assertRaisesRegex(
         ValueError,
-        "autotune_database_path is only supported for CUDA platform",
+        "autotune_database_path is only supported for GPU platforms",
     ):
+      offline_compiler.create_offline_compiler_hook([config])
+
+  @parameterized.parameters("cuda", "rocm")
+  def test_gpu_autotune_db_passes_platform_check(self, platform: str):
+    """Both GPU platforms accept an autotune db; only the path is validated."""
+    config = offline_compiler.TargetConfig(
+        target_topology_label=f"{platform}_missing_db",
+        platform=platform,
+        autotune_database_path="/tmp/does_not_exist_autotune.pb",
+    )
+    # FileNotFoundError rather than ValueError means the platform gate passed.
+    with self.assertRaises(FileNotFoundError):
       offline_compiler.create_offline_compiler_hook([config])
 
   def test_uninstantiated_optimizer_class_raises_type_error(self):

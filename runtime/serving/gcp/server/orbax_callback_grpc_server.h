@@ -71,6 +71,9 @@ struct OrbaxCallbackGrpcServerOptions {
   // TPU only. Number of premapped partitions per device for the PjRt TPU client
   // when `tpu_use_premapped_buffer` is true.
   int tpu_num_premapped_partitions_per_device = 1;
+  // Selects which AOT compiled executables to load from the manifest. Required
+  // to serve a bundle produced by `xsm-cli recompile`.
+  std::string target_topology_label;
 };
 
 class OrbaxCallbackGrpcServer final

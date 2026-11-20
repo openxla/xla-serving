@@ -120,6 +120,9 @@ def generate_xla_compile_options(
   cuda_platform_name = manifest_pb2.Platform.Name(
       manifest_pb2.Platform.CUDA
   ).lower()
+  rocm_platform_name = manifest_pb2.Platform.Name(
+      manifest_pb2.Platform.ROCM
+  ).lower()
   compile_options_map = manifest_pb2.CompileOptionsProtoMap()
   if native_serialization_platforms is None:
     # If no native serialization platforms are specified, we will set the
@@ -164,7 +167,8 @@ def generate_xla_compile_options(
         compile_environment,
         jax_mesh,
         populate_xla_build_options=(
-            platform_lower in (tpu_platform_name, cuda_platform_name)
+            platform_lower
+            in (tpu_platform_name, cuda_platform_name, rocm_platform_name)
         ),
     )
 

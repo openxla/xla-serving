@@ -246,7 +246,7 @@ OrbaxCallbackGrpcServer::Create(const ModelServerConfig& config,
   std::string orbax_platform = absl::GetFlag(FLAGS_orbax_grpc_server_platform);
   LOG(INFO) << "Creating Orbax Server for Orbax platform: " << orbax_platform;
   std::string pjrt_platform = orbax_platform;
-  if (orbax_platform == "cuda") {
+  if (orbax_platform == "cuda" || orbax_platform == "rocm") {
     pjrt_platform = "gpu";
   }
 
@@ -337,6 +337,7 @@ OrbaxCallbackGrpcServer::Create(const ModelServerConfig& config,
     create_options->ifrt_client = client;
     create_options->computation_thread_pool = computation_thread_pool.get();
     create_options->platform_name = orbax_platform;
+    create_options->target_topology_label = options.target_topology_label;
 
     // TODO: Support loading and warming up models concurrently.
     std::unique_ptr<xla_serving::Interpreter> interpreter;
