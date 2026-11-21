@@ -315,6 +315,8 @@ BundleInterpreter::CreateSubInterpreter(absl::string_view model_name) const {
   sub_options->computation_thread_pool =
       create_options()->computation_thread_pool;
   sub_options->allocator = create_options()->allocator;
+  sub_options->use_allocator_for_d2h_dest =
+      create_options()->use_allocator_for_d2h_dest;
   sub_options->platform_name = create_options()->platform_name;
 
   sub_options->model_path = tsl::io::JoinPath(bundle_path_, model_name);

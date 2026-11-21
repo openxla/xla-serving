@@ -42,6 +42,8 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "runtime/core/allocator.h"  // from @xla_serving
+#include "runtime/core/default_allocator.h"  // from @xla_serving
 #include "runtime/core/device_buffer.h"  // from @xla_serving
 #include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
@@ -584,11 +586,14 @@ StableHloRunnerBase::DataConverter::DataConverter(
     absl_nonnull std::shared_ptr<xla::ifrt::Client> ifrt_client,
     xla::ifrt::DeviceListRef device_list,
     tsl::thread::ThreadPool* absl_nonnull thread_pool,
-    std::unique_ptr<H2DTransferExecutor> h2d_transfer_executor)
+    std::unique_ptr<H2DTransferExecutor> h2d_transfer_executor,
+    Allocator* absl_nullable allocator)
     : ifrt_client_(std::move(ifrt_client)),
       device_list_(std::move(device_list)),
       thread_pool_(thread_pool),
       h2d_transfer_executor_(std::move(h2d_transfer_executor)),
+      allocator_(allocator != nullptr ? allocator
+                                      : DefaultAllocator::GetInstance()),
       arena_cell_(input_transfer_counter->GetCell("arena")),
       default_cell_(input_transfer_counter->GetCell("default")) {}
 
@@ -806,7 +811,7 @@ StableHloRunnerBase::DataConverter::ConvertOutput(
       VLOG(2) << "Output sharding: " << array_for_copy->sharding();
       output_futures[i] = sharding_internal::MakeHostBufferFromArray(
           *ifrt_client_, *array_for_copy, output_shardings[i], device_list_,
-          *thread_pool_);
+          *thread_pool_, allocator_);
     }
   }
 
@@ -854,7 +859,7 @@ StableHloRunnerBase::StableHloRunnerBase(
     absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
     ServingCoreSelector* absl_nullable serving_core_selector,
     std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory,
-    std::optional<int64_t> callback_id)
+    std::optional<int64_t> callback_id, Allocator* absl_nullable allocator)
     : model_io_metadata_(std::move(model_io_metadata)),
       assigned_device_list_(std::move(assigned_device_list)),
       ifrt_client_(std::move(client)),
@@ -863,8 +868,9 @@ StableHloRunnerBase::StableHloRunnerBase(
       ifrt_loaded_variable_registry_(*ifrt_loaded_variable_registry),
       weights_(std::move(weights)),
       serving_core_selector_(serving_core_selector),
-      h2d_transfer_executor_factory_(std::move(h2d_transfer_executor_factory)) {
-}
+      h2d_transfer_executor_factory_(std::move(h2d_transfer_executor_factory)),
+      allocator_(allocator != nullptr ? allocator
+                                      : DefaultAllocator::GetInstance()) {}
 
 absl::Status StableHloRunnerBase::Init(
     tsl::thread::ThreadPool* absl_nonnull thread_pool) {
@@ -897,7 +903,7 @@ absl::Status StableHloRunnerBase::CreateResourcesPerDeviceList(
   device_list_to_resources_map_[device_list] =
       std::make_unique<ResourcesPerDeviceList>(
           ifrt_client_, device_list, thread_pool,
-          std::move(h2d_transfer_executor));
+          std::move(h2d_transfer_executor), allocator_);
   return absl::OkStatus();
 }
 

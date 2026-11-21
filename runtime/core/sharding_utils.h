@@ -18,8 +18,11 @@
 #include <cstdint>
 #include <vector>
 
+#include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "runtime/core/allocator.h"  // from @xla_serving
+#include "runtime/core/default_allocator.h"  // from @xla_serving
 #include "runtime/core/device_buffer.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "xla/hlo/ir/hlo_sharding.h"  // from @xla
@@ -87,11 +90,15 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeArrayFromHostBuffer(
 // device_list: list of devices that is aligned with the order of device
 // buffers in the `input_array`.
 //
+// allocator: host memory allocator used for D2H destination `HostBuffer`
+// allocations. Defaults to `DefaultAllocator::GetInstance()`.
+//
 tsl::Future<HostBuffer> MakeHostBufferFromArray(
     xla::ifrt::Client& ifrt_client, xla::ifrt::Array& input_array,
     const xla::ifrt::ShardingRef& ifrt_sharding,
     const xla::ifrt::DeviceListRef& device_list,
-    tsl::thread::ThreadPool& thread_pool);
+    tsl::thread::ThreadPool& thread_pool,
+    Allocator* absl_nullable allocator = DefaultAllocator::GetInstance());
 
 // Copies `input_array` from the device into `destination`, host memory the
 // caller already owns, rather than into a newly allocated buffer. When
