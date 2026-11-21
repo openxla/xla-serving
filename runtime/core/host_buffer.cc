@@ -204,8 +204,9 @@ HostBuffer::HostBuffer(const xla::ifrt::DType& dtype,
     CHECK(!overflow &&
           static_cast<uint64_t>(size) <= std::numeric_limits<size_t>::max())
         << "Integer overflow in buffer allocation";
-    void* aligned_raw_ptr =
-        allocator->Allocate(static_cast<size_t>(size), EIGEN_MAX_ALIGN_BYTES);
+    std::shared_ptr<void> raw_owner = allocator->AllocateOwned(
+        static_cast<size_t>(size), EIGEN_MAX_ALIGN_BYTES);
+    void* aligned_raw_ptr = raw_owner.get();
     CHECK(size == 0 || aligned_raw_ptr != nullptr)
         << "Failed to allocate buffer of size " << size;
     if (num_elements > 0) {
@@ -216,13 +217,15 @@ HostBuffer::HostBuffer(const xla::ifrt::DType& dtype,
         aligned_raw_ptr, dtype, shape,
         CreateDefaultStrides(shape.dims(), dtype),
         std::shared_ptr<void>(
-            aligned_raw_ptr, [n = num_elements, allocator](void* ptr) {
+            aligned_raw_ptr,
+            [n = num_elements,
+             raw_owner = std::move(raw_owner)](void* ptr) mutable {
               if (ptr == nullptr) return;
               tsl::tstring* tstring_ptr = reinterpret_cast<tsl::tstring*>(ptr);
               for (int64_t i = 0; i < n; ++i) {
                 tstring_ptr[i].~tstring();
               }
-              allocator->Free(ptr, EIGEN_MAX_ALIGN_BYTES);
+              raw_owner.reset();
             }));
     return;
   }
@@ -237,14 +240,11 @@ HostBuffer::HostBuffer(const xla::ifrt::DType& dtype,
   CHECK(!overflow &&
         static_cast<uint64_t>(size) <= std::numeric_limits<size_t>::max())
       << "Integer overflow in buffer allocation";
-  void* aligned_raw_ptr =
-      allocator->Allocate(static_cast<size_t>(size), EIGEN_MAX_ALIGN_BYTES);
+  std::shared_ptr<void> owner = allocator->AllocateOwned(
+      static_cast<size_t>(size), EIGEN_MAX_ALIGN_BYTES);
+  void* aligned_raw_ptr = owner.get();
   CHECK(size == 0 || aligned_raw_ptr != nullptr)
       << "Failed to allocate buffer of size " << size;
-  auto owner = std::shared_ptr<void>(aligned_raw_ptr, [allocator](void* ptr) {
-    if (ptr == nullptr) return;
-    allocator->Free(ptr, EIGEN_MAX_ALIGN_BYTES);
-  });
   auto strides = CreateDefaultStrides(shape.dims(), storage_dtype);
   buffer_data_.emplace(aligned_raw_ptr, storage_dtype, shape, strides,
                        std::move(owner));
@@ -270,8 +270,9 @@ absl::StatusOr<HostBuffer> HostBuffer::Create(xla::ifrt::DType dtype,
         absl::StrCat("Failed to compute default strides for ", dtype, shape));
   }
 
-  void* aligned_raw_ptr =
-      allocator->Allocate(static_cast<size_t>(size), EIGEN_MAX_ALIGN_BYTES);
+  std::shared_ptr<void> raw_owner = allocator->AllocateOwned(
+      static_cast<size_t>(size), EIGEN_MAX_ALIGN_BYTES);
+  void* aligned_raw_ptr = raw_owner.get();
   if (size > 0 && aligned_raw_ptr == nullptr) {
     return absl::ResourceExhaustedError(absl::StrCat(
         "Failed to allocate ", size, " bytes for HostBuffer ", dtype, shape));
@@ -282,24 +283,21 @@ absl::StatusOr<HostBuffer> HostBuffer::Create(xla::ifrt::DType dtype,
       new (aligned_raw_ptr) tsl::tstring[num_elements];
     }
     auto owner = std::shared_ptr<void>(
-        aligned_raw_ptr, [n = num_elements, allocator](void* ptr) {
+        aligned_raw_ptr, [n = num_elements,
+                          raw_owner = std::move(raw_owner)](void* ptr) mutable {
           if (ptr == nullptr) return;
           tsl::tstring* tstring_ptr = reinterpret_cast<tsl::tstring*>(ptr);
           for (int64_t i = 0; i < n; ++i) {
             tstring_ptr[i].~tstring();
           }
-          allocator->Free(ptr, EIGEN_MAX_ALIGN_BYTES);
+          raw_owner.reset();
         });
     return HostBuffer(aligned_raw_ptr, dtype, std::move(shape), strides,
                       std::move(owner));
   }
 
-  auto owner = std::shared_ptr<void>(aligned_raw_ptr, [allocator](void* ptr) {
-    if (ptr == nullptr) return;
-    allocator->Free(ptr, EIGEN_MAX_ALIGN_BYTES);
-  });
   return HostBuffer(aligned_raw_ptr, dtype, std::move(shape), strides,
-                    std::move(owner));
+                    std::move(raw_owner));
 }
 
 HostBuffer::HostBuffer(

@@ -140,7 +140,7 @@ absl::StatusOr<std::unique_ptr<AotStableHloRunner>> AotStableHloRunner::Create(
       options.base_options.assigned_devices,
       /*serving_core_selector=*/nullptr,
       /*h2d_transfer_executor_factory=*/nullptr,
-      options.base_options.callback_id));
+      options.base_options.callback_id, options.base_options.allocator));
 
   runner->aot_memory_regions_ = std::move(options.aot_memory_regions);
 

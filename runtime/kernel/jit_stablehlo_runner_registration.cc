@@ -83,7 +83,8 @@ absl::StatusOr<std::unique_ptr<StableHloRunnerBase>> CreateJitRunner(
       std::move(base_options.weights), compilation_environment_proto,
       base_options.thread_pool, *optimizer,
       std::move(base_options.assigned_devices), serving_core_selector,
-      /*h2d_transfer_executor_factory=*/nullptr, base_options.callback_id);
+      /*h2d_transfer_executor_factory=*/nullptr, base_options.callback_id,
+      base_options.allocator);
 }
 
 // Registers the JIT `StableHloRunner` factory at link time.
