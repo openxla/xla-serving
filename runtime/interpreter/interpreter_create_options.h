@@ -75,6 +75,12 @@ struct InterpreterCreateOptions {
   // If true, in-graph batching is enabled. If false, in-graph batching is
   // disabled, but callers can still do out-of-graph batching.
   bool enable_batching = true;
+  // If true, every batched pipeline uses priority-aware batching, overriding
+  // the `priority_batching_policy` in the model's exported `BatchOptions`. If
+  // false, the exported policy is used. Priority-aware batching currently also
+  // requires `--jsv_use_queue_base`; otherwise the legacy queue is used and the
+  // policy is ignored.
+  bool enable_priority_aware_batching = false;
   // Providing a thread pool enables loading checkpoints in the background.
   // A null pointer disables background checkpoint loading. Not owned.
   tsl::thread::ThreadPool* absl_nullable checkpoint_loader_thread_pool =
