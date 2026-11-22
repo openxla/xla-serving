@@ -260,7 +260,10 @@ manifest.
 
 Lowering is completely deviceless: you can export with
 `platforms=['cpu', 'cuda', 'tpu']` on a laptop or CI runner that has no GPU or
-TPU attached.
+TPU attached. Every lowered platform entry in `xla_compile_options` records
+base single-replica SPMD `ExecutableBuildOptionsProto` settings (`num_replicas`,
+`num_partitions`, `device_assignment`, and Shardy partitioning flags), with any
+platform-specific compiler flag overrides layered on top.
 
 ## Weights and existing checkpoints
 
@@ -289,7 +292,12 @@ To export a model sharded across multiple devices:
 2. Attach matching `NamedSharding`s to the `params` leaves and
    `input_signature` `ShapeDtypeStruct`s.
 3. Pass `jax_mesh=mesh` to `JaxModel` so the exporter records the device mesh
-   in the bundle's XLA compile options.
+   (`num_replicas=1`, `num_partitions=mesh.size`, and `device_assignment`) in
+   the bundle's `ExecutableBuildOptionsProto` across all lowered platforms
+   (`'cpu'`, `'cuda'`, and `'tpu'`). When a manifest also serializes
+   `device_assignment_by_coords` from `mesh`, the serving runtime verifies at
+   load time that the manifest device count matches `num_replicas *
+   num_partitions` in the target platform's compile options.
 
 ```python
 from jax.experimental import mesh_utils
