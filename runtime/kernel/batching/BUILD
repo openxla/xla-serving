@@ -131,6 +131,17 @@ cc_test(
 )
 
 cc_library(
+    name = "upper_bound_input_provider",
+    hdrs = ["upper_bound_input_provider.h"],
+    visibility = [
+        "@xla_serving//runtime/kernel:__subpackages__",
+    ],
+    deps = [
+        "@xla//xla/python/ifrt",
+    ],
+)
+
+cc_library(
     name = "batch_runner_op",
     srcs = ["batch_runner_op.cc"],
     hdrs = ["batch_runner_op.h"],
@@ -141,8 +152,11 @@ cc_library(
     deps = [
         ":batch_options_utils",
         ":batch_resource_base",
+        ":upper_bound_input_provider",
         ":warmup",
         "@abseil-cpp//absl/cleanup",
+        "@abseil-cpp//absl/container:btree",
+        "@abseil-cpp//absl/flags:flag",
         "@abseil-cpp//absl/functional:any_invocable",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
@@ -154,12 +168,14 @@ cc_library(
         "@tsl//tsl/profiler/lib:context_types_hdrs",
         "@tsl//tsl/profiler/lib:traceme",
         "@tsl//tsl/profiler/lib:traceme_encode",
+        "@xla//xla/python/ifrt",
         "@xla//xla/tsl/concurrency:future",
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/tsl/platform:statusor",
         "@xla_serving//runtime/core:allocator",
         "@xla_serving//runtime/core:default_allocator",
+        "@xla_serving//runtime/core:dynamic_dma_flag",
         "@xla_serving//runtime/core:flat_signature",
         "@xla_serving//runtime/core:host_buffer",
         "@xla_serving//runtime/core:value",
@@ -190,8 +206,11 @@ cc_test(
         ":batch_resource_base",
         ":batch_runner_op",
         ":test_batch_resource_base",
+        ":upper_bound_input_provider",
         ":warmup",
+        "@abseil-cpp//absl/algorithm:container",
         "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/flags:reflection",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:status_matchers",
@@ -217,6 +236,8 @@ cc_test(
         "@xla//xla/tsl/platform:statusor",
         "@xla_serving//runtime/core:allocator",
         "@xla_serving//runtime/core:default_allocator",
+        "@xla_serving//runtime/core:dynamic_dma_flag",
+        "@xla_serving//runtime/core:h2d_transfer_executor_flag",
         "@xla_serving//runtime/core:host_buffer",
         "@xla_serving//runtime/core:host_buffer_matcher",
         "@xla_serving//runtime/core:host_buffer_test_utils",

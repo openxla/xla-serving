@@ -16,17 +16,22 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/flags/flag.h"  // from @abseil-cpp
+#include "absl/flags/reflection.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_matchers.h"  // from @abseil-cpp
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/aot_stablehlo_runner.h"  // from @xla_serving
+#include "runtime/core/dynamic_dma_flag.h"  // from @xla_serving
+#include "runtime/core/h2d_transfer_executor_flag.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "runtime/core/host_buffer_matcher.h"  // from @xla_serving
 #include "runtime/core/host_buffer_test_utils.h"  // from @xla_serving
@@ -37,6 +42,7 @@
 #include "runtime/core/value.h"  // from @xla_serving
 #include "runtime/core/value_matcher.h"  // from @xla_serving
 #include "runtime/interpreter/manifest_utils.h"  // from @xla_serving
+#include "runtime/kernel/batching/upper_bound_input_provider.h"  // from @xla_serving
 #include "runtime/kernel/kernel.h"  // from @xla_serving
 #include "runtime/kernel/kernel_builder_constants.h"  // from @xla_serving
 #include "runtime/kernel/kernel_builder_context.h"  // from @xla_serving
@@ -86,8 +92,12 @@ class StableHloRunnerTestPeer {
 
 namespace {
 using ::absl_testing::StatusIs;
+using ::testing::ElementsAre;
 using ::testing::ElementsAreArray;
+using ::testing::Eq;
 using ::testing::HasSubstr;
+using ::testing::IsEmpty;
+using ::testing::Optional;
 
 class TestMemoryRegion : public tsl::ReadOnlyMemoryRegion {
  public:
@@ -197,6 +207,100 @@ TEST_F(SimpleMlirStableHloRunnerOpTest, Basic) {
               ElementsAreArray(
                   {ValueOfType<HostBuffer>(HostBufferEq(expected_out_0_)),
                    ValueOfType<HostBuffer>(HostBufferEq(expected_out_1_))}));
+}
+
+TEST_F(SimpleMlirStableHloRunnerOpTest,
+       UpperBoundInputWithH2DTransferExecutorFlag) {
+  TF_ASSERT_OK_AND_ASSIGN(
+      const std::string stablehlo_str,
+      helper_->GetStableHloStrFromDataDependency(
+          "runtime/kernel/testdata/simple.mlir"));
+  stablehlo_spec_simple_->mlir_module = stablehlo_str;
+  stablehlo_spec_simple_->inputs[0].leading_dim_is_upper_bound = true;
+  // x has one of the two rows that the model is compiled for.
+  std::vector<Value> inputs{
+      Value(AsHostBuffer<float>({1.0, 2.0}, xla::ifrt::Shape({1, 2}))),
+      Value(std::move(y_))};
+
+  // By default the JIT runner has no `H2DTransferExecutor`, so it takes x only
+  // with both rows.
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<Kernel> runner,
+      helper_->MakeRunnerOp(stablehlo_spec_simple_, assigned_devices_simple_));
+  const auto* provider =
+      dynamic_cast<const UpperBoundInputProvider*>(runner.get());
+  ASSERT_NE(provider, nullptr);
+  EXPECT_THAT(provider->upper_bound_input_shapes(), IsEmpty());
+  Kernel::ExecuteContext failing_context{.inputs = absl::MakeSpan(inputs)};
+  EXPECT_THAT(runner->Run(failing_context),
+              StatusIs(absl::StatusCode::kFailedPrecondition,
+                       HasSubstr("has no H2DTransferExecutor")));
+
+  // `--xla_serving_enable_dynamic_dma` does not give it one.
+  absl::FlagSaver flag_saver;
+  absl::SetFlag(&FLAGS_xla_serving_enable_dynamic_dma, true);
+  TF_ASSERT_OK_AND_ASSIGN(
+      runner,
+      helper_->MakeRunnerOp(stablehlo_spec_simple_, assigned_devices_simple_));
+  provider = dynamic_cast<const UpperBoundInputProvider*>(runner.get());
+  ASSERT_NE(provider, nullptr);
+  EXPECT_THAT(provider->upper_bound_input_shapes(), IsEmpty());
+  absl::SetFlag(&FLAGS_xla_serving_enable_dynamic_dma, false);
+
+  // `--xla_serving_h2d_transfer_executor` does.
+  absl::SetFlag(&FLAGS_xla_serving_h2d_transfer_executor, "batched");
+  TF_ASSERT_OK_AND_ASSIGN(
+      runner,
+      helper_->MakeRunnerOp(stablehlo_spec_simple_, assigned_devices_simple_));
+  provider = dynamic_cast<const UpperBoundInputProvider*>(runner.get());
+  ASSERT_NE(provider, nullptr);
+  EXPECT_THAT(provider->upper_bound_input_shapes(),
+              ElementsAre(ElementsAre(Optional(xla::ifrt::Shape({2, 2})),
+                                      Eq(std::nullopt))));
+
+  // The outputs have both rows. Only the first one is defined.
+  Kernel::ExecuteContext execute_context{.inputs = absl::MakeSpan(inputs)};
+  TF_ASSERT_OK(runner->Run(execute_context));
+  ASSERT_EQ(execute_context.outputs.size(), expected_output_count_);
+  const HostBuffer& out_0 = execute_context.outputs[0].Get<HostBuffer>();
+  ASSERT_EQ(out_0.shape(), xla::ifrt::Shape({2, 8}));
+  TF_ASSERT_OK_AND_ASSIGN(HostBuffer out_0_row_0,
+                          out_0.SliceAlongFirstDimension(0, 1));
+  EXPECT_THAT(out_0_row_0, HostBufferEq(AsHostBuffer<float>(
+                               {19.0, 22.0, 25.0, 28.0, 31.0, 34.0, 37.0, 40.0},
+                               xla::ifrt::Shape({1, 8}))));
+}
+
+TEST_F(SimpleMlirStableHloRunnerOpTest, UnknownH2DTransferExecutorFlagFails) {
+  TF_ASSERT_OK_AND_ASSIGN(
+      const std::string stablehlo_str,
+      helper_->GetStableHloStrFromDataDependency(
+          "runtime/kernel/testdata/simple.mlir"));
+  stablehlo_spec_simple_->mlir_module = stablehlo_str;
+  absl::FlagSaver flag_saver;
+  absl::SetFlag(&FLAGS_xla_serving_h2d_transfer_executor, "unknown");
+
+  EXPECT_THAT(
+      helper_->MakeRunnerOp(stablehlo_spec_simple_, assigned_devices_simple_),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("--xla_serving_h2d_transfer_executor")));
+}
+
+TEST_F(SimpleMlirStableHloRunnerOpTest,
+       ArenaH2DTransferExecutorFlagFailsOnCpu) {
+  TF_ASSERT_OK_AND_ASSIGN(
+      const std::string stablehlo_str,
+      helper_->GetStableHloStrFromDataDependency(
+          "runtime/kernel/testdata/simple.mlir"));
+  stablehlo_spec_simple_->mlir_module = stablehlo_str;
+  absl::FlagSaver flag_saver;
+  absl::SetFlag(&FLAGS_xla_serving_h2d_transfer_executor, "arena");
+
+  // `ArenaH2DTransferExecutor` does not run on CPU, which this test runs on.
+  EXPECT_THAT(
+      helper_->MakeRunnerOp(stablehlo_spec_simple_, assigned_devices_simple_),
+      StatusIs(absl::StatusCode::kUnimplemented,
+               HasSubstr("ArenaH2DTransferExecutor is not supported on CPU")));
 }
 
 TEST_F(SimpleMlirStableHloRunnerOpTest, Spmd) {
