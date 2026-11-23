@@ -29,6 +29,7 @@
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/strings/str_cat.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "runtime/core/dynamic_dma_utils.h"  // from @xla_serving
 #include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "runtime/core/sharding_utils.h"  // from @xla_serving
@@ -84,6 +85,34 @@ struct DeviceArenaEntry {
   const void* data;
   // Byte strides of the source HostBuffer along each dimension.
   absl::InlinedVector<int64_t, 4> byte_strides;
+
+  // Set for an input that has fewer rows than `on_device_shape` (dynamic DMA,
+  // see dynamic_dma_utils.h). The slice of the entry is still sized for
+  // `on_device_shape`, but only the rows of the input are linearized and
+  // copied, to the front of the slice. The rest of the slice is left
+  // uninitialized.
+  struct Prefix {
+    // `on_device_shape` with the rows of the input along dimension 0.
+    xla::Shape shape;
+    // Bytes that the host data is linearized into as an array of `shape`.
+    int64_t linearized_bytes;
+    // Leading bytes of the linearized data that are copied to the device.
+    int64_t dma_bytes;
+  };
+  std::optional<Prefix> prefix;
+
+  // The shape that the host data is linearized as, the bytes that it is
+  // linearized into, and the leading bytes of those that are copied to the
+  // device.
+  const xla::Shape& linearized_shape() const {
+    return prefix.has_value() ? prefix->shape : on_device_shape;
+  }
+  int64_t linearized_bytes() const {
+    return prefix.has_value() ? prefix->linearized_bytes : on_device_bytes;
+  }
+  int64_t dma_bytes() const {
+    return prefix.has_value() ? prefix->dma_bytes : on_device_bytes;
+  }
 };
 
 // Checks sharding-agnostic `HostBuffer` and `MemoryKind` properties to
@@ -181,7 +210,8 @@ absl::StatusOr<std::shared_ptr<void>> AllocateHostArena(
 
 // Allocates a single device arena and host staging arena on `pjrt_device`,
 // linearizes `entries`, issues async H2D transfers, and returns the resulting
-// `PjRtBuffer`s in `entries` order.
+// `PjRtBuffer`s in `entries` order. An entry with a `prefix` gets a slice for
+// its `on_device_shape`, and a transfer of the rows that it has.
 absl::StatusOr<std::vector<std::shared_ptr<xla::PjRtBuffer>>>
 TransferDeviceArena(
     xla::CommonPjRtClient* absl_nonnull common_pjrt_client,
@@ -220,11 +250,15 @@ TransferDeviceArena(
   for (size_t idx = 0; idx < entries.size(); ++idx) {
     const DeviceArenaEntry& entry = entries[idx];
     const xla::PjRtRawBufferInterface::SliceInfo& slice = transfer_slices[idx];
+    if (entry.linearized_bytes() == 0) {
+      // An input without rows.
+      continue;
+    }
     uint8_t* arena_destination =
         static_cast<uint8_t*>(host_arena_shared.get()) + slice.offset;
     TF_RETURN_IF_ERROR(common_pjrt_client->Linearize(
-        absl::MakeSpan(arena_destination, slice.size), entry.data,
-        entry.byte_strides, entry.on_device_shape,
+        absl::MakeSpan(arena_destination, entry.linearized_bytes()), entry.data,
+        entry.byte_strides, entry.linearized_shape(),
         /*dynamic_sizes=*/{}, memory_space));
   }
 
@@ -236,11 +270,18 @@ TransferDeviceArena(
     const uint8_t* arena_destination =
         static_cast<const uint8_t*>(host_arena_shared.get()) +
         transfer_slice.offset;
-    TF_ASSIGN_OR_RETURN(
-        xla::PjRtDeviceEventRef copy_event,
-        device_raw_buffer->CopyRawHostToDeviceAndReturnEvent(
-            arena_destination, transfer_slice.offset, transfer_slice.size));
-    copy_event.AndThen([host_arena_shared]() {});
+    xla::PjRtDeviceEventRef copy_event;
+    if (entry.dma_bytes() == 0) {
+      // An input without rows: there is nothing to copy.
+      TF_ASSIGN_OR_RETURN(copy_event,
+                          device_raw_buffer->MakeAllocationReadyEvent());
+    } else {
+      TF_ASSIGN_OR_RETURN(
+          copy_event,
+          device_raw_buffer->CopyRawHostToDeviceAndReturnEvent(
+              arena_destination, transfer_slice.offset, entry.dma_bytes()));
+      copy_event.AndThen([host_arena_shared]() {});
+    }
 
     TF_ASSIGN_OR_RETURN(
         xla::PjRtRawBufferRef sliced_buffer,
@@ -326,9 +367,13 @@ ArenaH2DTransferExecutor::ArenaH2DTransferExecutor(
 absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
 ArenaH2DTransferExecutor::ExecuteTransfer(
     absl::Span<const HostBuffer> inputs,
-    absl::Span<const xla::ifrt::ShardingRef> input_shardings) const {
+    absl::Span<const xla::ifrt::ShardingRef> input_shardings,
+    absl::Span<const std::optional<StaticShape>> static_shapes) const {
   if (inputs.size() != input_shardings.size()) {
     return absl::InvalidArgumentError("inputs and shardings size mismatch");
+  }
+  if (!static_shapes.empty() && static_shapes.size() != inputs.size()) {
+    return absl::InvalidArgumentError("inputs and static_shapes size mismatch");
   }
   if (inputs.empty()) {
     return std::vector<xla::ifrt::ArrayRef>();
@@ -337,6 +382,20 @@ ArenaH2DTransferExecutor::ExecuteTransfer(
   struct DeviceBatch {
     std::vector<DeviceArenaEntry> entries;
     std::vector<int> input_indices;
+    // Bytes that the entries with a `prefix` take in the device arena, and
+    // bytes that are copied into them.
+    int64_t dynamic_dma_allocated_bytes = 0;
+    int64_t dynamic_dma_transferred_bytes = 0;
+  };
+
+  // Returns the static shape of input `i` if the input has fewer rows than it.
+  // A static shape equal to the shape of the input changes nothing.
+  auto get_static_shape_of_short_input = [&](int i) -> const StaticShape* {
+    if (static_shapes.empty() || !static_shapes[i].has_value() ||
+        static_shapes[i]->shape == inputs[i].shape()) {
+      return nullptr;
+    }
+    return &*static_shapes[i];
   };
 
   std::vector<xla::ifrt::ArrayRef> results(inputs.size());
@@ -395,8 +454,24 @@ ArenaH2DTransferExecutor::ExecuteTransfer(
       }
     }
 
-    if (!single_device_sharding.has_value() ||
-        !IsArenaEligibleInput(inputs[i], sharding->memory_kind())) {
+    // An input with fewer rows than its static shape is transferred with
+    // dynamic DMA. The fallback path cannot transfer it, so the arena also
+    // takes it with any other sharding that places it on one device.
+    const StaticShape* static_shape = get_static_shape_of_short_input(i);
+    if (static_shape != nullptr) {
+      if (!single_device_sharding.has_value() &&
+          sharding->devices()->size() == 1) {
+        single_device_sharding = sharding;
+      }
+      if (!single_device_sharding.has_value()) {
+        return absl::UnimplementedError(absl::StrCat(
+            "Dynamic DMA only supports single-device inputs, but the input of "
+            "shape ",
+            inputs[i].shape(), " with static shape ", static_shape->shape,
+            " has sharding ", *sharding, "."));
+      }
+    } else if (!single_device_sharding.has_value() ||
+               !IsArenaEligibleInput(inputs[i], sharding->memory_kind())) {
       fallback_input_indices.push_back(i);
       continue;
     }
@@ -414,6 +489,14 @@ ArenaH2DTransferExecutor::ExecuteTransfer(
     TF_ASSIGN_OR_RETURN(xla::PjRtMemorySpace * memory_space,
                         pjrt_device->default_memory_space());
 
+    std::optional<DynamicDmaTransfer> dynamic_dma;
+    if (static_shape != nullptr) {
+      TF_ASSIGN_OR_RETURN(dynamic_dma,
+                          PlanDynamicDmaTransfer(
+                              inputs[i], sharding->memory_kind(), *static_shape,
+                              *common_pjrt_client_, memory_space));
+    }
+
     TF_ASSIGN_OR_RETURN(xla::PrimitiveType primitive_type,
                         xla::ifrt::ToPrimitiveType(inputs[i].dtype()));
     xla::Shape host_shape =
@@ -427,22 +510,40 @@ ArenaH2DTransferExecutor::ExecuteTransfer(
           host_shape, absl::MakeSpan(byte_strides)));
     }
 
-    TF_ASSIGN_OR_RETURN(
-        xla::Shape on_device_shape,
-        common_pjrt_client_->MakeDefaultShapeForMemorySpace(
-            memory_space, host_shape,
-            host_shape.has_layout() ? &host_shape.layout() : nullptr));
-    TF_ASSIGN_OR_RETURN(int64_t on_device_bytes,
-                        common_pjrt_client_->GetOnDeviceBytesCount(
-                            memory_space, on_device_shape));
+    xla::Shape on_device_shape;
+    int64_t on_device_bytes = 0;
+    std::optional<DeviceArenaEntry::Prefix> prefix;
+    if (dynamic_dma.has_value()) {
+      on_device_shape = std::move(dynamic_dma->device_shape);
+      on_device_bytes = dynamic_dma->device_bytes;
+      prefix = DeviceArenaEntry::Prefix{
+          .shape = std::move(dynamic_dma->transfer_shape),
+          .linearized_bytes = dynamic_dma->linearized_bytes,
+          .dma_bytes = dynamic_dma->dma_bytes,
+      };
+    } else {
+      TF_ASSIGN_OR_RETURN(
+          on_device_shape,
+          common_pjrt_client_->MakeDefaultShapeForMemorySpace(
+              memory_space, host_shape,
+              host_shape.has_layout() ? &host_shape.layout() : nullptr));
+      TF_ASSIGN_OR_RETURN(on_device_bytes,
+                          common_pjrt_client_->GetOnDeviceBytesCount(
+                              memory_space, on_device_shape));
+    }
 
     effective_shardings[i] = *std::move(single_device_sharding);
     DeviceBatch& batch = batches_by_device[pjrt_device];
+    if (prefix.has_value()) {
+      batch.dynamic_dma_allocated_bytes += on_device_bytes;
+      batch.dynamic_dma_transferred_bytes += prefix->dma_bytes;
+    }
     batch.entries.push_back(DeviceArenaEntry{
         .on_device_shape = std::move(on_device_shape),
         .on_device_bytes = on_device_bytes,
         .data = inputs[i].base(),
         .byte_strides = std::move(byte_strides),
+        .prefix = std::move(prefix),
     });
     batch.input_indices.push_back(i);
   }
@@ -458,6 +559,10 @@ ArenaH2DTransferExecutor::ExecuteTransfer(
     for (size_t b = 0; b < device_buffers.size(); ++b) {
       arena_buffers[batch.input_indices[b]] = std::move(device_buffers[b]);
     }
+    if (batch.dynamic_dma_allocated_bytes > 0) {
+      RecordDynamicDmaBytes(batch.dynamic_dma_allocated_bytes,
+                            batch.dynamic_dma_transferred_bytes);
+    }
   }
 
   // Phase 3: Assemble IFRT Arrays for all arena-transferred inputs.
@@ -467,12 +572,18 @@ ArenaH2DTransferExecutor::ExecuteTransfer(
     }
     xla::ifrt::PjRtArray::PjRtBuffers pjrt_buffers = {
         std::move(arena_buffers[i])};
+    // The array of an input with fewer rows than its static shape has the
+    // static shape, in its layout.
+    const StaticShape* static_shape = get_static_shape_of_short_input(i);
     TF_ASSIGN_OR_RETURN(
         tsl::RCReference<xla::ifrt::PjRtArray> array,
         xla::ifrt::PjRtArray::Create(
-            client_, inputs[i].dtype(), inputs[i].shape(),
+            client_, inputs[i].dtype(),
+            static_shape != nullptr ? static_shape->shape : inputs[i].shape(),
             effective_shardings[i], std::move(pjrt_buffers),
-            /*layout=*/std::shared_ptr<const xla::PjRtLayout>()));
+            static_shape != nullptr
+                ? static_shape->layout
+                : std::shared_ptr<const xla::PjRtLayout>()));
     results[i] = tsl::RCReference<xla::ifrt::Array>(std::move(array));
   }
 

@@ -131,6 +131,18 @@ cc_test(
 )
 
 cc_library(
+    name = "upper_bound_input_provider",
+    hdrs = ["upper_bound_input_provider.h"],
+    visibility = [
+        "@xla_serving//runtime/kernel:__subpackages__",
+    ],
+    deps = [
+        "@abseil-cpp//absl/types:span",
+        "@xla//xla/python/ifrt",
+    ],
+)
+
+cc_library(
     name = "batch_runner_op",
     srcs = ["batch_runner_op.cc"],
     hdrs = ["batch_runner_op.h"],
@@ -141,6 +153,7 @@ cc_library(
     deps = [
         ":batch_options_utils",
         ":batch_resource_base",
+        ":upper_bound_input_provider",
         ":warmup",
         "@abseil-cpp//absl/cleanup",
         "@abseil-cpp//absl/functional:any_invocable",
@@ -154,6 +167,7 @@ cc_library(
         "@tsl//tsl/profiler/lib:context_types_hdrs",
         "@tsl//tsl/profiler/lib:traceme",
         "@tsl//tsl/profiler/lib:traceme_encode",
+        "@xla//xla/python/ifrt",
         "@xla//xla/tsl/concurrency:future",
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:errors",
@@ -190,6 +204,7 @@ cc_test(
         ":batch_resource_base",
         ":batch_runner_op",
         ":test_batch_resource_base",
+        ":upper_bound_input_provider",
         ":warmup",
         "@abseil-cpp//absl/flags:flag",
         "@abseil-cpp//absl/log",

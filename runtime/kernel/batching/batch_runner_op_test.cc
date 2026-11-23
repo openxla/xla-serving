@@ -53,6 +53,7 @@
 #include "runtime/kernel/batching/batch_options_utils.h"  // from @xla_serving
 #include "runtime/kernel/batching/batch_resource_base.h"  // from @xla_serving
 #include "runtime/kernel/batching/test_batch_resource_base.h"  // from @xla_serving
+#include "runtime/kernel/batching/upper_bound_input_provider.h"  // from @xla_serving
 #include "runtime/kernel/batching/warmup.h"  // from @xla_serving
 #include "runtime/kernel/identity.h"  // from @xla_serving
 #include "runtime/kernel/kernel.h"  // from @xla_serving
@@ -86,6 +87,7 @@ using ::tensorflow::CostMeasurement;
 using ::tensorflow::kTpuCostName;
 using ::testing::ElementsAre;
 using ::testing::ElementsAreArray;
+using ::testing::HasSubstr;
 using ::tsl::monitoring::testing::CellReader;
 using ::tsl::monitoring::testing::Histogram;
 
@@ -1619,6 +1621,169 @@ TEST_F(BatchRunnerOpWarmupTest, PadVariableLengthInputs) {
                   kModelName, absl::StrCat(kModelVersion), batch_size_str),
               0);
   }
+}
+
+// A kernel whose `upper_bound_input_shapes()` are `input_shapes`. Its inputs
+// are columns of int32. Like a function compiled for `num_output_rows` rows,
+// it returns that many rows whatever the number of rows of input 0: input 0 in
+// the rows that input 0 has, and -1 in the others.
+class UpperBoundKernel : public Kernel, public UpperBoundInputProvider {
+ public:
+  UpperBoundKernel(std::vector<std::optional<xla::ifrt::Shape>> input_shapes,
+                   int64_t num_output_rows)
+      : input_shapes_(std::move(input_shapes)),
+        num_output_rows_(num_output_rows) {}
+
+  std::string Name() const override { return "UpperBoundKernel"; }
+
+  absl::Status Run(ExecuteContext& context) override {
+    for (const Value& input : context.inputs) {
+      captured_inputs.push_back(input.Get<HostBuffer>());
+    }
+    const HostBuffer& input_0 = context.inputs[0].Get<HostBuffer>();
+    HostBuffer output(xla::ifrt::DType(xla::ifrt::DType::kS32),
+                      xla::ifrt::Shape({num_output_rows_, 1}),
+                      DefaultAllocator::GetInstance());
+    for (int64_t row = 0; row < num_output_rows_; ++row) {
+      output.flat<int32_t>()(row) = row < input_0.shape().dims()[0]
+                                        ? input_0.unaligned_flat<int32_t>()(row)
+                                        : -1;
+    }
+    context.outputs.push_back(Value(std::move(output)));
+    return absl::OkStatus();
+  }
+
+  int GetNumInputs() const override { return input_shapes_.size(); }
+  int GetNumOutputs() const override { return 1; }
+  IODataTypes GetIODataTypes() const override {
+    return {.input = KernelIODataType::kHostBuffer,
+            .output = KernelIODataType::kHostBuffer};
+  }
+  absl::Span<const std::optional<xla::ifrt::Shape>> upper_bound_input_shapes()
+      const override {
+    return input_shapes_;
+  }
+
+  std::vector<HostBuffer> captured_inputs;
+
+ private:
+  const std::vector<std::optional<xla::ifrt::Shape>> input_shapes_;
+  const int64_t num_output_rows_;
+};
+
+// Tests of a batched kernel that takes some of its inputs with fewer rows than
+// the batch size (`UpperBoundInputProvider`).
+class BatchRunnerOpUpperBoundInputTest : public BatchRunnerOpWarmupTest {
+ protected:
+  // Returns options with `batch_size` as the only allowed batch size.
+  static BatchRunnerOpOptions Options(int batch_size) {
+    BatchRunnerOpOptions options;
+    options.allowed_batch_sizes = {batch_size};
+    options.max_batch_size = batch_size;
+    options.batch_timeout_micros = 100000;
+    options.num_batch_threads = 1;
+    options.max_enqueued_batches = 10;
+    return options;
+  }
+
+  // Creates a `BatchRunnerOp` of one `UpperBoundKernel`.
+  absl::StatusOr<std::unique_ptr<Kernel>> CreateRunner(
+      std::unique_ptr<UpperBoundKernel> kernel,
+      const BatchRunnerOpOptions& options) {
+    std::vector<std::unique_ptr<Kernel>> batched_graph;
+    batched_graph.push_back(std::move(kernel));
+    return CreateBatchRunnerOp(std::move(batched_graph), options,
+                               batch_thread_pool_.get());
+  }
+};
+
+TEST_F(BatchRunnerOpUpperBoundInputTest, UpperBoundInputIsNotPadded) {
+  // The kernel is compiled for four rows and takes input 0 with fewer.
+  auto kernel = std::make_unique<UpperBoundKernel>(
+      std::vector<std::optional<xla::ifrt::Shape>>{xla::ifrt::Shape({4, 1}),
+                                                   std::nullopt},
+      /*num_output_rows=*/4);
+  UpperBoundKernel* kernel_ptr = kernel.get();
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Kernel> runner,
+                          CreateRunner(std::move(kernel), Options(4)));
+
+  std::vector<Value> inputs = {
+      Value(AsHostBuffer<int32_t>({1, 2}, xla::ifrt::Shape({2, 1}))),
+      Value(AsHostBuffer<int32_t>({3, 4}, xla::ifrt::Shape({2, 1})))};
+  Kernel::ExecuteContext context;
+  context.inputs = absl::MakeSpan(inputs);
+  context.metadata = {.model_name = kModelName, .model_version = kModelVersion};
+  TF_ASSERT_OK(runner->Run(context));
+
+  // Input 0 is passed on with its two rows. Input 1 is padded to four rows
+  // with copies of its first row.
+  EXPECT_THAT(kernel_ptr->captured_inputs,
+              ElementsAre(HostBufferEq(AsHostBuffer<int32_t>(
+                              {1, 2}, xla::ifrt::Shape({2, 1}))),
+                          HostBufferEq(AsHostBuffer<int32_t>(
+                              {3, 4, 3, 3}, xla::ifrt::Shape({4, 1})))));
+  // The kernel returns four rows. The request gets its two.
+  EXPECT_THAT(context.outputs,
+              ElementsAre(ValueOfType<HostBuffer>(HostBufferEq(
+                  AsHostBuffer<int32_t>({1, 2}, xla::ifrt::Shape({2, 1}))))));
+  EXPECT_EQ(executed_batch_size_reader_->Delta(
+                kModelName, absl::StrCat(kModelVersion), "4"),
+            1);
+}
+
+TEST_F(BatchRunnerOpUpperBoundInputTest, RequiresBoundAsOnlyAllowedBatchSize) {
+  const auto create = [this](const BatchRunnerOpOptions& options) {
+    return CreateRunner(std::make_unique<UpperBoundKernel>(
+                            std::vector<std::optional<xla::ifrt::Shape>>{
+                                xla::ifrt::Shape({4, 1}), std::nullopt},
+                            /*num_output_rows=*/4),
+                        options)
+        .status();
+  };
+  TF_EXPECT_OK(create(Options(4)));
+
+  // The kernel returns four rows for a batch padded to two, which cannot be
+  // split.
+  BatchRunnerOpOptions options = Options(4);
+  options.allowed_batch_sizes = {2, 4};
+  EXPECT_THAT(create(options),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("as the only allowed batch size")));
+
+  EXPECT_THAT(create(Options(8)),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("as the only allowed batch size")));
+
+  options = Options(4);
+  options.allowed_batch_sizes = {};
+  EXPECT_THAT(create(options),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("as the only allowed batch size")));
+
+  options = Options(4);
+  options.disable_padding = true;
+  EXPECT_THAT(create(options), StatusIs(absl::StatusCode::kInvalidArgument,
+                                        HasSubstr("disable_padding=true")));
+
+  // Low priority batches are padded to their own allowed batch sizes.
+  options = Options(4);
+  options.low_priority_max_batch_size = 4;
+  EXPECT_THAT(create(options),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("low_priority_allowed_batch_sizes=[]")));
+  options.low_priority_allowed_batch_sizes = {4};
+  TF_EXPECT_OK(create(options));
+}
+
+TEST_F(BatchRunnerOpUpperBoundInputTest, RequiresSameBoundForAllInputs) {
+  EXPECT_THAT(
+      CreateRunner(std::make_unique<UpperBoundKernel>(
+                       std::vector<std::optional<xla::ifrt::Shape>>{
+                           xla::ifrt::Shape({4, 1}), xla::ifrt::Shape({8, 1})},
+                       /*num_output_rows=*/4),
+                   Options(4)),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("must have the same one")));
 }
 
 }  // namespace

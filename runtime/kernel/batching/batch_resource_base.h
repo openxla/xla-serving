@@ -196,16 +196,23 @@ class BatchResourceBase : public ResourceBase {
   using BatcherQueueT = BatchScheduler<BatchResourceBase::BatchTask>;
   using BatchT = Batch<BatchResourceBase::BatchTask>;
 
+  // `upper_bound_inputs` is either empty or has one entry per input. An input
+  // whose entry is true is passed to `ProcessFuncBatchImpl()` with only the
+  // rows of the tasks in the batch, without padding. The batch function must
+  // take that input with fewer rows than the batch size, and still return as
+  // many rows as the batch size.
   BatchResourceBase(std::shared_ptr<BatcherT> batcher,
                     const QueueOptions& batcher_queue_options,
                     std::vector<int32_t> allowed_batch_sizes,
                     tsl::thread::ThreadPool* thread_pool,
-                    std::vector<RaggedInputSpec> ragged_inputs = {})
+                    std::vector<RaggedInputSpec> ragged_inputs = {},
+                    std::vector<bool> upper_bound_inputs = {})
       : batcher_(std::move(batcher)),
         batcher_queue_options_(batcher_queue_options),
         allowed_batch_sizes_(std::move(allowed_batch_sizes)),
         allowed_batch_sizes_str_(absl::StrJoin(allowed_batch_sizes_, ",")),
         ragged_inputs_(std::move(ragged_inputs)),
+        upper_bound_inputs_(std::move(upper_bound_inputs)),
         thread_pool_(thread_pool) {}
 
   using CreateBatchTaskFn =
@@ -344,7 +351,9 @@ class BatchResourceBase : public ResourceBase {
 
   // Concatenates the input buffers of the tasks from the batch and the
   // unbatched task vector. When padding is enabled in the batcher queue, they
-  // are padded with garbage value up to the nearest allowed batch size.
+  // are padded with garbage value up to the nearest allowed batch size. An
+  // input in `upper_bound_inputs_` is not padded, except in a warmup batch,
+  // which has no rows of its own.
   absl::Status ConcatInputBuffers(
       const BatchT& batch,
       absl::Span<const std::unique_ptr<BatchTask>> unbatched_tasks,
@@ -398,6 +407,10 @@ class BatchResourceBase : public ResourceBase {
   std::string allowed_batch_sizes_str_;
 
   std::vector<RaggedInputSpec> ragged_inputs_;
+
+  // Either empty or one entry per input: whether dimension 0 of the input is
+  // an upper bound for the batch function, so that the input is not padded.
+  std::vector<bool> upper_bound_inputs_;
 
   tsl::thread::ThreadPool* thread_pool_;
 };

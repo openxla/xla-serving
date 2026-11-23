@@ -896,6 +896,163 @@ TEST_F(BatchResourceBaseTest, BatchFunctionCancelledBeforeStart) {
   EXPECT_TRUE(future.Await().ok());
 }
 
+// Tests of inputs whose dimension 0 is an upper bound for the batch function
+// (`upper_bound_inputs`). The function takes them with fewer rows than the
+// batch size, so they are not padded.
+class UpperBoundBatchResourceBaseTest : public BatchResourceBaseTest {
+ protected:
+  static constexpr int32_t kBatchSize = 8;
+
+  // Creates `batch_resource_`. `kBatchSize` is its only allowed batch size. It
+  // has two inputs, of which input 0 has an upper bound.
+  void CreateResource(int64_t batch_timeout_micros) {
+    std::shared_ptr<SharedBatchScheduler<BatchResourceBase::BatchTask>> batcher;
+    TF_ASSERT_OK(SharedBatchScheduler<BatchResourceBase::BatchTask>::Create(
+        GetDefaultBatcherOptions(), &batcher));
+    BatchResourceBase::BatcherT::QueueOptions queue_options =
+        TestBatchResourceBase::GetBatcherQueueOptions(
+            /*num_batch_threads=*/4, /*max_batch_size=*/kBatchSize,
+            batch_timeout_micros, /*max_enqueued_batches=*/10,
+            /*allowed_batch_sizes=*/{kBatchSize},
+            /*enable_large_batch_splitting=*/false,
+            /*disable_padding=*/false, /*pad_variable_length_inputs=*/false,
+            kPadUpPolicy,
+            /*low_priority_max_batch_size=*/0,
+            /*low_priority_batch_timeout_micros=*/0,
+            /*low_priority_max_enqueued_batches=*/0,
+            /*low_priority_allowed_batch_sizes=*/{},
+            MixedPriorityBatchingPolicy::kLowPriorityPaddingWithMaxBatchSize,
+            PriorityBatchingPolicy::kStrictFifo,
+            /*priority_aware_batching_options=*/{}, thread_pool_.get(),
+            allocator_);
+    batch_resource_.reset(new TestUpperBoundBatchResourceBase(
+        batcher, queue_options, kBatchSize, thread_pool_.get(),
+        /*upper_bound_inputs=*/{true, false}));
+  }
+
+  // Registers the inputs of `context` with `batch_resource_`. The returned
+  // future is ready once its batch is processed.
+  tsl::Future<> RegisterInput(int64_t guid, Kernel::ExecuteContext& context,
+                              int forced_warmup_batch_size = 0) {
+    auto create_batch_task_fn = []() {
+      return std::make_unique<BatchResourceBase::BatchTask>();
+    };
+    auto [promise, future] = tsl::MakePromise<>();
+    auto done_callback = [promise =
+                              std::move(promise)](absl::Status status) mutable {
+      promise.Set(status);
+    };
+    absl::Status status = batch_resource_->RegisterInput(
+        guid, &context, /*num_outputs=*/1, "batch_queue", create_batch_task_fn,
+        std::move(done_callback), forced_warmup_batch_size);
+    if (!status.ok()) {
+      return tsl::Future<>(status);
+    }
+    return std::move(future);
+  }
+
+  tsl::core::RefCountPtr<TestUpperBoundBatchResourceBase> batch_resource_;
+};
+
+TEST_F(UpperBoundBatchResourceBaseTest, UpperBoundInputIsNotPadded) {
+  // The batch closes at the timeout, with the rows of both requests.
+  ASSERT_NO_FATAL_FAILURE(
+      CreateResource(absl::ToInt64Microseconds(absl::Seconds(1))));
+
+  // Request 0 has one row and request 1 has two.
+  std::vector<std::vector<Value>> inputs = {
+      {Value(AsHostBuffer<int32_t>({10}, xla::ifrt::Shape({1, 1}))),
+       Value(AsHostBuffer<int32_t>({100}, xla::ifrt::Shape({1, 1})))},
+      {Value(AsHostBuffer<int32_t>({20, 30}, xla::ifrt::Shape({2, 1}))),
+       Value(AsHostBuffer<int32_t>({200, 300}, xla::ifrt::Shape({2, 1})))}};
+  std::vector<Kernel::ExecuteContext> contexts(inputs.size());
+  std::vector<tsl::Future<>> futures(inputs.size());
+  for (int i = 0; i < inputs.size(); ++i) {
+    contexts[i].inputs = inputs[i];
+    contexts[i].metadata = {.model_name = kModelName,
+                            .model_version = kModelVersion};
+    futures[i] = RegisterInput(/*guid=*/i, contexts[i]);
+  }
+  for (tsl::Future<>& future : futures) {
+    TF_ASSERT_OK(future.Await());
+  }
+
+  // Input 0 has the three rows of the requests. Input 1 is padded to the
+  // batch size.
+  EXPECT_THAT(batch_resource_->input_rows(),
+              ::testing::ElementsAre(::testing::ElementsAre(3, kBatchSize)));
+
+  // The function returns a full batch, which is split as usual.
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<HostBuffer> outputs_0,
+      internal::UnpackFromValues<HostBuffer>(std::move(contexts[0].outputs)));
+  EXPECT_THAT(outputs_0,
+              ::testing::ElementsAre(HostBufferEq(
+                  AsHostBuffer<int32_t>({11}, xla::ifrt::Shape({1, 1})))));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<HostBuffer> outputs_1,
+      internal::UnpackFromValues<HostBuffer>(std::move(contexts[1].outputs)));
+  EXPECT_THAT(outputs_1,
+              ::testing::ElementsAre(HostBufferEq(
+                  AsHostBuffer<int32_t>({21, 31}, xla::ifrt::Shape({2, 1})))));
+
+  // The batch still counts as one of `kBatchSize` rows with five of padding.
+  EXPECT_EQ(executed_batch_size_reader_->Delta(
+                kModelName, absl::StrCat(kModelVersion), "8"),
+            1);
+  Histogram padding_sizes_histogram = padding_sizes_reader_->Delta(
+      kModelName, absl::StrCat(kModelVersion), "8");
+  EXPECT_EQ(padding_sizes_histogram.sum(), 5);
+}
+
+TEST_F(UpperBoundBatchResourceBaseTest, FullBatchOfUpperBoundInput) {
+  ASSERT_NO_FATAL_FAILURE(
+      CreateResource(absl::ToInt64Microseconds(absl::Seconds(30))));
+
+  // The request fills the batch, which closes without waiting for the timeout.
+  std::vector<int32_t> values(kBatchSize);
+  std::iota(values.begin(), values.end(), 0);
+  std::vector<Value> inputs = {
+      Value(AsHostBuffer<int32_t>(values, xla::ifrt::Shape({kBatchSize, 1}))),
+      Value(AsHostBuffer<int32_t>(values, xla::ifrt::Shape({kBatchSize, 1})))};
+  Kernel::ExecuteContext context;
+  context.inputs = inputs;
+  context.metadata = {.model_name = kModelName, .model_version = kModelVersion};
+  TF_ASSERT_OK(RegisterInput(/*guid=*/0, context).Await());
+
+  EXPECT_THAT(
+      batch_resource_->input_rows(),
+      ::testing::ElementsAre(::testing::ElementsAre(kBatchSize, kBatchSize)));
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<HostBuffer> outputs,
+      internal::UnpackFromValues<HostBuffer>(std::move(context.outputs)));
+  std::iota(values.begin(), values.end(), 1);
+  EXPECT_THAT(outputs,
+              ::testing::ElementsAre(HostBufferEq(AsHostBuffer<int32_t>(
+                  values, xla::ifrt::Shape({kBatchSize, 1})))));
+}
+
+TEST_F(UpperBoundBatchResourceBaseTest, WarmupBatchIsStillPadded) {
+  ASSERT_NO_FATAL_FAILURE(CreateResource(/*batch_timeout_micros=*/0));
+
+  std::vector<Value> inputs = {
+      Value(AsHostBuffer<int32_t>({10, 20}, xla::ifrt::Shape({2, 1}))),
+      Value(AsHostBuffer<int32_t>({100, 200}, xla::ifrt::Shape({2, 1})))};
+  Kernel::ExecuteContext context;
+  context.inputs = inputs;
+  context.metadata = {.model_name = kModelName, .model_version = kModelVersion};
+  TF_ASSERT_OK(RegisterInput(/*guid=*/0, context,
+                             /*forced_warmup_batch_size=*/kBatchSize)
+                   .Await());
+
+  // A warmup batch has no rows of its own. Every input, with an upper bound or
+  // not, is `kBatchSize` copies of the first row of the request.
+  EXPECT_THAT(
+      batch_resource_->input_rows(),
+      ::testing::ElementsAre(::testing::ElementsAre(kBatchSize, kBatchSize)));
+  EXPECT_TRUE(context.outputs.empty());
+}
+
 class RaggedBatchResourceBaseTest : public BatchResourceBaseTest {
  protected:
   void SetUp() override {
