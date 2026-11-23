@@ -16,14 +16,17 @@
 #define XLA_SERVING_RUNTIME_CORE_H2D_TRANSFER_EXECUTOR_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "runtime/core/host_buffer.h"  // from @xla_serving
+#include "xla/pjrt/pjrt_layout.h"  // from @xla
 #include "xla/python/ifrt/array.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device_list.h"  // from @xla
+#include "xla/python/ifrt/shape.h"  // from @xla
 #include "xla/python/ifrt/sharding.h"  // from @xla
 #include "xla/tsl/platform/threadpool.h"  // from @xla
 
@@ -39,6 +42,15 @@ namespace xla_serving {
 // inference serving thread pool.
 class H2DTransferExecutor {
  public:
+  // The shape and layout that the executable expects of an input that is
+  // passed with fewer rows.
+  struct StaticShape {
+    xla::ifrt::Shape shape;
+    // Layout of the executable parameter that the input is passed for. Null
+    // means the layout that the device uses for `shape` by default.
+    std::shared_ptr<const xla::PjRtLayout> layout;
+  };
+
   virtual ~H2DTransferExecutor() = default;
 
   // Converts the given `inputs` (HostBuffers) to XLA IFRT Arrays.
@@ -47,9 +59,19 @@ class H2DTransferExecutor {
   //
   // `inputs`: The user-provided HostBuffers to transfer.
   // `input_shardings`: The exact IFRT Shardings required for these arrays.
+  // `static_shapes`: Either empty, or one entry per input. A set entry means
+  //   the host buffer has fewer rows than the executable expects, and gives
+  //   the shape and layout the executable expects. The host buffer has the
+  //   same rank, is no larger along dimension 0, and is equal along every
+  //   other dimension. Its sharding is single-device. The returned array must
+  //   have the static shape in that layout, with the host data as its
+  //   dimension-0 prefix. The rest of the device buffer may be left
+  //   uninitialized. An implementation that cannot do this must return an
+  //   error instead of transferring the buffer with its own shape.
   virtual absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ExecuteTransfer(
       absl::Span<const HostBuffer> inputs,
-      absl::Span<const xla::ifrt::ShardingRef> input_shardings) const = 0;
+      absl::Span<const xla::ifrt::ShardingRef> input_shardings,
+      absl::Span<const std::optional<StaticShape>> static_shapes) const = 0;
 };
 
 // Factory interface for creating an `H2DTransferExecutor`.

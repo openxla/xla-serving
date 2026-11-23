@@ -59,6 +59,7 @@
 #include "runtime/libs/ifrt/serving_core_selector/serving_core_selector.h"  // from @xla_serving
 #include "runtime/libs/mlir/dump_mlir_util.h"  // from @xla_serving
 #include "google/protobuf/message.h"
+#include "xla/pjrt/pjrt_layout.h"  // from @xla
 #include "xla/pjrt/proto/compile_options.pb.h"  // from @xla
 #include "xla/python/ifrt/client.h"  // from @xla
 #include "xla/python/ifrt/device.h"  // from @xla
@@ -123,10 +124,27 @@ void AnnotateConstantWeights(mlir::ModuleOp module, int input_offset) {
   }
 }
 
+// Returns the layouts that `executable` declares for its `num_parameters`
+// parameters.
+absl::StatusOr<std::vector<std::shared_ptr<const xla::PjRtLayout>>>
+GetParameterLayouts(const xla::ifrt::LoadedExecutable& executable,
+                    int num_parameters) {
+  TF_ASSIGN_OR_RETURN(
+      std::vector<std::shared_ptr<const xla::PjRtLayout>> layouts,
+      executable.GetParameterLayouts());
+  if (layouts.size() != num_parameters) {
+    return absl::InternalError(absl::StrCat(
+        "Executable reports ", layouts.size(), " parameter layouts but has ",
+        num_parameters, " parameters."));
+  }
+  return layouts;
+}
+
 }  // namespace
 
 StableHloRunner::StableHloRunner(
     absl_nonnull std::unique_ptr<LoadedStableHlo> loaded_stablehlo,
+    std::vector<std::optional<xla::ifrt::Shape>> user_input_static_shapes,
     std::optional<xla::CompileOptionsProto> compile_options,
     absl_nonnull std::shared_ptr<xla::ifrt::Client> client,
     IfrtLoadedVariableRegistry* absl_nonnull ifrt_loaded_variable_registry,
@@ -146,6 +164,7 @@ StableHloRunner::StableHloRunner(
               .num_user_inputs = loaded_stablehlo->num_user_inputs(),
               .num_outputs = loaded_stablehlo->num_outputs(),
               .has_streaming = loaded_stablehlo->has_streaming(),
+              .user_input_static_shapes = std::move(user_input_static_shapes),
           },
           client, ifrt_loaded_variable_registry, std::move(weights),
           std::move(assigned_device_list), std::move(assigned_devices),
@@ -202,6 +221,10 @@ absl::StatusOr<std::unique_ptr<StableHloRunner>> StableHloRunner::Create(
       std::unique_ptr<LoadedStableHlo> loaded_stablehlo,
       LoadedStableHlo::Create(stablehlo, num_weights, client->platform_name(),
                               compile_options));
+  TF_ASSIGN_OR_RETURN(
+      std::vector<std::optional<xla::ifrt::Shape>> user_input_static_shapes,
+      ModelIoMetadata::GetUserInputStaticShapes(
+          *stablehlo, num_weights, loaded_stablehlo->num_user_inputs()));
 
   if (loaded_stablehlo->has_streaming() && !callback_id.has_value()) {
     return absl::InvalidArgumentError(
@@ -218,11 +241,12 @@ absl::StatusOr<std::unique_ptr<StableHloRunner>> StableHloRunner::Create(
                       client->MakeDeviceList(assigned_ifrt_devices));
 
   auto runner = absl::WrapUnique(new StableHloRunner(
-      std::move(loaded_stablehlo), std::move(compile_options), client,
-      ifrt_loaded_variable_registry, std::move(weights), assigned_device_list,
-      compilation_environment_proto, persistent_compilation_cache, optimizer,
-      assigned_devices, serving_core_selector,
-      std::move(h2d_transfer_executor_factory), callback_id));
+      std::move(loaded_stablehlo), std::move(user_input_static_shapes),
+      std::move(compile_options), client, ifrt_loaded_variable_registry,
+      std::move(weights), assigned_device_list, compilation_environment_proto,
+      persistent_compilation_cache, optimizer, assigned_devices,
+      serving_core_selector, std::move(h2d_transfer_executor_factory),
+      callback_id));
   TF_RETURN_IF_ERROR(runner->Init(thread_pool));
   return runner;
 }
@@ -373,6 +397,19 @@ StableHloRunner::CreateExecutableSynchronously(
   executable_bundle->program_fingerprint_with_timestamp =
       GetProgramFingerprintWithTimestamp(executable_bundle->ifrt_executable,
                                          absl::Now());
+  if (!model_io_metadata_.user_input_static_shapes.empty()) {
+    // An input with fewer rows than its static shape is transferred in the
+    // layout of its executable parameter. Without the layouts such an input is
+    // rejected. An input with its static shape is not affected.
+    executable_bundle->parameter_layouts = GetParameterLayouts(
+        *executable_bundle->ifrt_executable, io_spec.inputs.size());
+    if (!executable_bundle->parameter_layouts.ok()) {
+      LOG(WARNING) << "Failed to read the parameter layouts of the "
+                      "executable. Inputs with fewer rows than their static "
+                      "shape will be rejected: "
+                   << executable_bundle->parameter_layouts.status();
+    }
+  }
 
   executable_bundle->callback_id = callback_id;
 
