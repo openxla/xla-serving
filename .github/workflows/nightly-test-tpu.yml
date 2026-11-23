@@ -193,7 +193,6 @@ jobs:
             ${PLATFORM_FLAG} \
             --model_name=nnx \
             --model_path=/tmp/exported_model \
-            --use_insecure_grpc_credentials=true \
             --port=8500 > /tmp/xla-serving.log 2>&1 &
           SERVER_PID=$!
           echo "SERVER_PID=${SERVER_PID}" >> $GITHUB_ENV

@@ -716,7 +716,6 @@ start_xse() {
     --model_name="${MODEL_NAME}"
     --orbax_grpc_server_platform="${PLATFORM}"
     --port="${PORT}"
-    --use_insecure_grpc_credentials=true
     --warmup_server=true
     --thread_pool_num_threads="${NUM_THREADS}"
   )

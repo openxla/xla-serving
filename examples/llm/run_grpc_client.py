@@ -41,6 +41,26 @@ _PROMPT = flags.DEFINE_string(
     "The future of artificial intelligence in scientific discovery is",
     "Prompt text to generate completions for.",
 )
+_USE_ALTS_CREDENTIALS = flags.DEFINE_bool(
+    "use_alts_credentials",
+    False,
+    "Use ALTS credentials for Google Cloud endpoints.",
+)
+
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]", ""})
+
+
+def _make_channel(
+    server_address: str, use_alts_credentials: bool = False
+) -> grpc.Channel:
+  if use_alts_credentials:
+    return grpc.secure_channel(server_address, grpc.alts_channel_credentials())
+  if (
+      server_address in _LOOPBACK_HOSTS
+      or server_address.rsplit(":", 1)[0] in _LOOPBACK_HOSTS
+  ):
+    return grpc.secure_channel(server_address, grpc.local_channel_credentials())
+  return grpc.insecure_channel(server_address)
 
 
 def query_server(
@@ -48,9 +68,12 @@ def query_server(
     model_name: str,
     signature_name: str,
     prompt: str,
+    use_alts_credentials: bool = False,
 ) -> list[str]:
   """Sends a single prompt to the server and returns all generated beams."""
-  channel = grpc.insecure_channel(server_address)
+  channel = _make_channel(
+      server_address, use_alts_credentials=use_alts_credentials
+  )
   predict_fn = channel.unary_unary(
       f"/{predict_pb2.DESCRIPTOR.package}.PredictionService/Predict",
       request_serializer=predict_pb2.PredictRequest.SerializeToString,
@@ -91,6 +114,7 @@ def main(argv: Sequence[str]) -> None:
       model_name=_MODEL_NAME.value,
       signature_name=_SIGNATURE_NAME.value,
       prompt=_PROMPT.value,
+      use_alts_credentials=_USE_ALTS_CREDENTIALS.value,
   )
 
   print("\n" + "=" * 50)

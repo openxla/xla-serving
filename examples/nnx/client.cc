@@ -41,14 +41,18 @@
 #include "xla/python/ifrt/dtype.pb.h"  // from @xla
 #include "xla/python/ifrt/shape.pb.h"  // from @xla
 #include "xla/tsl/platform/statusor.h"  // from @xla
+#include "tsl/platform/init_main.h"  // from @tsl
 
 ABSL_FLAG(std::string, server_address, "", "Server IP address and port.");
 ABSL_FLAG(std::string, model_name, "", "Name of the model to query.");
 
 ABSL_FLAG(std::string, server_cert_chain_path, "",
-          "Path to the server's certificate chain file for SSL/TLS. For a "
-          "client, this is the server's certificate chain for verification. If "
-          "not provided, the client will fall back on default trust stores.");
+          "Path to the server's PEM-encoded certificate chain file for "
+          "SSL/TLS. When unset (and neither --use_alts_credentials nor "
+          "--use_insecure_grpc_credentials is set), LocalCredentials are used "
+          "for loopback connections.");
+ABSL_FLAG(bool, use_alts_credentials, false,
+          "Whether to use ALTS credentials for Google Cloud endpoints.");
 ABSL_FLAG(bool, use_insecure_grpc_credentials, false,
           "Whether to use insecure credentials for the server. WARNING: THIS "
           "SHOULD NOT BE USED IN PRODUCTION.");
@@ -82,7 +86,8 @@ void LogPredictResponse(const xla_serving::serving::PredictResponse& response) {
 
 absl::StatusOr<xla_serving::serving::PredictResponse> RunPredict(
     const std::string& server_address, absl::string_view model_name,
-    std::string server_cert_chain_path, bool use_insecure_grpc_credentials) {
+    std::string server_cert_chain_path, bool use_insecure_grpc_credentials,
+    bool use_alts_credentials) {
   xla_serving::serving::PredictRequest request;
   request.mutable_model_spec()->set_name(model_name);
 
@@ -101,10 +106,10 @@ absl::StatusOr<xla_serving::serving::PredictResponse> RunPredict(
     (*inputs)[feature_name] = std::move(buffer_proto);
   }
   LOG(INFO) << "Successfully constructed PredictRequest with synthetic data.";
-  TF_ASSIGN_OR_RETURN(
-      std::shared_ptr<grpc::ChannelCredentials> creds,
-      xla_serving::serving::CreateChannelCredentials(server_cert_chain_path,
-                                             use_insecure_grpc_credentials));
+  TF_ASSIGN_OR_RETURN(std::shared_ptr<grpc::ChannelCredentials> creds,
+                      xla_serving::serving::CreateChannelCredentials(
+                          server_cert_chain_path, use_insecure_grpc_credentials,
+                          use_alts_credentials));
   std::shared_ptr<grpc::Channel> channel =
       grpc::CreateChannel(server_address, creds);
 
@@ -125,11 +130,13 @@ absl::StatusOr<xla_serving::serving::PredictResponse> RunPredict(
 
 int main(int argc, char* argv[]) {
   absl::ParseCommandLine(argc, argv);
+  tsl::port::InitMain(argv[0], &argc, &argv);
   std::string server_address = absl::GetFlag(FLAGS_server_address);
   std::string model_name = absl::GetFlag(FLAGS_model_name);
 
   std::string server_cert_chain_path =
       absl::GetFlag(FLAGS_server_cert_chain_path);
+  bool use_alts_credentials = absl::GetFlag(FLAGS_use_alts_credentials);
   bool use_insecure_grpc_credentials =
       absl::GetFlag(FLAGS_use_insecure_grpc_credentials);
 
@@ -144,7 +151,7 @@ int main(int argc, char* argv[]) {
 
   auto predict_response =
       RunPredict(server_address, model_name, server_cert_chain_path,
-                 use_insecure_grpc_credentials);
+                 use_insecure_grpc_credentials, use_alts_credentials);
   if (!predict_response.ok()) {
     LOG(ERROR) << "Failed to run predict: " << predict_response.status();
     return 1;

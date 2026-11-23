@@ -417,6 +417,7 @@ XLA_SERVING_MAIN_TEST_COMMON_DEPS = [
     "@xla_serving//protos/grpc:prediction_service_cc_grpc_proto",
     "@xla_serving//runtime/core:host_buffer",
     "@xla_serving//runtime/core:host_buffer_matcher",
+    "@xla_serving//runtime/serving/gcp/auth:utils",
     "@com_google_protobuf//:protobuf",
     "@xla//xla/python/ifrt",
     "@xla//xla/tsl/platform:env",
