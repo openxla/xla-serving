@@ -249,6 +249,84 @@ class UtilsTest(parameterized.TestCase):
       )
       print(shlo_tensor_specs)
 
+  def test_apply_upper_bound_dims_copies_annotation(self):
+    user_signature = {
+        'bounded': shlo_type.ShloTensorSpec(
+            shape=(8, 4), dtype=shlo_type.ShloDType.f32, upper_bound_dims=(0,)
+        ),
+        'plain': shlo_type.ShloTensorSpec(
+            shape=(2,), dtype=shlo_type.ShloDType.i32
+        ),
+        # Non-ShloTensorSpec leaves (e.g. jax.ShapeDtypeStruct) are ignored.
+        'jax': jax.ShapeDtypeStruct((3,), jnp.float32),
+    }
+    converted_signature = {
+        'bounded': shlo_type.ShloTensorSpec(
+            shape=(8, 4), dtype=shlo_type.ShloDType.f32, name='bounded'
+        ),
+        'plain': shlo_type.ShloTensorSpec(
+            shape=(2,), dtype=shlo_type.ShloDType.i32, name='plain'
+        ),
+        'jax': shlo_type.ShloTensorSpec(
+            shape=(3,), dtype=shlo_type.ShloDType.f32, name='jax'
+        ),
+    }
+
+    result = utils.apply_upper_bound_dims(user_signature, converted_signature)
+
+    self.assertEqual(result['bounded'].upper_bound_dims, (0,))
+    # Other attributes of the converted spec are preserved.
+    self.assertEqual(result['bounded'].name, 'bounded')
+    self.assertIsNone(result['plain'].upper_bound_dims)
+    self.assertIsNone(result['jax'].upper_bound_dims)
+    # The converted signature is left untouched.
+    self.assertIsNone(converted_signature['bounded'].upper_bound_dims)
+
+  def test_apply_upper_bound_dims_is_identity_without_annotation(self):
+    user_signature = {
+        'x': shlo_type.ShloTensorSpec(
+            shape=(8, 4), dtype=shlo_type.ShloDType.f32
+        )
+    }
+    converted_signature = {
+        'x': shlo_type.ShloTensorSpec(
+            shape=(8, 4), dtype=shlo_type.ShloDType.f32
+        )
+    }
+    self.assertIs(
+        utils.apply_upper_bound_dims(user_signature, converted_signature),
+        converted_signature,
+    )
+
+  def test_apply_upper_bound_dims_rejects_polymorphic_bound(self):
+    user_signature = {
+        'x': shlo_type.ShloTensorSpec(
+            shape=(8, 4), dtype=shlo_type.ShloDType.f32, upper_bound_dims=(0,)
+        )
+    }
+    # The exporter made the bounded dimension polymorphic.
+    converted_signature = {
+        'x': shlo_type.ShloTensorSpec(
+            shape=(None, 4), dtype=shlo_type.ShloDType.f32
+        )
+    }
+    with self.assertRaisesRegex(ValueError, 'cannot be made polymorphic'):
+      utils.apply_upper_bound_dims(user_signature, converted_signature)
+
+  def test_apply_upper_bound_dims_rejects_structure_mismatch(self):
+    user_signature = {
+        'x': shlo_type.ShloTensorSpec(
+            shape=(8, 4), dtype=shlo_type.ShloDType.f32, upper_bound_dims=(0,)
+        )
+    }
+    converted_signature = {
+        'y': shlo_type.ShloTensorSpec(
+            shape=(8, 4), dtype=shlo_type.ShloDType.f32
+        )
+    }
+    with self.assertRaisesRegex(ValueError, 'different structures'):
+      utils.apply_upper_bound_dims(user_signature, converted_signature)
+
   def test_sharding_to_placement(self):
     self.assertEqual(
         utils.sharding_to_placement(None),

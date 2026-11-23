@@ -448,9 +448,25 @@ BatchedH2DTransferExecutor::BatchedH2DTransferExecutor(
 absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
 BatchedH2DTransferExecutor::ExecuteTransfer(
     absl::Span<const HostBuffer> inputs,
-    absl::Span<const xla::ifrt::ShardingRef> input_shardings) const {
+    absl::Span<const xla::ifrt::ShardingRef> input_shardings,
+    absl::Span<const std::optional<StaticShape>> static_shapes) const {
   if (inputs.size() != input_shardings.size()) {
     return absl::InvalidArgumentError("inputs and shardings size mismatch");
+  }
+  if (!static_shapes.empty()) {
+    if (static_shapes.size() != inputs.size()) {
+      return absl::InvalidArgumentError(
+          "inputs and static_shapes size mismatch");
+    }
+    for (int i = 0; i < static_shapes.size(); ++i) {
+      if (static_shapes[i].has_value()) {
+        return absl::UnimplementedError(absl::StrCat(
+            "BatchedH2DTransferExecutor cannot transfer an input that is "
+            "smaller than its static shape yet: input #",
+            i, " has shape ", inputs[i].shape(), " and static shape ",
+            static_shapes[i]->shape));
+      }
+    }
   }
 
   absl::flat_hash_map<xla::ifrt::Device*, DeviceBatchData> batches_by_device;
