@@ -69,9 +69,26 @@ struct ModelIoMetadata {
   int64_t num_user_inputs = 0;
   int64_t num_outputs = 0;
   bool has_streaming = false;
+  // Compiled shapes of the user inputs whose leading dimension is an upper
+  // bound (`ArgSpec::leading_dim_is_upper_bound`). Either empty, or one entry
+  // per user input, where `std::nullopt` means the input is not bounded.
+  //
+  // `StableHloRunnerBase::Execute()` runs a bounded input on the executable
+  // compiled for this shape, and accepts a `HostBuffer` with fewer rows than
+  // it. Only the rows that are present are then transferred to the device
+  // (dynamic DMA).
+  std::vector<std::optional<xla::ifrt::Shape>> user_input_static_shapes;
 
   static absl::StatusOr<ModelIoMetadata> CreateFromStableHlo(
       const StableHlo& stablehlo, int num_weights);
+
+  // Returns `user_input_static_shapes` for `stablehlo`. The user inputs are
+  // the `num_user_inputs` inputs that follow the first `num_weights` inputs of
+  // each spec. A bounded input must have a concrete shape, and the same one in
+  // every spec (shape bucket). Returns an empty vector if no input is bounded.
+  static absl::StatusOr<std::vector<std::optional<xla::ifrt::Shape>>>
+  GetUserInputStaticShapes(const StableHlo& stablehlo, int num_weights,
+                           int num_user_inputs);
 };
 
 struct StableHloRunnerOptions {
@@ -105,6 +122,21 @@ class StableHloRunnerBase {
   int GetNumInputs() const { return model_io_metadata_.num_user_inputs; }
   int GetNumOutputs() const { return model_io_metadata_.num_outputs; }
   bool has_streaming() const { return model_io_metadata_.has_streaming; }
+
+  // Compiled shapes of the user inputs that `Execute()` takes with fewer rows
+  // than compiled (`ModelIoMetadata::user_input_static_shapes`). Empty if there
+  // is no such input, or if this runner cannot transfer one: it has no
+  // `H2DTransferExecutor`, or one that does not support static shapes
+  // (`H2DTransferExecutor::SupportsStaticShapes()`). Otherwise it has one entry
+  // per user input, `std::nullopt` for an input that must have its compiled
+  // shape.
+  absl::Span<const std::optional<xla::ifrt::Shape>> upper_bound_input_shapes()
+      const {
+    if (!H2DTransferSupportsStaticShapes()) {
+      return {};
+    }
+    return model_io_metadata_.user_input_static_shapes;
+  }
 
   std::optional<int64_t> streaming_host_callback_id() const {
     return streaming_host_callback_id_;
@@ -196,6 +228,13 @@ class StableHloRunnerBase {
   // (as passed to `Create`) will be looked in `IfrtLoadedVariableRegistry` from
   // the variable name. These will be passed as the first arguments to the
   // computation. The inputs and outputs are wrapped in `xla_serving::Value` containers.
+  //
+  // A `HostBuffer` passed for an input whose leading dimension is an upper
+  // bound (`ModelIoMetadata::user_input_static_shapes`) may have fewer rows
+  // than the compiled shape. The rows it lacks are left uninitialized on the
+  // device, and the outputs still have the compiled shape. This requires an
+  // `H2DTransferExecutor` that supports static shapes, a single-device
+  // sharding for the input, and no host transpose of the input.
   // Output placement is resolved via the 3-tier precedence hierarchy above:
   // `Placement::kHost` returns a `xla_serving::HostBuffer`, while `Placement::kDevice`
   // returns a `xla_serving::DeviceBuffer` (retained on accelerator device memory).
@@ -260,6 +299,17 @@ class StableHloRunnerBase {
     // `num_input_aliased_output` is 0.
     std::vector<std::shared_ptr<const xla::PjRtLayout>>
         input_aliased_output_arg_layouts;
+
+    // Layouts the executable declares for its parameters, one per entry of
+    // `io_spec.inputs`. An input that is passed with fewer rows than the
+    // executable expects is transferred in the layout of its parameter, which
+    // is not necessarily the default layout for its shape. Only read for a
+    // model that has such an input
+    // (`ModelIoMetadata::user_input_static_shapes`). An error if they were not
+    // read, or if the executable does not report them.
+    absl::StatusOr<std::vector<std::shared_ptr<const xla::PjRtLayout>>>
+        parameter_layouts = absl::FailedPreconditionError(
+            "The parameter layouts of the executable were not read.");
 
     xla::ifrt::LoadedExecutableRef ifrt_executable;
     // The canonical program fingerprint of the `ifrt_executable` and the
@@ -346,10 +396,18 @@ class StableHloRunnerBase {
     // - `inputs` are the inputs from the user excluding weights.
     // - `executable_bundle` is the executable bundle for this execution.
     // - `input_offset` is the offset of the inputs in the StableHloIOSpec.
+    // - `static_shapes` is either empty or one entry per input. A set entry
+    //   is the shape the executable expects for an input that has fewer rows
+    //   than that. The input is transferred with that shape and the layout of
+    //   its executable parameter
+    //   (`CachedExecutableBundle::parameter_layouts`); see
+    //   `H2DTransferExecutor::ExecuteTransfer`.
     absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ConvertInput(
         absl::Span<const HostBuffer> inputs,
         const CachedExecutableBundle& executable_bundle,
-        absl::Span<const int> stablehlo_indices) const;
+        absl::Span<const int> stablehlo_indices,
+        absl::Span<const std::optional<xla::ifrt::Shape>> static_shapes = {})
+        const;
 
     // Converts the outputs from `xla::ifrt::Array` to `xla_serving::Value` according
     // to `placements`. `output_host_buffers` is either empty or one entry per
@@ -363,6 +421,13 @@ class StableHloRunnerBase {
 
     xla::ifrt::DeviceListRef device_list() const { return device_list_; }
 
+    // Returns true if `ConvertInput()` takes inputs with a set `static_shapes`
+    // entry: there is an `H2DTransferExecutor`, and it supports them.
+    bool SupportsStaticShapes() const {
+      return h2d_transfer_executor_ != nullptr &&
+             h2d_transfer_executor_->SupportsStaticShapes();
+    }
+
    private:
     // Validates input data types and shapes against the model specification
     // and resolves the corresponding physical sharding references. Uses the
@@ -370,11 +435,13 @@ class StableHloRunnerBase {
     // references without heap allocation, returning an O(1) pointer subspan
     // when possible.
     absl::StatusOr<absl::Span<const xla::ifrt::ShardingRef>>
-    ValidateAndResolveShardings(absl::Span<const HostBuffer> inputs,
-                                const CachedExecutableBundle& executable_bundle,
-                                absl::Span<const int> stablehlo_indices,
-                                absl::InlinedVector<xla::ifrt::ShardingRef, 16>&
-                                    mixed_shardings_storage) const;
+    ValidateAndResolveShardings(
+        absl::Span<const HostBuffer> inputs,
+        const CachedExecutableBundle& executable_bundle,
+        absl::Span<const int> stablehlo_indices,
+        absl::Span<const std::optional<xla::ifrt::Shape>> static_shapes,
+        absl::InlinedVector<xla::ifrt::ShardingRef, 16>&
+            mixed_shardings_storage) const;
 
     // Performs standard host-to-device transfers for inputs using the default
     // IFRT MakeArrayFromHostBuffer path.
@@ -541,6 +608,10 @@ class StableHloRunnerBase {
   absl::Status CreateResourcesPerDeviceList(
       xla::ifrt::DeviceListRef device_list,
       tsl::thread::ThreadPool* thread_pool);
+  // Returns true if the `DataConverter` of every device list takes inputs with
+  // a static shape (`DataConverter::SupportsStaticShapes()`). False before
+  // `Init()`.
+  bool H2DTransferSupportsStaticShapes() const;
   // Looks up the weights from the registry and returns the IFRT arrays for
   // them. When a weight is set to std::nullopt, it means the weight is unused
   // (i.e. does not needed to be passed to the StableHLO for execution). If

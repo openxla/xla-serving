@@ -239,6 +239,66 @@ class TestRaggedBatchResourceBase : public BatchResourceBase {
   Allocator* allocator_;
 };
 
+// A batch function that is compiled for `batch_size` rows and takes its
+// upper-bound inputs with fewer. Each input is a column of int32. Whatever the
+// number of rows of input 0, the output has `batch_size` rows: input 0 plus
+// one in the rows that input 0 has, and -1 in the others.
+class TestUpperBoundBatchResourceBase : public BatchResourceBase {
+ public:
+  TestUpperBoundBatchResourceBase(
+      std::shared_ptr<SharedBatchScheduler<BatchResourceBase::BatchTask>>
+          batcher,
+      const QueueOptions& batcher_queue_options, int32_t batch_size,
+      tsl::thread::ThreadPool* thread_pool,
+      std::vector<bool> upper_bound_inputs)
+      : BatchResourceBase(std::move(batcher), batcher_queue_options,
+                          {batch_size}, thread_pool, /*ragged_inputs=*/{},
+                          std::move(upper_bound_inputs)),
+        batch_size_(batch_size) {}
+
+  std::string DebugString() const override {
+    return "TestUpperBoundBatchResourceBase";
+  }
+
+  // The number of rows of each input, for each batch processed so far.
+  std::vector<std::vector<int64_t>> input_rows() const {
+    absl::MutexLock l(mu_);
+    return input_rows_;
+  }
+
+ protected:
+  void ProcessFuncBatchImpl(
+      const BatchResourceBase::BatchTask& propagated_task,
+      std::vector<int32_t> batch_request_ids,
+      absl::Span<const HostBuffer> inputs,
+      std::vector<HostBuffer>* combined_outputs,
+      std::function<void(const absl::Status&)> done) const override {
+    std::vector<int64_t> rows;
+    rows.reserve(inputs.size());
+    for (const HostBuffer& input : inputs) {
+      rows.push_back(input.shape().dims()[0]);
+    }
+    {
+      absl::MutexLock l(mu_);
+      input_rows_.push_back(rows);
+    }
+    HostBuffer output(xla::ifrt::DType(xla::ifrt::DType::kS32),
+                      xla::ifrt::Shape({batch_size_, 1}),
+                      DefaultAllocator::GetInstance());
+    for (int64_t row = 0; row < batch_size_; ++row) {
+      output.flat<int32_t>()(row) =
+          row < rows[0] ? inputs[0].unaligned_flat<int32_t>()(row) + 1 : -1;
+    }
+    combined_outputs->push_back(std::move(output));
+    done(absl::OkStatus());
+  }
+
+ private:
+  const int64_t batch_size_;
+  mutable absl::Mutex mu_;
+  mutable std::vector<std::vector<int64_t>> input_rows_ ABSL_GUARDED_BY(mu_);
+};
+
 }  // namespace xla_serving
 
 #endif  // XLA_SERVING_RUNTIME_KERNEL_BATCHING_TEST_BATCH_RESOURCE_BASE_H_
