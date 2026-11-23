@@ -14,17 +14,16 @@
 
 r"""Generates a checkpoint for testing.
 
-Usage:
-blaze run \
-  third_party/neptune/runtime/data_loader/testdata:gen_checkpoint \
-  -- \
-  --enable_sharding=false
+The `gen_checkpoint` rules in this package's BUILD file run this binary at
+build time to generate the checkpoints that tests use. To generate a checkpoint
+by hand:
 
-export XLA_FLAGS="--xla_force_host_platform_device_count=4"
-blaze run \
-  third_party/neptune/runtime/data_loader/testdata:gen_checkpoint \
-  -- \
-  --enable_sharding=true
+  bazel run //runtime/data_loader/testdata:gen_checkpoint \
+    -- --enable_sharding=false
+
+  XLA_FLAGS="--xla_force_host_platform_device_count=4" bazel run \
+    //runtime/data_loader/testdata:gen_checkpoint \
+    -- --enable_sharding=true
 """
 
 from collections.abc import Sequence

@@ -1263,7 +1263,7 @@ absl::StatusOr<Interpreter::AotLoadResult> Interpreter::LoadAotExecutable(
 
   // 4. Final validation block
   // TODO: Update 1:1 validation when exporting multiple JAX
-  // modules as a single OBM model.
+  // modules as a single XSM model.
   if (result.executables.size() == stablehlo_funcs.size()) {
     auto aot_stablehlo = StableHlo::Create(std::move(aot_specs));
     if (!aot_stablehlo.ok()) {

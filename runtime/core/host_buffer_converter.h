@@ -136,8 +136,8 @@ class HostBufferConverterRegistry {
   // Copy-on-write: writers (`RegisterImpl`, `UnregisterImpl`) serialize on
   // `write_mu_`, copy the list, change the copy and publish it. `snapshot_mu_`
   // only guards the pointer; readers hold it to copy the `shared_ptr`.
-  // (`std::atomic<std::shared_ptr>` is not available in all of Neptune's
-  // toolchains.)
+  // (`std::atomic<std::shared_ptr>` is not available in all of XLA Serving
+  // Engine's toolchains.)
   absl::Mutex write_mu_;
   mutable absl::Mutex snapshot_mu_ ABSL_ACQUIRED_AFTER(write_mu_);
   std::shared_ptr<const ConverterList> converters_

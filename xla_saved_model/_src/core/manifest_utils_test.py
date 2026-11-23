@@ -47,9 +47,9 @@ class ManifestUtilsTest(absltest.TestCase):
         input_signature={},
         output_signature={},
     )
-    obm_module = {'test_fn': fn}
+    xsm_module = {'test_fn': fn}
 
-    manifest_proto = manifest_utils.build_manifest_proto(obm_module, tmp_dir)
+    manifest_proto = manifest_utils.build_manifest_proto(xsm_module, tmp_dir)
 
     self.assertIn('test_fn', manifest_proto.objects)
     self.assertTrue(
@@ -136,7 +136,7 @@ class ManifestUtilsTest(absltest.TestCase):
         input_signature={},
         output_signature={},
     )
-    obm_module = {'test_fn': fn}
+    xsm_module = {'test_fn': fn}
 
     def custom_compiler_hook(
         mlir_bytes: bytes,
@@ -162,7 +162,7 @@ class ManifestUtilsTest(absltest.TestCase):
       ]
 
     manifest_proto = manifest_utils.build_manifest_proto(
-        obm_module, tmp_dir, compiler_hook=custom_compiler_hook
+        xsm_module, tmp_dir, compiler_hook=custom_compiler_hook
     )
 
     self.assertIn('test_fn', manifest_proto.objects)
@@ -276,7 +276,7 @@ class ManifestUtilsTest(absltest.TestCase):
         input_signature={},
         output_signature={},
     )
-    obm_module = {'poly_fn_obj': [fn0, fn1]}
+    xsm_module = {'poly_fn_obj': [fn0, fn1]}
 
     def custom_compiler_hook(mlir_bytes, module_kept_var_idx, *_):
       label = (
@@ -294,7 +294,7 @@ class ManifestUtilsTest(absltest.TestCase):
       ]
 
     manifest_proto = manifest_utils.build_manifest_proto(
-        obm_module, tmp_dir, compiler_hook=custom_compiler_hook
+        xsm_module, tmp_dir, compiler_hook=custom_compiler_hook
     )
 
     self.assertIn('poly_fn_obj', manifest_proto.objects)
@@ -346,7 +346,7 @@ class ManifestUtilsTest(absltest.TestCase):
         input_signature={},
         output_signature={},
     )
-    obm_module = {'fn:special/name': fn}
+    xsm_module = {'fn:special/name': fn}
 
     def custom_compiler_hook(*_):
       return [
@@ -359,7 +359,7 @@ class ManifestUtilsTest(absltest.TestCase):
       ]
 
     manifest_proto = manifest_utils.build_manifest_proto(
-        obm_module, tmp_dir, compiler_hook=custom_compiler_hook
+        xsm_module, tmp_dir, compiler_hook=custom_compiler_hook
     )
 
     self.assertIn('fn:special/name', manifest_proto.objects)
@@ -399,7 +399,7 @@ class ManifestUtilsTest(absltest.TestCase):
         output_signature={},
         data_names=['param_w0', 'param_w1', 'param_b0'],
     )
-    obm_module = {'weighted_fn': fn}
+    xsm_module = {'weighted_fn': fn}
 
     def custom_compiler_hook(mlir_bytes, module_kept_var_idx, num_weights):
       self.assertEqual(mlir_bytes, b'test_stablehlo')
@@ -415,7 +415,7 @@ class ManifestUtilsTest(absltest.TestCase):
       ]
 
     manifest_utils.build_manifest_proto(
-        obm_module, tmp_dir, compiler_hook=custom_compiler_hook
+        xsm_module, tmp_dir, compiler_hook=custom_compiler_hook
     )
 
   def test_include_stablehlo_false_without_artifacts_raises_error(self):

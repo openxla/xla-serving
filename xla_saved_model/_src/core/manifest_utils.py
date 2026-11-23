@@ -432,7 +432,7 @@ def _is_seq_of_functions(
 
 
 def build_manifest_proto(
-    obm_module: Mapping[str, saveable.Saveable],
+    xsm_module: Mapping[str, saveable.Saveable],
     target_dir: str,
     supplementals: Mapping[str, manifest_pb2.UnstructuredData] | None = None,
     visibilities: Mapping[str, manifest_pb2.Visibility] | None = None,
@@ -443,10 +443,10 @@ def build_manifest_proto(
     compiler_hook: CompilerHook | None = None,
     include_stablehlo: bool = True,
 ) -> manifest_pb2.Manifest:
-  """Builds a manifest proto from an OBM module.
+  """Builds a manifest proto from an XSM module.
 
   Args:
-    obm_module: A mapping from object name to saveable module components.
+    xsm_module: A mapping from object name to saveable module components.
     target_dir: Target directory where external payload files are written.
     supplementals: Optional global supplemental unstructured data entries.
     visibilities: Optional mapping from object name to visibility.
@@ -464,7 +464,7 @@ def build_manifest_proto(
   visibilities = visibilities or {}
   manifest = manifest_pb2.Manifest()
 
-  for name, obj in obm_module.items():
+  for name, obj in xsm_module.items():
     visibility = visibilities.get(name, manifest_pb2.PUBLIC)
 
     if isinstance(obj, function.Function):

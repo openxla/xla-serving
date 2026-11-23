@@ -191,7 +191,7 @@ absl::Status FillMetaArgSpecs(const xla_saved_model_type::Type& type,
       }
       return absl::OkStatus();
     case xla_saved_model_type::Type::kDict:
-      // We sort by the string key, aligned with JAX and OBM Python.
+      // We sort by the string key, aligned with JAX and XSM Python.
       for (const auto& [key, value] :
            SortedByStringKey(type.dict().string_to_type())) {
         TF_RETURN_IF_ERROR(FillMetaArgSpecs(value, specs));
@@ -381,7 +381,7 @@ absl::Status FlattenType(
       return absl::OkStatus();
     }
     case xla_saved_model_type::Type::kDict: {
-      // We sort by the string key, aligned with JAX and OBM Python.
+      // We sort by the string key, aligned with JAX and XSM Python.
       for (const auto& [_, value] :
            SortedByStringKey(type.dict().string_to_type())) {
         TF_RETURN_IF_ERROR(FlattenType(value, flatten_types));

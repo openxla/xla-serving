@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""The shape and dtype of a tensor in a neptune signature.
+"""The shape and dtype of a tensor in an XLA Serving Engine signature.
 
 Unlike `jax.ShapeDtypeStruct`, a dimension may be unknown, which is None. A
 negative size is never read as unknown: it is an error.

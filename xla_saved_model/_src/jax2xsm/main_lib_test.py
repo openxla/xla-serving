@@ -119,15 +119,15 @@ class MainLibTest(test_utils.XsmTestCase):
     if native_serialization_platforms:
       jax_export_kwargs['platforms'] = native_serialization_platforms
 
-    obm_shlo_fn = main_lib.convert(
+    xsm_shlo_fn = main_lib.convert(
         model_fn,
         (params_args_spec, input_args_spec),
         {},
         jax_export_kwargs=jax_export_kwargs,
     )
-    obm_module = dict()
+    xsm_module = dict()
     model_function_name = 'my_model_fn'
-    obm_module[model_function_name] = obm_shlo_fn
+    xsm_module[model_function_name] = xsm_shlo_fn
 
     save_dir_path = os.path.join(self.create_tempdir())
     ckpt_subdir = 'my_checkpoint/'
@@ -135,13 +135,13 @@ class MainLibTest(test_utils.XsmTestCase):
     checkpointer = ocp.Checkpointer(ocp.StandardCheckpointHandler())
     checkpointer.save(ckpt_path, params)
     weights_name = 'my_weights'
-    obm_module[weights_name] = main_lib.convert_path_to_value(
+    xsm_module[weights_name] = main_lib.convert_path_to_value(
         ckpt_subdir,
         mime_type='application/x.orbax-checkpoint',
     )
 
     xsm_core.save(
-        obm_module,
+        xsm_module,
         save_dir_path,
         xsm_core.SaveOptions(version=2),
     )
@@ -426,23 +426,23 @@ class MainLibTest(test_utils.XsmTestCase):
         {},
     )
 
-    obm_module = dict()
+    xsm_module = dict()
 
     model_function_name = 'mnist_forward_fn'
-    obm_module[model_function_name] = em_shlo_fn
+    xsm_module[model_function_name] = em_shlo_fn
     save_dir_path = os.path.join(self.create_tempdir())
 
     checkpoint_path = 'my_checkpoint/'
     checkpoint_abs_path = os.path.join(save_dir_path, checkpoint_path)
     checkpointer = ocp.Checkpointer(ocp.StandardCheckpointHandler())
     checkpointer.save(checkpoint_abs_path, params)
-    obm_module['my_weights'] = main_lib.convert_path_to_value(
+    xsm_module['my_weights'] = main_lib.convert_path_to_value(
         checkpoint_path,
         mime_type='application/x.orbax-checkpoint',
     )
 
     xsm_core.save(
-        obm_module,
+        xsm_module,
         save_dir_path,
         xsm_core.SaveOptions(
             version=2,
@@ -495,20 +495,20 @@ class MainLibTest(test_utils.XsmTestCase):
     input_args_spec = jax.ShapeDtypeStruct((4, 4), jnp.float32)
     params_args_spec = _get_shape_dtype_struct(params)
 
-    obm_shlo_fn = main_lib.convert(
+    xsm_shlo_fn = main_lib.convert(
         model_fn,
         (params_args_spec, input_args_spec),
         {},
         jax_export_kwargs={'platforms': ['cpu']},
     )
 
-    shlo_params_spec = obm_shlo_fn.input_signature[0][0]['w']
+    shlo_params_spec = xsm_shlo_fn.input_signature[0][0]['w']
     self.assertEqual(shlo_params_spec.placement, type_pb2.HOST)
 
     save_dir_path = self.create_tempdir().full_path
-    obm_module = {'model_fn': obm_shlo_fn}
+    xsm_module = {'model_fn': xsm_shlo_fn}
     xsm_core.save(
-        obm_module,
+        xsm_module,
         save_dir_path,
         xsm_core.SaveOptions(version=2),
     )

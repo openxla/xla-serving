@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for XSM / OBM CLI `update`, `history`, and `rollback` commands."""
+"""Tests for XSM CLI `update`, `history`, and `rollback` commands."""
 
 import os
 from unittest import mock

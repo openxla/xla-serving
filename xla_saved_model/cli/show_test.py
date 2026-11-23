@@ -96,7 +96,7 @@ def _sample_composite_config() -> Any:
   named_resource = config.resources.add(
       name='scale_table',
       class_name='ScaleResource',
-      module_name='neptune.data.scale',
+      module_name='example.scale',
       id=7,
   )
   named_resource.assets.append(
@@ -200,7 +200,7 @@ class ShowTest(absltest.TestCase):
     self.assertNotIn('scale_table', output)
     self.assertNotIn('ScaleResource', output)
     self.assertNotIn('assets/factors.npy', output)
-    self.assertNotIn('neptune.data.scale', output)
+    self.assertNotIn('example.scale', output)
     self.assertNotIn('ScaleCfg', output)
 
   @absltest.skipIf(
@@ -222,7 +222,7 @@ class ShowTest(absltest.TestCase):
     self.assertIn('- ScaleTransform_1.output[0]', output)
     self.assertIn('- scale_table (ScaleResource)', output)
     self.assertIn('- resource[1] (BiasResource)', output)
-    self.assertIn('module: neptune.data.scale', output)
+    self.assertIn('module: example.scale', output)
     self.assertIn('factors: assets/factors.npy', output)
     self.assertIn('inline_cfg: <inline, 3 characters>', output)
     self.assertIn('bias: assets/bias.txt', output)

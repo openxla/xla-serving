@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Utility functions for OBM test cases."""
+"""Utility functions for XSM test cases."""
 
 import collections
 from collections.abc import Callable, Iterable, Mapping
@@ -206,9 +206,9 @@ def _clear_fields(msg: message.Message, fields: Iterable[str]) -> None:
 
 
 class XsmTestCase(parameterized.TestCase):  # pylint: disable=g-doc-args
-  """Base class for OBM test cases.
+  """Base class for XSM test cases.
 
-  Provides utility methods for testing OBM code.
+  Provides utility methods for testing XSM code.
   """
 
   def assertTreesEqual(

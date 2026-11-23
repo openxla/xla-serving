@@ -170,7 +170,7 @@ def export_model(
     )
     return {'predictions': predictions}
 
-  # Build the 3-transform pipeline to map OBM inputs into JCE signatures:
+  # Build the 3-transform pipeline to map XSM inputs into JCE signatures:
   # 1. PackJceInputsModule: Assembles flat inputs into JCE's 4-vector shape.
   # 2. CpuEmbeddingModule: Executes the high-performance embedding lookup.
   # 3. UnpackTensorArrayModule: Scatters lookup outputs to leaf tensors.

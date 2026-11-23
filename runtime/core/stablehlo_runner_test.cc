@@ -2361,10 +2361,10 @@ TEST_F(StableHloRunnerExecuteOptionsTest, ExecuteRejectsInputWithoutConverter) {
           absl::StatusCode::kInvalidArgument,
           "StableHloRunner inputs must be HostBuffer or xla_serving::DeviceBuffer. "
           "Input #1 is neither, and no HostBuffer converter is registered for "
-          "its type. To pass tensorflow::Tensor inputs, link "
-          "//third_party/neptune/runtime/tensorflow:"
-          "interpreter_tensorflow_support (it registers the TF converter), or "
-          "convert the input to a HostBuffer before calling."));
+          "its type. To pass tensorflow::Tensor inputs, link the "
+          "interpreter_tensorflow_support target in runtime/tensorflow (it "
+          "registers the TF converter), or convert the input to a HostBuffer "
+          "before calling."));
 }
 
 TEST_F(StableHloRunnerExecuteOptionsTest, ExecuteReportsConverterError) {

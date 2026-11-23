@@ -165,10 +165,6 @@ def xsm_type(t: type_pb2.Type) -> str:
   return ''
 
 
-# Keep alias for compatibility across module
-obm_type = xsm_type
-
-
 def tensor_type(tt: type_pb2.TensorType) -> str:
   if not tt.shape.shape_with_known_rank.dimension_sizes:
     return f'{type_pb2.DType.Name(tt.dtype)}'

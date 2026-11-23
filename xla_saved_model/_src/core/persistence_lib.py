@@ -14,8 +14,8 @@
 
 """Saving to disk.
 
-This file contains facilities that can save an OBM module to disk or load a
-persisted OBM module.
+This file contains facilities that can save an XSM module to disk or load a
+persisted XSM module.
 """
 
 from collections.abc import Mapping, Sequence

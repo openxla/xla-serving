@@ -1241,10 +1241,10 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
           "Input #",
           i,
           " is neither, and no HostBuffer converter is registered for its "
-          "type. To pass tensorflow::Tensor inputs, link "
-          "//third_party/neptune/runtime/tensorflow:"
-          "interpreter_tensorflow_support (it registers the TF converter), or "
-          "convert the input to a HostBuffer before calling."));
+          "type. To pass tensorflow::Tensor inputs, link the "
+          "interpreter_tensorflow_support target in runtime/tensorflow (it "
+          "registers the TF converter), or convert the input to a HostBuffer "
+          "before calling."));
     }
     absl::StatusOr<HostBuffer> host_buffer = converter->Convert(input);
     if (!host_buffer.ok()) {

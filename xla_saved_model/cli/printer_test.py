@@ -163,7 +163,7 @@ class PrinterTest(parameterized.TestCase):
       ('empty', type_pb2.Type(), ''),
   )
   def test_type(self, t, expected_str):
-    self.assertEqual(printer.obm_type(t), expected_str)
+    self.assertEqual(printer.xsm_type(t), expected_str)
 
   @parameterized.named_parameters(
       (

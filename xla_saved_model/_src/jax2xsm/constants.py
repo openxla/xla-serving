@@ -18,7 +18,7 @@
 XLA_COMPILE_OPTIONS = 'xla_compile_options'
 
 # TODO: Consolidate constants related to mime types in a common
-# library, so that both OBM and XLA Serving can use them.
+# library, so that both XSM and XLA Serving can use them.
 # XLA compile options mime type.
 XLA_COMPILE_OPTIONS_MIME_TYPE = (
     'application/protobuf; type=xla_saved_model_manifest.CompileOptionsProtoMap'
