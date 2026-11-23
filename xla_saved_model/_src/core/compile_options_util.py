@@ -33,9 +33,35 @@ from xla_saved_model.protos.xla.pjrt.proto import compile_options_pb2  # pylint:
 def _generate_compilation_options(
     compile_environment,
     jax_mesh: jax.sharding.Mesh | None = None,
-    populate_xla_build_options: bool = False,
 ) -> compile_options_pb2.CompileOptionsProto:
-  """Generates the compilation options for the given compilation environment."""
+  """Generates `CompileOptionsProto` for a single lowered target platform.
+
+  Populates `ExecutableBuildOptionsProto` unconditionally across all target
+  platforms (`cpu`, `cuda`, `tpu`) so that every serialized platform entry
+  carries consistent single-replica SPMD and Shardy build metadata:
+    * `num_replicas = 1` and `num_partitions = jax_mesh.size` (or `1` when
+      `jax_mesh` is `None`), matching the device count recorded in
+      `Manifest.device_assignment_by_coords` when exported with a `jax_mesh`.
+      At load time, the serving runtime checks that `len(devices)` in
+      `device_assignment_by_coords` equals `num_replicas * num_partitions`.
+    * `device_ordinal = -1` and `process_count = 1` for single-host SPMD
+      execution, plus an explicit single-replica `DeviceAssignmentProto` over
+      `jax_mesh.devices.flat` whenever `jax_mesh` is provided.
+    * `use_shardy_partitioner = True` paired with `[False]` for both
+      `allow_spmd_sharding_propagation_to_parameters` and
+      `allow_spmd_sharding_propagation_to_output`, which Shardy's input/output
+      sharding adjustment helpers read whenever Shardy partitioning is enabled.
+
+  Args:
+    compile_environment: Optional `CompilationEnvironmentsProto` packed with
+      platform-specific compiler flags (for example on TPU), or `None`.
+    jax_mesh: Optional JAX `Mesh` describing the single-replica SPMD device
+      topology. When `None`, defaults to 1 replica and 1 partition without an
+      explicit `device_assignment`.
+
+  Returns:
+    A populated `CompileOptionsProto` for the target platform.
+  """
   compile_options = compile_options_pb2.CompileOptionsProto()
   executable_build_options = compile_options_pb2.ExecutableBuildOptionsProto()
 
@@ -48,34 +74,34 @@ def _generate_compilation_options(
   )
   if compile_environment is not None:
     executable_build_options.comp_envs.CopyFrom(compile_environment)
-  if populate_xla_build_options:
-    executable_build_options.num_replicas = 1
-    executable_build_options.num_partitions = 1
-    executable_build_options.device_ordinal = -1
-    executable_build_options.process_count = 1
-    executable_build_options.allow_spmd_sharding_propagation_to_parameters.append(
-        False
-    )
-    executable_build_options.allow_spmd_sharding_propagation_to_output.append(
-        False
-    )
-    # Set the device assignment to a single-replica. If the jax mesh is
-    # provided, we will set the device assignment to the jax mesh.
-    if jax_mesh is not None:
-      partition = 0
-      device_assignment = xla_data_pb2.DeviceAssignmentProto()
-      device_assignment.replica_count = 1
-      for d in jax_mesh.devices.flat:
-        computation_device = (
-            xla_data_pb2.DeviceAssignmentProto.ComputationDevice()
-        )
-        computation_device.replica_device_ids.append(d.id)
-        device_assignment.computation_devices.append(computation_device)
-        partition += 1
-      # Reset num_partitions to the number of devices in the mesh.
-      executable_build_options.num_partitions = partition
-      device_assignment.computation_count = partition
-      executable_build_options.device_assignment.CopyFrom(device_assignment)
+  executable_build_options.num_replicas = 1
+  executable_build_options.num_partitions = 1
+  executable_build_options.device_ordinal = -1
+  executable_build_options.process_count = 1
+  executable_build_options.allow_spmd_sharding_propagation_to_parameters.append(
+      False
+  )
+  executable_build_options.allow_spmd_sharding_propagation_to_output.append(
+      False
+  )
+  # Populate a single-replica XLA device assignment from `jax_mesh` when
+  # provided so `num_partitions` and `device_assignment` match any manifest
+  # `device_assignment_by_coords` across CPU, GPU, and TPU platforms.
+  if jax_mesh is not None:
+    partition = 0
+    device_assignment = xla_data_pb2.DeviceAssignmentProto()
+    device_assignment.replica_count = 1
+    for device in jax_mesh.devices.flat:
+      computation_device = (
+          xla_data_pb2.DeviceAssignmentProto.ComputationDevice()
+      )
+      computation_device.replica_device_ids.append(device.id)
+      device_assignment.computation_devices.append(computation_device)
+      partition += 1
+    # Reset num_partitions to the number of devices in the mesh.
+    executable_build_options.num_partitions = partition
+    device_assignment.computation_count = partition
+    executable_build_options.device_assignment.CopyFrom(device_assignment)
   executable_build_options.use_shardy_partitioner = True
   compile_options.executable_build_options.CopyFrom(executable_build_options)
   return compile_options
@@ -87,21 +113,28 @@ def generate_xla_compile_options(
     jax_mesh: jax.sharding.Mesh | None = None,
     persist_xla_flags: bool = True,
 ) -> manifest_pb2.CompileOptionsProtoMap:
-  """Sets the XLA compilation options.
+  """Generates per-platform XLA `CompileOptionsProto` entries for export.
+
+  Every target platform in `native_serialization_platforms` (`cpu`, `cuda`,
+  `tpu`) receives a complete `ExecutableBuildOptionsProto` with
+  single-replica SPMD and Shardy settings derived from `jax_mesh`, while
+  platform-specific compiler flag overrides (such as TPU `comp_envs` or GPU
+  `env_option_overrides`) are layered onto the corresponding platform entry.
 
   Args:
-    native_serialization_platforms: A sequence of platform names that the
-      compile options will be set for. If None, the compile options will be set
-      for TPU only.
-    xla_flags_per_platform: A mapping from platform name to a list of xla flags
-      which will be used to override the default XLA compilation flags.
-    jax_mesh: The JAX mesh used for sharding. If None, the compile options will
-      be set for a default single-replica.
-    persist_xla_flags: Whether to persist XLA flags in the compile options.
+    native_serialization_platforms: Sequence of target platform names to
+      populate compile options for. If `None`, defaults to TPU only (`['tpu']`).
+    xla_flags_per_platform: Optional mapping from platform name to `--key=value`
+      XLA flag overrides for that platform.
+    jax_mesh: Optional JAX mesh used for sharding. Populates `num_replicas = 1`,
+      `num_partitions = jax_mesh.size`, and `device_assignment` on every target
+      platform; when `None`, defaults to `num_replicas = 1` and `num_partitions
+      = 1`.
+    persist_xla_flags: Whether to persist platform-specific XLA flag overrides
+      in the returned compile options.
 
   Returns:
-    A `CompileOptionsProtoMap` containing the XLA compilation options per
-    platform.
+    A `CompileOptionsProtoMap` keyed by lowercase platform name.
 
   Raises:
     ValueError: If an unknown platform is provided as a native serialization
@@ -116,9 +149,6 @@ def generate_xla_compile_options(
   """
   tpu_platform_name = manifest_pb2.Platform.Name(
       manifest_pb2.Platform.TPU
-  ).lower()
-  cuda_platform_name = manifest_pb2.Platform.Name(
-      manifest_pb2.Platform.CUDA
   ).lower()
   compile_options_map = manifest_pb2.CompileOptionsProtoMap()
   if native_serialization_platforms is None:
@@ -163,9 +193,6 @@ def generate_xla_compile_options(
     compile_options = _generate_compilation_options(
         compile_environment,
         jax_mesh,
-        populate_xla_build_options=(
-            platform_lower in (tpu_platform_name, cuda_platform_name)
-        ),
     )
 
     compile_options_map.map[platform_lower].CopyFrom(compile_options)
