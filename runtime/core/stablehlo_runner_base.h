@@ -306,6 +306,28 @@ class StableHloRunnerBase {
     CachedExecutableBundle& operator=(const CachedExecutableBundle& other) =
         delete;
 
+    // Helper method to resolve and retrieve the input argument sharding layout.
+    // If the executable is portable, it looks up the pre-populated sharding
+    // for the specified target device ID. Otherwise, it returns the
+    // universally cached argument shardings.
+    absl::StatusOr<absl::Span<const xla::ifrt::ShardingRef>> GetArgShardings(
+        xla::ifrt::DeviceId device_id) const {
+      if (const auto* portable_map =
+              std::get_if<PortableShardingMap>(&arg_shardings)) {
+        auto it = portable_map->find(device_id);
+        if (it != portable_map->end()) {
+          return absl::MakeConstSpan(it->second);
+        }
+        return absl::InternalError(absl::StrCat(
+            "No portable single device arg sharding found for device ",
+            device_id.value()));
+      } else if (const auto* sharding_list =
+                     std::get_if<ShardingList>(&arg_shardings)) {
+        return absl::MakeConstSpan(*sharding_list);
+      }
+      return absl::InternalError("Arg shardings are uninitialized.");
+    }
+
     // Helper method to resolve and retrieve the output sharding layout.
     // If the executable is portable, it looks up the pre-populated sharding
     // for the specified target device ID. Otherwise, it simply returns the

@@ -71,8 +71,10 @@
 #include "xla/python/ifrt/sharding.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_array.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
+#include "xla/python/pjrt_ifrt/pjrt_device.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_dtype.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_memory.h"  // from @xla
+#include "xla/runtime/chip_id.h"  // from @xla
 #include "xla/shape_util.h"  // from @xla
 #include "xla/status_macros.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
@@ -455,6 +457,182 @@ absl::Status CheckResultsWrittenInPlace(
     }
   }
   return absl::OkStatus();
+}
+
+// Wraps `src_array`, which belongs to another IFRT client, as a zero-copy view
+// on `dst_client` when both clients back the same physical device(s).
+//
+// Two PjRt clients in the same process on the same platform (e.g. per-model
+// GPU clients sharing a physical GPU's CUDA context) own distinct `PjRtDevice`
+// objects and allocators, so PjRt rejects buffers passed directly across them.
+// This verifies that each shard resides on the same physical device
+// (`local_hardware_id`) as the corresponding device in `target_sharding`,
+// waits for the source array to become ready (since PjRt readiness events are
+// not shared across clients), and creates a non-owning view via
+// `CreateViewOfDeviceBuffer` whose delete callback holds a `CallerMemoryPin`
+// keeping the source allocation alive and un-donatable until the view is done.
+absl::StatusOr<xla::ifrt::ArrayRef> MakeCrossClientView(
+    xla::ifrt::Array& src_array, xla::ifrt::Client& dst_client,
+    const xla::ifrt::Sharding& target_sharding, int input_index) {
+  auto* src_pjrt_array =
+      xla::ifrt::dyn_cast<xla::ifrt::PjRtCompatibleArray>(&src_array);
+  auto* src_pjrt_ifrt_client =
+      xla::ifrt::dyn_cast<xla::ifrt::PjRtCompatibleClient>(src_array.client());
+  auto* dst_pjrt_ifrt_client =
+      xla::ifrt::dyn_cast<xla::ifrt::PjRtCompatibleClient>(&dst_client);
+  if (src_pjrt_array == nullptr || src_pjrt_ifrt_client == nullptr ||
+      dst_pjrt_ifrt_client == nullptr ||
+      src_pjrt_ifrt_client->pjrt_client() == nullptr ||
+      dst_pjrt_ifrt_client->pjrt_client() == nullptr) {
+    absl::InlinedVector<std::string, 3> not_pjrt_backed;
+    if (src_pjrt_array == nullptr) {
+      not_pjrt_backed.push_back("input array");
+    }
+    auto check_client = [&](absl::string_view role,
+                            const xla::ifrt::Client* client,
+                            xla::ifrt::PjRtCompatibleClient* pjrt_client) {
+      if (client == nullptr) {
+        not_pjrt_backed.push_back(absl::StrCat(role, " IFRT client (<null>)"));
+      } else if (pjrt_client == nullptr) {
+        not_pjrt_backed.push_back(absl::StrCat(role,
+                                               " IFRT client (runtime_type='",
+                                               client->runtime_type(), "')"));
+      } else if (pjrt_client->pjrt_client() == nullptr) {
+        not_pjrt_backed.push_back(
+            absl::StrCat(role, " IFRT client (runtime_type='",
+                         client->runtime_type(), "', null pjrt_client)"));
+      }
+    };
+    check_client("input", src_array.client(), src_pjrt_ifrt_client);
+    check_client("runner", &dst_client, dst_pjrt_ifrt_client);
+    return absl::UnimplementedError(absl::StrCat(
+        "Cross-client DeviceBuffer input #", input_index,
+        " is only supported between PjRt-backed IFRT clients; "
+        "not PjRt-backed: ",
+        absl::StrJoin(not_pjrt_backed, ", "), "."));
+  }
+
+  xla::PjRtClient* src_pjrt_client = src_pjrt_ifrt_client->pjrt_client();
+  xla::PjRtClient* dst_pjrt_client = dst_pjrt_ifrt_client->pjrt_client();
+  if (src_pjrt_client->platform_id() != dst_pjrt_client->platform_id()) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Cross-client DeviceBuffer input #", input_index,
+        " is on PjRt platform '", src_pjrt_client->platform_name(),
+        "', but runner is on PjRt platform '", dst_pjrt_client->platform_name(),
+        "'."));
+  }
+
+  if (src_array.IsDeleted()) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Cross-client DeviceBuffer input #", input_index,
+                     " has already been deleted."));
+  }
+
+  const absl::Span<const std::shared_ptr<xla::PjRtBuffer>> src_buffers =
+      src_pjrt_array->pjrt_buffers();
+  const absl::Span<xla::ifrt::Device* const> target_devices =
+      target_sharding.devices()->devices();
+  if (src_buffers.size() != target_devices.size()) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Cross-client DeviceBuffer input #", input_index, " has ",
+        src_buffers.size(), " shard(s), but runner expects ",
+        target_devices.size(), " device(s)."));
+  }
+  if (src_buffers.empty()) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Cross-client DeviceBuffer input #", input_index, " has no shards."));
+  }
+
+  // Validate physical device compatibility for every shard before awaiting or
+  // acquiring external references.
+  std::vector<xla::PjRtMemorySpace*> dst_memory_spaces;
+  dst_memory_spaces.reserve(src_buffers.size());
+  for (size_t shard_idx = 0; shard_idx < src_buffers.size(); ++shard_idx) {
+    const std::shared_ptr<xla::PjRtBuffer>& src_buffer = src_buffers[shard_idx];
+    if (src_buffer == nullptr || src_buffer->IsDeleted()) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Cross-client DeviceBuffer input #", input_index, " shard #",
+          shard_idx, " is null or deleted."));
+    }
+    xla::PjRtDevice* src_pjrt_device = src_buffer->device();
+    auto* dst_ifrt_device =
+        xla::ifrt::dyn_cast<xla::ifrt::PjRtCompatibleDevice>(
+            target_devices[shard_idx]);
+    xla::PjRtDevice* dst_pjrt_device =
+        dst_ifrt_device != nullptr ? dst_ifrt_device->pjrt_device() : nullptr;
+    if (src_pjrt_device == nullptr || !src_pjrt_device->IsAddressable() ||
+        dst_pjrt_device == nullptr || !dst_pjrt_device->IsAddressable()) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Cross-client DeviceBuffer input #", input_index, " shard #",
+          shard_idx, " requires addressable source and target PjRt devices."));
+    }
+    const xla::LocalChipId src_hw_id = src_pjrt_device->local_hardware_id();
+    const xla::LocalChipId dst_hw_id = dst_pjrt_device->local_hardware_id();
+    if (src_hw_id.value() < 0 || dst_hw_id.value() < 0 ||
+        src_hw_id != dst_hw_id) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Cross-client DeviceBuffer input #", input_index, " shard #",
+          shard_idx, " is on physical device ", src_hw_id.value(), " (",
+          src_pjrt_device->DebugString(),
+          "), which is incompatible with runner's target physical device ",
+          dst_hw_id.value(), " (", dst_pjrt_device->DebugString(), ")."));
+    }
+    const xla::ifrt::MemoryKind src_memory_kind =
+        xla::ifrt::MakeMemoryKindFromPjRtBuffer(src_buffer.get());
+    TF_ASSIGN_OR_RETURN(
+        xla::PjRtMemorySpace * dst_memory_space,
+        GetPjRtMemorySpace(*target_devices[shard_idx], src_memory_kind));
+    dst_memory_spaces.push_back(dst_memory_space);
+  }
+
+  // PjRt does not share readiness events across clients; wait for the source
+  // buffer's producer work to finish before creating the view so the target
+  // client's stream observes the data (and `OpaqueDeviceMemoryDataPointer`
+  // sees a ready buffer).
+  TF_RETURN_IF_ERROR(src_array.GetReadyFuture().Await());
+
+  xla::ifrt::PjRtArray::PjRtBuffers views;
+  views.reserve(src_buffers.size());
+  for (size_t shard_idx = 0; shard_idx < src_buffers.size(); ++shard_idx) {
+    const std::shared_ptr<xla::PjRtBuffer>& src_buffer = src_buffers[shard_idx];
+    TF_ASSIGN_OR_RETURN(
+        std::unique_ptr<xla::PjRtBuffer::ExternalReference> external_reference,
+        src_buffer->AcquireExternalReference());
+    void* device_ptr = external_reference->OpaqueDeviceMemoryDataPointer();
+    // `std::function` requires a copyable callback, so the pin is shared.
+    auto pin = std::make_shared<CallerMemoryPin>(src_buffer,
+                                                 std::move(external_reference));
+    absl::StatusOr<std::unique_ptr<xla::PjRtBuffer>> view =
+        dst_pjrt_client->CreateViewOfDeviceBuffer(
+            device_ptr, src_buffer->on_device_shape(),
+            dst_memory_spaces[shard_idx],
+            /*on_delete_callback=*/[pin = std::move(pin)]() {});
+    if (!view.ok()) {
+      return absl::Status(
+          view.status().code(),
+          absl::StrCat("Cross-client DeviceBuffer input #", input_index,
+                       " is not supported on PjRt platform '",
+                       dst_pjrt_client->platform_name(),
+                       "': cannot create a view of the array's memory: ",
+                       view.status().message()));
+    }
+    views.push_back(std::shared_ptr<xla::PjRtBuffer>(*std::move(view)));
+  }
+
+  TF_ASSIGN_OR_RETURN(
+      std::unique_ptr<xla::ifrt::Sharding> dst_sharding,
+      src_array.sharding().WithDeviceAssignment(
+          target_sharding.devices(),
+          xla::ifrt::MakeMemoryKindFromPjRtBuffer(views.front().get())));
+  TF_ASSIGN_OR_RETURN(std::shared_ptr<const xla::PjRtLayout> layout,
+                      src_array.pjrt_layout());
+  TF_ASSIGN_OR_RETURN(
+      tsl::RCReference<xla::ifrt::PjRtArray> view_array,
+      xla::ifrt::PjRtArray::Create(
+          dst_pjrt_ifrt_client, src_array.dtype(), src_array.shape(),
+          xla::ifrt::ShardingRef(std::move(dst_sharding)), std::move(views),
+          std::move(layout)));
+  return xla::ifrt::ArrayRef(std::move(view_array));
 }
 
 }  // namespace
@@ -1388,11 +1566,32 @@ absl::StatusOr<std::vector<xla_serving::Value>> StableHloRunnerBase::Execute(
       TF_RETURN_IF_ERROR(ValidateDeviceBufferInput(*device_buffer.ifrt_array,
                                                    target_dtype, target_shape,
                                                    idx_in_stablehlo_spec));
-      if (has_caller_output_arrays) {
-        caller_device_inputs.emplace_back(original_input_idx,
-                                          device_buffer.ifrt_array);
+      xla::ifrt::ArrayRef input_array = std::move(device_buffer.ifrt_array);
+      if (input_array->client() != ifrt_client_.get()) {
+        TF_RET_CHECK(!device_list->devices().empty())
+            << "Device list cannot be empty";
+        // `GetArgShardings` only uses `device_id` for portable executables,
+        // which are always single-device (`device_list->devices()[0]` is the
+        // reserved device). For fixed (including multi-device) executables,
+        // `device_id` is ignored and the full `ShardingList` is returned.
+        TF_ASSIGN_OR_RETURN(
+            absl::Span<const xla::ifrt::ShardingRef> arg_shardings,
+            executable_bundle->GetArgShardings(
+                device_list->devices()[0]->Id()));
+        if (idx_in_stablehlo_spec >= arg_shardings.size()) {
+          return absl::InternalError(
+              "IFRT Executable arg shardings size mismatch.");
+        }
+        TF_ASSIGN_OR_RETURN(
+            input_array,
+            MakeCrossClientView(*input_array, *ifrt_client_,
+                                *arg_shardings[idx_in_stablehlo_spec],
+                                 original_input_idx));
       }
-      final_used_inputs[i] = std::move(device_buffer.ifrt_array);
+      if (has_caller_output_arrays) {
+        caller_device_inputs.emplace_back(original_input_idx, input_array);
+      }
+      final_used_inputs[i] = std::move(input_array);
     } else if (original_input_value.IsType<HostBuffer>()) {
       auto& original_input = original_input_value.Get<HostBuffer>();
       if (auto it = executable_bundle->host_transpose_permutations.find(
