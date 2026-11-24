@@ -1034,6 +1034,51 @@ cc_library(
 )
 
 cc_library(
+    name = "pjrt_host_allocator",
+    srcs = ["pjrt_host_allocator.cc"],
+    hdrs = ["pjrt_host_allocator.h"],
+    visibility = [
+        ":core_users",
+        "@xla_serving//runtime/core/google:__subpackages__",
+    ],
+    deps = [
+        ":allocator",
+        ":default_allocator",
+        "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@xla//xla/pjrt:host_memory_allocator",
+        "@xla//xla/pjrt:pjrt_client",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/python/pjrt_ifrt",
+    ],
+)
+
+cc_test(
+    name = "pjrt_host_allocator_test",
+    srcs = ["pjrt_host_allocator_test.cc"],
+    defines = ["ABSL_DEFINE_UNQUALIFIED_STATUS_TESTING_MACROS"],
+    deps = [
+        ":allocator",
+        ":host_buffer",
+        ":host_buffer_matcher",
+        ":host_buffer_test_utils",
+        ":pjrt_host_allocator",
+        "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_matchers",
+        "@googletest//:gtest_main",
+        "@tsl//tsl/platform:platform_port",
+        "@tsl//tsl/platform:tstring",
+        "@xla//xla/pjrt:host_memory_allocator",
+        "@xla//xla/pjrt:pjrt_client",
+        "@xla//xla/python/ifrt",
+    ],
+)
+
+cc_library(
     name = "thread_pool_interface",
     hdrs = ["thread_pool_interface.h"],
     visibility = [
