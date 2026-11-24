@@ -1015,6 +1015,9 @@ cc_library(
         "@xla_serving//runtime/core/batching:__subpackages__",
         "@xla_serving//runtime/core/google:__subpackages__",
     ],
+    deps = [
+        "@abseil-cpp//absl/functional:any_invocable",
+    ],
 )
 
 cc_library(

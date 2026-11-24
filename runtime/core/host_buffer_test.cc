@@ -1551,5 +1551,115 @@ TEST(HostBufferTest, BitcastSubByteDTypeReturnsError) {
                    .ok());
 }
 
+class OwnedTrackingAllocator : public Allocator {
+ public:
+  void* Allocate(size_t size, size_t alignment) override {
+    ++raw_allocate_count_;
+    return DefaultAllocator::GetInstance()->Allocate(size, alignment);
+  }
+
+  void Free(void* ptr, size_t alignment) override {
+    ++raw_free_count_;
+    DefaultAllocator::GetInstance()->Free(ptr, alignment);
+  }
+
+  OwnedPtr AllocateOwned(size_t size, size_t alignment) override {
+    ++owned_allocate_count_;
+    if (fail_allocations_) {
+      return nullptr;
+    }
+    void* ptr = DefaultAllocator::GetInstance()->Allocate(size, alignment);
+    if (ptr == nullptr) {
+      return nullptr;
+    }
+    ++live_owned_count_;
+    return OwnedPtr(ptr, [this, alignment](void* p) {
+      --live_owned_count_;
+      DefaultAllocator::GetInstance()->Free(p, alignment);
+    });
+  }
+
+  void set_fail_allocations(bool fail) { fail_allocations_ = fail; }
+  int raw_allocate_count() const { return raw_allocate_count_; }
+  int raw_free_count() const { return raw_free_count_; }
+  int owned_allocate_count() const { return owned_allocate_count_; }
+  int live_owned_count() const { return live_owned_count_; }
+
+ private:
+  bool fail_allocations_ = false;
+  int raw_allocate_count_ = 0;
+  int raw_free_count_ = 0;
+  int owned_allocate_count_ = 0;
+  int live_owned_count_ = 0;
+};
+
+class RawOnlyTrackingAllocator : public Allocator {
+ public:
+  void* Allocate(size_t size, size_t alignment) override {
+    ++allocate_count_;
+    ++live_count_;
+    return DefaultAllocator::GetInstance()->Allocate(size, alignment);
+  }
+
+  void Free(void* ptr, size_t alignment) override {
+    --live_count_;
+    DefaultAllocator::GetInstance()->Free(ptr, alignment);
+  }
+
+  int allocate_count() const { return allocate_count_; }
+  int live_count() const { return live_count_; }
+
+ private:
+  int allocate_count_ = 0;
+  int live_count_ = 0;
+};
+
+TEST(HostBufferTest, UsesAllocateOwnedFastPath) {
+  OwnedTrackingAllocator allocator;
+
+  {
+    HostBuffer numeric_buffer(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+                              xla::ifrt::Shape({8}), &allocator);
+    EXPECT_EQ(allocator.owned_allocate_count(), 1);
+    EXPECT_EQ(allocator.live_owned_count(), 1);
+    EXPECT_EQ(allocator.raw_allocate_count(), 0);
+    numeric_buffer.flat<float>()(0) = 42.0f;
+    EXPECT_EQ(numeric_buffer.flat<float>()(0), 42.0f);
+  }
+  EXPECT_EQ(allocator.live_owned_count(), 0);
+  EXPECT_EQ(allocator.raw_free_count(), 0);
+
+  {
+    absl::StatusOr<HostBuffer> string_buffer =
+        HostBuffer::Create(xla::ifrt::DType(xla::ifrt::DType::Kind::kString),
+                           xla::ifrt::Shape({2}), &allocator);
+    ASSERT_THAT(string_buffer, IsOk());
+    EXPECT_EQ(allocator.owned_allocate_count(), 2);
+    EXPECT_EQ(allocator.live_owned_count(), 1);
+    EXPECT_EQ(allocator.raw_allocate_count(), 0);
+    string_buffer->flat<tsl::tstring>()(0) = "hello";
+    string_buffer->flat<tsl::tstring>()(1) = "world";
+    EXPECT_EQ(string_buffer->flat<tsl::tstring>()(1), "world");
+  }
+  EXPECT_EQ(allocator.live_owned_count(), 0);
+  EXPECT_EQ(allocator.raw_free_count(), 0);
+
+  allocator.set_fail_allocations(true);
+  EXPECT_THAT(HostBuffer::Create(xla::ifrt::DType(xla::ifrt::DType::Kind::kF32),
+                                 xla::ifrt::Shape({4}), &allocator),
+              StatusIs(absl::StatusCode::kResourceExhausted));
+}
+
+TEST(HostBufferTest, DefaultAllocateOwnedDelegatesToAllocateAndFree) {
+  RawOnlyTrackingAllocator allocator;
+  {
+    HostBuffer buffer(xla::ifrt::DType(xla::ifrt::DType::Kind::kS32),
+                      xla::ifrt::Shape({4}), &allocator);
+    EXPECT_EQ(allocator.allocate_count(), 1);
+    EXPECT_EQ(allocator.live_count(), 1);
+  }
+  EXPECT_EQ(allocator.live_count(), 0);
+}
+
 }  // namespace
 }  // namespace xla_serving
