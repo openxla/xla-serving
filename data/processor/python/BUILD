@@ -40,6 +40,7 @@ pybind_extension(
     linkopts = ["-Wl,-rpath,$$ORIGIN/..:$$ORIGIN/../.."],
     deps = [
         ":transform_pybind",
+        "@abseil-cpp//absl/base:core_headers",
         "@abseil-cpp//absl/base:fast_type_id",
         "@abseil-cpp//absl/base:nullability",
         "@abseil-cpp//absl/container:flat_hash_map",

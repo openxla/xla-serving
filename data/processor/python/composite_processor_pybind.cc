@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "google/protobuf/any.pb.h"
+#include "absl/base/attributes.h"  // from @abseil-cpp
 #include "absl/base/fast_type_id.h"  // from @abseil-cpp
 #include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/container/flat_hash_map.h"  // from @abseil-cpp
@@ -486,7 +487,7 @@ class DLPackHostBufferBuilder {
   struct DLManagedTensorOwner {
     MT* absl_nonnull t;
     explicit DLManagedTensorOwner(MT* t) : t(t) {}
-    ~DLManagedTensorOwner() {
+    ABSL_ATTRIBUTE_NO_SANITIZE_CFI ~DLManagedTensorOwner() {
       if (t && t->deleter) {
         t->deleter(t);
       }
@@ -756,7 +757,7 @@ struct DLPackHostBuffer {
           auto* t =
               reinterpret_cast<MT*>(PyCapsule_GetPointer(obj, CapsuleName()));
           if (t && t->deleter) {
-            t->deleter(t);
+            InvokeDeleter(t);
           } else {
             PyErr_Clear();
           }
@@ -767,6 +768,10 @@ struct DLPackHostBuffer {
   explicit DLPackHostBuffer(const xla_serving::HostBuffer& host_buffer)
       // Copy the host buffer to avoid lifetime issues.
       : hb(host_buffer) {}
+
+  ABSL_ATTRIBUTE_NO_SANITIZE_CFI static void InvokeDeleter(MT* dlmt) {
+    dlmt->deleter(dlmt);
+  }
 
   static void Deleter(MT* dlmt) {
     if (dlmt) {
