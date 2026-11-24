@@ -1,0 +1,24 @@
+--- a/cc/features/features.bzl
++++ b/cc/features/features.bzl
+@@ -318,9 +318,9 @@
+             ],
+         ),
+         # For transitively linked cc_library shared objects (e.g., _solib_*/lib*.so in dynamic cc_test):
+-        # Hide static libc++abi.a and libunwind.a to avoid __cxa_* / _Unwind_* collisions with
+-        # libstdc++.so.6 / libgcc_s.so.1, while keeping libc++.a (std::__1::*) visible so all DSOs
+-        # coalesce onto a single shared std::__1 runtime instance.
++        # Hide only stateless libunwind.a, keeping libc++.a and libc++abi.a visible so fundamental
++        # RTTI symbols (e.g., _ZTIv/_ZTSv used by tensorstore::Poly) and C++ exceptions coalesce
++        # across DSOs.
+         flag_set(
+             actions = [
+                 ACTION_NAMES.cpp_link_nodeps_dynamic_library,
+@@ -330,7 +330,7 @@
+                 flag_group(
+                     flags = [
+                         "-stdlib=libc++",
+-                        "-Wl,--exclude-libs,libc++abi.a:libunwind.a",
++                        "-Wl,--exclude-libs,libunwind.a",
+                     ],
+                 ),
+             ],

@@ -96,13 +96,17 @@ exports_files(
 bazel_dep(name = "rules_ml_toolchain")
 archive_override(
     module_name = "rules_ml_toolchain",
-    integrity = "sha256-jS+3cXmAQJFifU4JZOQcuH+ZfB9bhnyj7/C+tDSq6QM=",
+    integrity = "sha256-snyX5OlAUa+d4VjiwPpFAn6d82fikpLujpze0Agx1dw=",
     patch_strip = 1,
     patches = [
+        # Keeps libc++abi.a visible across transitively linked `_solib_*/lib*.so`
+        # libraries in dynamic `cc_test` builds so fundamental RTTI symbols
+        # (`_ZTIv`/`_ZTSv`, used by `tensorstore::Poly`) coalesce across DSOs.
+        "//third_party/rules_ml_toolchain:libcxx_nodeps_dynamic_library.patch",
         "//third_party/rules_ml_toolchain:patch_nvcc_wrapper.patch",
     ],
-    strip_prefix = "rules_ml_toolchain-acf23037903eff6359c5bac21379957725fb9dda",
-    urls = ["https://github.com/google-ml-infra/rules_ml_toolchain/archive/acf23037903eff6359c5bac21379957725fb9dda.tar.gz"],
+    strip_prefix = "rules_ml_toolchain-3293999d7db2eb05b9e577066e4cb496ec83328a",
+    urls = ["https://github.com/google-ml-infra/rules_ml_toolchain/archive/3293999d7db2eb05b9e577066e4cb496ec83328a.tar.gz"],
 )
 
 # To calculate integrity:
@@ -111,9 +115,9 @@ archive_override(
 bazel_dep(name = "xla")
 archive_override(
     module_name = "xla",
-    integrity = "sha256-Q2T1kZsUKxntBPPXkxpg5f04819l2CUh93O7fjHpbxs=",
-    strip_prefix = "xla-aef971c1f405bf1ddc51c469cf70e00a9ad6f584",
-    urls = ["https://github.com/openxla/xla/archive/aef971c1f405bf1ddc51c469cf70e00a9ad6f584.tar.gz"],
+    integrity = "sha256-JkQ34pfiYH70VIykvtDSZZuJ69EiQaU0pCe6nze7LVw=",
+    strip_prefix = "xla-463a21521112d61be1bf9ab02a19d8b8d8251573",
+    urls = ["https://github.com/openxla/xla/archive/463a21521112d61be1bf9ab02a19d8b8d8251573.tar.gz"],
 )
 
 xla_third_party = use_extension("@xla//third_party/extensions:third_party.bzl", "third_party_ext")
@@ -137,7 +141,7 @@ override_repo(
 bazel_dep(name = "tensorflow", repo_name = "org_tensorflow")
 archive_override(
     module_name = "tensorflow",
-    integrity = "sha256-2TwlSSpVAnZEkQRRMC9SOjQJt9Ul3KbYTgBhBjx+gFc=",
+    integrity = "sha256-lJW2wyCIjQ+WoNA6HfBsnJKdJ8CgU5mzbwndCXCqUqc=",
     patch_strip = 1,
     patches = [
         "//third_party/tensorflow:dynamic_partition_op_gpu.patch",
@@ -147,10 +151,9 @@ archive_override(
         # propagate the include paths of Eigen and protobuf when TensorFlow is
         # an external module, so `warmup.cc` fails to compile.
         "//third_party/tensorflow:warmup_framework_dep.patch",
-        "//third_party/tensorflow:where_op_gpu.patch",
     ],
-    strip_prefix = "tensorflow-66c42e61a7df4d29da17a7b4da9e53f3902031ba",
-    urls = ["https://github.com/tensorflow/tensorflow/archive/66c42e61a7df4d29da17a7b4da9e53f3902031ba.zip"],
+    strip_prefix = "tensorflow-7622768f3d3f92f1b5e7b07fcbbb9be04f9d8b69",
+    urls = ["https://github.com/tensorflow/tensorflow/archive/7622768f3d3f92f1b5e7b07fcbbb9be04f9d8b69.zip"],
 )
 
 tf_third_party = use_extension("@org_tensorflow//third_party/extensions:third_party.bzl", "third_party_ext")
