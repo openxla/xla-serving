@@ -1,7 +1,7 @@
 name: CI Failure Issue Tracker
 
 on:
-  workflow_run:
+  workflow_run:  # zizmor: ignore[dangerous-triggers] -- only acts on runs on main from this repo, checks out no code, and passes event data via env.
     workflows:
       - "Build XLA SavedModel"
       - "Build XLA Serving Runtime"
@@ -13,22 +13,21 @@ on:
     types: [completed]
     branches: [main]
 
-permissions:
-  contents: read
-  issues: write
+# No workflow-level permissions; each job gets only what it needs, so no job
+# holds both `actions: write` and `issues: write`.
+permissions: {}
 
 concurrency:
   group: ci-failure-issue-${{ github.event.workflow_run.name }}
   cancel-in-progress: false
 
 jobs:
-  track-ci-failure:
-    name: Update CI Failure Issue
+  retry-failed-jobs:
+    name: Re-run Failed Jobs Once
     runs-on: ubuntu-latest
     # Run on postsubmit/scheduled runs on main (ignore PRs, forks, and
-    # cancelled/skipped/neutral runs). Catch all failure conclusions (e.g.
-    # failure, timed_out, startup_failure, action_required, stale) and
-    # auto-close on success.
+    # cancelled/skipped/neutral runs). On the first failed attempt of a
+    # retryable workflow, re-run its failed jobs once (see the step below).
     if: >-
       github.event.workflow_run.event != 'pull_request' &&
       github.event.workflow_run.head_branch == 'main' &&
@@ -37,6 +36,65 @@ jobs:
       github.event.workflow_run.conclusion != 'cancelled' &&
       github.event.workflow_run.conclusion != 'skipped' &&
       github.event.workflow_run.conclusion != 'neutral'
+    # Only this job can re-run workflows. It checks out no code and runs a
+    # single fixed `gh run rerun` command.
+    permissions:
+      actions: write
+    outputs:
+      rerun_started: ${{ steps.rerun.outputs.started }}
+    steps:
+      - name: Re-run failed jobs on the first failed attempt
+        id: rerun
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          WF_NAME: ${{ github.event.workflow_run.name }}
+          WF_URL: ${{ github.event.workflow_run.html_url }}
+          WF_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          WF_RUN_ID: ${{ github.event.workflow_run.id }}
+          WF_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          # Workflows whose failed jobs are safe to re-run automatically. The
+          # release and image-publishing workflows are intentionally excluded.
+          RETRYABLE_WORKFLOWS: |
+            Build XLA SavedModel
+            Build XLA Serving Runtime
+            Nightly Serving Test (CPU)
+            Nightly Serving Test (GPU)
+            Nightly Serving Test (TPU)
+        run: |
+          # On the first `failure` attempt of a retryable workflow (excluding
+          # `timed_out` / `startup_failure` so hung or broken runs alert right
+          # away), re-run only the failed jobs and skip filing an issue. When
+          # the re-run completes this workflow is triggered again with
+          # run_attempt=2, which either closes the issue (success) or files it
+          # (failure).
+          echo "started=false" >> "${GITHUB_OUTPUT}"
+          if [ "${WF_CONCLUSION}" = "failure" ] && \
+             [ "${WF_RUN_ATTEMPT}" = "1" ] && \
+             printf '%s\n' "${RETRYABLE_WORKFLOWS}" | grep -Fxq "${WF_NAME}"; then
+            if gh run rerun "${WF_RUN_ID}" --failed --repo "${GH_REPO}"; then
+              echo "Re-running failed jobs of ${WF_URL}; an issue is filed only if the re-run also fails."
+              echo "started=true" >> "${GITHUB_OUTPUT}"
+            else
+              echo "::warning::Could not re-run ${WF_URL}; filing an issue instead."
+            fi
+          fi
+
+  track-ci-failure:
+    name: Update CI Failure Issue
+    needs: retry-failed-jobs
+    runs-on: ubuntu-latest
+    # Same events as retry-failed-jobs (skipped when it is skipped). Files or
+    # updates the issue on any failure conclusion (e.g. failure, timed_out,
+    # startup_failure, action_required, stale) and auto-closes it on success.
+    # Skipped only when a re-run was started; if retry-failed-jobs itself
+    # failed, still file the issue.
+    if: >-
+      !cancelled() &&
+      needs.retry-failed-jobs.result != 'skipped' &&
+      needs.retry-failed-jobs.outputs.rerun_started != 'true'
+    permissions:
+      issues: write
     steps:
       - name: Create, update, or close tracking GitHub Issue
         env:
@@ -47,6 +105,7 @@ jobs:
           WF_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           WF_SHA: ${{ github.event.workflow_run.head_sha }}
           WF_EVENT: ${{ github.event.workflow_run.event }}
+          WF_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
         run: |
           LABEL="ci-failure"
           TITLE="[CI Failure] ${WF_NAME}"
@@ -68,9 +127,9 @@ jobs:
 
           EXISTING_ISSUE=$(printf '%s\n' "${EXISTING_ISSUES}" | head -n 1)
 
-          BODY=$(printf '%s\n\n- **Workflow:** %s\n- **Conclusion:** `%s`\n- **Trigger:** `%s`\n- **Commit:** `%s`\n- **Run URL:** %s\n' \
+          BODY=$(printf '%s\n\n- **Workflow:** %s\n- **Conclusion:** `%s`\n- **Trigger:** `%s`\n- **Commit:** `%s`\n- **Attempt:** %s\n- **Run URL:** %s\n' \
             "❌ **${WF_NAME}** failed on \`main\`." \
-            "${WF_NAME}" "${WF_CONCLUSION}" "${WF_EVENT}" "${WF_SHA}" "${WF_URL}")
+            "${WF_NAME}" "${WF_CONCLUSION}" "${WF_EVENT}" "${WF_SHA}" "${WF_RUN_ATTEMPT}" "${WF_URL}")
 
           if [ -n "${EXISTING_ISSUE}" ]; then
             gh issue comment "${EXISTING_ISSUE}" \
