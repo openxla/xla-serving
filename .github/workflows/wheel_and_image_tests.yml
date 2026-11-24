@@ -143,10 +143,14 @@ jobs:
             exit 1
           fi
           mkdir -p wheels
-          gcloud storage cp "${uri}/*.whl" "${uri}/SHA256SUMS" wheels/
-          (cd wheels && sha256sum --check --strict SHA256SUMS)
-          diff -u <(ls -1A -I SHA256SUMS wheels | LC_ALL=C sort) \
-            <(awk '{print $2}' wheels/SHA256SUMS | LC_ALL=C sort)
+          if [[ "${uri}" =~ ^gs://xla-serving-release-artifacts/ ]]; then
+            gcloud storage cp "${uri}/*.whl" "${uri}/SHA256SUMS" wheels/
+            (cd wheels && sha256sum --check --strict SHA256SUMS)
+            diff -u <(ls -1A -I SHA256SUMS wheels | LC_ALL=C sort) \
+              <(awk '{print $2}' wheels/SHA256SUMS | LC_ALL=C sort)
+          else
+            gcloud storage cp "${uri}/*.whl" wheels/
+          fi
           ls -la wheels/
 
       - name: Install uv and Set up Python
@@ -404,10 +408,14 @@ jobs:
           export PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
           mkdir -p wheels
-          gcloud storage cp "${wheel_uri}/*.whl" "${wheel_uri}/SHA256SUMS" wheels/
-          (cd wheels && sha256sum --check --strict SHA256SUMS)
-          diff -u <(ls -1A -I SHA256SUMS wheels | LC_ALL=C sort) \
-            <(awk '{print $2}' wheels/SHA256SUMS | LC_ALL=C sort)
+          if [[ "${wheel_uri}" =~ ^gs://xla-serving-release-artifacts/ ]]; then
+            gcloud storage cp "${wheel_uri}/*.whl" "${wheel_uri}/SHA256SUMS" wheels/
+            (cd wheels && sha256sum --check --strict SHA256SUMS)
+            diff -u <(ls -1A -I SHA256SUMS wheels | LC_ALL=C sort) \
+              <(awk '{print $2}' wheels/SHA256SUMS | LC_ALL=C sort)
+          else
+            gcloud storage cp "${wheel_uri}/*.whl" wheels/
+          fi
           shopt -s nullglob
           py_tag="cp${PYTHON_VERSION//./}"
           wheels_to_install=(wheels/*-py3-none-any.whl wheels/*-"${py_tag}"-*.whl)
@@ -585,10 +593,14 @@ jobs:
           export PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
           mkdir -p wheels
-          gcloud storage cp "${wheel_uri}/*.whl" "${wheel_uri}/SHA256SUMS" wheels/
-          (cd wheels && sha256sum --check --strict SHA256SUMS)
-          diff -u <(ls -1A -I SHA256SUMS wheels | LC_ALL=C sort) \
-            <(awk '{print $2}' wheels/SHA256SUMS | LC_ALL=C sort)
+          if [[ "${wheel_uri}" =~ ^gs://xla-serving-release-artifacts/ ]]; then
+            gcloud storage cp "${wheel_uri}/*.whl" "${wheel_uri}/SHA256SUMS" wheels/
+            (cd wheels && sha256sum --check --strict SHA256SUMS)
+            diff -u <(ls -1A -I SHA256SUMS wheels | LC_ALL=C sort) \
+              <(awk '{print $2}' wheels/SHA256SUMS | LC_ALL=C sort)
+          else
+            gcloud storage cp "${wheel_uri}/*.whl" wheels/
+          fi
           shopt -s nullglob
           py_tag="cp${PYTHON_VERSION//./}"
           wheels_to_install=(wheels/*-py3-none-any.whl wheels/*-"${py_tag}"-*.whl)
@@ -765,10 +777,14 @@ jobs:
           export PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
           mkdir -p wheels
-          gcloud storage cp "${wheel_uri}/*.whl" "${wheel_uri}/SHA256SUMS" wheels/
-          (cd wheels && sha256sum --check --strict SHA256SUMS)
-          diff -u <(ls -1A -I SHA256SUMS wheels | LC_ALL=C sort) \
-            <(awk '{print $2}' wheels/SHA256SUMS | LC_ALL=C sort)
+          if [[ "${wheel_uri}" =~ ^gs://xla-serving-release-artifacts/ ]]; then
+            gcloud storage cp "${wheel_uri}/*.whl" "${wheel_uri}/SHA256SUMS" wheels/
+            (cd wheels && sha256sum --check --strict SHA256SUMS)
+            diff -u <(ls -1A -I SHA256SUMS wheels | LC_ALL=C sort) \
+              <(awk '{print $2}' wheels/SHA256SUMS | LC_ALL=C sort)
+          else
+            gcloud storage cp "${wheel_uri}/*.whl" wheels/
+          fi
           shopt -s nullglob
           py_tag="cp${PYTHON_VERSION//./}"
           wheels_to_install=(wheels/*-py3-none-any.whl wheels/*-"${py_tag}"-*.whl)
