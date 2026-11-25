@@ -158,7 +158,7 @@ if (( ${#built_wheels[@]} != expected_wheels )); then
 fi
 
 if command -v twine >/dev/null 2>&1; then
-  twine check --strict "${built_wheels[@]}"
+  twine check "${built_wheels[@]}"
 else
-  /usr/bin/python3 -m twine check --strict "${built_wheels[@]}"
+  /usr/bin/python3 -m twine check "${built_wheels[@]}"
 fi

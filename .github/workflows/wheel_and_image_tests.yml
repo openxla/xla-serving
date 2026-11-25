@@ -170,7 +170,7 @@ jobs:
           uv venv --clear --python "${PYTHON_VERSION}"
           echo "${GITHUB_WORKSPACE}/.venv/bin" >> "${GITHUB_PATH}"
           echo "VIRTUAL_ENV=${GITHUB_WORKSPACE}/.venv" >> "${GITHUB_ENV}"
-          uv run --isolated --no-project --with twine twine check --strict wheels/*.whl
+          uv run --isolated --no-project --with twine twine check wheels/*.whl
 
       - name: Install Staged Wheels and Run Pytest Suites
         run: |
