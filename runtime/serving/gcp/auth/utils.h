@@ -25,7 +25,14 @@
 namespace xla_serving {
 namespace serving {
 
-// Creates gRPC server credentials based on the provided flags.
+// Creates gRPC server credentials.
+//
+// When `use_insecure_grpc_credentials` is true, returns insecure credentials.
+// Otherwise, if `private_key_path` and `cert_chain_path` are non-empty, returns
+// SSL/TLS credentials; if `root_certs_path` is also non-empty, enables mutual
+// TLS by requiring and verifying client certificates against `root_certs_path`.
+// Returns an error if only a partial TLS configuration is provided. When all
+// certificate paths are empty, falls back to local TCP credentials.
 absl::StatusOr<std::shared_ptr<grpc::ServerCredentials>>
 CreateServerCredentials(std::string private_key_path,
                         std::string cert_chain_path,

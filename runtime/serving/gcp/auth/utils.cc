@@ -19,6 +19,7 @@
 
 #include "absl/log/check.h"  // from @abseil-cpp
 #include "absl/log/log.h"  // from @abseil-cpp
+#include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "include/grpc/grpc_security_constants.h"  // from @grpc
 #include "include/grpcpp/security/credentials.h"  // from @grpc
@@ -43,7 +44,13 @@ CreateServerCredentials(std::string private_key_path,
         InsecureServerCredentials();  // NOLINT(grpc_insecure_credential_linter)
   }
 
-  if (!private_key_path.empty() && !cert_chain_path.empty()) {
+  if (!private_key_path.empty() || !cert_chain_path.empty() ||
+      !root_certs_path.empty()) {
+    if (private_key_path.empty() || cert_chain_path.empty()) {
+      return absl::InvalidArgumentError(
+          "Both private_key_path and cert_chain_path must be specified when "
+          "configuring SSL/TLS server credentials.");
+    }
     LOG(INFO) << "Using file-based SSL/TLS server credentials.";
     std::string private_key_pem;
     TF_RETURN_WITH_CONTEXT_IF_ERROR(
@@ -57,16 +64,23 @@ CreateServerCredentials(std::string private_key_path,
                               &cert_chain_pem),
         "Failed to read server certificate chain from filepath");
 
-    grpc::SslServerCredentialsOptions ssl_opts;
+    grpc::SslServerCredentialsOptions ssl_opts(
+        root_certs_path.empty()
+            ? GRPC_SSL_DONT_REQUEST_CLIENT_CERTIFICATE
+            : GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
     ssl_opts.pem_key_cert_pairs.push_back({private_key_pem, cert_chain_pem});
 
     if (!root_certs_path.empty()) {
-      LOG(INFO) << "Loading root certificates from: " << root_certs_path;
+      LOG(INFO) << "Loading root certificates from: " << root_certs_path
+                << " and requiring verified client certificates (mTLS).";
       TF_RETURN_WITH_CONTEXT_IF_ERROR(
           tsl::ReadFileToString(tsl::Env::Default(), root_certs_path,
                                 &ssl_opts.pem_root_certs),
           "Failed to read client certificate chain from filepath");
-      // Set ssl_opts.client_cert_request_type if client auth is required.
+      if (ssl_opts.pem_root_certs.empty()) {
+        return absl::InvalidArgumentError(
+            "Client certificate chain file must not be empty.");
+      }
     }
     return grpc::SslServerCredentials(ssl_opts);
   }
