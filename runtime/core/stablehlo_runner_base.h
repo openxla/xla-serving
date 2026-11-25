@@ -37,6 +37,8 @@
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "runtime/core/allocator.h"  // from @xla_serving
+#include "runtime/core/default_allocator.h"  // from @xla_serving
 #include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "runtime/core/ifrt_loaded_variable_registry.h"  // from @xla_serving
@@ -88,6 +90,8 @@ struct StableHloRunnerOptions {
   absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices;
   // Optional ID for host callback dispatch in streaming execution.
   std::optional<int64_t> callback_id = std::nullopt;
+  // Host memory allocator used for D2H output `HostBuffer` allocations.
+  Allocator* absl_nonnull allocator = DefaultAllocator::GetInstance();
 };
 
 class StableHloRunnerBase {
@@ -339,7 +343,8 @@ class StableHloRunnerBase {
         absl_nonnull std::shared_ptr<xla::ifrt::Client> ifrt_client,
         xla::ifrt::DeviceListRef device_list,
         tsl::thread::ThreadPool* absl_nonnull thread_pool,
-        std::unique_ptr<H2DTransferExecutor> h2d_transfer_executor = nullptr);
+        std::unique_ptr<H2DTransferExecutor> h2d_transfer_executor = nullptr,
+        Allocator* absl_nonnull allocator = DefaultAllocator::GetInstance());
 
     // Converts the inputs from `HostBuffer` to `xla::ifrt::Array`.
     // Args:
@@ -387,6 +392,8 @@ class StableHloRunnerBase {
     // NOT OWNED.
     tsl::thread::ThreadPool* const absl_nonnull thread_pool_;
     const std::unique_ptr<H2DTransferExecutor> h2d_transfer_executor_;
+    // NOT OWNED.
+    Allocator* const absl_nonnull allocator_;
     tsl::monitoring::CounterCell* const arena_cell_;
     tsl::monitoring::CounterCell* const default_cell_;
   };
@@ -398,10 +405,11 @@ class StableHloRunnerBase {
         absl_nonnull std::shared_ptr<xla::ifrt::Client> ifrt_client,
         xla::ifrt::DeviceListRef device_list,
         tsl::thread::ThreadPool* absl_nonnull thread_pool,
-        std::unique_ptr<H2DTransferExecutor> h2d_transfer_executor)
+        std::unique_ptr<H2DTransferExecutor> h2d_transfer_executor,
+        Allocator* absl_nonnull allocator = DefaultAllocator::GetInstance())
         : data_converter(std::make_unique<DataConverter>(
               std::move(ifrt_client), device_list, thread_pool,
-              std::move(h2d_transfer_executor))) {}
+              std::move(h2d_transfer_executor), allocator)) {}
 
     std::unique_ptr<DataConverter> data_converter;
     // IFRT array for weights. They are looked up from the registry.
@@ -478,7 +486,8 @@ class StableHloRunnerBase {
       ServingCoreSelector* absl_nullable serving_core_selector = nullptr,
       std::unique_ptr<H2DTransferExecutorFactory>
           h2d_transfer_executor_factory = nullptr,
-      std::optional<int64_t> callback_id = std::nullopt);
+      std::optional<int64_t> callback_id = std::nullopt,
+      Allocator* absl_nonnull allocator = DefaultAllocator::GetInstance());
 
   // Looks up the executable bundle in the cache, uses the shapes of the
   // input (excluding the weights) to determine which executable to use. If not
@@ -561,6 +570,8 @@ class StableHloRunnerBase {
   static std::atomic<uint32_t> launch_id_;
   ServingCoreSelector* absl_nullable serving_core_selector_;
   std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory_;
+  // NOT OWNED.
+  Allocator* const absl_nonnull allocator_;
   absl::flat_hash_map<xla::ifrt::DeviceListRef,
                       std::unique_ptr<ResourcesPerDeviceList>>
       device_list_to_resources_map_;

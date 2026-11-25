@@ -43,6 +43,7 @@
 #include "mlir/include/mlir/IR/BuiltinAttributes.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/BuiltinOps.h"  // from @llvm-project
 #include "mlir/include/mlir/IR/OperationSupport.h"  // from @llvm-project
+#include "runtime/core/allocator.h"  // from @xla_serving
 #include "runtime/core/h2d_transfer_executor.h"  // from @xla_serving
 #include "runtime/core/ifrt_device_utils.h"  // from @xla_serving
 #include "runtime/core/ifrt_loaded_variable_registry.h"  // from @xla_serving
@@ -138,7 +139,7 @@ StableHloRunner::StableHloRunner(
     absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
     ServingCoreSelector* absl_nullable serving_core_selector,
     std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory,
-    std::optional<int64_t> callback_id)
+    std::optional<int64_t> callback_id, Allocator* absl_nonnull allocator)
     : StableHloRunnerBase(
           ModelIoMetadata{
               .weight_specs = loaded_stablehlo->weight_specs(),
@@ -150,7 +151,7 @@ StableHloRunner::StableHloRunner(
           client, ifrt_loaded_variable_registry, std::move(weights),
           std::move(assigned_device_list), std::move(assigned_devices),
           serving_core_selector, std::move(h2d_transfer_executor_factory),
-          callback_id),
+          callback_id, allocator),
       loaded_stablehlo_(std::move(loaded_stablehlo)),
       compile_options_(std::move(compile_options)),
       persistent_compilation_cache_(persistent_compilation_cache),
@@ -170,7 +171,7 @@ absl::StatusOr<std::unique_ptr<StableHloRunner>> StableHloRunner::Create(
     absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
     ServingCoreSelector* absl_nullable serving_core_selector,
     std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory,
-    std::optional<int64_t> callback_id) {
+    std::optional<int64_t> callback_id, Allocator* absl_nonnull allocator) {
   if (!stablehlo) {
     return absl::InvalidArgumentError(
         "`StableHlo` should be non-null when creating `StableHloRunner`");
@@ -222,7 +223,7 @@ absl::StatusOr<std::unique_ptr<StableHloRunner>> StableHloRunner::Create(
       ifrt_loaded_variable_registry, std::move(weights), assigned_device_list,
       compilation_environment_proto, persistent_compilation_cache, optimizer,
       assigned_devices, serving_core_selector,
-      std::move(h2d_transfer_executor_factory), callback_id));
+      std::move(h2d_transfer_executor_factory), callback_id, allocator));
   TF_RETURN_IF_ERROR(runner->Init(thread_pool));
   return runner;
 }

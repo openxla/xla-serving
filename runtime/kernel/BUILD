@@ -134,6 +134,8 @@ cc_library(
         "@xla//xla/python/ifrt",
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:statusor",
+        "@xla_serving//runtime/core:allocator",
+        "@xla_serving//runtime/core:default_allocator",
         "@xla_serving//runtime/core:flat_signature",
         "@xla_serving//runtime/core:host_buffer",
         "@xla_serving//runtime/core:ifrt_loaded_variable_registry",

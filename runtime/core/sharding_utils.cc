@@ -27,6 +27,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/base/nullability.h"  // from @abseil-cpp
 #include "absl/container/btree_map.h"  // from @abseil-cpp
 #include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/log/check.h"  // from @abseil-cpp
@@ -37,6 +38,7 @@
 #include "absl/strings/str_join.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
 #include "unsupported/Eigen/CXX11/Tensor"
+#include "runtime/core/allocator.h"  // from @xla_serving
 #include "runtime/core/device_buffer.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "runtime/core/host_buffer_type_utils.h"  // from @xla_serving
@@ -507,7 +509,7 @@ absl::StatusOr<tsl::Future<HostBuffer>> MakeHostBufferFromArrayHelper(
     xla::ifrt::Client& ifrt_client, xla::ifrt::Array& input_array,
     const xla::ifrt::ShardingRef& ifrt_sharding,
     const xla::ifrt::DeviceListRef& device_list,
-    tsl::thread::ThreadPool& thread_pool) {
+    tsl::thread::ThreadPool& thread_pool, Allocator* absl_nonnull allocator) {
   VLOG(2) << "MakeHostBufferFromArrayHelper" << input_array.dtype();
   VLOG(2) << "Create HostBuffer from array based on sharding: "
           << *ifrt_sharding;
@@ -518,9 +520,10 @@ absl::StatusOr<tsl::Future<HostBuffer>> MakeHostBufferFromArrayHelper(
       xla::ifrt::ArrayRef whole_array,
       GetSingleShardHoldingWholeArray(ifrt_client, input_array, ifrt_sharding));
   if (whole_array != nullptr) {
-    HostBuffer output_buffer(input_dtype, input_shape);
+    HostBuffer output_buffer(input_dtype, input_shape, allocator);
+    void* output_base = output_buffer.base();
     return whole_array
-        ->CopyToHostBuffer(output_buffer.base(), std::nullopt,
+        ->CopyToHostBuffer(output_base, std::nullopt,
                            xla::ifrt::ArrayCopySemantics::kAlwaysCopy)
         .MapTo(std::move(output_buffer));
   }
@@ -625,7 +628,7 @@ absl::StatusOr<tsl::Future<HostBuffer>> MakeHostBufferFromArrayHelper(
   for (const auto& [index_domain, array] : index_domain_device_arrays) {
     xla::ifrt::Shape shape = index_domain.shape();
     xla::ifrt::DType dtype = array->dtype();
-    HostBuffer buffer(dtype, shape);
+    HostBuffer buffer(dtype, shape, allocator);
     input_buffers.push_back(buffer);
     tsl::Future<> copy_status =
         array->CopyToHostBuffer(buffer.base(), std::nullopt,
@@ -653,11 +656,11 @@ tsl::Future<HostBuffer> MakeHostBufferFromArray(
     xla::ifrt::Client& ifrt_client, xla::ifrt::Array& input_array,
     const xla::ifrt::ShardingRef& ifrt_sharding,
     const xla::ifrt::DeviceListRef& device_list,
-    tsl::thread::ThreadPool& thread_pool) {
+    tsl::thread::ThreadPool& thread_pool, Allocator* absl_nonnull allocator) {
   tsl::profiler::TraceMe trace_me("MakeHostBufferFromArray", /*level=*/3);
   absl::StatusOr<tsl::Future<HostBuffer>> output_future =
       MakeHostBufferFromArrayHelper(ifrt_client, input_array, ifrt_sharding,
-                                    device_list, thread_pool);
+                                    device_list, thread_pool, allocator);
   if (!output_future.ok()) {
     return tsl::Future<HostBuffer>(std::move(output_future).status());
   }

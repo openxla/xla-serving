@@ -25,6 +25,8 @@
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/statusor.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "runtime/core/allocator.h"  // from @xla_serving
+#include "runtime/core/default_allocator.h"  // from @xla_serving
 #include "runtime/core/ifrt_loaded_variable_registry.h"  // from @xla_serving
 #include "runtime/core/loaded_stablehlo.h"  // from @xla_serving
 #include "runtime/core/stablehlo.h"  // from @xla_serving
@@ -60,7 +62,8 @@ class StableHloRunner : public StableHloRunnerBase {
       ServingCoreSelector* absl_nullable serving_core_selector,
       std::unique_ptr<H2DTransferExecutorFactory>
           h2d_transfer_executor_factory = nullptr,
-      std::optional<int64_t> callback_id = std::nullopt);
+      std::optional<int64_t> callback_id = std::nullopt,
+      Allocator* absl_nonnull allocator = DefaultAllocator::GetInstance());
 
   // Virtual destructor is required for safe polymorphic destruction of
   // subclasses.
@@ -87,7 +90,7 @@ class StableHloRunner : public StableHloRunnerBase {
       absl_nonnull std::shared_ptr<const AssignedDevices> assigned_devices,
       ServingCoreSelector* absl_nullable serving_core_selector,
       std::unique_ptr<H2DTransferExecutorFactory> h2d_transfer_executor_factory,
-      std::optional<int64_t> callback_id);
+      std::optional<int64_t> callback_id, Allocator* absl_nonnull allocator);
 
   // Looks up the executable bundle in the cache, uses the shapes of the
   // input (excluding the weights) to determine which executable to use. If not

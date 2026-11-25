@@ -29,6 +29,8 @@
 #include "absl/strings/string_view.h"  // from @abseil-cpp
 #include "absl/synchronization/mutex.h"  // from @abseil-cpp
 #include "absl/types/span.h"  // from @abseil-cpp
+#include "runtime/core/allocator.h"  // from @xla_serving
+#include "runtime/core/default_allocator.h"  // from @xla_serving
 #include "runtime/core/flat_signature.h"  // from @xla_serving
 #include "runtime/core/host_buffer.h"  // from @xla_serving
 #include "runtime/core/ifrt_loaded_variable_registry.h"  // from @xla_serving
@@ -192,6 +194,17 @@ absl::StatusOr<std::unique_ptr<Kernel>> StableHloRunnerOp::Create(
     return callback_id_status.status();
   }
 
+  absl::StatusOr<Allocator*> allocator_status =
+      context.GetConfig<Allocator*>(kAllocator);
+  Allocator* allocator = DefaultAllocator::GetInstance();
+  if (allocator_status.ok()) {
+    if (*allocator_status != nullptr) {
+      allocator = *allocator_status;
+    }
+  } else if (!absl::IsNotFound(allocator_status.status())) {
+    return allocator_status.status();
+  }
+
   StableHloRunnerOptions base_options{
       .client = std::move(ifrt_client),
       .thread_pool = thread_pool,
@@ -199,6 +212,7 @@ absl::StatusOr<std::unique_ptr<Kernel>> StableHloRunnerOp::Create(
       .weights = std::move(weights),
       .assigned_devices = std::move(assigned_devices),
       .callback_id = callback_id,
+      .allocator = allocator,
   };
 
   StableHloRunnerMode mode;

@@ -129,11 +129,14 @@ cc_library(
     ],
     visibility = [":core_users"],
     deps = [
+        ":allocator",
+        ":default_allocator",
         ":device_buffer",
         ":host_buffer",
         ":host_buffer_type_utils",
         ":host_buffer_utils",
         ":sharding_utils_core",
+        "@abseil-cpp//absl/base:nullability",
         "@abseil-cpp//absl/container:btree",
         "@abseil-cpp//absl/container:inlined_vector",
         "@abseil-cpp//absl/log",
@@ -307,6 +310,8 @@ cc_library(
     hdrs = ["stablehlo_runner_base.h"],
     visibility = [":core_users"],
     deps = [
+        ":allocator",
+        ":default_allocator",
         ":device_buffer",
         ":h2d_transfer_executor",
         ":host_buffer",
@@ -392,6 +397,8 @@ cc_library(
     hdrs = ["stablehlo_runner.h"],
     visibility = [":core_users"],
     deps = [
+        ":allocator",
+        ":default_allocator",
         ":h2d_transfer_executor",
         ":ifrt_device_utils",
         ":ifrt_loaded_variable_registry",
