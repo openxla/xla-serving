@@ -74,6 +74,7 @@
 #include "xla/python/pjrt_ifrt/pjrt_client.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_dtype.h"  // from @xla
 #include "xla/python/pjrt_ifrt/pjrt_memory.h"  // from @xla
+#include "xla/python/version.h"  // from @xla
 #include "xla/shape_util.h"  // from @xla
 #include "xla/status_macros.h"  // from @xla
 #include "xla/tsl/concurrency/future.h"  // from @xla
@@ -394,8 +395,12 @@ absl::StatusOr<xla::ifrt::ArrayRef> MakeDonatableAliasOf(
     aliases.push_back(std::shared_ptr<xla::PjRtBuffer>(*std::move(view)));
   }
 
+#if JAX_XLA_VERSION_NUMBER >= 95
+  std::shared_ptr<const xla::PjRtLayout> layout = array.pjrt_layout();
+#else
   TF_ASSIGN_OR_RETURN(std::shared_ptr<const xla::PjRtLayout> layout,
                       array.pjrt_layout());
+#endif
   TF_ASSIGN_OR_RETURN(
       tsl::RCReference<xla::ifrt::PjRtArray> alias_array,
       xla::ifrt::PjRtArray::Create(pjrt_client, array.dtype(), array.shape(),
@@ -1128,8 +1133,12 @@ StableHloRunnerBase::ResolveInputAliasedOutputArrays(
     // An array that reports no layout is using the default layout for its
     // shape on its device rather than having none, so read the concrete layout
     // off the underlying buffer instead of treating null as a mismatch.
+#if JAX_XLA_VERSION_NUMBER >= 95
+    std::shared_ptr<const xla::PjRtLayout> layout = array->pjrt_layout();
+#else
     TF_ASSIGN_OR_RETURN(std::shared_ptr<const xla::PjRtLayout> layout,
                         array->pjrt_layout());
+#endif
     if (layout == nullptr) {
       if (auto* pjrt_array =
               xla::ifrt::dyn_cast<xla::ifrt::PjRtCompatibleArray>(array.get());
