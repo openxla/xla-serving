@@ -34,7 +34,8 @@ from xla_saved_model.protos.xla.pjrt.proto import compile_options_pb2  # pylint:
 optimizer_ext = None
 OptimizerType = Callable[[bytes, Sequence[int]], bytes]
 
-_SUPPORTED_PLATFORMS = frozenset({"cpu", "cuda", "tpu"})
+_GPU_PLATFORMS = frozenset({"cuda", "rocm"})
+_SUPPORTED_PLATFORMS = frozenset({"cpu", "tpu"}) | _GPU_PLATFORMS
 
 
 @dataclasses.dataclass(frozen=True)
@@ -45,11 +46,12 @@ class TargetConfig:
     target_topology_label: Identifier for the compiled artifact saved in the
       manifest (matches CompiledExecutableBody.target_topology_label in
       manifest.proto).
-    platform: Name of the target platform ("cuda", "tpu", "cpu"). Note: 'gpu' is
-      not supported; use 'cuda' directly.
+    platform: Name of the target platform ("cuda", "rocm", "tpu", "cpu"). Note:
+      'gpu' is not supported; use 'cuda' or 'rocm' directly.
     serialized_topology: Optional serialized topology bytes required for
       deviceless compilation.
-    autotune_database_path: Optional path to the CUDA autotune database.
+    autotune_database_path: Optional path to the GPU autotune database (CUDA or
+      ROCm).
     target_topology: Optional JAX topology mesh specification string (e.g.
       "2x2x2").
     compile_portable_executable: Optional override to compile as a portable
@@ -89,22 +91,26 @@ def _validate_target_config(config: TargetConfig) -> None:
     )
 
   # 2. Autotune database validation
+  # The autotune cache is routed through `xla_gpu_*` debug options, which
+  # apply to both GPU backends.
   if config.autotune_database_path:
-    if platform != "cuda":
+    if platform not in _GPU_PLATFORMS:
       raise ValueError(
-          "autotune_database_path is only supported for CUDA platform, but"
-          f" got platform '{platform}'."
+          "autotune_database_path is only supported for GPU platforms"
+          f" ({', '.join(sorted(_GPU_PLATFORMS))}), but got platform"
+          f" '{platform}'."
       )
     if not file_utils.exists(config.autotune_database_path):
       raise FileNotFoundError(
           "Autotune database path does not exist:"
           f" {config.autotune_database_path}"
       )
-  elif platform == "cuda" and config.is_deviceless:
+  elif platform in _GPU_PLATFORMS and config.is_deviceless:
     logging.warning(
-        "autotune_database_path was not provided for CUDA deviceless"
+        "autotune_database_path was not provided for %s deviceless"
         " compilation. XLA will fallback to internal heuristics/cost-models"
-        " which may not be deterministic or optimal in production."
+        " which may not be deterministic or optimal in production.",
+        platform,
     )
 
 

@@ -110,6 +110,11 @@ ABSL_FLAG(size_t, tpu_premapped_buffer_size, 2 * (1ULL << 30),
 ABSL_FLAG(int, tpu_num_premapped_partitions_per_device, 1,
           "TPU only. Number of premapped partitions per device for the PjRt "
           "TPU client when --tpu_use_premapped_buffer is true.");
+ABSL_FLAG(std::string, target_topology_label, "",
+          "Label selecting which ahead-of-time compiled executables to load "
+          "from the manifest, as passed to `xsm-cli recompile "
+          "--target-topology-label`. Required to serve a bundle that contains "
+          "AOT executables; ignored for JIT-only bundles.");
 
 void RunServer() {
   std::string server_address = absl::StrCat("[::]:", absl::GetFlag(FLAGS_port));
@@ -154,6 +159,7 @@ void RunServer() {
       absl::GetFlag(FLAGS_tpu_premapped_buffer_size);
   options.tpu_num_premapped_partitions_per_device =
       absl::GetFlag(FLAGS_tpu_num_premapped_partitions_per_device);
+  options.target_topology_label = absl::GetFlag(FLAGS_target_topology_label);
 
   LOG(INFO) << "Server address: " << server_address;
   absl::StatusOr<std::unique_ptr<xla_serving::serving::OrbaxCallbackGrpcServer>>

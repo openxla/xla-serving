@@ -18,4 +18,4 @@
 #include "absl/flags/flag.h"  // from @abseil-cpp
 
 ABSL_FLAG(std::string, orbax_grpc_server_platform, "cpu",
-          "The platform to use. It can be cpu, tpu, or cuda.");
+          "The platform to use. It can be cpu, tpu, cuda, or rocm.");

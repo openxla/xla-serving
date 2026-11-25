@@ -74,6 +74,39 @@ common:cuda_v13 --repo_env=HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_75,sm_80,sm_90
 common:cuda_v13 --action_env=TF_NVCC_CLANG="1"
 common:cuda_v13 --@local_config_cuda//:cuda_compiler=nvcc
 
+# ROCm: transcribed from XLA's `rocm_base` + `rocm_clang_hermetic` configs,
+# since this .bazelrc does not import XLA's tensorflow.bazelrc.
+# TF_ROCM_AMDGPU_TARGETS lists the gfx architectures to generate code for.
+# gfx942 covers MI300X/MI325X and gfx950 covers MI350X/MI355X, so one binary
+# runs on either. Override on the command line to narrow it, which cuts build
+# time but makes the binary machine-specific:
+#   bazel build --config=rocm --repo_env=TF_ROCM_AMDGPU_TARGETS=gfx942 ...
+# Note this is a repository-rule input, so changing it re-runs
+# local_config_rocm and invalidates much of the build.
+common:rocm --repo_env TF_NEED_ROCM=1
+common:rocm --repo_env=TF_ROCM_AMDGPU_TARGETS="gfx942,gfx950"
+common:rocm --repo_env=SYSROOT_DIST=linux_glibc_2_35
+common:rocm --define=using_rocm_hipcc=true
+common:rocm --define=tensorflow_mkldnn_contraction_kernel=0
+common:rocm --action_env=HIPCC_COMPILE_FLAGS_APPEND="--offload-compress"
+# The hipcc wrapper passes the link-time flag `-rtlib=compiler-rt` on compile
+# actions too, where clang reports it as unused. Deps that build with -Werror
+# (brotli) turn that into a hard error, so suppress it as the cuda config
+# above already does. host_copt covers the same deps built for the exec config.
+build:rocm --copt=-Wno-unused-command-line-argument
+build:rocm --host_copt=-Wno-unused-command-line-argument
+common:rocm --copt=-Wno-gnu-offsetof-extensions
+common:rocm --@rules_ml_toolchain//common:enable_rocm=True
+common:rocm --@rules_ml_toolchain//common:enable_cuda=False
+common:rocm --@rules_ml_toolchain//common:enable_sycl=False
+common:rocm --@rules_ml_toolchain//common:enable_hermetic_cc=True
+common:rocm --@rules_ml_toolchain//common:enable_hermetic_libraries=True
+# ROCm requires libstdc++; these override the libc++ defaults set at the top of
+# this file. If you hit C++ ABI or std:: link errors, look here first.
+common:rocm --@rules_ml_toolchain//common:stdlib=libstdc++
+common:rocm --@rules_ml_toolchain//common:static_libcxx=False
+common:rocm --@local_config_rocm//rocm:rocm_path_type=hermetic
+
 common --experimental_repo_remote_exec
 
 # Do not use C-Ares when building gRPC.

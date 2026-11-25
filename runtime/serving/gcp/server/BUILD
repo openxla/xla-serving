@@ -1,4 +1,5 @@
 load("@aspect_bazel_lib//lib:tar.bzl", "tar")
+load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm_is_configured")
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
@@ -356,7 +357,14 @@ cc_library(
     name = "xla_serving_callback_grpc_server_gpu",
     srcs = ["orbax_callback_grpc_server.cc"],
     hdrs = ["orbax_callback_grpc_server.h"],
-    defines = ["PLATFORM_CUDA"] + select({
+    # The GPU server is backend-agnostic: `GetXlaPjrtGpuClient()` resolves to
+    # the CUDA or the ROCm PjRt client depending on how XLA was configured, and
+    # the PJRT plugin registers under "gpu" either way. Only the StreamExecutor
+    # runtime dep below has to follow the build config.
+    defines = if_rocm_is_configured(
+        ["PLATFORM_ROCM"],
+        ["PLATFORM_CUDA"],
+    ) + select({
         ":enable_tf": ["ENABLE_TF=1"],
         "//conditions:default": [],
     }),
@@ -369,8 +377,10 @@ cc_library(
         "@xla//xla/pjrt/plugin/xla_gpu:gpu_static_registration",
         "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_client_options",
         "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
-        "@xla//xla/stream_executor/cuda:all_runtime",
-    ],
+    ] + if_rocm_is_configured(
+        ["@xla//xla/stream_executor/rocm:all_runtime"],
+        ["@xla//xla/stream_executor/cuda:all_runtime"],
+    ),
 )
 
 cc_library(

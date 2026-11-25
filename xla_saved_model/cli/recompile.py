@@ -51,7 +51,7 @@ def recompile(
         typer.Option(
             "--platform",
             "-p",
-            help="Target platform backend (cuda, tpu, cpu).",
+            help="Target platform backend (cuda, rocm, tpu, cpu).",
         ),
     ],
     target_topology_label: Annotated[
@@ -72,7 +72,8 @@ def recompile(
     autotune_database_path: str | None = typer.Option(
         None,
         help=(
-            "Optional path to CUDA autotune cache. Passing a directory enables"
+            "Optional path to the GPU (CUDA or ROCm) autotune cache. Passing a"
+            " directory enables"
             " read/write per-fusion caching; passing a file (.pb/.textproto)"
             " strictly loads read-only results."
         ),
