@@ -213,9 +213,9 @@ use_repo(python_version_ext, "python_version_repo")
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
 oci.pull(
     name = "distroless_cc",
-    # gcr.io/distroless/cc-debian13:latest as of 2026-11-09. To refresh, run:
+    # gcr.io/distroless/cc-debian13:latest as of 2026-11-25. To refresh, run:
     #   crane digest gcr.io/distroless/cc-debian13:latest
-    digest = "sha256:e1f5543d45a2cd7c02a5b43dda5f0ff30729b4832113759d01ed39b0b152cddb",
+    digest = "sha256:dac90a25ffe03ebaace90cda886b081e61ab6cd77ac47eda51f7bcc15c320765",
     image = "gcr.io/distroless/cc-debian13",
     platforms = ["linux/amd64"],
 )
