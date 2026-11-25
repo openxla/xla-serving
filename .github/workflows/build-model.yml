@@ -14,6 +14,11 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # Disable ambient GCE metadata credentials on self-hosted runners; remote
+  # cache reads use anonymous public GCS access (`remote_cache_readonly`).
+  CLOUDSDK_AUTH_DISABLE_CREDENTIALS: "1"
+
 jobs:
   build-and-test:
     name: "Build XLA SavedModel (Python ${{ matrix.python-version }}, jax ${{ matrix.jax-version }})"
@@ -28,6 +33,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - name: Install uv and Set up Python
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
@@ -54,15 +61,13 @@ jobs:
           uv pip install build setuptools wheel grpcio-tools
 
       - name: Build xla_serving_data, xla_serving_data_test and xla_saved_model_runner wheels
-        env:
-          CACHE_CONFIG: ${{ github.ref == 'refs/heads/main' && 'remote_cache_readwrite' || 'remote_cache_readonly' }}
         run: |
-          bazel build -c opt \
+          bazel --nosystem_rc build -c opt \
             //data:xla_serving_data \
             //data:xla_serving_data_test \
             //runtime/python:xla_saved_model_runner \
             --@rules_python//python/config_settings:python_version=${{ matrix.python-version }} \
-            --config=${CACHE_CONFIG} \
+            --config=remote_cache_readonly \
             --output_filter=DONT_MATCH_ANYTHING \
             --ui_event_filters=-warning \
             --show_progress_rate_limit=30 \
@@ -149,6 +154,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - name: Install uv and Set up Python
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
@@ -191,10 +198,6 @@ jobs:
         env:
           VLLM_TARGET_DEVICE: tpu
         run: |
-          # TODO: Remove once flax > 0.12.9 is released. flax <= 0.12.9 imports
-          # `hijax.HiPrimitive`, which jax 0.11.2 renamed to `HiPrim`.
-          uv pip install "jax<0.11.2"
-
           uv pip install ".[test]"
           uv pip uninstall triton 2>/dev/null || true
           pytest -v -s -n auto xla_saved_model/_src/llm/

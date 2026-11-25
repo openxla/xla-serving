@@ -1,15 +1,12 @@
 name: CI Failure Issue Tracker
 
 on:
+  # zizmor: ignore[dangerous-triggers] - gated to non-PR runs on main; never checks out code or artifacts
   workflow_run:
     workflows:
       - "Build XLA SavedModel"
       - "Build XLA Serving Runtime"
-      - "Nightly Serving Test (CPU)"
-      - "Nightly Serving Test (GPU)"
-      - "Nightly Serving Test (TPU)"
-      - "Push Nightly XLA Serving Images"
-      - "Release XLA Serving"
+      - "Wheel and Image Tests"
     types: [completed]
     branches: [main]
 

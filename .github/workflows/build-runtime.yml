@@ -5,9 +5,6 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-  schedule:
-    # Run nightly at 02:00 UTC to refresh the Bazel remote cache ahead of nightly image builds
-    - cron: '0 2 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -17,6 +14,11 @@ concurrency:
 permissions:
   contents: read
   pull-requests: read
+
+env:
+  # Disable ambient GCE metadata credentials on self-hosted runners; remote
+  # cache reads use anonymous public GCS access (`remote_cache_readonly`).
+  CLOUDSDK_AUTH_DISABLE_CREDENTIALS: "1"
 
 jobs:
   build-and-test-runtime:
@@ -28,6 +30,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - name: Check for runtime changes
         id: filter
@@ -56,11 +60,9 @@ jobs:
 
       - name: Build and Test XLA Serving Runtime
         if: github.event_name != 'pull_request' || steps.filter.outputs.runtime == 'true'
-        env:
-          CACHE_CONFIG: ${{ github.ref == 'refs/heads/main' && 'remote_cache_readwrite' || 'remote_cache_readonly' }}
         run: |
-          bazel test -c opt --test_output=errors //runtime/... //data/... \
-            --config=${CACHE_CONFIG} \
+          bazel --nosystem_rc test -c opt --test_output=errors //runtime/... //data/... \
+            --config=remote_cache_readonly \
             --output_filter=DONT_MATCH_ANYTHING \
             --ui_event_filters=-warning \
             --show_progress_rate_limit=30 \
