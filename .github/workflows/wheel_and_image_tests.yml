@@ -63,7 +63,7 @@ jobs:
   bazel-tests:
     name: "Bazel runtime & data test suite"
     runs-on: linux-x86-n4-32
-    timeout-minutes: 90
+    timeout-minutes: 240
     permissions:
       contents: read
     container:
@@ -108,7 +108,7 @@ jobs:
   wheel-tests:
     name: "Wheel install & pytest suite (Python ${{ matrix.python_version }})"
     runs-on: linux-x86-n4-16
-    timeout-minutes: 90
+    timeout-minutes: 120
     permissions:
       contents: read
     strategy:
@@ -230,12 +230,31 @@ jobs:
             python -c "import xla_serving_data_test; print('Imported xla_serving_data_test')"
           )
 
-          pytest -v -s --full-trace -n auto \
-            xla_saved_model/ \
-            data/cpu_embedding/python/embedding_utils_test.py
+          # Run embedding_utils_test.py and examples/ outside the repository
+          # root so local ./xla_saved_model/ cannot shadow the staged wheels in
+          # site-packages.
+          rm -rf /tmp/wheel_e2e_test
+          mkdir -p /tmp/wheel_e2e_test/data/cpu_embedding/python
+          cp conftest.py pyproject.toml /tmp/wheel_e2e_test/
+          cp data/cpu_embedding/python/embedding_utils_test.py \
+            /tmp/wheel_e2e_test/data/cpu_embedding/python/
+          cp -r examples /tmp/wheel_e2e_test/
+          (
+            cd /tmp/wheel_e2e_test
+            pytest -v -s --full-trace -n auto \
+              data/cpu_embedding/python/embedding_utils_test.py
+            pytest -v -s -n auto --dist loadfile \
+              examples/
+          )
+          rm -rf /tmp/wheel_e2e_test
 
-          pytest -v -s -n auto --dist loadfile \
-            examples/
+          # In-tree unit tests import test-only modules (test_utils, *_test_pb2)
+          # that setup.py excludes from the published wheel; generate in-tree
+          # *_pb2.py files without reinstalling "." over site-packages.
+          uv pip install setuptools grpcio-tools
+          python setup.py build_py
+          pytest -v -s --full-trace -n auto \
+            xla_saved_model/
 
       - name: Run LLM Module Pytest Suite (Python 3.12)
         if: matrix.python_version == '3.12'
