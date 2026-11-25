@@ -63,6 +63,12 @@ struct InterpreterCreateOptions {
   // The default allocator is DefaultAllocator. It can be overridden to a
   // custom allocator which extends Allocator.
   Allocator* absl_nonnull allocator = DefaultAllocator::GetInstance();
+  // If true, also passes `allocator` to `StableHloRunnerOp` for allocating
+  // device-to-host (D2H) destination `HostBuffer`s. When false (default), D2H
+  // destination `HostBuffer`s use `DefaultAllocator`.
+  // Clients must ensure that the `allocator` and `ifrt_client` outlive the
+  // output `HostBuffer`s.
+  bool use_allocator_for_d2h_dest = false;
   // The platform name to use for `xla::ExecutableBuildOptions`. If not set,
   // the default platform name will be "TPU".
   // platform_name should be the name of xla_saved_model_manifest::Platform name.

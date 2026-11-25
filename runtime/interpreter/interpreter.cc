@@ -752,6 +752,9 @@ absl::StatusOr<std::unique_ptr<Kernel>> CreateStableHloRunnerOp(
   }
   TF_RETURN_IF_ERROR(builder.SetConfig(kServingCoreSelector,
                                        create_options.serving_core_selector));
+  if (create_options.use_allocator_for_d2h_dest) {
+    TF_RETURN_IF_ERROR(builder.SetConfig(kAllocator, create_options.allocator));
+  }
   TF_RETURN_IF_ERROR(
       builder.SetConfig(kStablehloOptimizer, create_options.optimizer.get()));
 
@@ -804,6 +807,11 @@ absl::Status ValidateInterpreterCreateOptions(
   if (create_options.computation_thread_pool == nullptr) {
     return absl::InvalidArgumentError(
         "Computation thread pool must not be null.");
+  }
+  if (create_options.use_allocator_for_d2h_dest &&
+      create_options.allocator == nullptr) {
+    return absl::InvalidArgumentError(
+        "Allocator must not be null when use_allocator_for_d2h_dest is true.");
   }
   return absl::OkStatus();
 }
@@ -1298,6 +1306,10 @@ absl::StatusOr<std::unique_ptr<Kernel>> Interpreter::LoadAotRunnerOp(
       builder.SetConfig(kWeights, aot_result.loaded_weight_names));
   TF_RETURN_IF_ERROR(
       builder.SetConfig(kAssignedDevices, aot_result.shared_assigned_devices));
+  if (create_options_->use_allocator_for_d2h_dest) {
+    TF_RETURN_IF_ERROR(
+        builder.SetConfig(kAllocator, create_options_->allocator));
+  }
 
   if (named_inputs != nullptr) {
     TF_ASSIGN_OR_RETURN(FlatSignature input_flat_signature,
