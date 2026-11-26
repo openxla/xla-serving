@@ -275,7 +275,7 @@ TEST(OpCommonTest, TestPropagateSignatureUnarySuccess) {
   EXPECT_EQ(context.outputs[0].spec().dtype, DType(DType::kF32));
 }
 
-TEST(OpCommonTest, TestPropagateSignatureRejectsUnknownDimension) {
+TEST(OpCommonTest, TestPropagateSignatureBroadcastsUnknownDimension) {
   const xla_serving::data::composite::api::HostBufferSpec known{
       .dtype = DType(DType::kS32),
       .shape = Shape({2, 3}),
@@ -291,17 +291,53 @@ TEST(OpCommonTest, TestPropagateSignatureRejectsUnknownDimension) {
 
   xla_serving::data::composite::api::ShapeInferenceContext lhs_context;
   lhs_context.inputs = unknown_lhs;
-  EXPECT_THAT(
-      BinaryOpShared::PropagateBinarySignature(lhs_context, "TestAddTransform"),
-      StatusIs(absl::StatusCode::kInvalidArgument,
-               HasSubstr("is not fully known")));
+  ASSERT_OK(BinaryOpShared::PropagateBinarySignature(lhs_context,
+                                                     "TestAddTransform"));
+  ASSERT_EQ(lhs_context.outputs.size(), 1);
+  EXPECT_EQ(lhs_context.outputs[0].spec().shape, Shape({2, 3}));
 
   xla_serving::data::composite::api::ShapeInferenceContext rhs_context;
   rhs_context.inputs = unknown_rhs;
+  ASSERT_OK(BinaryOpShared::PropagateBinarySignature(rhs_context,
+                                                     "TestAddTransform"));
+  ASSERT_EQ(rhs_context.outputs.size(), 1);
+  EXPECT_EQ(rhs_context.outputs[0].spec().shape, Shape({2, 3}));
+
+  const std::vector<xla_serving::data::composite::api::ShapeInferenceValue>
+      rank_expand = {
+          xla_serving::data::composite::api::HostBufferSpec{
+              .dtype = DType(DType::kS32),
+              .shape = PartialShapeOrDie(
+                  {Dim::Unknown(), Dim::Static(1), Dim::Static(3)}),
+          },
+          xla_serving::data::composite::api::HostBufferSpec{
+              .dtype = DType(DType::kS32),
+              .shape = PartialShapeOrDie({Dim::Static(4), Dim::Unknown()}),
+          },
+      };
+  xla_serving::data::composite::api::ShapeInferenceContext expand_context;
+  expand_context.inputs = rank_expand;
+  ASSERT_OK(BinaryOpShared::PropagateBinarySignature(expand_context,
+                                                     "TestAddTransform"));
+  EXPECT_EQ(
+      expand_context.outputs[0].spec().shape,
+      PartialShapeOrDie({Dim::Unknown(), Dim::Static(4), Dim::Static(3)}));
+
+  const std::vector<xla_serving::data::composite::api::ShapeInferenceValue>
+      incompatible = {
+          unknown,
+          xla_serving::data::composite::api::HostBufferSpec{
+              .dtype = DType(DType::kS32),
+              .shape = Shape({2, 4}),
+          },
+      };
+  xla_serving::data::composite::api::ShapeInferenceContext bad_context;
+  bad_context.inputs = incompatible;
   EXPECT_THAT(
-      BinaryOpShared::PropagateBinarySignature(rhs_context, "TestAddTransform"),
+      BinaryOpShared::PropagateBinarySignature(bad_context, "TestAddTransform"),
       StatusIs(absl::StatusCode::kInvalidArgument,
-               HasSubstr("is not fully known")));
+               HasSubstr("TestAddTransform inputs are not broadcast-compatible:"
+                         " [?,3] and [2,4]")));
 }
 
 TEST(OpCommonTest, TestPropagateSignatureUnaryForwardsUnknownDimension) {
