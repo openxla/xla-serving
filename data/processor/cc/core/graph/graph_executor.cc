@@ -52,11 +52,12 @@ absl::Status SingleThreadedSynchronousGraphExecutor::Execute(
 
   // Store outputs for each node.
   // node_outputs[node_index][port_index]
-  std::vector<absl::InlinedVector<api::Value, 4>> node_outputs(graph.size());
+  absl::InlinedVector<absl::InlinedVector<api::Value, 4>, 8> node_outputs(
+      graph.size());
 
   for (const auto& node : graph.nodes()) {
     // Gather inputs for this node
-    std::vector<api::Value> node_inputs;
+    absl::InlinedVector<api::Value, 32> node_inputs;
     node_inputs.reserve(node.input_edges.size());
     {
       tsl::profiler::TraceMe trace(

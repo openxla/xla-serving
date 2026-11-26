@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "absl/algorithm/container.h"  // from @abseil-cpp
+#include "absl/container/inlined_vector.h"  // from @abseil-cpp
 #include "absl/status/status.h"  // from @abseil-cpp
 #include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"  // from @abseil-cpp
@@ -97,10 +98,10 @@ absl::StatusOr<std::vector<Array>> CpuEmbeddingEngine::Execute(
 
   // Pre-lookup all feature specs and tables on the main thread to avoid
   // parallel lock contention.
-  std::vector<FeatureSpec> resolved_specs;
+  absl::InlinedVector<FeatureSpec, 32> resolved_specs;
   resolved_specs.reserve(feature_batches.size());
   {
-    absl::MutexLock spec_lock(feature_specs_mu_);
+    absl::ReaderMutexLock spec_lock(feature_specs_mu_);
     for (const auto& batch : feature_batches) {
       auto spec_it = feature_specs_.find(batch.Name());
       if (spec_it == feature_specs_.end()) {
@@ -111,10 +112,11 @@ absl::StatusOr<std::vector<Array>> CpuEmbeddingEngine::Execute(
     }
   }
 
-  std::vector<std::shared_ptr<const EmbeddingTable>> resolved_tables;
+  absl::InlinedVector<std::shared_ptr<const EmbeddingTable>, 32>
+      resolved_tables;
   resolved_tables.reserve(feature_batches.size());
   {
-    absl::MutexLock table_lock(local_tables_mu_);
+    absl::ReaderMutexLock table_lock(local_tables_mu_);
     for (const auto& spec : resolved_specs) {
       auto table_it = local_tables_.find(spec.table_name);
       if (table_it == local_tables_.end()) {
@@ -173,11 +175,12 @@ absl::Status CpuEmbeddingEngine::ExecuteBatch(
   }
 
   // Resolve specs and tables under the same lock order as Clear.
-  std::vector<std::shared_ptr<const EmbeddingTable>> resolved_tables;
+  absl::InlinedVector<std::shared_ptr<const EmbeddingTable>, 32>
+      resolved_tables;
   resolved_tables.reserve(inputs.size());
   {
-    absl::MutexLock spec_lock(feature_specs_mu_);
-    absl::MutexLock table_lock(local_tables_mu_);
+    absl::ReaderMutexLock spec_lock(feature_specs_mu_);
+    absl::ReaderMutexLock table_lock(local_tables_mu_);
     for (size_t index = 0; index < inputs.size(); ++index) {
       const FeatureBatchInput<float>& input = inputs[index];
       auto spec_it = feature_specs_.find(input.feature_name);
@@ -199,7 +202,7 @@ absl::Status CpuEmbeddingEngine::ExecuteBatch(
     }
   }
 
-  std::vector<internal::EmbeddingBagInput> batch_inputs;
+  absl::InlinedVector<internal::EmbeddingBagInput, 32> batch_inputs;
   batch_inputs.reserve(inputs.size());
   for (size_t index = 0; index < inputs.size(); ++index) {
     batch_inputs.push_back({
@@ -208,6 +211,7 @@ absl::Status CpuEmbeddingEngine::ExecuteBatch(
         .embedding_table = resolved_tables[index].get(),
         .weights = inputs[index].weights,
         .output_allocator = &inputs[index].output_allocator,
+        .embedding_ids_i32 = inputs[index].embedding_ids_i32,
     });
   }
 
@@ -234,7 +238,17 @@ absl::StatusOr<absl::Span<T>> CpuEmbeddingEngine::Execute(
     return absl::InvalidArgumentError(
         "In-place execution requires an output allocator.");
   }
-  const absl::Span<const int64_t> embedding_ids = input.embedding_ids;
+  if (!input.embedding_ids.empty() && !input.embedding_ids_i32.empty()) {
+    return absl::InvalidArgumentError(
+        "FeatureBatchInput cannot specify both int64 and int32 embedding IDs.");
+  }
+  absl::InlinedVector<int64_t, 256> converted_ids;
+  absl::Span<const int64_t> embedding_ids = input.embedding_ids;
+  if (embedding_ids.empty() && !input.embedding_ids_i32.empty()) {
+    converted_ids.assign(input.embedding_ids_i32.begin(),
+                         input.embedding_ids_i32.end());
+    embedding_ids = absl::MakeConstSpan(converted_ids);
+  }
   const absl::Span<const int32_t> row_pointers = input.row_pointers;
   const absl::Span<const float> weights = input.weights;
   if (row_pointers.size() < 2) {
@@ -349,7 +363,7 @@ CpuEmbeddingEngine::Execute(FeatureBatchInput<Eigen::bfloat16> input) const;
 
 absl::StatusOr<FeatureSpec> CpuEmbeddingEngine::GetFeatureSpec(
     absl::string_view feature_name) const {
-  absl::MutexLock lock(feature_specs_mu_);
+  absl::ReaderMutexLock lock(feature_specs_mu_);
   auto it = feature_specs_.find(feature_name);
   if (it == feature_specs_.end()) {
     return absl::NotFoundError(
@@ -360,7 +374,7 @@ absl::StatusOr<FeatureSpec> CpuEmbeddingEngine::GetFeatureSpec(
 
 absl::StatusOr<std::shared_ptr<const EmbeddingTable>>
 CpuEmbeddingEngine::GetLocalTable(absl::string_view table_name) const {
-  absl::MutexLock lock(local_tables_mu_);
+  absl::ReaderMutexLock lock(local_tables_mu_);
   auto it = local_tables_.find(table_name);
   if (it == local_tables_.end()) {
     return absl::NotFoundError(

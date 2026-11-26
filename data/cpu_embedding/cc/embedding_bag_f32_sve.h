@@ -31,6 +31,11 @@ void AccumulateEmbeddingBagsF32(const int64_t* embedding_ids,
                                 const float* weights, const float* table_data,
                                 size_t embedding_dim, float* output);
 
+void AccumulateEmbeddingBagsF32(const int32_t* embedding_ids,
+                                const int32_t* row_pointers, size_t num_bags,
+                                const float* weights, const float* table_data,
+                                size_t embedding_dim, float* output);
+
 }  // namespace xla_serving::data::cpu_embedding::internal::sve
 
 #endif  // XLA_SERVING_DATA_CPU_EMBEDDING_CC_EMBEDDING_BAG_F32_SVE_H_
