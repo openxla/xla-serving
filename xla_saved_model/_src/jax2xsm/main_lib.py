@@ -26,6 +26,7 @@ from jax.experimental import layout as jax_layout
 import jaxtyping
 
 from xla_saved_model.protos import manifest_pb2
+from xla_saved_model.protos import type_pb2
 from xla_saved_model._src.core import compile_options_util
 from xla_saved_model._src.core import shlo_function
 from xla_saved_model._src.core import shlo_type
@@ -62,6 +63,42 @@ class XlaCompileOptionsSupplementalInfo(
     )
 
 
+def _annotate_serialized_module_compute_type(
+    mlir_module_serialized: bytes,
+    xla_compute_type: str,
+) -> bytes:
+  """Attaches `_xla_compute_type` to a serialized StableHLO portable artifact."""
+  # Lazy-import MLIR bindings so `from ...jax2xsm.main_lib import *` neither
+  # re-exports `ir`/`hlo` nor eagerly loads jaxlib MLIR extensions before
+  # TensorFlow/PyTorch C++ extensions in mixed-framework processes.
+  # pylint: disable=g-import-not-at-top
+  import jax.extend as jex
+  from jax.extend.mlir import ir
+  from jax.extend.mlir.dialects import stablehlo as hlo
+  from jax.interpreters import mlir as jax_mlir
+  # pylint: enable=g-import-not-at-top
+
+  with jax_mlir.make_ir_context():
+    module = jex.mlir.deserialize_portable_artifact(mlir_module_serialized)
+    existing: dict[str, ir.Attribute] = {}
+    if "mhlo.frontend_attributes" in module.operation.attributes:
+      existing_attr = ir.DictAttr(
+          module.operation.attributes["mhlo.frontend_attributes"]
+      )
+      for named_attr in existing_attr:
+        existing[named_attr.name] = named_attr.attr
+    existing["_xla_compute_type"] = ir.StringAttr.get(xla_compute_type)
+    module.operation.attributes["mhlo.frontend_attributes"] = ir.DictAttr.get(
+        existing
+    )
+    target_version = hlo.get_version_from_compatibility_requirement(
+        hlo.StablehloCompatibilityRequirement.WEEK_4
+    )
+    return jex.mlir.serialize_portable_artifact(
+        module, target_version, jex.backend.get_backend().serialize_with_sdy
+    )
+
+
 def jax_exported_to_shlo_fn(
     exported: jax_export.Exported,
     xla_compile_options_per_platform: (
@@ -70,6 +107,9 @@ def jax_exported_to_shlo_fn(
     model_param_names: Sequence[str] | None = None,
     *,
     model_inputs_layout: Sequence[jax_layout.Layout] | None = None,
+    model_inputs_placement: Sequence[type_pb2.Placement | None] | None = None,
+    model_outputs_placement: Sequence[type_pb2.Placement | None] | None = None,
+    xla_compute_type: str | None = None,
     num_input_aliased_output: int = 0,
     weights_name: str | None = None,
 ) -> shlo_function.ShloFunction:
@@ -87,6 +127,10 @@ def jax_exported_to_shlo_fn(
       is executed.
     model_inputs_layout: Optional. A sequence of `jax_layout.Layout` objects
       specifying the layouts for the model inputs.
+    model_inputs_placement: Optional per-input placement overrides.
+    model_outputs_placement: Optional per-output placement overrides.
+    xla_compute_type: Optional module-level `_xla_compute_type` frontend
+      attribute (e.g. `"sparseoffload"`).
     num_input_aliased_output: The number of trailing arguments of `exported`
       that are donated output buffers rather than caller-supplied inputs.
     weights_name: Optional. The name of the weights object in the manifest bound
@@ -116,6 +160,13 @@ def jax_exported_to_shlo_fn(
   in_placements = tuple(
       utils.sharding_to_placement(nsd) for nsd in in_named_shardings
   )
+  if model_inputs_placement is not None:
+    in_placements = tuple(
+        override if override is not None else base
+        for base, override in zip(
+            in_placements, model_inputs_placement, strict=True
+        )
+    )
   out_shardings_hlo = tuple([
       _get_op_sharding(nsd, aval)
       for nsd, aval in zip(out_named_shardings, exported.out_avals)
@@ -127,6 +178,13 @@ def jax_exported_to_shlo_fn(
   out_avals = exported.out_avals[:num_user_outputs]
   out_shardings_hlo = out_shardings_hlo[:num_user_outputs]
   out_placements = out_placements[:num_user_outputs]
+  if model_outputs_placement is not None:
+    out_placements = tuple(
+        override if override is not None else base
+        for base, override in zip(
+            out_placements, model_outputs_placement, strict=True
+        )
+    )
 
   # TODO: properly get the name for the input signature.
   shlo_in_sig, jax_in_sig_refinements = (
@@ -178,12 +236,18 @@ def jax_exported_to_shlo_fn(
         XlaCompileOptionsSupplementalInfo(xla_compile_options_per_platform)
     )
 
+  mlir_module_serialized = exported.mlir_module_serialized
+  if xla_compute_type is not None:
+    mlir_module_serialized = _annotate_serialized_module_compute_type(
+        mlir_module_serialized, xla_compute_type
+    )
+
   shlo_func = shlo_function.ShloFunction(
       input_signature=shlo_in_sig,
       output_signature=shlo_out_sig,
       data_names=model_param_names,
       weights_name=weights_name,
-      mlir_module_serialized=exported.mlir_module_serialized,
+      mlir_module_serialized=mlir_module_serialized,
       calling_convention_version=exported.calling_convention_version,
       module_kept_var_idx=exported.module_kept_var_idx,
       lowering_platforms=exported.platforms,
@@ -376,6 +440,10 @@ def convert(
     ] = (),
     num_input_aliased_output: int = 0,
     weights_name: str | None = None,
+    *,
+    model_inputs_placement: Sequence[type_pb2.Placement | None] | None = None,
+    model_outputs_placement: Sequence[type_pb2.Placement | None] | None = None,
+    xla_compute_type: str | None = None,
 ) -> shlo_function.ShloFunction:
   """Converts a JAX function to an Orbax Model `ShloFunction`.
 
@@ -416,6 +484,12 @@ def convert(
       must already be jitted with those arguments donated.
     weights_name: Optional. The name of the weights object in the manifest bound
       to this function.
+    model_inputs_placement: Optional sequence of placements overriding the
+      flattened model inputs (weights and user inputs).
+    model_outputs_placement: Optional sequence of placements overriding the
+      flattened user outputs.
+    xla_compute_type: Optional `_xla_compute_type` module frontend attribute
+      (for example, `"sparseoffload"`).
 
   Returns:
     An Orbax Model `ShloFunction`.
@@ -451,6 +525,9 @@ def convert(
       xla_compile_options_per_platform,
       model_param_names=model_param_names,
       model_inputs_layout=model_inputs_layout,
+      model_inputs_placement=model_inputs_placement,
+      model_outputs_placement=model_outputs_placement,
+      xla_compute_type=xla_compute_type,
       num_input_aliased_output=num_input_aliased_output,
       weights_name=weights_name,
   )

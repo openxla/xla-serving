@@ -22,6 +22,9 @@ import jax
 from jax import export as jax_export
 from jax import sharding as jax_sharding
 from jax.experimental import mesh_utils
+import jax.extend as jex
+from jax.extend.mlir import ir
+from jax.interpreters import mlir as jax_mlir
 import jax.numpy as jnp
 import orbax.checkpoint as ocp
 
@@ -518,6 +521,60 @@ class MainLibTest(test_utils.XsmTestCase):
     input_tuple = fn_sig.input.tuple.elements[0].tuple.elements[0]
     w_type = input_tuple.dict.string_to_type['w'].leaf.tensor_type
     self.assertEqual(w_type.placement, type_pb2.HOST)
+
+  def test_placement_overrides_and_compute_type(self):
+    @jax.jit
+    def _stage_fn(x, y):
+      return x + y, x - y
+
+    spec = jax.ShapeDtypeStruct((4, 2), jnp.float32)
+    xsm_shlo_fn = main_lib.convert(
+        _stage_fn,
+        (spec, spec),
+        {},
+        model_inputs_placement=[type_pb2.DEVICE, None],
+        model_outputs_placement=[type_pb2.DEVICE, type_pb2.HOST],
+        xla_compute_type='sparseoffload',
+        jax_export_kwargs={'platforms': ['cpu']},
+    )
+
+    in_specs = xsm_shlo_fn.input_signature[0]
+    self.assertEqual(in_specs[0].placement, type_pb2.DEVICE)
+    self.assertIsNone(in_specs[1].placement)
+    self.assertEqual(xsm_shlo_fn.output_signature[0].placement, type_pb2.DEVICE)
+    self.assertEqual(xsm_shlo_fn.output_signature[1].placement, type_pb2.HOST)
+
+    with jax_mlir.make_ir_context():
+      module = jex.mlir.deserialize_portable_artifact(
+          xsm_shlo_fn.mlir_module_serialized
+      )
+      fe_attrs = ir.DictAttr(
+          module.operation.attributes['mhlo.frontend_attributes']
+      )
+      self.assertEqual(
+          ir.StringAttr(fe_attrs['_xla_compute_type']).value,
+          'sparseoffload',
+      )
+
+    save_dir_path = self.create_tempdir().full_path
+    xsm_core.save(
+        {'stage_fn': xsm_shlo_fn},
+        save_dir_path,
+        xsm_core.SaveOptions(version=2),
+    )
+    manifest_proto = xsm_core.load(save_dir_path)
+    fn_sig = manifest_proto.objects['stage_fn'].function.signature
+    in_elements = fn_sig.input.tuple.elements[0].tuple.elements
+    out_elements = fn_sig.output.tuple.elements
+    self.assertEqual(in_elements[0].leaf.tensor_type.placement, type_pb2.DEVICE)
+    self.assertEqual(
+        in_elements[1].leaf.tensor_type.placement,
+        type_pb2.PLACEMENT_UNSPECIFIED,
+    )
+    self.assertEqual(
+        out_elements[0].leaf.tensor_type.placement, type_pb2.DEVICE
+    )
+    self.assertEqual(out_elements[1].leaf.tensor_type.placement, type_pb2.HOST)
 
 
 if __name__ == '__main__':
