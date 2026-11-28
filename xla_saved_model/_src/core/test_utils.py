@@ -30,6 +30,7 @@ import jax
 from jax import export as jax_export
 from jax.experimental import topologies
 import jax.numpy as jnp
+import jaxlib
 import jaxtyping
 
 from xla_saved_model.protos import manifest_pb2
@@ -73,6 +74,16 @@ def require_attached_hardware(platform: str) -> None:
     raise unittest.SkipTest(
         f"Requires attached {platform.upper()} hardware: {e}"
     ) from e
+
+
+def jaxlib_has_new_autotune_cache_fields() -> bool:
+  """Returns whether jaxlib exposes the backend-neutral autotune cache fields.
+
+  Older jaxlib versions only expose their deprecated xla_gpu_* names.
+  """
+  compile_options = jaxlib.xla_client.CompileOptions()
+  debug_options = compile_options.executable_build_options.debug_options
+  return hasattr(debug_options, "xla_autotune_cache_dir")
 
 
 def create_sample_autotune_file(
