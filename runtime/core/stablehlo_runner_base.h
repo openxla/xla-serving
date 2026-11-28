@@ -140,20 +140,21 @@ class StableHloRunnerBase {
     // entries are only usable when the model was exported for input aliasing.
     //
     // Each array must match the dtype, shape, sharding (including devices and
-    // memory kind) and layout of the output it backs, and must be in GPU
-    // device memory on a PjRt-backed client. On other platforms the execution
-    // cannot write into memory the caller keeps, and `Execute` returns an
-    // error. No two outputs may be backed by the same memory, and no array
-    // may share memory with an input of the same execution, such as the
-    // `DeviceBuffer` an earlier execution returned over it; `Execute` rejects
-    // both. To carry state such as a KV cache from one execution to the next,
-    // alternate between two arrays: pass the previous result as the input and
-    // the other array as the output.
+    // memory kind) and layout of the output it backs, and must be in GPU or
+    // CPU device memory on a PjRt-backed client. On TPU the execution cannot
+    // write into memory the caller keeps, and `Execute` returns an error. No
+    // two outputs may be backed by the same memory, and no array may share
+    // memory with an input of the same execution, such as the `DeviceBuffer`
+    // an earlier execution returned over it; `Execute` rejects both. To carry
+    // state such as a KV cache from one execution to the next, alternate
+    // between two arrays: pass the previous result as the input and the other
+    // array as the output.
     //
-    // Lifecycle: the caller keeps the arrays. The runner donates a view of
-    // each array's memory (`PjRtClient::CreateViewOfDeviceBuffer`) rather
-    // than the array itself, so the execution writes the result into that
-    // memory in place and the same arrays can be passed again. The runner
+    // Lifecycle: the caller keeps the arrays. The runner donates an alias of
+    // each array's memory (`PjRtClient::CreateViewOfDeviceBuffer` on GPU, or
+    // `PjRtClient::BufferFromHostBuffer` with `kMutableZeroCopy` on CPU)
+    // rather than the array itself, so the execution writes the result into
+    // that memory in place and the same arrays can be passed again. The runner
     // checks after the execution that each result landed in the caller's
     // memory. An output placed on the device is returned as a
     // `DeviceBuffer` over a different array backed by that same memory, which
